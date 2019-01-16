@@ -38,9 +38,7 @@
  * #ClutterBackend is available since Clutter 0.4
  */
 
-#ifdef HAVE_CONFIG_H
 #include "clutter-build-config.h"
-#endif
 
 #define CLUTTER_ENABLE_EXPERIMENTAL_API
 
@@ -53,7 +51,6 @@
 #include "clutter-stage-manager-private.h"
 #include "clutter-stage-private.h"
 #include "clutter-stage-window.h"
-#include "clutter-version.h"
 #include "clutter-device-manager-private.h"
 
 #define CLUTTER_DISABLE_DEPRECATION_WARNINGS
@@ -433,7 +430,7 @@ clutter_backend_real_get_features (ClutterBackend *backend)
   if (cogl_clutter_winsys_has_feature (COGL_WINSYS_FEATURE_SWAP_THROTTLE))
     {
       CLUTTER_NOTE (BACKEND, "Cogl supports swap buffers throttling");
-      flags |= CLUTTER_FEATURE_SYNC_TO_VBLANK;
+      flags |= CLUTTER_FEATURE_SWAP_THROTTLE;
     }
   else
     CLUTTER_NOTE (BACKEND, "Cogl doesn't support swap buffers throttling");

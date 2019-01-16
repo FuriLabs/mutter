@@ -28,21 +28,20 @@
  */
 
 #include "config.h"
-#include "meta-cursor-tracker-private.h"
 
-#include <string.h>
-#include <meta/main.h>
-#include <meta/util.h>
-#include <meta/meta-x11-errors.h>
-
-#include <cogl/cogl.h>
-#include <clutter/clutter.h>
+#include "backends/meta-cursor-tracker-private.h"
 
 #include <gdk/gdk.h>
 #include <gdk/gdkx.h>
+#include <string.h>
 
-#include "meta-backend-private.h"
+#include "backends/meta-backend-private.h"
 #include "backends/x11/cm/meta-cursor-sprite-xfixes.h"
+#include "cogl/cogl.h"
+#include "clutter/clutter.h"
+#include "meta/main.h"
+#include "meta/meta-x11-errors.h"
+#include "meta/util.h"
 #include "x11/meta-x11-display-private.h"
 
 G_DEFINE_TYPE (MetaCursorTracker, meta_cursor_tracker, G_TYPE_OBJECT);
@@ -312,6 +311,14 @@ meta_cursor_tracker_unset_window_cursor (MetaCursorTracker *tracker)
   set_window_cursor (tracker, FALSE, NULL);
 }
 
+/**
+ * meta_cursor_tracker_set_root_cursor:
+ * @tracker: a #MetaCursorTracker object.
+ * @cursor_sprite: (transfer none): the new root cursor
+ *
+ * Sets the root cursor (the cursor that is shown if not modified by a window).
+ * The #MetaCursorTracker will take a strong reference to the sprite.
+ */
 void
 meta_cursor_tracker_set_root_cursor (MetaCursorTracker *tracker,
                                      MetaCursorSprite  *cursor_sprite)

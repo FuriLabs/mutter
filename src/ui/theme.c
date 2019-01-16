@@ -17,16 +17,19 @@
  * along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <config.h>
-#include "theme-private.h"
-#include "frames.h" /* for META_TYPE_FRAMES */
-#include "util-private.h"
-#include <meta/prefs.h>
+#include "config.h"
+
+#include "ui/theme-private.h"
+
 #include <gtk/gtk.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdarg.h>
 #include <math.h>
+#include <stdarg.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "core/util-private.h"
+#include "meta/prefs.h"
+#include "ui/frames.h"
 
 #define DEBUG_FILL_STRUCT(s) memset ((s), 0xef, sizeof (*(s)))
 
@@ -1050,6 +1053,23 @@ create_style_context (GType            widget_type,
   return style;
 }
 
+static inline GtkCssProvider *
+get_css_provider_for_theme_name (const gchar *theme_name,
+                                 const gchar *variant)
+{
+  static GtkCssProvider *default_provider = NULL;
+
+  if (!theme_name || *theme_name == '\0')
+    {
+      if (G_UNLIKELY (default_provider == NULL))
+        default_provider = gtk_css_provider_new ();
+
+      return default_provider;
+    }
+
+  return gtk_css_provider_get_named (theme_name, variant);
+}
+
 MetaStyleInfo *
 meta_theme_create_style_info (GdkScreen   *screen,
                               const gchar *variant)
@@ -1062,10 +1082,7 @@ meta_theme_create_style_info (GdkScreen   *screen,
                 "gtk-theme-name", &theme_name,
                 NULL);
 
-  if (theme_name && *theme_name)
-    provider = gtk_css_provider_get_named (theme_name, variant);
-  else
-    provider = gtk_css_provider_get_default ();
+  provider = get_css_provider_for_theme_name (theme_name, variant);
   g_free (theme_name);
 
   style_info = g_new0 (MetaStyleInfo, 1);

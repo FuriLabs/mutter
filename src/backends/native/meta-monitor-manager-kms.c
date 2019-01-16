@@ -2,6 +2,7 @@
 
 /*
  * Copyright (C) 2013 Red Hat Inc.
+ * Copyright (C) 2018 DisplayLink (UK) Ltd.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -21,36 +22,55 @@
  * Author: Giovanni Campagna <gcampagn@redhat.com>
  */
 
+/**
+ * SECTION:meta-monitor-manager-kms
+ * @title: MetaMonitorManagerKms
+ * @short_description: A subclass of #MetaMonitorManager using Linux DRM
+ *
+ * #MetaMonitorManagerKms is a subclass of #MetaMonitorManager which
+ * implements its functionality "natively": it uses the appropriate
+ * functions of the Linux DRM kernel module and using a udev client.
+ *
+ * See also #MetaMonitorManagerXrandr for an implementation using XRandR.
+ */
+
 #include "config.h"
 
-#include "meta-monitor-manager-kms.h"
-#include "meta-monitor-config-manager.h"
-#include "meta-backend-native.h"
-#include "meta-crtc.h"
-#include "meta-launcher.h"
-#include "meta-output.h"
-#include "meta-backend-private.h"
-#include "meta-renderer-native.h"
-#include "meta-crtc-kms.h"
-#include "meta-gpu-kms.h"
-#include "meta-output-kms.h"
-
-#include <string.h>
-#include <stdlib.h>
-#include <clutter/clutter.h>
+#include "backends/native/meta-monitor-manager-kms.h"
 
 #include <drm.h>
 #include <errno.h>
+#include <gudev/gudev.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
-#include <meta/main.h>
-#include <meta/meta-x11-errors.h>
-
-#include <gudev/gudev.h>
+#include "backends/meta-backend-private.h"
+#include "backends/meta-crtc.h"
+#include "backends/meta-monitor-config-manager.h"
+#include "backends/meta-output.h"
+#include "backends/native/meta-backend-native.h"
+#include "backends/native/meta-crtc-kms.h"
+#include "backends/native/meta-gpu-kms.h"
+#include "backends/native/meta-launcher.h"
+#include "backends/native/meta-output-kms.h"
+#include "backends/native/meta-renderer-native.h"
+#include "clutter/clutter.h"
+#include "meta/main.h"
+#include "meta/meta-x11-errors.h"
 
 #define DRM_CARD_UDEV_DEVICE_TYPE "drm_minor"
+
+enum
+{
+  GPU_ADDED,
+
+  LAST_SIGNAL
+};
+
+static guint signals[LAST_SIGNAL] = { 0 };
 
 typedef struct
 {
@@ -374,6 +394,43 @@ handle_hotplug_event (MetaMonitorManager *manager)
 }
 
 static void
+handle_gpu_hotplug (MetaMonitorManagerKms *manager_kms,
+                    GUdevDevice           *device)
+{
+  MetaMonitorManager *manager = META_MONITOR_MANAGER (manager_kms);
+  g_autoptr (GError) error = NULL;
+  const char *gpu_path;
+  MetaGpuKms *gpu_kms;
+  GList *gpus, *l;
+
+  gpu_path = g_udev_device_get_device_file (device);
+
+  gpus = meta_monitor_manager_get_gpus (manager);
+  for (l = gpus; l; l = l->next)
+    {
+      MetaGpuKms *gpu_kms = l->data;
+
+      if (!g_strcmp0 (gpu_path, meta_gpu_kms_get_file_path (gpu_kms)))
+        {
+          g_warning ("Failed to hotplug secondary gpu '%s': %s",
+                     gpu_path, "device already present");
+          return;
+        }
+    }
+
+  gpu_kms = meta_gpu_kms_new (manager_kms, gpu_path, &error);
+  if (!gpu_kms)
+    {
+      g_warning ("Failed to hotplug secondary gpu '%s': %s",
+                 gpu_path, error->message);
+      return;
+    }
+  meta_monitor_manager_add_gpu (manager, META_GPU (gpu_kms));
+
+  g_signal_emit (manager_kms, signals[GPU_ADDED], 0, gpu_kms);
+}
+
+static void
 on_uevent (GUdevClient *client,
            const char  *action,
            GUdevDevice *device,
@@ -381,6 +438,25 @@ on_uevent (GUdevClient *client,
 {
   MetaMonitorManagerKms *manager_kms = META_MONITOR_MANAGER_KMS (user_data);
   MetaMonitorManager *manager = META_MONITOR_MANAGER (manager_kms);
+
+  if (g_str_equal (action, "add") &&
+      g_udev_device_get_device_file (device) != NULL)
+    {
+      MetaBackend *backend = meta_monitor_manager_get_backend (manager);
+      MetaBackendNative *backend_native = META_BACKEND_NATIVE (backend);
+      MetaLauncher *launcher = meta_backend_native_get_launcher (backend_native);
+      const char *device_seat;
+      const char *seat_id;
+
+      device_seat = g_udev_device_get_property (device, "ID_SEAT");
+      seat_id = meta_launcher_get_seat_id (launcher);
+
+      if (!device_seat)
+        device_seat = "seat0";
+
+      if (!g_strcmp0 (seat_id, device_seat))
+        handle_gpu_hotplug (manager_kms, device);
+    }
 
   if (!g_udev_device_get_property_as_boolean (device, "HOTPLUG"))
     return;
@@ -486,15 +562,7 @@ meta_monitor_manager_kms_get_max_screen_size (MetaMonitorManager *manager,
                                               int                *max_width,
                                               int                *max_height)
 {
-  MetaMonitorManagerKms *manager_kms = META_MONITOR_MANAGER_KMS (manager);
-
-  if (meta_is_stage_views_enabled ())
-    return FALSE;
-
-  meta_gpu_kms_get_max_buffer_size (manager_kms->primary_gpu,
-                                    max_width, max_height);
-
-  return TRUE;
+  return FALSE;
 }
 
 static MetaLogicalMonitorLayoutMode
@@ -502,9 +570,6 @@ meta_monitor_manager_kms_get_default_layout_mode (MetaMonitorManager *manager)
 {
   MetaBackend *backend = meta_monitor_manager_get_backend (manager);
   MetaSettings *settings = meta_backend_get_settings (backend);
-
-  if (!meta_is_stage_views_enabled ())
-    return META_LOGICAL_MONITOR_LAYOUT_MODE_PHYSICAL;
 
   if (meta_settings_is_experimental_feature_enabled (
         settings,
@@ -624,10 +689,11 @@ get_gpu_paths (MetaMonitorManagerKms *manager_kms,
                   break;
                 }
             }
-          else
-            {
-              gpu_paths = g_list_append (gpu_paths, g_strdup (device_path));
-            }
+        }
+
+      if (gpu_type == GPU_TYPE_SECONDARY)
+        {
+          gpu_paths = g_list_append (gpu_paths, g_strdup (device_path));
         }
     }
 
@@ -755,4 +821,12 @@ meta_monitor_manager_kms_class_init (MetaMonitorManagerKmsClass *klass)
   manager_class->get_capabilities = meta_monitor_manager_kms_get_capabilities;
   manager_class->get_max_screen_size = meta_monitor_manager_kms_get_max_screen_size;
   manager_class->get_default_layout_mode = meta_monitor_manager_kms_get_default_layout_mode;
+
+  signals[GPU_ADDED] =
+    g_signal_new ("gpu-added",
+                  G_TYPE_FROM_CLASS (object_class),
+                  G_SIGNAL_RUN_LAST,
+                  0,
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE, 1, META_TYPE_GPU_KMS);
 }

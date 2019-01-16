@@ -22,6 +22,7 @@
 
 #include <glib-object.h>
 
+#include "backends/meta-backend-types.h"
 #include "backends/meta-gpu.h"
 
 struct _MetaTileInfo
@@ -65,7 +66,7 @@ struct _MetaOutput
   MetaGpu *gpu;
 
   /* The low-level ID of this output, used to apply back configuration */
-  glong winsys_id;
+  uint64_t winsys_id;
   char *name;
   char *vendor;
   char *product;

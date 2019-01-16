@@ -24,8 +24,10 @@
 #define __META_SHADOW_FACTORY_H__
 
 #include <cairo.h>
-#include <clutter/clutter.h>
-#include <meta/meta-window-shape.h>
+
+#include "clutter/clutter.h"
+#include "cogl/cogl.h"
+#include "meta/meta-window-shape.h"
 
 GType meta_shadow_get_type (void) G_GNUC_CONST;
 
@@ -55,12 +57,11 @@ struct _MetaShadowParams
   guint8 opacity;
 };
 
-#define META_TYPE_SHADOW_FACTORY            (meta_shadow_factory_get_type ())
-#define META_SHADOW_FACTORY(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), META_TYPE_SHADOW_FACTORY, MetaShadowFactory))
-#define META_SHADOW_FACTORY_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST ((klass),  META_TYPE_SHADOW_FACTORY, MetaShadowFactoryClass))
-#define META_IS_SHADOW_FACTORY(obj)         (G_TYPE_CHECK_INSTANCE_TYPE ((obj), META_TYPE_SHADOW_FACTORY))
-#define META_IS_SHADOW_FACTORY_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass),  META_TYPE_SHADOW_FACTORY))
-#define META_SHADOW_FACTORY_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj),  META_TYPE_SHADOW_FACTORY, MetaShadowFactoryClass))
+#define META_TYPE_SHADOW_FACTORY (meta_shadow_factory_get_type ())
+G_DECLARE_FINAL_TYPE (MetaShadowFactory,
+                      meta_shadow_factory,
+                      META, SHADOW_FACTORY,
+                      GObject)
 
 /**
  * MetaShadowFactory:
@@ -69,12 +70,8 @@ struct _MetaShadowParams
  * so that multiple shadows created for the same shape with the same radius will
  * share the same MetaShadow.
  */
-typedef struct _MetaShadowFactory      MetaShadowFactory;
-typedef struct _MetaShadowFactoryClass MetaShadowFactoryClass;
 
 MetaShadowFactory *meta_shadow_factory_get_default (void);
-
-GType meta_shadow_factory_get_type (void);
 
 void meta_shadow_factory_set_params (MetaShadowFactory *factory,
                                      const char        *class_name,
@@ -96,6 +93,7 @@ typedef struct _MetaShadow MetaShadow;
 MetaShadow *meta_shadow_ref         (MetaShadow            *shadow);
 void        meta_shadow_unref       (MetaShadow            *shadow);
 void        meta_shadow_paint       (MetaShadow            *shadow,
+                                     CoglFramebuffer       *framebuffer,
                                      int                    window_x,
                                      int                    window_y,
                                      int                    window_width,

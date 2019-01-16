@@ -22,7 +22,9 @@
 
 #include <glib-object.h>
 
-#include "backends/meta-gpu.h"
+#include "backends/meta-backend-types.h"
+#include "backends/meta-monitor-transform.h"
+#include "meta/boxes.h"
 
 /* Same as KMS mode flags and X11 randr flags */
 typedef enum _MetaCrtcModeFlag

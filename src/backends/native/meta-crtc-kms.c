@@ -29,8 +29,6 @@
 #include "backends/meta-backend-private.h"
 #include "backends/native/meta-gpu-kms.h"
 
-#include <drm_fourcc.h>
-
 #define ALL_TRANSFORMS (META_MONITOR_TRANSFORM_FLIPPED_270 + 1)
 #define ALL_TRANSFORMS_MASK ((1 << ALL_TRANSFORMS) - 1)
 
@@ -449,8 +447,7 @@ meta_create_kms_crtc (MetaGpuKms   *gpu_kms,
   crtc->rect.height = drm_crtc->height;
   crtc->is_dirty = FALSE;
   crtc->transform = META_MONITOR_TRANSFORM_NORMAL;
-  crtc->all_transforms = meta_is_stage_views_enabled () ?
-    ALL_TRANSFORMS_MASK : META_MONITOR_TRANSFORM_NORMAL;
+  crtc->all_transforms = ALL_TRANSFORMS_MASK;
 
   if (drm_crtc->mode_valid)
     {

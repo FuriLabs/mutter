@@ -26,9 +26,12 @@
 #define META_XWAYLAND_H
 
 #include <glib.h>
-#include <meta/types.h>
 
+#include "meta/types.h"
 #include "wayland/meta-wayland-types.h"
+
+void
+meta_xwayland_override_display_number (int number);
 
 void
 meta_xwayland_handle_wl_surface_id (MetaWindow *window,

@@ -1,17 +1,5 @@
 /* -*- mode: C; c-file-style: "gnu"; indent-tabs-mode: nil; -*- */
 
-/**
- * \file screen-private.h  Handling of monitor configuration
- *
- * Managing multiple monitors
- * This file contains structures and functions that handle
- * multiple monitors, including reading the current configuration
- * and available hardware, and applying it.
- *
- * This interface is private to mutter, API users should look
- * at MetaScreen instead.
- */
-
 /*
  * Copyright (C) 2001 Havoc Pennington
  * Copyright (C) 2003 Rob Adams
@@ -38,34 +26,14 @@
 #include <cogl/cogl.h>
 #include <libgnome-desktop/gnome-pnp-ids.h>
 
-#include "display-private.h"
-#include "stack-tracker.h"
-#include <meta/meta-monitor-manager.h>
+#include "backends/meta-backend-private.h"
+#include "backends/meta-cursor.h"
+#include "backends/meta-display-config-shared.h"
+#include "backends/meta-monitor-transform.h"
+#include "meta/display.h"
+#include "meta/meta-monitor-manager.h"
 
-#include "meta-display-config-shared.h"
 #include "meta-dbus-display-config.h"
-#include "meta-cursor.h"
-
-typedef struct _MetaMonitorConfigManager MetaMonitorConfigManager;
-typedef struct _MetaMonitorConfigStore MetaMonitorConfigStore;
-typedef struct _MetaMonitorsConfig MetaMonitorsConfig;
-
-typedef struct _MetaMonitor MetaMonitor;
-typedef struct _MetaMonitorNormal MetaMonitorNormal;
-typedef struct _MetaMonitorTiled MetaMonitorTiled;
-typedef struct _MetaMonitorSpec MetaMonitorSpec;
-typedef struct _MetaLogicalMonitor MetaLogicalMonitor;
-
-typedef struct _MetaMonitorMode MetaMonitorMode;
-
-typedef struct _MetaGpu MetaGpu;
-
-typedef struct _MetaCrtc MetaCrtc;
-typedef struct _MetaOutput MetaOutput;
-typedef struct _MetaCrtcMode MetaCrtcMode;
-typedef struct _MetaCrtcInfo MetaCrtcInfo;
-typedef struct _MetaOutputInfo MetaOutputInfo;
-typedef struct _MetaTileInfo MetaTileInfo;
 
 #define META_MONITOR_MANAGER_MIN_SCREEN_WIDTH 640
 #define META_MONITOR_MANAGER_MIN_SCREEN_HEIGHT 480
@@ -92,18 +60,6 @@ typedef enum _MetaLogicalMonitorLayoutMode
   META_LOGICAL_MONITOR_LAYOUT_MODE_LOGICAL = 1,
   META_LOGICAL_MONITOR_LAYOUT_MODE_PHYSICAL = 2
 } MetaLogicalMonitorLayoutMode;
-
-typedef enum
-{
-  META_MONITOR_TRANSFORM_NORMAL,
-  META_MONITOR_TRANSFORM_90,
-  META_MONITOR_TRANSFORM_180,
-  META_MONITOR_TRANSFORM_270,
-  META_MONITOR_TRANSFORM_FLIPPED,
-  META_MONITOR_TRANSFORM_FLIPPED_90,
-  META_MONITOR_TRANSFORM_FLIPPED_180,
-  META_MONITOR_TRANSFORM_FLIPPED_270,
-} MetaMonitorTransform;
 
 /*
  * MetaCrtcInfo:
@@ -184,12 +140,52 @@ struct _MetaMonitorManager
   MetaMonitorSwitchConfigType current_switch_config;
 };
 
+/**
+ * MetaMonitorManagerClass:
+ *
+ * @read_edid: Returns the raw Extended Display Identification Data (EDID)
+ *   for the given #MetaOutput object. Use meta_output_parse_edid() to parse
+ *   afterwards.
+ *
+ * @ensure_initial_config: Called on setup. Makes sure an initial config
+ *   is loaded.
+ *
+ * @apply_monitors_config: Tries to apply the given config using the given
+ *   method. Throws an error if something went wrong.
+ *
+ * @set_power_save_mode: Sets the #MetaPowerSave mode (for all displays).
+ *
+ * @change_backlight: Changes the backlight intensity to the given value (in
+ *   percent).
+ *
+ * @get_crtc_gamma: Queries and returns the gamma rampQueries and returns the
+ *   gamma ramp.
+ *
+ * @set_crtc_gamma: Sets custom display LUT (look up table) for each primary
+ *   color. Each table is indexed by a value that represents input intensity,
+ *   and yields a value that represents output intensity.
+ *
+ * @tiled_monitor_added: Should be called by a #MetaMonitor when it is created.
+ *
+ * @tiled_monitor_removed: Should be called by a #MetaMonitor when it is
+ *   destroyed.
+ *
+ * @is_transform_handled: vfunc for
+ *   meta_monitor_manager_is_transform_handled().
+ * @calculate_monitor_mode_scale: vfunc for
+ *   meta_monitor_manager_calculate_monitor_mode_scale().
+ * @calculate_supported_scales: vfunc for
+ *   meta_monitor_manager_calculate_supported_scales().
+ * @get_capabilities: vfunc for meta_monitor_manager_get_capabilities().
+ * @get_max_screen_size: vfunc for meta_monitor_manager_get_max_screen_size().
+ * @get_default_layout_mode: vfunc for meta_monitor_manager_get_default_layout_mode().
+ *
+ * The base class for a #MetaMonitorManager.
+ */
 struct _MetaMonitorManagerClass
 {
   MetaDBusDisplayConfigSkeletonClass parent_class;
 
-  char* (*get_edid_file) (MetaMonitorManager *,
-                          MetaOutput         *);
   GBytes* (*read_edid) (MetaMonitorManager *,
                         MetaOutput         *);
 
@@ -369,20 +365,5 @@ void meta_monitor_manager_rotate_monitor (MetaMonitorManager *manager);
 void meta_monitor_manager_clear_output (MetaOutput *output);
 void meta_monitor_manager_clear_mode (MetaCrtcMode *mode);
 void meta_monitor_manager_clear_crtc (MetaCrtc *crtc);
-
-/* Returns true if transform causes width and height to be inverted
-   This is true for the odd transforms in the enum */
-static inline gboolean
-meta_monitor_transform_is_rotated (MetaMonitorTransform transform)
-{
-  return (transform % 2);
-}
-
-/* Returns true if transform involves flipping */
-static inline gboolean
-meta_monitor_transform_is_flipped (MetaMonitorTransform transform)
-{
-  return (transform >= META_MONITOR_TRANSFORM_FLIPPED);
-}
 
 #endif /* META_MONITOR_MANAGER_PRIVATE_H */

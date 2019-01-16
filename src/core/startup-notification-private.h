@@ -25,24 +25,39 @@
 #ifndef META_STARTUP_NOTIFICATION_PRIVATE_H
 #define META_STARTUP_NOTIFICATION_PRIVATE_H
 
-#include "display-private.h"
+#include "core/display-private.h"
+#include "meta/meta-startup-notification.h"
 
-#define META_TYPE_STARTUP_NOTIFICATION (meta_startup_notification_get_type ())
+typedef struct _MetaStartupSequenceClass MetaStartupSequenceClass;
+
+struct _MetaStartupSequenceClass
+{
+  GObjectClass parent_class;
+
+  void (* complete) (MetaStartupSequence *sequence);
+};
 
 G_DECLARE_FINAL_TYPE (MetaStartupNotification,
                       meta_startup_notification,
                       META, STARTUP_NOTIFICATION,
                       GObject)
+G_DECLARE_DERIVABLE_TYPE (MetaStartupSequence,
+                          meta_startup_sequence,
+                          META, STARTUP_SEQUENCE,
+                          GObject)
 
 MetaStartupNotification *
-         meta_startup_notification_get             (MetaDisplay             *display);
+         meta_startup_notification_new             (MetaDisplay             *display);
 
 gboolean meta_startup_notification_handle_xevent   (MetaStartupNotification *sn,
                                                     XEvent                  *xevent);
 
+void     meta_startup_notification_add_sequence    (MetaStartupNotification *sn,
+                                                    MetaStartupSequence     *seq);
 void     meta_startup_notification_remove_sequence (MetaStartupNotification *sn,
+                                                    MetaStartupSequence     *seq);
+MetaStartupSequence *
+         meta_startup_notification_lookup_sequence (MetaStartupNotification *sn,
                                                     const gchar             *id);
-
-GSList * meta_startup_notification_get_sequences   (MetaStartupNotification *sn);
 
 #endif /* META_STARTUP_NOTIFICATION_PRIVATE_H */

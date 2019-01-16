@@ -27,6 +27,8 @@
 #include <meta/prefs.h>
 #include <meta/common.h>
 #include <meta/workspace.h>
+#include <meta/meta-sound-player.h>
+#include <meta/meta-startup-notification.h>
 
 /**
  * MetaTabList:
@@ -172,8 +174,6 @@ void meta_display_get_size (MetaDisplay *display,
 void meta_display_set_cursor (MetaDisplay *display,
                               MetaCursor   cursor);
 
-GSList *meta_display_get_startup_sequences (MetaDisplay *display);
-
 /**
  * MetaDisplayDirection:
  * @META_DISPLAY_UP: up
@@ -225,5 +225,12 @@ typedef enum
 } MetaDisplayCorner;
 
 MetaWorkspaceManager *meta_display_get_workspace_manager (MetaDisplay *display);
+
+/**
+ * meta_display_get_startup_notification: (skip)
+ */
+MetaStartupNotification * meta_display_get_startup_notification (MetaDisplay *display);
+
+MetaSoundPlayer * meta_display_get_sound_player (MetaDisplay *display);
 
 #endif
