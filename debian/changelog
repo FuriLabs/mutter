@@ -1,4 +1,4 @@
-mutter (3.32.1-1ubuntu1) UNRELEASED; urgency=medium
+mutter (3.32.1-1ubuntu1) eoan; urgency=medium
 
   [ Marco Trevisan (Treviño) ]
   * Merge with debian
@@ -19,7 +19,7 @@ mutter (3.32.1-1ubuntu1) UNRELEASED; urgency=medium
   * 0-initialize a struct we'll be memcmp()ing. Cherry-pick from upstream
     stable branch.
 
- -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Mon, 29 Apr 2019 16:08:24 -0500
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Tue, 30 Apr 2019 12:45:56 +0100
 
 mutter (3.32.1-1) experimental; urgency=medium
 
