@@ -63,6 +63,7 @@ struct _ClutterFrameClock
   GObject parent;
 
   float refresh_rate;
+  int64_t refresh_interval_us;
   ClutterFrameListener listener;
 
   GSource *source;
@@ -219,7 +220,6 @@ calculate_next_update_time_us (ClutterFrameClock *frame_clock,
 {
   int64_t last_presentation_time_us;
   int64_t now_us;
-  float refresh_rate;
   int64_t refresh_interval_us;
   int64_t min_render_time_allowed_us;
   int64_t max_render_time_allowed_us;
@@ -230,8 +230,7 @@ calculate_next_update_time_us (ClutterFrameClock *frame_clock,
 
   now_us = g_get_monotonic_time ();
 
-  refresh_rate = frame_clock->refresh_rate;
-  refresh_interval_us = (int64_t) (0.5 + G_USEC_PER_SEC / refresh_rate);
+  refresh_interval_us = frame_clock->refresh_interval_us;
 
   min_render_time_allowed_us = refresh_interval_us / 2;
   max_render_time_allowed_us = refresh_interval_us - SYNC_DELAY_US;
@@ -500,6 +499,8 @@ clutter_frame_clock_new (float                            refresh_rate,
   init_frame_clock_source (frame_clock);
 
   frame_clock->refresh_rate = refresh_rate;
+  frame_clock->refresh_interval_us =
+    (int64_t) (0.5 + G_USEC_PER_SEC / refresh_rate);
 
   return frame_clock;
 }
