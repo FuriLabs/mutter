@@ -2,6 +2,7 @@
 #include "tests/clutter-test-utils.h"
 
 static const float refresh_rate = 60.0;
+static unsigned int max_concurrent_frames = 1;
 
 static ClutterFrameResult
 timeline_frame_clock_frame (ClutterFrameClock *frame_clock,
@@ -62,6 +63,7 @@ frame_clock_timeline_basic (void)
 
   main_loop = g_main_loop_new (NULL, FALSE);
   frame_clock = clutter_frame_clock_new (refresh_rate,
+                                         max_concurrent_frames,
                                          &timeline_frame_listener_iface,
                                          NULL);
   g_object_add_weak_pointer (G_OBJECT (frame_clock), (gpointer *) &frame_clock);
@@ -141,10 +143,12 @@ frame_clock_timeline_switch (void)
   main_loop = g_main_loop_new (NULL, FALSE);
 
   frame_clock1 = clutter_frame_clock_new (refresh_rate,
+                                          max_concurrent_frames,
                                           &timeline_frame_listener_iface,
                                           NULL);
   g_object_add_weak_pointer (G_OBJECT (frame_clock1), (gpointer *) &frame_clock1);
   frame_clock2 = clutter_frame_clock_new (refresh_rate,
+                                          max_concurrent_frames,
                                           &timeline_frame_listener_iface,
                                           NULL);
   g_object_add_weak_pointer (G_OBJECT (frame_clock2), (gpointer *) &frame_clock2);

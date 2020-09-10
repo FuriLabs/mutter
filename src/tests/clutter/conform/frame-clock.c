@@ -5,6 +5,8 @@ static const float refresh_rate = 60.0;
 static const int64_t refresh_interval_us = (int64_t) (0.5 + G_USEC_PER_SEC /
                                                       refresh_rate);
 
+static const unsigned int max_concurrent_frames = 1;
+
 static int64_t test_frame_count;
 static int64_t expected_frame_count;
 
@@ -144,6 +146,7 @@ frame_clock_schedule_update (void)
 
   test.main_loop = g_main_loop_new (NULL, FALSE);
   frame_clock = clutter_frame_clock_new (refresh_rate,
+                                         max_concurrent_frames,
                                          &frame_listener_iface,
                                          &test);
 
@@ -226,6 +229,7 @@ frame_clock_immediate_present (void)
 
   main_loop = g_main_loop_new (NULL, FALSE);
   frame_clock = clutter_frame_clock_new (refresh_rate,
+                                         max_concurrent_frames,
                                          &immediate_frame_listener_iface,
                                          main_loop);
 
@@ -304,6 +308,7 @@ frame_clock_delayed_damage (void)
 
   test.main_loop = g_main_loop_new (NULL, FALSE);
   frame_clock = clutter_frame_clock_new (refresh_rate,
+                                         max_concurrent_frames,
                                          &delayed_damage_frame_listener_iface,
                                          &test);
 
@@ -364,6 +369,7 @@ frame_clock_no_damage (void)
 
   main_loop = g_main_loop_new (NULL, FALSE);
   frame_clock = clutter_frame_clock_new (refresh_rate,
+                                         max_concurrent_frames,
                                          &no_damage_frame_listener_iface,
                                          NULL);
 
@@ -450,6 +456,7 @@ frame_clock_schedule_update_now (void)
 
   test.base.main_loop = g_main_loop_new (NULL, FALSE);
   frame_clock = clutter_frame_clock_new (refresh_rate,
+                                         max_concurrent_frames,
                                          &update_now_frame_listener_iface,
                                          &test);
 
@@ -532,6 +539,7 @@ frame_clock_before_frame (void)
 
   main_loop = g_main_loop_new (NULL, FALSE);
   frame_clock = clutter_frame_clock_new (refresh_rate,
+                                         max_concurrent_frames,
                                          &before_frame_frame_listener_iface,
                                          &expected_frame_count);
 
@@ -613,6 +621,7 @@ frame_clock_inhibit (void)
 
   test.main_loop = g_main_loop_new (NULL, FALSE);
   test.frame_clock = clutter_frame_clock_new (refresh_rate,
+                                              max_concurrent_frames,
                                               &inhibit_frame_listener_iface,
                                               &test);
 
@@ -676,6 +685,7 @@ frame_clock_reschedule_on_idle (void)
 
   test.base.main_loop = g_main_loop_new (NULL, FALSE);
   frame_clock = clutter_frame_clock_new (refresh_rate,
+                                         max_concurrent_frames,
                                          &reschedule_on_idle_listener_iface,
                                          &test);
   fake_hw_clock = fake_hw_clock_new (frame_clock, NULL, NULL);
@@ -712,6 +722,7 @@ frame_clock_destroy_signal (void)
   /* Test that the destroy signal is emitted when removing last reference. */
 
   frame_clock = clutter_frame_clock_new (refresh_rate,
+                                         max_concurrent_frames,
                                          &dummy_frame_listener_iface,
                                          NULL);
 
@@ -730,6 +741,7 @@ frame_clock_destroy_signal (void)
    */
 
   frame_clock = clutter_frame_clock_new (refresh_rate,
+                                         max_concurrent_frames,
                                          &dummy_frame_listener_iface,
                                          NULL);
   frame_clock_backup = frame_clock;

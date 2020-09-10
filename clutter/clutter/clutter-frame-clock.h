@@ -53,6 +53,7 @@ typedef struct _ClutterFrameListenerIface
 
 CLUTTER_EXPORT
 ClutterFrameClock * clutter_frame_clock_new (float                            refresh_rate,
+                                             unsigned int                     max_concurrent_frames,
                                              const ClutterFrameListenerIface *iface,
                                              gpointer                         user_data);
 
