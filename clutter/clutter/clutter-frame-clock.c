@@ -76,6 +76,7 @@ struct _ClutterFrameClock
 
   unsigned int max_concurrent_frames;  /* 1 = double buffering, 2 = triple buffering */
 
+  int64_t last_update_time_us;
   int64_t last_presentation_time_us;
 
   gboolean is_next_presentation_time_valid;
@@ -215,8 +216,13 @@ clutter_frame_clock_notify_presented (ClutterFrameClock *frame_clock,
       maybe_reschedule_update (frame_clock);
       break;
     case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE_AND_SCHEDULED:
-      frame_clock->state = CLUTTER_FRAME_CLOCK_STATE_SCHEDULED;
-      maybe_reschedule_update (frame_clock);
+      /* The GPU has caught up now so we can start trusting
+       * last_presentation_time_us again. So rather than dropping back to
+       * SCHEDULED, let's force a reschedule from IDLE. This way we'll get a
+       * more precise next update time based on last_presentation_time_us.
+       */
+      frame_clock->state = CLUTTER_FRAME_CLOCK_STATE_IDLE;
+      clutter_frame_clock_schedule_update (frame_clock);
       break;
     case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_TWO:
       frame_clock->state = CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE;
@@ -366,6 +372,7 @@ clutter_frame_clock_schedule_update_now (ClutterFrameClock *frame_clock)
   g_warn_if_fail (next_update_time_us != -1);
 
   g_source_set_ready_time (frame_clock->source, next_update_time_us);
+  frame_clock->last_update_time_us = next_update_time_us;
   frame_clock->is_next_presentation_time_valid = FALSE;
 }
 
@@ -399,10 +406,10 @@ clutter_frame_clock_schedule_update (ClutterFrameClock *frame_clock)
     case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE:
       if (frame_clock->max_concurrent_frames > 1)
         {
-          calculate_next_update_time_us (frame_clock,
-                                         &next_update_time_us,
-                                         &frame_clock->next_presentation_time_us);
-          frame_clock->is_next_presentation_time_valid = TRUE;
+          g_assert (frame_clock->last_update_time_us);
+          next_update_time_us = frame_clock->last_update_time_us +
+                                frame_clock->refresh_interval_us;
+          frame_clock->is_next_presentation_time_valid = FALSE;
           frame_clock->state = CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE_AND_SCHEDULED;
           break;
         }
@@ -414,6 +421,7 @@ clutter_frame_clock_schedule_update (ClutterFrameClock *frame_clock)
   g_warn_if_fail (next_update_time_us != -1);
 
   g_source_set_ready_time (frame_clock->source, next_update_time_us);
+  frame_clock->last_update_time_us = next_update_time_us;
 }
 
 static void
