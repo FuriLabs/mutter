@@ -108,6 +108,11 @@ meta_test_ref_test_sanity (void)
   clutter_actor_set_background_color (actor2, &COGL_COLOR_INIT (52, 101, 164, 255));
   clutter_actor_add_child (stage, actor2);
 
+#if G_BYTE_ORDER == G_BIG_ENDIAN
+  g_test_incomplete ("View comparison is not supported by this architecture");
+  return;
+#endif
+
   g_test_expect_message ("libmutter-test",
                          G_LOG_LEVEL_CRITICAL,
                          "Pixel difference exceeds limits*");

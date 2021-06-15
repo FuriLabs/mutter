@@ -374,6 +374,11 @@ meta_ref_test_verify (MetaRefTestAdaptor  adaptor,
       g_assert_cmpint (ref_status, ==, CAIRO_STATUS_SUCCESS);
       ensure_expected_format (&ref_image);
 
+#if G_BYTE_ORDER == G_BIG_ENDIAN
+  g_test_incomplete ("View comparison is not supported by this architecture");
+  return;
+#endif
+
       if (!compare_images (ref_image, image, &gl_fuzz,
                            &diff_stat))
         {
