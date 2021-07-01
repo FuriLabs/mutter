@@ -93,6 +93,7 @@ struct _MetaOnscreenNative
   struct {
     struct gbm_surface *surface;
     MetaDrmBuffer *current_fb;
+    MetaDrmBuffer *posted_fb;
     MetaDrmBuffer *next_fb;
   } gbm;
 
@@ -160,15 +161,33 @@ meta_onscreen_native_swap_drm_fb (CoglOnscreen *onscreen)
 {
   MetaOnscreenNative *onscreen_native = META_ONSCREEN_NATIVE (onscreen);
 
-  if (!onscreen_native->gbm.next_fb)
+  if (!onscreen_native->gbm.posted_fb)
     return;
 
   free_current_bo (onscreen);
 
-  g_set_object (&onscreen_native->gbm.current_fb, onscreen_native->gbm.next_fb);
-  g_clear_object (&onscreen_native->gbm.next_fb);
+  g_set_object (&onscreen_native->gbm.current_fb,
+                onscreen_native->gbm.posted_fb);
+  g_clear_object (&onscreen_native->gbm.posted_fb);
 
   swap_secondary_drm_fb (onscreen);
+
+  if (onscreen_native->gbm.next_fb)
+    post_latest_swap (onscreen);
+}
+
+static void
+promote_drm_next_to_posted (CoglOnscreen *onscreen)
+{
+  MetaOnscreenNative *onscreen_native = META_ONSCREEN_NATIVE (onscreen);
+
+  if (onscreen_native->gbm.next_fb)
+    {
+      g_warn_if_fail (onscreen_native->gbm.posted_fb == NULL);
+      g_set_object (&onscreen_native->gbm.posted_fb,
+                    onscreen_native->gbm.next_fb);
+      g_clear_object (&onscreen_native->gbm.next_fb);
+    }
 }
 
 static void
@@ -1106,6 +1125,7 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
     {
       meta_renderer_native_queue_power_save_page_flip (renderer_native,
                                                        onscreen);
+      promote_drm_next_to_posted (onscreen);
       return;
     }
 
@@ -1123,6 +1143,8 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
                       "Postponing primary plane composite update for CRTC %u (%s)",
                       meta_kms_crtc_get_id (kms_crtc),
                       meta_kms_device_get_path (kms_device));
+
+          promote_drm_next_to_posted (onscreen);
           return;
         }
       else if (meta_renderer_native_has_pending_mode_set (renderer_native))
@@ -1130,6 +1152,7 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
           meta_topic (META_DEBUG_KMS, "Posting global mode set updates on %s",
                       meta_kms_device_get_path (kms_device));
 
+          promote_drm_next_to_posted (onscreen);
           meta_renderer_native_notify_mode_sets_reset (renderer_native);
           meta_renderer_native_post_mode_set_updates (renderer_native);
           return;
@@ -1150,7 +1173,8 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
 #endif
     }
 
-  post_latest_swap (onscreen);
+  if (!onscreen_native->gbm.posted_fb)
+    post_latest_swap (onscreen);
 }
 
 static void
@@ -1186,6 +1210,7 @@ post_latest_swap (CoglOnscreen *onscreen)
   switch (meta_kms_feedback_get_result (kms_feedback))
     {
     case META_KMS_FEEDBACK_PASSED:
+      promote_drm_next_to_posted (onscreen);
       break;
     case META_KMS_FEEDBACK_FAILED:
       g_clear_object (&onscreen_native->gbm.next_fb);
@@ -1347,6 +1372,7 @@ meta_onscreen_native_direct_scanout (CoglOnscreen   *onscreen,
   switch (meta_kms_feedback_get_result (kms_feedback))
     {
     case META_KMS_FEEDBACK_PASSED:
+      promote_drm_next_to_posted (onscreen);
       clutter_frame_set_result (frame,
                                 CLUTTER_FRAME_RESULT_PENDING_PRESENTED);
       break;
@@ -1392,6 +1418,9 @@ meta_onscreen_native_finish_frame (CoglOnscreen *onscreen,
   MetaKmsUpdate *kms_update;
   g_autoptr (MetaKmsFeedback) kms_feedback = NULL;
   const GError *error;
+
+  if (onscreen_native->gbm.posted_fb)  /* Post already pending. Avoid EBUSY */
+    return;
 
   kms_update = meta_kms_get_pending_update (kms, kms_device);
   if (!kms_update)
