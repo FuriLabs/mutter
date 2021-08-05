@@ -1181,6 +1181,7 @@ post_latest_swap (CoglOnscreen *onscreen)
     case META_KMS_FEEDBACK_PASSED:
       break;
     case META_KMS_FEEDBACK_FAILED:
+      g_clear_object (&onscreen_native->gbm.next_fb);
       feedback_error = meta_kms_feedback_get_error (kms_feedback);
       if (!g_error_matches (feedback_error,
                             G_IO_ERROR,
