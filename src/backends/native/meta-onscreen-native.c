@@ -1340,6 +1340,15 @@ meta_onscreen_native_direct_scanout (CoglOnscreen   *onscreen,
       return FALSE;
     }
 
+  if (onscreen_native->gbm.posted_fb)
+    {
+      g_set_error_literal (error,
+                           COGL_SCANOUT_ERROR,
+                           COGL_SCANOUT_ERROR_INHIBITED,
+                           "Direct scanout does not support triple buffering");
+      return FALSE;
+    }
+
   renderer_gpu_data = meta_renderer_native_get_gpu_data (renderer_native,
                                                          render_gpu);
 
