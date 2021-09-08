@@ -444,7 +444,6 @@ static void
 meta_onscreen_native_flip_crtc (CoglOnscreen                *onscreen,
                                 MetaRendererView            *view,
                                 MetaCrtc                    *crtc,
-                                MetaKmsPageFlipListenerFlag  flags,
                                 const int                   *rectangles,
                                 int                          n_rectangles)
 {
@@ -452,7 +451,6 @@ meta_onscreen_native_flip_crtc (CoglOnscreen                *onscreen,
   MetaRendererNative *renderer_native = onscreen_native->renderer_native;
   MetaGpuKms *render_gpu = onscreen_native->render_gpu;
   MetaCrtcKms *crtc_kms = META_CRTC_KMS (crtc);
-  MetaKmsCrtc *kms_crtc = meta_crtc_kms_get_kms_crtc (crtc_kms);
   MetaRendererNativeGpuData *renderer_gpu_data;
   MetaGpuKms *gpu_kms;
   MetaKmsDevice *kms_device;
@@ -508,6 +506,23 @@ meta_onscreen_native_flip_crtc (CoglOnscreen                *onscreen,
       break;
 #endif
     }
+}
+
+static void
+add_page_flip_listener (CoglOnscreen                *onscreen,
+                        MetaKmsPageFlipListenerFlag  flags)
+{
+  MetaOnscreenNative *onscreen_native = META_ONSCREEN_NATIVE (onscreen);
+  MetaCrtcKms *crtc_kms = META_CRTC_KMS (onscreen_native->crtc);
+  MetaKmsCrtc *kms_crtc = meta_crtc_kms_get_kms_crtc (crtc_kms);
+  MetaKmsDevice *kms_device = meta_kms_crtc_get_device (kms_crtc);
+  MetaKms *kms = meta_kms_device_get_kms (kms_device);
+  MetaRendererView *view = onscreen_native->view;
+  MetaKmsUpdate *kms_update;
+
+  kms_update = meta_kms_get_pending_update (kms, kms_device);
+  if (!kms_update)
+    return;
 
   meta_kms_update_add_page_flip_listener (kms_update,
                                           kms_crtc,
@@ -1117,7 +1132,6 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
       meta_onscreen_native_flip_crtc (onscreen,
                                       onscreen_native->view,
                                       onscreen_native->crtc,
-                                      META_KMS_PAGE_FLIP_LISTENER_FLAG_NONE,
                                       rectangles,
                                       n_rectangles);
     }
@@ -1145,6 +1159,8 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
                       meta_kms_device_get_path (kms_device));
 
           promote_drm_next_to_posted (onscreen);
+          add_page_flip_listener (onscreen,
+                                  META_KMS_PAGE_FLIP_LISTENER_FLAG_NONE);
           return;
         }
       else if (meta_renderer_native_has_pending_mode_set (renderer_native))
@@ -1153,6 +1169,9 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
                       meta_kms_device_get_path (kms_device));
 
           promote_drm_next_to_posted (onscreen);
+          add_page_flip_listener (onscreen,
+                                  META_KMS_PAGE_FLIP_LISTENER_FLAG_NONE);
+
           meta_renderer_native_notify_mode_sets_reset (renderer_native);
           meta_renderer_native_post_mode_set_updates (renderer_native);
           return;
@@ -1165,6 +1184,9 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
     case META_RENDERER_NATIVE_MODE_EGL_DEVICE:
       if (meta_renderer_native_has_pending_mode_set (renderer_native))
         {
+          add_page_flip_listener (onscreen,
+                                  META_KMS_PAGE_FLIP_LISTENER_FLAG_NONE);
+
           meta_renderer_native_notify_mode_sets_reset (renderer_native);
           meta_renderer_native_post_mode_set_updates (renderer_native);
           return;
@@ -1202,6 +1224,8 @@ post_latest_swap (CoglOnscreen *onscreen)
               "Posting primary plane composite update for CRTC %u (%s)",
               meta_kms_crtc_get_id (kms_crtc),
               meta_kms_device_get_path (kms_device));
+
+  add_page_flip_listener (onscreen, META_KMS_PAGE_FLIP_LISTENER_FLAG_NONE);
 
   flags = META_KMS_UPDATE_FLAG_NONE;
   kms_feedback = meta_kms_post_pending_update_sync (kms, kms_device, flags);
@@ -1355,9 +1379,11 @@ meta_onscreen_native_direct_scanout (CoglOnscreen   *onscreen,
   meta_onscreen_native_flip_crtc (onscreen,
                                   onscreen_native->view,
                                   onscreen_native->crtc,
-                                  META_KMS_PAGE_FLIP_LISTENER_FLAG_DROP_ON_ERROR,
                                   NULL,
                                   0);
+
+  add_page_flip_listener (onscreen,
+                          META_KMS_PAGE_FLIP_LISTENER_FLAG_DROP_ON_ERROR);
 
   kms_crtc = meta_crtc_kms_get_kms_crtc (META_CRTC_KMS (onscreen_native->crtc));
   kms_device = meta_kms_crtc_get_device (kms_crtc);
@@ -1429,12 +1455,7 @@ meta_onscreen_native_finish_frame (CoglOnscreen *onscreen,
       return;
     }
 
-  meta_kms_update_add_page_flip_listener (kms_update,
-                                          kms_crtc,
-                                          &page_flip_listener_vtable,
-                                          META_KMS_PAGE_FLIP_LISTENER_FLAG_NONE,
-                                          g_object_ref (onscreen_native->view),
-                                          g_object_unref);
+  add_page_flip_listener (onscreen, META_KMS_PAGE_FLIP_LISTENER_FLAG_NONE);
 
   flags = META_KMS_UPDATE_FLAG_NONE;
   kms_feedback = meta_kms_post_pending_update_sync (kms,
