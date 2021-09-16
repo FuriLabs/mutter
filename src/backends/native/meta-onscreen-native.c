@@ -1084,6 +1084,9 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
   if (egl_context_changed)
     _cogl_winsys_egl_ensure_current (cogl_display);
 
+  clutter_frame_set_result (frame,
+                            CLUTTER_FRAME_RESULT_PENDING_PRESENTED);
+
   power_save_mode = meta_monitor_manager_get_power_save_mode (monitor_manager);
   if (power_save_mode == META_POWER_SAVE_ON)
     {
@@ -1099,8 +1102,6 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
     {
       meta_renderer_native_queue_power_save_page_flip (renderer_native,
                                                        onscreen);
-      clutter_frame_set_result (frame,
-                                CLUTTER_FRAME_RESULT_PENDING_PRESENTED);
       return;
     }
 
@@ -1118,9 +1119,6 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
                       "Postponing primary plane composite update for CRTC %u (%s)",
                       meta_kms_crtc_get_id (kms_crtc),
                       meta_kms_device_get_path (kms_device));
-
-          clutter_frame_set_result (frame,
-                                    CLUTTER_FRAME_RESULT_PENDING_PRESENTED);
           return;
         }
       else if (meta_renderer_native_has_pending_mode_set (renderer_native))
@@ -1130,8 +1128,6 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
 
           meta_renderer_native_notify_mode_sets_reset (renderer_native);
           meta_renderer_native_post_mode_set_updates (renderer_native);
-          clutter_frame_set_result (frame,
-                                    CLUTTER_FRAME_RESULT_PENDING_PRESENTED);
           return;
         }
       break;
@@ -1144,8 +1140,6 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
         {
           meta_renderer_native_notify_mode_sets_reset (renderer_native);
           meta_renderer_native_post_mode_set_updates (renderer_native);
-          clutter_frame_set_result (frame,
-                                    CLUTTER_FRAME_RESULT_PENDING_PRESENTED);
           return;
         }
       break;
@@ -1163,13 +1157,8 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
   switch (meta_kms_feedback_get_result (kms_feedback))
     {
     case META_KMS_FEEDBACK_PASSED:
-      clutter_frame_set_result (frame,
-                                CLUTTER_FRAME_RESULT_PENDING_PRESENTED);
       break;
     case META_KMS_FEEDBACK_FAILED:
-      clutter_frame_set_result (frame,
-                                CLUTTER_FRAME_RESULT_PENDING_PRESENTED);
-
       feedback_error = meta_kms_feedback_get_error (kms_feedback);
       if (!g_error_matches (feedback_error,
                             G_IO_ERROR,
