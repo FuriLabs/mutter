@@ -1150,6 +1150,11 @@ assert_thread_levels (uint32_t expected_priority,
   uint32_t priority = UINT32_MAX;
   int32_t nice_level = INT32_MAX;
 
+#if defined  __arm__ || defined __i386__
+  g_test_incomplete ("Modifying thread priority is not supported by this architecture");
+  return;
+#endif
+
   priority_variant =
     call_rtkit_mock_method ("GetThreadPriority",
                             g_variant_new ("(t)", gettid ()));
