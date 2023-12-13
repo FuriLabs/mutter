@@ -658,6 +658,7 @@ test_cases += [
     'name': 'input-capture',
     'suite': 'backends/native',
     'sources': [ 'input-capture-tests.c' ],
+    'broken': true,
   },
   {
     'name': 'thread',
@@ -1092,9 +1093,20 @@ foreach test_case: test_cases
 
   args = test_case.get('args', [])
 
+
+  extra_suites = []
+
+  if test_case.get('flaky', false)
+    extra_suites += 'flaky'
+  endif
+
+  if test_case.get('broken', false)
+    extra_suites += 'broken'
+  endif
+
   message('test @0@ args: @1@'.format(test_case['name'], args))
   test(test_case['name'], test_executable,
-    suite: ['core', 'mutter/' + test_case['suite']],
+    suite: ['core', 'mutter/' + test_case['suite']] + extra_suites,
     args: args,
     env: test_env,
     depends: test_depends,
@@ -1185,7 +1197,7 @@ stacking_tests = [
 
 foreach stacking_test: stacking_tests
   test(stacking_test, test_runner,
-    suite: ['core', 'mutter/stacking'],
+    suite: ['core', 'mutter/stacking', 'flaky'],
     env: test_env,
     args: [
       files('stacking' / stacking_test + '.metatest'),

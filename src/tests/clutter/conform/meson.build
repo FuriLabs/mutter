@@ -70,6 +70,12 @@ test_env.set('GSETTINGS_SCHEMA_DIR', locally_compiled_schemas_dir)
 test_env.set('TEST_DATADIR', mutter_srcdir / 'src' / 'tests')
 
 foreach test : clutter_conform_tests
+  extra_suites = []
+
+  if test == 'timeline' or test == 'timeline-interpolate'
+    extra_suites += 'flaky'
+  endif
+
   test_executable = executable('@0@'.format(test),
     sources: [
       '@0@.c'.format(test),
@@ -85,7 +91,7 @@ foreach test : clutter_conform_tests
   )
 
   test(test, test_executable,
-    suite: ['clutter', 'clutter/conform'],
+    suite: ['clutter', 'clutter/conform'] + extra_suites,
     env: test_env,
     is_parallel: false,
   )

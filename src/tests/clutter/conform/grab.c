@@ -620,6 +620,12 @@ grab_input_only (void)
   ClutterSeat *seat;
   g_autoptr (ClutterVirtualInputDevice) pointer = NULL;
 
+  if (g_getenv ("DEB_ALLOW_FLAKY_TESTS") == NULL)
+    {
+      g_test_skip ("https://gitlab.gnome.org/GNOME/mutter/-/issues/3205");
+      return;
+    }
+
   seat = clutter_test_get_default_seat ();
   pointer = clutter_seat_create_virtual_device (seat, CLUTTER_POINTER_DEVICE);
 

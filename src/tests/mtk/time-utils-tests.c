@@ -28,6 +28,12 @@ test_extrapolate_interval_boundary (void)
   int64_t now_us;
   int64_t next_interval_boundary_us;
 
+  if (g_getenv ("DEB_ALLOW_FLAKY_TESTS") == NULL)
+    {
+      g_test_skip ("https://gitlab.gnome.org/GNOME/mutter/-/issues/4199");
+      return;
+    }
+
   now_us = g_get_monotonic_time ();
 
   next_interval_boundary_us =

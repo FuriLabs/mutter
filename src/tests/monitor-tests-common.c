@@ -276,7 +276,11 @@ meta_check_monitor_test_clients_state (void)
 
   meta_check_test_client_state (wayland_monitor_test_client);
   meta_check_test_client_state (x11_monitor_test_client);
-  check_test_client_x11_state (x11_monitor_test_client);
+
+  if (g_getenv ("DEB_ALLOW_FLAKY_TESTS") == NULL)
+    g_test_skip ("https://gitlab.gnome.org/GNOME/mutter/-/issues/4200");
+  else
+    check_test_client_x11_state (x11_monitor_test_client);
 }
 
 static MetaMonitorTestSetup *

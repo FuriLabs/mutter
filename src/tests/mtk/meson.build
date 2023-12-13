@@ -30,6 +30,7 @@ test_cases += [
   {
     'name': 'mtk-time-utils',
     'suite': 'unit',
+    'flaky': true,
     'sources': [
       'mtk/time-utils-tests.c',
     ]
