@@ -781,6 +781,15 @@ cogl_onscreen_glx_swap_region (CoglOnscreen  *onscreen,
    */
   _cogl_winsys_wait_for_gpu (onscreen);
 
+  printf("vv: is_sync=%d have_counter=%d can_wait=%d, n_rectangles=%d copy=%p, blit=%p\n",
+         !!blit_sub_buffer_is_synchronized,
+         !!have_counter,
+         !!can_wait,
+         n_rectangles,
+         glx_renderer->glXCopySubBuffer,
+         context->glBlitFramebuffer);
+  fflush(stdout);
+
   if (blit_sub_buffer_is_synchronized && have_counter && can_wait)
     {
       end_frame_vsync_counter = _cogl_winsys_get_vsync_counter (context);

@@ -304,6 +304,10 @@ swap_framebuffer (ClutterStageWindow *stage_window,
                                                         target_presentation_time_us);
         }
 
+      printf("vv: n_rects=%d swap_with_damage=%d\n",
+             n_rects, !!swap_with_damage);
+      fflush(stdout);
+
       /* push on the screen */
       if (n_rects > 0 && !swap_with_damage)
         {
@@ -531,7 +535,7 @@ meta_stage_impl_redraw_view_primary (MetaStageImpl    *stage_impl,
   fb_width = cogl_framebuffer_get_width (fb);
   fb_height = cogl_framebuffer_get_height (fb);
 
-  has_buffer_age =
+  has_buffer_age = FALSE &&
     COGL_IS_ONSCREEN (onscreen) &&
     cogl_clutter_winsys_has_feature (COGL_WINSYS_FEATURE_BUFFER_AGE);
 
@@ -562,6 +566,10 @@ meta_stage_impl_redraw_view_primary (MetaStageImpl    *stage_impl,
                                paint_debug_flags,
                                onscreen,
                                stage_window);
+
+  printf("vv: has_buffer_age=%d use_clipped_redraw=%d\n",
+         !!has_buffer_age, !!use_clipped_redraw);
+  fflush(stdout);
 
   if (use_clipped_redraw)
     {
