@@ -293,6 +293,16 @@ swap_framebuffer (ClutterStageWindow *stage_window,
           damage[i * 4 + 3] = rect.height;
         }
 
+      if (n_rects == 0)
+        {
+          n_rects = 1;
+          damage = g_newa (int, 4);
+          damage[0] = 0;
+          damage[1] = 0;
+          damage[2] = 3840;
+          damage[3] = 2160;
+        }
+
       frame_info =
         cogl_frame_info_new (cogl_context, priv->global_frame_counter);
       priv->global_frame_counter++;
