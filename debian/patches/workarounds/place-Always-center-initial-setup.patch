@@ -1,0 +1,26 @@
+From: =?utf-8?q?Florian_M=C3=BCllner?= <fmuellner@gnome.org>
+Date: Fri, 2 Dec 2022 22:49:41 +0100
+Subject: place: Always center initial-setup
+
+Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/gnome-shell-extension-tiling-assistant/+bug/2011611
+Origin: https://src.fedoraproject.org/rpms/mutter/blob/main/f/0001-place-Always-center-initial-setup-fedora-welcome.patch
+Forwarded: not-needed
+---
+ src/core/place.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/core/place.c b/src/core/place.c
+index 23eb68e..ffe93b6 100644
+--- a/src/core/place.c
++++ b/src/core/place.c
+@@ -381,6 +381,10 @@ window_place_centered (MetaWindow *window)
+ 
+   type = window->type;
+ 
++  if (G_UNLIKELY (g_strcmp0 (meta_window_get_wm_class (window),
++                             "org.gnome.InitialSetup") == 0))
++    return TRUE;
++
+   return (type == META_WINDOW_DIALOG ||
+     type == META_WINDOW_MODAL_DIALOG ||
+     type == META_WINDOW_SPLASHSCREEN ||
