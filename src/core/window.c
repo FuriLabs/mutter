@@ -599,7 +599,7 @@ meta_window_class_init (MetaWindowClass *klass)
   obj_props[PROP_SUSPEND_STATE] =
     g_param_spec_enum ("suspend-state", NULL, NULL,
                        META_TYPE_WINDOW_SUSPEND_STATE,
-                       META_WINDOW_SUSPEND_STATE_SUSPENDED,
+                       META_WINDOW_SUSPEND_STATE_ACTIVE,
                        G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
   g_object_class_install_properties (object_class, PROP_LAST, obj_props);
@@ -715,6 +715,9 @@ meta_window_class_init (MetaWindowClass *klass)
 static void
 meta_window_init (MetaWindow *window)
 {
+  MetaWindowPrivate *priv = meta_window_get_instance_private (window);
+
+  priv->suspend_state = META_WINDOW_SUSPEND_STATE_ACTIVE;
   window->stamp = next_window_stamp++;
   meta_prefs_add_listener (prefs_changed_callback, window);
   window->is_alive = TRUE;
@@ -990,7 +993,6 @@ static void
 meta_window_constructed (GObject *object)
 {
   MetaWindow *window = META_WINDOW (object);
-  MetaWindowPrivate *priv = meta_window_get_instance_private (window);
   MetaDisplay *display = window->display;
   MetaContext *context = meta_display_get_context (display);
   MetaBackend *backend = meta_context_get_backend (context);
@@ -1342,11 +1344,6 @@ meta_window_constructed (GObject *object)
       !display->display_opening &&
       !window->initially_iconic)
     unminimize_window_and_all_transient_parents (window);
-
-  /* There is a slim chance we'll hit time out before a extremely slow client
-   * managed to become active, but unlikely enough. */
-  priv->suspend_state = META_WINDOW_SUSPEND_STATE_HIDDEN;
-  set_hidden_suspended_state (window);
 
   window->constructing = FALSE;
 }
@@ -1783,51 +1780,6 @@ meta_window_should_be_showing (MetaWindow *window)
   return meta_window_should_be_showing_on_workspace (window, active_workspace);
 }
 
-static void
-implement_showing (MetaWindow *window,
-                   gboolean    showing)
-{
-  /* Actually show/hide the window */
-  meta_verbose ("Implement showing = %d for window %s",
-                showing, window->desc);
-
-  /* Some windows are not stackable until being showed, so add those now. */
-  if (meta_window_is_stackable (window) && !meta_window_is_in_stack (window))
-    meta_stack_add (window->display->stack, window);
-
-  if (!showing)
-    {
-      /* When we manage a new window, we normally delay placing it
-       * until it is is first shown, but if we're previewing hidden
-       * windows we might want to know where they are on the screen,
-       * so we should place the window even if we're hiding it rather
-       * than showing it.
-       * Force placing windows only when they should be already mapped,
-       * see #751887
-       */
-      if (!window->placed && window_has_buffer (window))
-        meta_window_force_placement (window, FALSE);
-
-      meta_window_hide (window);
-
-      if (!window->override_redirect)
-        sync_client_window_mapped (window);
-    }
-  else
-    {
-      if (!window->override_redirect)
-        sync_client_window_mapped (window);
-
-      meta_window_show (window);
-    }
-}
-
-void
-meta_window_update_visibility (MetaWindow  *window)
-{
-  implement_showing (window, meta_window_should_be_showing (window));
-}
-
 void
 meta_window_clear_queued (MetaWindow *window)
 {
@@ -2241,6 +2193,53 @@ meta_window_is_suspended (MetaWindow *window)
     }
 
   g_assert_not_reached ();
+}
+
+static void
+implement_showing (MetaWindow *window,
+                   gboolean    showing)
+{
+  /* Actually show/hide the window */
+  meta_verbose ("Implement showing = %d for window %s",
+                showing, window->desc);
+
+  /* Some windows are not stackable until being showed, so add those now. */
+  if (meta_window_is_stackable (window) && !meta_window_is_in_stack (window))
+    meta_stack_add (window->display->stack, window);
+
+  if (!showing)
+    {
+      /* When we manage a new window, we normally delay placing it
+       * until it is is first shown, but if we're previewing hidden
+       * windows we might want to know where they are on the screen,
+       * so we should place the window even if we're hiding it rather
+       * than showing it.
+       * Force placing windows only when they should be already mapped,
+       * see #751887
+       */
+      if (!window->placed && window_has_buffer (window))
+        meta_window_force_placement (window, FALSE);
+
+      meta_window_hide (window);
+
+      if (!window->override_redirect)
+        sync_client_window_mapped (window);
+    }
+  else
+    {
+      if (!window->override_redirect)
+        sync_client_window_mapped (window);
+
+      meta_window_show (window);
+    }
+
+  update_suspend_state (window);
+}
+
+void
+meta_window_update_visibility (MetaWindow  *window)
+{
+  implement_showing (window, meta_window_should_be_showing (window));
 }
 
 static void
@@ -3997,9 +3996,6 @@ meta_window_move_resize_internal (MetaWindow          *window,
 
   meta_stack_update_window_tile_matches (window->display->stack,
                                          workspace_manager->active_workspace);
-
-  if (flags & META_MOVE_RESIZE_WAYLAND_CLIENT_RESIZE)
-    meta_window_queue (window, META_QUEUE_MOVE_RESIZE);
 
   /* This is a workaround for #1627. We still don't have any tests that can
    * reproduce this issue reliably and this is not a proper fix! */

@@ -25,6 +25,7 @@
 #include "backends/native/meta-kms-device.h"
 #include "compositor/meta-window-actor-private.h"
 #include "core/display-private.h"
+#include "core/meta-workspace-manager-private.h"
 #include "core/window-private.h"
 #include "meta-test/meta-context-test.h"
 #include "meta/meta-later.h"
@@ -873,6 +874,7 @@ enum
   XDG_TOPLEVEL_SUSPENDED_COMMAND_NEXT_WORKSPACE = 0,
   XDG_TOPLEVEL_SUSPENDED_COMMAND_PREV_WORKSPACE = 1,
   XDG_TOPLEVEL_SUSPENDED_COMMAND_ACTIVATE_WINDOW = 2,
+  XDG_TOPLEVEL_SUSPENDED_COMMAND_CLONE = 3,
 };
 
 static void
@@ -914,6 +916,27 @@ on_toplevel_suspended_sync_point (MetaWaylandTestDriver *test_driver,
       now_ms = meta_display_get_current_time_roundtrip (display);
       meta_window_activate (meta_wayland_surface_get_window (surface), now_ms);
       break;
+    case XDG_TOPLEVEL_SUSPENDED_COMMAND_CLONE:
+      {
+        MetaBackend *backend = meta_context_get_backend (test_context);
+        ClutterActor *stage = meta_backend_get_stage (backend);
+        MetaWindow *window;
+        MetaWindowActor *window_actor;
+        ClutterActor *clone;
+
+        surface = wl_resource_get_user_data (surface_resource);
+        window = meta_wayland_surface_get_window (surface);
+        window_actor = meta_window_actor_from_window (window);
+
+        clone = clutter_clone_new (CLUTTER_ACTOR (window_actor));
+        clutter_actor_show (clone);
+        clutter_actor_add_child (stage, clone);
+
+        g_object_set_data_full (G_OBJECT (window), "suspend-test-clone",
+                                clone, (GDestroyNotify) clutter_actor_destroy);
+
+        break;
+      }
     }
 }
 
@@ -922,11 +945,17 @@ toplevel_suspended (void)
 {
   MetaWaylandTestClient *wayland_test_client;
   gulong sync_point_id;
+  MetaDisplay *display = meta_context_get_display (test_context);
+  uint32_t now_ms = meta_display_get_current_time_roundtrip (display);
+  MetaWorkspaceManager *workspace_manager =
+    meta_display_get_workspace_manager (display);
 
   sync_point_id =
     g_signal_connect (test_driver, "sync-point",
                       G_CALLBACK (on_toplevel_suspended_sync_point),
                       NULL);
+
+  meta_workspace_manager_update_num_workspaces (workspace_manager, now_ms, 2);
 
   wayland_test_client =
     meta_wayland_test_client_new (test_context, "xdg-toplevel-suspended");

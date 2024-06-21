@@ -45,7 +45,6 @@ BUILDDIR=$(CURDIR)/obj-$(DEB_HOST_GNU_TYPE)
 TEST_COMMAND_BASE=env \
 	GIO_USE_VFS=local \
 	GIO_USE_VOLUME_MONITOR=unix \
-	GSETTINGS_SCHEMA_DIR=$(BUILDDIR)/data \
 	GVFS_DISABLE_FUSE=1 \
 	dbus-run-session -- xvfb-run -s '+iglx -noreset' -a \
 	dh_auto_test -- -C $(BUILDDIR) --no-rebuild --verbose --timeout-multiplier 6 \
@@ -58,7 +57,6 @@ TEST_COMMAND_FLAKY=env DEB_ALLOW_FLAKY_TESTS=1 $(TEST_COMMAND_BASE) --suite flak
 # Please keep this list in sync with debian/tests/installed-tests
 override_dh_auto_test:
 ifeq ($(filter nocheck,$(DEB_BUILD_OPTIONS)),)
-	glib-compile-schemas $(BUILDDIR)/data
 ifeq (,$(filter armhf mips mips64el mipsel ppc64el riscv64 s390x alpha hppa powerpc sparc64 x32,$(DEB_HOST_ARCH)))
 	-$(TEST_COMMAND)
 	-$(TEST_COMMAND_FLAKY) --logbase flaky-tests

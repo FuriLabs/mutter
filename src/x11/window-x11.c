@@ -2400,6 +2400,7 @@ meta_window_x11_update_input_region (MetaWindow *window)
   g_autoptr (MtkRegion) region = NULL;
   MetaWindowX11 *window_x11 = META_WINDOW_X11 (window);
   MetaWindowX11Private *priv = meta_window_x11_get_instance_private (window_x11);
+  MtkRectangle bounding_rect = { 0 };
   Window xwindow;
 
   if (window->decorated)
@@ -2411,10 +2412,14 @@ meta_window_x11_update_input_region (MetaWindow *window)
           return;
         }
       xwindow = window->frame->xwindow;
+      bounding_rect.width = window->buffer_rect.width;
+      bounding_rect.height = window->buffer_rect.height;
     }
   else
     {
       xwindow = priv->xwindow;
+      bounding_rect.width = priv->client_rect.width;
+      bounding_rect.height = priv->client_rect.height;
     }
 
   if (META_X11_DISPLAY_HAS_SHAPE (x11_display))
@@ -2458,8 +2463,8 @@ meta_window_x11_update_input_region (MetaWindow *window)
       else if (n_rects == 1 &&
                (rects[0].x == 0 &&
                 rects[0].y == 0 &&
-                rects[0].width == window->buffer_rect.width &&
-                rects[0].height == window->buffer_rect.height))
+                rects[0].width == bounding_rect.width &&
+                rects[0].height == bounding_rect.height))
         {
           /* This is the bounding region case. Keep the
            * region as NULL. */
@@ -2476,13 +2481,6 @@ meta_window_x11_update_input_region (MetaWindow *window)
 
   if (region != NULL)
     {
-      MtkRectangle bounding_rect;
-
-      bounding_rect.x = 0;
-      bounding_rect.y = 0;
-      bounding_rect.width = window->buffer_rect.width;
-      bounding_rect.height = window->buffer_rect.height;
-
       /* The shape we get back from the client may have coordinates
        * outside of the frame. The X SHAPE Extension requires that
        * the overall shape the client provides never exceeds the
@@ -2861,8 +2859,9 @@ meta_window_x11_configure_request (MetaWindow *window,
                       window->desc);
         }
       else if (active_window &&
-               !meta_window_x11_same_application (window, active_window) &&
-               !meta_window_same_client (window, active_window) &&
+               (active_window->client_type != window->client_type ||
+                (!meta_window_x11_same_application (window, active_window) &&
+                 !meta_window_same_client (window, active_window))) &&
                XSERVER_TIME_IS_BEFORE (window->net_wm_user_time,
                                        active_window->net_wm_user_time))
         {
@@ -4438,7 +4437,7 @@ meta_window_x11_get_xwindow (MetaWindow *window)
   MetaWindowX11 *window_x11;
   MetaWindowX11Private *priv;
 
-  g_return_val_if_fail (META_IS_WINDOW (window), None);
+  g_return_val_if_fail (META_IS_WINDOW_X11 (window), None);
 
   window_x11 = META_WINDOW_X11 (window);
   priv = meta_window_x11_get_instance_private (window_x11);
@@ -4452,7 +4451,7 @@ meta_window_x11_get_xgroup_leader (MetaWindow *window)
   MetaWindowX11 *window_x11;
   MetaWindowX11Private *priv;
 
-  g_return_val_if_fail (META_IS_WINDOW (window), None);
+  g_return_val_if_fail (META_IS_WINDOW_X11 (window), None);
 
   window_x11 = META_WINDOW_X11 (window);
   priv = meta_window_x11_get_instance_private (window_x11);
@@ -4466,7 +4465,7 @@ meta_window_x11_get_user_time_window (MetaWindow *window)
   MetaWindowX11 *window_x11;
   MetaWindowX11Private *priv;
 
-  g_return_val_if_fail (META_IS_WINDOW (window), None);
+  g_return_val_if_fail (META_IS_WINDOW_X11 (window), None);
 
   window_x11 = META_WINDOW_X11 (window);
   priv = meta_window_x11_get_instance_private (window_x11);
@@ -4479,7 +4478,7 @@ meta_window_x11_get_xtransient_for (MetaWindow *window)
 {
   MetaWindow *transient_for;
 
-  g_return_val_if_fail (META_IS_WINDOW (window), None);
+  g_return_val_if_fail (META_IS_WINDOW_X11 (window), None);
 
   transient_for = meta_window_get_transient_for (window);
   if (transient_for)
@@ -4534,6 +4533,8 @@ meta_window_x11_get_group (MetaWindow *window)
 {
   MetaWindowX11 *window_x11;
   MetaWindowX11Private *priv;
+
+  g_return_val_if_fail (META_IS_WINDOW_X11 (window), NULL);
 
   if (window->unmanaging)
     return NULL;

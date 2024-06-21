@@ -102,25 +102,6 @@ meta_wayland_transaction_apply_subsurface_position (MetaWaylandSurface          
   surface->sub.y = entry->y;
 }
 
-void
-meta_wayland_transaction_drop_subsurface_state (MetaWaylandTransaction *transaction,
-                                                MetaWaylandSurface     *surface)
-{
-  MetaWaylandSurface *parent = surface->committed_state.parent;
-  MetaWaylandTransactionEntry *entry;
-
-  entry = meta_wayland_transaction_get_entry (transaction, surface);
-  if (entry)
-    entry->has_sub_pos = FALSE;
-
-  if (!parent)
-    return;
-
-  entry = meta_wayland_transaction_get_entry (transaction, parent);
-  if (entry && entry->state && entry->state->subsurface_placement_ops)
-    meta_wayland_subsurface_drop_placement_ops (entry->state, surface);
-}
-
 static gboolean
 is_ancestor (MetaWaylandSurface *candidate,
              MetaWaylandSurface *reference)
@@ -485,8 +466,12 @@ meta_wayland_transaction_ensure_entry (MetaWaylandTransaction *transaction,
   if (entry)
     return entry;
 
+  g_return_val_if_fail (surface, NULL);
+  surface = g_object_ref (surface);
+  g_return_val_if_fail (surface, NULL);
+
   entry = g_new0 (MetaWaylandTransactionEntry, 1);
-  g_hash_table_insert (transaction->entries, g_object_ref (surface), entry);
+  g_hash_table_insert (transaction->entries, surface, entry);
 
   return entry;
 }

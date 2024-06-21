@@ -1,0 +1,116 @@
+From: Daniel van Vugt <daniel.van.vugt@canonical.com>
+Date: Mon, 10 Jun 2024 22:50:12 +0800
+Subject: build: Compile schemas locally for use in build tests
+
+So they don't need to be installed system-wide before build testing
+can work.
+
+Closes: https://gitlab.gnome.org/GNOME/mutter/-/issues/3368
+
+Forwarded: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3800
+---
+ data/meson.build                      | 17 +++++++++++++++--
+ src/tests/clutter/conform/meson.build |  1 +
+ src/tests/cogl/conform/meson.build    |  1 +
+ src/tests/cogl/unit/meson.build       |  1 +
+ src/tests/meson.build                 |  4 +++-
+ 5 files changed, 21 insertions(+), 3 deletions(-)
+
+diff --git a/data/meson.build b/data/meson.build
+index e97df81..12c4428 100644
+--- a/data/meson.build
++++ b/data/meson.build
+@@ -27,20 +27,33 @@ gschema_config.set('XWAYLAND_GRAB_DEFAULT_ACCESS_RULES',
+                    xwayland_grab_default_access_rules)
+ 
+ schemadir = datadir / 'glib-2.0' / 'schemas'
+-configure_file(
++schema_xmls = []
++schema_xmls += configure_file(
+   input: 'org.gnome.mutter.gschema.xml.in',
+   output: 'org.gnome.mutter.gschema.xml',
+   configuration: gschema_config,
+   install_dir: schemadir
+ )
+ 
+-configure_file(
++schema_xmls += configure_file(
+   input: 'org.gnome.mutter.wayland.gschema.xml.in',
+   output: 'org.gnome.mutter.wayland.gschema.xml',
+   configuration: gschema_config,
+   install_dir: schemadir
+ )
+ 
++locally_compiled_schemas_dir = meson.current_build_dir()
++
++locally_compiled_schemas = custom_target(
++  output: 'gschemas.compiled',
++  depend_files: schema_xmls,
++  command: ['glib-compile-schemas', locally_compiled_schemas_dir],
++)
++
++locally_compiled_schemas_dep = declare_dependency(
++  sources: locally_compiled_schemas
++)
++
+ install_data(['mutter-schemas.convert'],
+   install_dir: datadir / 'GConf/gsettings',
+ )
+diff --git a/src/tests/clutter/conform/meson.build b/src/tests/clutter/conform/meson.build
+index 92430c1..5263c91 100644
+--- a/src/tests/clutter/conform/meson.build
++++ b/src/tests/clutter/conform/meson.build
+@@ -56,6 +56,7 @@ test_env.set('G_TEST_SRCDIR', meson.current_source_dir())
+ test_env.set('G_TEST_BUILDDIR', meson.current_build_dir())
+ test_env.set('G_ENABLE_DIAGNOSTIC', '0')
+ test_env.set('CLUTTER_ENABLE_DIAGNOSTIC', '0')
++test_env.set('GSETTINGS_SCHEMA_DIR', locally_compiled_schemas_dir)
+ 
+ foreach test : clutter_conform_tests
+   test_executable = executable('@0@'.format(test),
+diff --git a/src/tests/cogl/conform/meson.build b/src/tests/cogl/conform/meson.build
+index 2614be5..f60fbf1 100644
+--- a/src/tests/cogl/conform/meson.build
++++ b/src/tests/cogl/conform/meson.build
+@@ -66,6 +66,7 @@ test_env = environment()
+ test_env.set('G_TEST_SRCDIR', meson.current_source_dir())
+ test_env.set('G_TEST_BUILDDIR', meson.current_build_dir())
+ test_env.set('G_ENABLE_DIAGNOSTIC', '0')
++test_env.set('GSETTINGS_SCHEMA_DIR', locally_compiled_schemas_dir)
+ 
+ cogl_test_variants = [ 'gl3', 'gles2' ]
+ 
+diff --git a/src/tests/cogl/unit/meson.build b/src/tests/cogl/unit/meson.build
+index f46a3df..ff763cb 100644
+--- a/src/tests/cogl/unit/meson.build
++++ b/src/tests/cogl/unit/meson.build
+@@ -14,6 +14,7 @@ test_env = environment()
+ test_env.set('G_TEST_SRCDIR', meson.current_source_dir())
+ test_env.set('G_TEST_BUILDDIR', meson.current_build_dir())
+ test_env.set('G_ENABLE_DIAGNOSTIC', '0')
++test_env.set('GSETTINGS_SCHEMA_DIR', locally_compiled_schemas_dir)
+ 
+ foreach unit_test: cogl_unit_tests
+   test_name = 'cogl-' + unit_test[0]
+diff --git a/src/tests/meson.build b/src/tests/meson.build
+index 60a2edb..a972096 100644
+--- a/src/tests/meson.build
++++ b/src/tests/meson.build
+@@ -42,6 +42,7 @@ tests_deps = [
+   libmutter_clutter_dep,
+   libmutter_dep,
+   mutter_deps,
++  locally_compiled_schemas_dep,
+ ]
+ 
+ libmutter_test = shared_library(libmutter_test_name,
+@@ -144,7 +145,8 @@ test_env_variables = {
+   'G_TEST_BUILDDIR': mutter_builddir,
+   'XDG_CONFIG_HOME': mutter_builddir / '.config',
+   'MUTTER_TEST_PLUGIN_PATH': '@0@'.format(default_plugin.full_path()),
+-  'GSETTINGS_SCHEMA_DIR': mutter_builddir / 'src' / 'tests',
++  'GSETTINGS_SCHEMA_DIR': ':'.join([mutter_builddir / 'src' / 'tests',
++                                    locally_compiled_schemas_dir]),
+ }
+ 
+ foreach name, value: test_env_variables

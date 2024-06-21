@@ -1,6 +1,8 @@
 include:
   - remote: 'https://gitlab.freedesktop.org/freedesktop/ci-templates/-/raw/145b1bc7ef1702d2bd71584010d7113c6786a506/templates/fedora.yml'
   - remote: 'https://gitlab.freedesktop.org/freedesktop/ci-templates/-/raw/34f4ade99434043f88e164933f570301fd18b125/templates/ci-fairy.yml'
+  - project: 'Infrastructure/openshift-images/gnome-release-service'
+    file: '/ci-templates/release-module.yml'
 
 stages:
  - review
@@ -85,7 +87,7 @@ variables:
     - .skip-git-clone
   variables:
     FDO_DISTRIBUTION_VERSION: 40
-    BASE_TAG: '2024-02-23.0'
+    BASE_TAG: '2024-04-29.0'
     MUTTER_USER: 'meta-user'
     FDO_DISTRIBUTION_PACKAGES:
       asciidoc
@@ -594,7 +596,7 @@ can-run-gnome-shell@x86_64:
     - .gitlab-ci/checkout-gnome-shell.sh
     - meson setup gnome-shell gnome-shell/build --prefix /usr -Dbuildtype=debugoptimized -Dman=false --werror --fatal-meson-warnings
     - sudo meson install -C gnome-shell/build
-    - dbus-run-session -- xvfb-run meson test -C gnome-shell/build --no-rebuild
+    - dbus-run-session -- xvfb-run meson test -C gnome-shell/build --no-rebuild --timeout-multiplier 5
 
 test-mutter-coverity:
   rules:
@@ -624,6 +626,27 @@ test-mutter-coverity:
     paths:
       - coverity
 
+distinfo:
+  extends:
+    - .fdo.distribution-image@fedora
+    - .mutter.fedora@x86_64
+    - .build-mutter-base
+    - .test-setup
+  stage: deploy
+  needs:
+    - job: build-fedora-container@x86_64
+      artifacts: false
+  script:
+    - meson setup . build
+    - .gitlab-ci/export-artifact-path build > dist.env
+  artifacts:
+    reports:
+      dotenv: dist.env
+    paths:
+      - dist.env
+  rules:
+    - if: '$CI_COMMIT_TAG'
+
 dist-mutter:
   extends:
     - .fdo.distribution-image@fedora
@@ -642,6 +665,12 @@ dist-mutter:
         ./src/tests/meta-dbus-runner.py
           --launch=wireplumber
           meson dist -C build
+  artifacts:
+    expire_in: 7 day
+    name: "mutter-${CI_JOB_NAME}-${CI_COMMIT_REF_NAME}"
+    when: always
+    paths:
+      - build/meson-private/dist-build/meson-logs
   rules:
     - if: '$CI_PIPELINE_SOURCE != "merge_request_event"'
       when: manual
@@ -657,10 +686,22 @@ dist-mutter:
 
 dist-mutter-tarball:
   extends: dist-mutter
+  needs:
+    - distinfo
   artifacts:
     expose_as: 'Get tarball here'
     paths:
-      - build/meson-dist/$CI_PROJECT_NAME-$CI_COMMIT_TAG.tar.xz
+      - $TARBALL_ARTIFACT_PATH
+    reports:
+      dotenv: dist.env
+  rules:
+    - if: '$CI_COMMIT_TAG'
+
+release-module:
+  stage: deploy
+  needs:
+    - dist-mutter-tarball
+  extends: .release-module
   rules:
     - if: '$CI_COMMIT_TAG'
 

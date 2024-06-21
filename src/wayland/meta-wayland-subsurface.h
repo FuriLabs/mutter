@@ -44,8 +44,7 @@ void meta_wayland_subsurface_union_geometry (MetaWaylandSubsurface *subsurface,
                                              int                    parent_y,
                                              MtkRectangle          *out_geometry);
 
-void meta_wayland_subsurface_drop_placement_ops (MetaWaylandSurfaceState *state,
-                                                 MetaWaylandSurface      *surface);
+void meta_wayland_subsurface_destroy_placement_op (MetaWaylandSubsurfacePlacementOp *op);
 
 void meta_wayland_subsurface_parent_destroyed (MetaWaylandSurface *surface);
 

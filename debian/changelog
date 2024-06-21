@@ -1,3 +1,30 @@
+mutter (46.2-1) experimental; urgency=medium
+
+  [ Daniel van Vugt ]
+  * New upstream release 46.2 (LP: #2068598)
+    - Fixed mouse clicks falling through to the window behind (LP: #2026194)
+    - Fixed a crash in meta_wayland_transaction_commit (LP: #2061739)
+    - Fixed night light getting stuck on (LP: #2066902)
+  * Update Support-Dynamic-triple-double-buffering.patch:
+    - Removed bogus changes introduced in 46.1-2 (unrelated files)
+    - Fixed debugging mode "MUTTER_DEBUG_TRIPLE_BUFFERING=always" which had
+      temporarily stopped working in 46.1 but also nobody should have been
+      using it.
+    - Updated commit message to mention the upstream source is maintained
+      in 'triple-buffering-v4-46'.
+  * Refreshed patches:
+    - meson-Do-not-mark-CI-test-tools-as-required.patch
+    - Mark-several-additional-tests-as-flaky.patch
+  * Add clutter/conform gesture tests to the list of known flaky ones:
+    it is a new test in mutter 46
+  * Add patch to compile gsettings schemas for use in build tests
+
+  [ Jeremy Bícha ]
+  * Stop compiling gsettings schemas in debian/rules
+  * Opt into Salsa CI
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Wed, 12 Jun 2024 11:23:13 -0400
+
 mutter (46.1-2ubuntu1) oracular; urgency=medium
 
   * Merge with Debian (LP: #2064735). Remaining changes:

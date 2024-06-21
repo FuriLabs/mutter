@@ -493,7 +493,8 @@ meta_wayland_surface_state_clear (MetaWaylandSurfaceState *state)
     wl_resource_destroy (cb->resource);
 
   if (state->subsurface_placement_ops)
-    g_slist_free_full (state->subsurface_placement_ops, g_free);
+    g_slist_free_full (state->subsurface_placement_ops,
+                       (GDestroyNotify) meta_wayland_subsurface_destroy_placement_op);
 
   meta_wayland_surface_state_discard_presentation_feedback (state);
 }
@@ -700,8 +701,6 @@ meta_wayland_surface_apply_placement_ops (MetaWaylandSurface      *parent,
       MetaWaylandSurface *surface = op->surface;
       GNode *sibling_node;
 
-      g_node_unlink (surface->applied_state.subsurface_branch_node);
-
       if (!op->sibling)
         {
           surface->applied_state.parent = NULL;
@@ -709,6 +708,8 @@ meta_wayland_surface_apply_placement_ops (MetaWaylandSurface      *parent,
         }
 
       surface->applied_state.parent = parent;
+
+      g_node_unlink (surface->applied_state.subsurface_branch_node);
 
       if (op->sibling == parent)
         sibling_node = parent->applied_state.subsurface_leaf_node;
@@ -980,7 +981,7 @@ meta_wayland_surface_commit (MetaWaylandSurface *surface)
       if ((meta_multi_texture_get_width (committed_texture) % committed_scale != 0) ||
           (meta_multi_texture_get_height (committed_texture) % committed_scale != 0))
         {
-          if (!surface->role || !META_IS_WAYLAND_CURSOR_SURFACE (surface->role))
+          if (surface->role && !META_IS_WAYLAND_CURSOR_SURFACE (surface->role))
             {
               wl_resource_post_error (surface->resource, WL_SURFACE_ERROR_INVALID_SIZE,
                                       "Buffer size (%dx%d) must be an integer multiple "
@@ -1519,6 +1520,7 @@ meta_wayland_surface_finalize (GObject *object)
 {
   MetaWaylandSurface *surface = META_WAYLAND_SURFACE (object);
   MetaWaylandCompositor *compositor = surface->compositor;
+  MetaWaylandSurface *subsurface_surface;
   MetaWaylandFrameCallback *cb, *next;
 
   g_clear_object (&surface->scanout_candidate);
@@ -1553,6 +1555,10 @@ meta_wayland_surface_finalize (GObject *object)
     wl_resource_destroy (cb->resource);
 
   meta_wayland_surface_discard_presentation_feedback (surface);
+
+  META_WAYLAND_SURFACE_FOREACH_SUBSURFACE (&surface->applied_state,
+                                           subsurface_surface)
+    g_node_unlink (subsurface_surface->applied_state.subsurface_branch_node);
 
   g_clear_pointer (&surface->applied_state.subsurface_branch_node, g_node_destroy);
 
@@ -2457,7 +2463,7 @@ committed_state_handle_highest_scale_monitor (MetaWaylandSurface *surface)
       transform = meta_wayland_surface_get_output_transform (surface);
       if (transform != surface->preferred_transform)
         {
-          wl_surface_send_preferred_buffer_transform (surface->resource, ceiled_scale);
+          wl_surface_send_preferred_buffer_transform (surface->resource, transform);
           surface->preferred_transform = transform;
         }
     }
