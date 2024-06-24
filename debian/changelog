@@ -17,6 +17,8 @@ mutter (46.2-1ubuntu1.1) UNRELEASED; urgency=medium
     it's a new test in Mutter 46 and not yet reliable.
   * Add build-Compile-schemas-locally-for-use-in-build-tests.patch to compile
     gsettings schemas for use in build tests.
+  * Add wayland-Disable-linux-drm-syncobj-v1.patch to avoid enabling major
+    new features in Noble updates.
 
   [ Jeremy Bícha ]
   * Stop compiling gsettings schemas in debian/rules

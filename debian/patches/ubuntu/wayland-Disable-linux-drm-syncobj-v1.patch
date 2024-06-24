@@ -1,0 +1,28 @@
+From: Daniel van Vugt <daniel.van.vugt@canonical.com>
+Date: Tue, 18 Jun 2024 18:11:58 +0800
+Subject: wayland: Disable linux-drm-syncobj-v1
+
+Introducing such a feature in 46.1 is a violation of the Ubuntu-GNOME MRE
+and a risk to LTS stability relative to 46.0. So disable it in such a way
+as to avoid conflicts since we still want to merge Mutter point releases
+going forward.
+
+The good news is that the feature is mostly only used by Xwayland 24.1
+to support Nvidia driver 555 and later, neither of which exist in Ubuntu
+24.04.
+---
+ src/wayland/meta-wayland.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/src/wayland/meta-wayland.c b/src/wayland/meta-wayland.c
+index 501b69a..8007c35 100644
+--- a/src/wayland/meta-wayland.c
++++ b/src/wayland/meta-wayland.c
+@@ -869,7 +869,6 @@ meta_wayland_compositor_new (MetaContext *context)
+   meta_wayland_activation_init (compositor);
+   meta_wayland_transaction_init (compositor);
+   meta_wayland_idle_inhibit_init (compositor);
+-  meta_wayland_drm_syncobj_init (compositor);
+ 
+ #ifdef HAVE_WAYLAND_EGLSTREAM
+   {
