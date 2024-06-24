@@ -24,18 +24,15 @@
 
 #include "xdg-activation-v1-client-protocol.h"
 
-static WaylandDisplay *display;
-static struct wl_registry *registry;
 static struct xdg_activation_v1 *activation;
 
 static struct wl_surface *surface;
-static struct xdg_surface *xdg_surface;
-static struct xdg_toplevel *xdg_toplevel;
 
 static gboolean running;
 
 static void
-init_surface (const char *token)
+init_surface (struct xdg_toplevel *xdg_toplevel,
+              const char          *token)
 {
   xdg_toplevel_set_title (xdg_toplevel, "startup notification client");
   xdg_activation_v1_activate (activation, token, surface);
@@ -43,7 +40,7 @@ init_surface (const char *token)
 }
 
 static void
-draw_main (void)
+draw_main (WaylandDisplay *display)
 {
   draw_surface (display, surface, 700, 500, 0xff00ff00);
 }
@@ -74,7 +71,9 @@ handle_xdg_surface_configure (void               *data,
                               struct xdg_surface *xdg_surface,
                               uint32_t            serial)
 {
-  draw_main ();
+  WaylandDisplay *display = data;
+
+  draw_main (display);
   wl_surface_commit (surface);
 
   g_assert_cmpint (wl_display_roundtrip (display->display), !=, -1);
@@ -126,7 +125,7 @@ static const struct xdg_activation_token_v1_listener token_listener = {
 };
 
 static char *
-get_token (void)
+get_token (WaylandDisplay *display)
 {
   struct xdg_activation_token_v1 *token;
   char *token_string = NULL;
@@ -151,6 +150,11 @@ get_token (void)
 static void
 test_startup_notifications (void)
 {
+  g_autoptr (WaylandDisplay) display = NULL;
+  struct wl_registry *registry;
+  struct xdg_toplevel *xdg_toplevel;
+  struct xdg_surface *xdg_surface;
+
   g_autofree char *token = NULL;
 
   display = wayland_display_new (WAYLAND_DISPLAY_CAPABILITY_NONE);
@@ -162,22 +166,19 @@ test_startup_notifications (void)
 
   wl_display_roundtrip (display->display);
 
-  token = get_token ();
+  token = get_token (display);
 
   surface = wl_compositor_create_surface (display->compositor);
   xdg_surface = xdg_wm_base_get_xdg_surface (display->xdg_wm_base, surface);
-  xdg_surface_add_listener (xdg_surface, &xdg_surface_listener, NULL);
+  xdg_surface_add_listener (xdg_surface, &xdg_surface_listener, display);
   xdg_toplevel = xdg_surface_get_toplevel (xdg_surface);
   xdg_toplevel_add_listener (xdg_toplevel, &xdg_toplevel_listener, NULL);
 
-  init_surface (token);
+  init_surface (xdg_toplevel, token);
 
   running = TRUE;
   while (running)
-    {
-      if (wl_display_dispatch (display->display) == -1)
-        return;
-    }
+    wayland_display_dispatch (display);
 
   wl_display_roundtrip (display->display);
 
@@ -185,7 +186,6 @@ test_startup_notifications (void)
   g_clear_pointer (&xdg_surface, xdg_surface_destroy);
   g_clear_pointer (&activation, xdg_activation_v1_destroy);
   g_clear_pointer (&registry, wl_registry_destroy);
-  g_clear_object (&display);
 }
 
 int

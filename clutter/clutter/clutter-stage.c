@@ -182,6 +182,14 @@ static void clutter_stage_set_viewport (ClutterStage *stage,
                                         float         width,
                                         float         height);
 
+static ClutterActor * clutter_stage_pick_and_update_device (ClutterStage             *stage,
+                                                            ClutterInputDevice       *device,
+                                                            ClutterEventSequence     *sequence,
+                                                            ClutterInputDevice       *source_device,
+                                                            ClutterDeviceUpdateFlags  flags,
+                                                            graphene_point_t          point,
+                                                            uint32_t                  time_ms);
+
 G_DEFINE_TYPE_WITH_PRIVATE (ClutterStage, clutter_stage, CLUTTER_TYPE_ACTOR)
 
 static void
@@ -891,35 +899,6 @@ clutter_stage_maybe_relayout (ClutterActor *actor)
     clutter_stage_invalidate_devices (stage);
 }
 
-GSList *
-clutter_stage_find_updated_devices (ClutterStage     *stage,
-                                    ClutterStageView *view)
-{
-  ClutterStagePrivate *priv = clutter_stage_get_instance_private (stage);
-  GSList *updating = NULL;
-  GHashTableIter iter;
-  gpointer value;
-
-  g_hash_table_iter_init (&iter, priv->pointer_devices);
-  while (g_hash_table_iter_next (&iter, NULL, &value))
-    {
-      PointerDeviceEntry *entry = value;
-      ClutterStageView *pointer_view;
-
-      pointer_view = clutter_stage_get_view_at (stage,
-                                                entry->coords.x,
-                                                entry->coords.y);
-      if (!pointer_view)
-        continue;
-      if (pointer_view != view)
-        continue;
-
-      updating = g_slist_prepend (updating, entry->device);
-    }
-
-  return updating;
-}
-
 void
 clutter_stage_finish_layout (ClutterStage *stage)
 {
@@ -952,33 +931,6 @@ clutter_stage_finish_layout (ClutterStage *stage)
     }
 
   g_warn_if_fail (!priv->actor_needs_immediate_relayout);
-}
-
-void
-clutter_stage_update_devices (ClutterStage *stage,
-                              GSList       *devices)
-{
-  ClutterStagePrivate *priv = clutter_stage_get_instance_private (stage);
-  GSList *l;
-
-  COGL_TRACE_BEGIN_SCOPED (ClutterStageUpdateDevices, "Clutter::Stage::update_devices()");
-
-  for (l = devices; l; l = l->next)
-    {
-      ClutterInputDevice *device = l->data;
-      PointerDeviceEntry *entry = NULL;
-
-      entry = g_hash_table_lookup (priv->pointer_devices, device);
-      g_assert (entry != NULL);
-
-      clutter_stage_pick_and_update_device (stage,
-                                            device,
-                                            NULL, NULL,
-                                            CLUTTER_DEVICE_UPDATE_IGNORE_CACHE |
-                                            CLUTTER_DEVICE_UPDATE_EMIT_CROSSING,
-                                            entry->coords,
-                                            CLUTTER_CURRENT_TIME);
-    }
 }
 
 static void
@@ -1623,7 +1575,21 @@ static void
 on_seat_unfocus_inhibited_changed (ClutterStage *stage,
                                    ClutterSeat  *seat)
 {
-  clutter_stage_repick_device (stage, clutter_seat_get_pointer (seat));
+  ClutterInputDevice *device;
+  graphene_point_t point = GRAPHENE_POINT_INIT_ZERO;
+
+  device = clutter_seat_get_pointer (seat);
+
+  if (!clutter_stage_get_device_coords (stage, device, NULL, &point))
+    return;
+
+  clutter_stage_pick_and_update_device (stage,
+                                        device,
+                                        NULL, NULL,
+                                        CLUTTER_DEVICE_UPDATE_IGNORE_CACHE |
+                                        CLUTTER_DEVICE_UPDATE_EMIT_CROSSING,
+                                        point,
+                                        CLUTTER_CURRENT_TIME);
 }
 
 static void
@@ -3524,24 +3490,6 @@ clutter_stage_update_device (ClutterStage         *stage,
     }
 }
 
-void
-clutter_stage_repick_device (ClutterStage       *stage,
-                             ClutterInputDevice *device)
-{
-  graphene_point_t point = GRAPHENE_POINT_INIT_ZERO;
-
-  if (!clutter_stage_get_device_coords (stage, device, NULL, &point))
-    return;
-
-  clutter_stage_pick_and_update_device (stage,
-                                        device,
-                                        NULL, NULL,
-                                        CLUTTER_DEVICE_UPDATE_IGNORE_CACHE |
-                                        CLUTTER_DEVICE_UPDATE_EMIT_CROSSING,
-                                        point,
-                                        CLUTTER_CURRENT_TIME);
-}
-
 static gboolean
 clutter_stage_check_in_clear_area (ClutterStage         *stage,
                                    ClutterInputDevice   *device,
@@ -3568,7 +3516,7 @@ clutter_stage_check_in_clear_area (ClutterStage         *stage,
                                     point.x, point.y);
 }
 
-ClutterActor *
+static ClutterActor *
 clutter_stage_pick_and_update_device (ClutterStage             *stage,
                                       ClutterInputDevice       *device,
                                       ClutterEventSequence     *sequence,
@@ -4604,4 +4552,61 @@ clutter_stage_get_active_gestures_array (ClutterStage *self)
   ClutterStagePrivate *priv = clutter_stage_get_instance_private (self);
 
   return priv->all_active_gestures;
+}
+
+ClutterActor *
+clutter_stage_update_device_for_event (ClutterStage *stage,
+                                       ClutterEvent *event)
+{
+  ClutterInputDevice *device = clutter_event_get_device (event);
+  ClutterInputDevice *source_device = clutter_event_get_source_device (event);
+  ClutterEventSequence *sequence = clutter_event_get_event_sequence (event);
+  ClutterDeviceUpdateFlags flags;
+  graphene_point_t point;
+  uint32_t time_ms;
+
+  clutter_event_get_coords (event, &point.x, &point.y);
+  time_ms = clutter_event_get_time (event);
+
+  flags = CLUTTER_DEVICE_UPDATE_EMIT_CROSSING;
+
+  return clutter_stage_pick_and_update_device (stage,
+                                               device,
+                                               sequence,
+                                               source_device,
+                                               flags,
+                                               point,
+                                               time_ms);
+}
+
+void
+clutter_stage_update_devices_in_view (ClutterStage     *stage,
+                                      ClutterStageView *view)
+{
+  ClutterStagePrivate *priv = clutter_stage_get_instance_private (stage);
+  GHashTableIter iter;
+  gpointer value;
+
+  g_hash_table_iter_init (&iter, priv->pointer_devices);
+  while (g_hash_table_iter_next (&iter, NULL, &value))
+    {
+      PointerDeviceEntry *entry = value;
+      ClutterStageView *pointer_view;
+
+      pointer_view = clutter_stage_get_view_at (stage,
+                                                entry->coords.x,
+                                                entry->coords.y);
+      if (!pointer_view)
+        continue;
+      if (pointer_view != view)
+        continue;
+
+      clutter_stage_pick_and_update_device (stage,
+                                            entry->device,
+                                            NULL, NULL,
+                                            CLUTTER_DEVICE_UPDATE_IGNORE_CACHE |
+                                            CLUTTER_DEVICE_UPDATE_EMIT_CROSSING,
+                                            entry->coords,
+                                            CLUTTER_CURRENT_TIME);
+    }
 }

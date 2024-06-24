@@ -74,13 +74,10 @@ struct _MetaWaylandKeyboard
   struct wl_listener focus_surface_listener;
   uint32_t focus_serial;
 
-  uint32_t key_down_keycode;
-  uint32_t key_down_serial;
-
-  uint32_t key_up_keycode;
-  uint32_t key_up_serial;
-
   struct wl_array pressed_keys;
+  GHashTable *key_down_serials;
+  uint32_t last_key_up_serial;
+  uint32_t last_key_up;
 
   MetaWaylandXkbInfo xkb_info;
   enum xkb_state_component mods_changed;
@@ -283,15 +280,24 @@ meta_wayland_keyboard_broadcast_key (MetaWaylandKeyboard *keyboard,
 
       serial = meta_wayland_input_device_next_serial (input_device);
 
+      if (keyboard->last_key_up)
+        {
+          g_hash_table_remove (keyboard->key_down_serials,
+                               GUINT_TO_POINTER (keyboard->last_key_up));
+          keyboard->last_key_up = 0;
+        }
+
       if (state)
         {
-          keyboard->key_down_serial = serial;
-          keyboard->key_down_keycode = key;
+          g_hash_table_insert (keyboard->key_down_serials,
+                               GUINT_TO_POINTER (key),
+                               GUINT_TO_POINTER (serial));
+          keyboard->last_key_up_serial = 0;
         }
       else
         {
-          keyboard->key_up_serial = serial;
-          keyboard->key_up_keycode = key;
+          keyboard->last_key_up_serial = serial;
+          keyboard->last_key_up = key;
         }
 
       wl_resource_for_each (resource, &keyboard->focus_resource_list)
@@ -548,6 +554,8 @@ meta_wayland_keyboard_enable (MetaWaylandKeyboard *keyboard)
 
   wl_array_init (&keyboard->pressed_keys);
 
+  keyboard->key_down_serials = g_hash_table_new (NULL, NULL);
+
   g_signal_connect (keyboard->settings, "changed",
                     G_CALLBACK (settings_changed), keyboard);
 
@@ -587,6 +595,9 @@ meta_wayland_keyboard_disable (MetaWaylandKeyboard *keyboard)
   wl_list_init (&keyboard->resource_list);
   wl_list_remove (&keyboard->focus_resource_list);
   wl_list_init (&keyboard->focus_resource_list);
+
+  g_clear_pointer (&keyboard->key_down_serials, g_hash_table_unref);
+  keyboard->last_key_up_serial = 0;
 
   wl_array_release (&keyboard->pressed_keys);
 
@@ -791,6 +802,8 @@ meta_wayland_keyboard_set_focus (MetaWaylandKeyboard *keyboard,
 
       wl_list_remove (&keyboard->focus_surface_listener.link);
       keyboard->focus_surface = NULL;
+      g_hash_table_remove_all (keyboard->key_down_serials);
+      keyboard->last_key_up_serial = 0;
     }
 
   if (surface != NULL)
@@ -822,15 +835,6 @@ meta_wayland_keyboard_set_focus (MetaWaylandKeyboard *keyboard,
             }
         }
     }
-}
-
-struct wl_client *
-meta_wayland_keyboard_get_focus_client (MetaWaylandKeyboard *keyboard)
-{
-  if (keyboard->focus_surface)
-    return wl_resource_get_client (keyboard->focus_surface->resource);
-  else
-    return NULL;
 }
 
 static void
@@ -891,9 +895,20 @@ gboolean
 meta_wayland_keyboard_can_popup (MetaWaylandKeyboard *keyboard,
                                  uint32_t             serial)
 {
-  return (keyboard->key_down_serial == serial ||
-          ((keyboard->key_down_keycode == keyboard->key_up_keycode) &&
-           keyboard->key_up_serial == serial));
+  GHashTableIter iter;
+  gpointer value;
+
+  if (keyboard->last_key_up_serial == serial)
+    return TRUE;
+
+  g_hash_table_iter_init (&iter, keyboard->key_down_serials);
+  while (g_hash_table_iter_next (&iter, NULL, &value))
+    {
+      if (GPOINTER_TO_UINT (value) == serial)
+        return TRUE;
+    }
+
+  return FALSE;
 }
 
 static void

@@ -18,6 +18,7 @@ typedef enum _WaylandDisplayCapabilities
   WAYLAND_DISPLAY_CAPABILITY_NONE = 0,
   WAYLAND_DISPLAY_CAPABILITY_TEST_DRIVER = 1 << 0,
   WAYLAND_DISPLAY_CAPABILITY_XDG_SHELL_V4 = 1 << 1,
+  WAYLAND_DISPLAY_CAPABILITY_XDG_SHELL_V6 = 1 << 2,
 } WaylandDisplayCapabilities;
 
 typedef struct _DmaBufFormat
@@ -62,11 +63,16 @@ G_DECLARE_FINAL_TYPE (WaylandDisplay, wayland_display,
 
 typedef struct _WaylandSurface
 {
+  GObject parent;
+
   WaylandDisplay *display;
 
   struct wl_surface *wl_surface;
   struct xdg_surface *xdg_surface;
   struct xdg_toplevel *xdg_toplevel;
+
+  GHashTable *pending_state;
+  GHashTable *current_state;
 
   int default_width;
   int default_height;
@@ -74,6 +80,7 @@ typedef struct _WaylandSurface
   int height;
 
   uint32_t color;
+  gboolean is_opaque;
 } WaylandSurface;
 
 #define WAYLAND_TYPE_SURFACE (wayland_surface_get_type ())
@@ -93,11 +100,18 @@ WaylandDisplay * wayland_display_new (WaylandDisplayCapabilities capabilities);
 WaylandDisplay * wayland_display_new_full (WaylandDisplayCapabilities  capabilities,
                                            struct wl_display          *wayland_display);
 
+void wayland_display_dispatch (WaylandDisplay *display);
+
 WaylandSurface * wayland_surface_new (WaylandDisplay *display,
                                       const char     *title,
                                       int             default_width,
                                       int             default_height,
                                       uint32_t        color);
+
+gboolean wayland_surface_has_state (WaylandSurface          *surface,
+                                    enum xdg_toplevel_state  state);
+
+void wayland_surface_set_opaque (WaylandSurface *surface);
 
 void draw_surface (WaylandDisplay    *display,
                    struct wl_surface *surface,
@@ -110,6 +124,9 @@ const char * lookup_property_value (WaylandDisplay *display,
 
 void wait_for_effects_completed (WaylandDisplay    *display,
                                  struct wl_surface *surface);
+
+void wait_for_window_shown (WaylandDisplay    *display,
+                            struct wl_surface *surface);
 
 void wait_for_view_verified (WaylandDisplay *display,
                              int             sequence);

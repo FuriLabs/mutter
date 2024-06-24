@@ -22,23 +22,19 @@
 
 #include "wayland-test-client-utils.h"
 
-static WaylandDisplay *display;
-
 static struct wl_surface *surface;
-static struct xdg_surface *xdg_surface;
-static struct xdg_toplevel *xdg_toplevel;
 
 static gboolean running;
 
 static void
-init_surface (void)
+init_surface (struct xdg_toplevel *xdg_toplevel)
 {
   xdg_toplevel_set_title (xdg_toplevel, "bogus window geometry");
   wl_surface_commit (surface);
 }
 
 static void
-draw_main (void)
+draw_main (WaylandDisplay *display)
 {
   draw_surface (display, surface, 700, 500, 0xff00ff00);
 }
@@ -69,13 +65,14 @@ handle_xdg_surface_configure (void               *data,
                               struct xdg_surface *xdg_surface,
                               uint32_t            serial)
 {
+  WaylandDisplay *display = data;
   static gboolean sent_invalid_once = FALSE;
 
   if (sent_invalid_once)
     return;
 
   xdg_surface_set_window_geometry (xdg_surface, 0, 0, 0, 0);
-  draw_main ();
+  draw_main (display);
   wl_surface_commit (surface);
 
   sent_invalid_once = TRUE;
@@ -91,15 +88,19 @@ static const struct xdg_surface_listener xdg_surface_listener = {
 static void
 test_empty_window_geometry (void)
 {
+  g_autoptr (WaylandDisplay) display = NULL;
+  struct xdg_toplevel *xdg_toplevel;
+  struct xdg_surface *xdg_surface;
+
   display = wayland_display_new (WAYLAND_DISPLAY_CAPABILITY_NONE);
 
   surface = wl_compositor_create_surface (display->compositor);
   xdg_surface = xdg_wm_base_get_xdg_surface (display->xdg_wm_base, surface);
-  xdg_surface_add_listener (xdg_surface, &xdg_surface_listener, NULL);
+  xdg_surface_add_listener (xdg_surface, &xdg_surface_listener, display);
   xdg_toplevel = xdg_surface_get_toplevel (xdg_surface);
   xdg_toplevel_add_listener (xdg_toplevel, &xdg_toplevel_listener, NULL);
 
-  init_surface ();
+  init_surface (xdg_toplevel);
 
   running = TRUE;
   while (running)
@@ -110,7 +111,6 @@ test_empty_window_geometry (void)
 
   g_clear_pointer (&xdg_toplevel, xdg_toplevel_destroy);
   g_clear_pointer (&xdg_surface, xdg_surface_destroy);
-  g_clear_object (&display);
 }
 
 int

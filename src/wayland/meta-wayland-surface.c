@@ -48,6 +48,7 @@
 #include "wayland/meta-wayland-viewporter.h"
 #include "wayland/meta-wayland-xdg-shell.h"
 #include "wayland/meta-window-wayland.h"
+#include "wayland/meta-wayland-linux-drm-syncobj.h"
 
 #ifdef HAVE_XWAYLAND
 #include "wayland/meta-xwayland-private.h"
@@ -446,6 +447,9 @@ meta_wayland_surface_state_set_default (MetaWaylandSurfaceState *state)
   wl_list_init (&state->presentation_feedback_list);
 
   state->xdg_popup_reposition_token = 0;
+
+  state->drm_syncobj.acquire = NULL;
+  state->drm_syncobj.release = NULL;
 }
 
 static void
@@ -466,6 +470,8 @@ meta_wayland_surface_state_clear (MetaWaylandSurfaceState *state)
   MetaWaylandFrameCallback *cb, *next;
 
   g_clear_object (&state->texture);
+  g_clear_object (&state->drm_syncobj.acquire);
+  g_clear_object (&state->drm_syncobj.release);
 
   g_clear_pointer (&state->surface_damage, mtk_region_unref);
   g_clear_pointer (&state->buffer_damage, mtk_region_unref);
@@ -487,7 +493,8 @@ meta_wayland_surface_state_clear (MetaWaylandSurfaceState *state)
     wl_resource_destroy (cb->resource);
 
   if (state->subsurface_placement_ops)
-    g_slist_free_full (state->subsurface_placement_ops, g_free);
+    g_slist_free_full (state->subsurface_placement_ops,
+                       (GDestroyNotify) meta_wayland_subsurface_destroy_placement_op);
 
   meta_wayland_surface_state_discard_presentation_feedback (state);
 }
@@ -630,6 +637,11 @@ meta_wayland_surface_state_merge_into (MetaWaylandSurfaceState *from,
       to->xdg_positioner = g_steal_pointer (&from->xdg_positioner);
       to->xdg_popup_reposition_token = from->xdg_popup_reposition_token;
     }
+
+  g_set_object (&to->drm_syncobj.acquire, from->drm_syncobj.acquire);
+  g_clear_object (&from->drm_syncobj.acquire);
+  g_set_object (&to->drm_syncobj.release, from->drm_syncobj.release);
+  g_clear_object (&from->drm_syncobj.release);
 }
 
 static void
@@ -689,8 +701,6 @@ meta_wayland_surface_apply_placement_ops (MetaWaylandSurface      *parent,
       MetaWaylandSurface *surface = op->surface;
       GNode *sibling_node;
 
-      g_node_unlink (surface->applied_state.subsurface_branch_node);
-
       if (!op->sibling)
         {
           surface->applied_state.parent = NULL;
@@ -698,6 +708,8 @@ meta_wayland_surface_apply_placement_ops (MetaWaylandSurface      *parent,
         }
 
       surface->applied_state.parent = parent;
+
+      g_node_unlink (surface->applied_state.subsurface_branch_node);
 
       if (op->sibling == parent)
         sibling_node = parent->applied_state.subsurface_leaf_node;
@@ -914,12 +926,16 @@ meta_wayland_surface_commit (MetaWaylandSurface *surface)
   MetaWaylandBuffer *buffer = pending->buffer;
   MetaWaylandTransaction *transaction;
   MetaWaylandSurface *subsurface_surface;
+  MetaWaylandSyncPoint *release_point = pending->drm_syncobj.release;
 
   COGL_TRACE_BEGIN_SCOPED (MetaWaylandSurfaceCommit,
                            "Meta::WaylandSurface::commit()");
 
   if (pending->scale > 0)
     surface->committed_state.scale = pending->scale;
+
+  if (!meta_wayland_surface_explicit_sync_validate (surface, pending))
+    return;
 
   if (buffer)
     {
@@ -946,6 +962,9 @@ meta_wayland_surface_commit (MetaWaylandSurface *surface)
 
       pending->texture = g_object_ref (surface->committed_state.texture);
 
+      if (release_point)
+        g_ptr_array_add (buffer->release_points, g_object_ref (release_point));
+
       g_object_ref (buffer);
       meta_wayland_buffer_inc_use_count (buffer);
     }
@@ -962,7 +981,7 @@ meta_wayland_surface_commit (MetaWaylandSurface *surface)
       if ((meta_multi_texture_get_width (committed_texture) % committed_scale != 0) ||
           (meta_multi_texture_get_height (committed_texture) % committed_scale != 0))
         {
-          if (!surface->role || !META_IS_WAYLAND_CURSOR_SURFACE (surface->role))
+          if (surface->role && !META_IS_WAYLAND_CURSOR_SURFACE (surface->role))
             {
               wl_resource_post_error (surface->resource, WL_SURFACE_ERROR_INVALID_SIZE,
                                       "Buffer size (%dx%d) must be an integer multiple "
@@ -1501,6 +1520,7 @@ meta_wayland_surface_finalize (GObject *object)
 {
   MetaWaylandSurface *surface = META_WAYLAND_SURFACE (object);
   MetaWaylandCompositor *compositor = surface->compositor;
+  MetaWaylandSurface *subsurface_surface;
   MetaWaylandFrameCallback *cb, *next;
 
   g_clear_object (&surface->scanout_candidate);
@@ -1535,6 +1555,10 @@ meta_wayland_surface_finalize (GObject *object)
     wl_resource_destroy (cb->resource);
 
   meta_wayland_surface_discard_presentation_feedback (surface);
+
+  META_WAYLAND_SURFACE_FOREACH_SUBSURFACE (&surface->applied_state,
+                                           subsurface_surface)
+    g_node_unlink (subsurface_surface->applied_state.subsurface_branch_node);
 
   g_clear_pointer (&surface->applied_state.subsurface_branch_node, g_node_destroy);
 
@@ -2439,7 +2463,7 @@ committed_state_handle_highest_scale_monitor (MetaWaylandSurface *surface)
       transform = meta_wayland_surface_get_output_transform (surface);
       if (transform != surface->preferred_transform)
         {
-          wl_surface_send_preferred_buffer_transform (surface->resource, ceiled_scale);
+          wl_surface_send_preferred_buffer_transform (surface->resource, transform);
           surface->preferred_transform = transform;
         }
     }

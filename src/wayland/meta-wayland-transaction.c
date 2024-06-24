@@ -26,6 +26,7 @@
 #include "wayland/meta-wayland.h"
 #include "wayland/meta-wayland-buffer.h"
 #include "wayland/meta-wayland-dma-buf.h"
+#include "wayland/meta-wayland-linux-drm-syncobj.h"
 
 #define META_WAYLAND_TRANSACTION_NONE ((void *)(uintptr_t) G_MAXSIZE)
 
@@ -99,25 +100,6 @@ meta_wayland_transaction_apply_subsurface_position (MetaWaylandSurface          
 
   surface->sub.x = entry->x;
   surface->sub.y = entry->y;
-}
-
-void
-meta_wayland_transaction_drop_subsurface_state (MetaWaylandTransaction *transaction,
-                                                MetaWaylandSurface     *surface)
-{
-  MetaWaylandSurface *parent = surface->committed_state.parent;
-  MetaWaylandTransactionEntry *entry;
-
-  entry = meta_wayland_transaction_get_entry (transaction, surface);
-  if (entry)
-    entry->has_sub_pos = FALSE;
-
-  if (!parent)
-    return;
-
-  entry = meta_wayland_transaction_get_entry (transaction, parent);
-  if (entry && entry->state && entry->state->subsurface_placement_ops)
-    meta_wayland_subsurface_drop_placement_ops (entry->state, surface);
 }
 
 static gboolean
@@ -314,6 +296,17 @@ meta_wayland_transaction_dma_buf_dispatch (MetaWaylandBuffer *buffer,
   meta_wayland_transaction_maybe_apply (transaction);
 }
 
+static void
+ensure_buf_sources (MetaWaylandTransaction *transaction)
+{
+  if (!transaction->buf_sources)
+    {
+      transaction->buf_sources =
+        g_hash_table_new_full (NULL, NULL, NULL,
+                               (GDestroyNotify) g_source_destroy);
+    }
+}
+
 static gboolean
 meta_wayland_transaction_add_dma_buf_source (MetaWaylandTransaction *transaction,
                                              MetaWaylandBuffer      *buffer)
@@ -330,12 +323,35 @@ meta_wayland_transaction_add_dma_buf_source (MetaWaylandTransaction *transaction
   if (!source)
     return FALSE;
 
-  if (!transaction->buf_sources)
-    {
-      transaction->buf_sources =
-        g_hash_table_new_full (NULL, NULL, NULL,
-                               (GDestroyNotify) g_source_destroy);
-    }
+  ensure_buf_sources (transaction);
+
+  g_hash_table_insert (transaction->buf_sources, buffer, source);
+  g_source_attach (source, NULL);
+  g_source_unref (source);
+
+  return TRUE;
+}
+
+static gboolean
+meta_wayland_transaction_add_drm_syncobj_source (MetaWaylandTransaction *transaction,
+                                                 MetaWaylandBuffer      *buffer,
+                                                 MetaWaylandSyncPoint   *acquire)
+{
+  GSource *source;
+
+  if (transaction->buf_sources &&
+      g_hash_table_contains (transaction->buf_sources, buffer))
+    return FALSE;
+
+  source = meta_wayland_drm_syncobj_create_source (buffer,
+                                                   acquire->timeline,
+                                                   acquire->sync_point,
+                                                   meta_wayland_transaction_dma_buf_dispatch,
+                                                   transaction);
+  if (!source)
+    return FALSE;
+
+  ensure_buf_sources (transaction);
 
   g_hash_table_insert (transaction->buf_sources, buffer, source);
   g_source_attach (source, NULL);
@@ -382,8 +398,11 @@ meta_wayland_transaction_commit (MetaWaylandTransaction *transaction)
         {
           MetaWaylandBuffer *buffer = entry->state->buffer;
 
-          if (buffer &&
-              meta_wayland_transaction_add_dma_buf_source (transaction, buffer))
+          if ((entry->state->drm_syncobj.acquire &&
+               meta_wayland_transaction_add_drm_syncobj_source (transaction, buffer,
+                                                                entry->state->drm_syncobj.acquire))
+              || (buffer &&
+                  meta_wayland_transaction_add_dma_buf_source (transaction, buffer)))
             maybe_apply = FALSE;
 
           if (entry->state->subsurface_placement_ops)
@@ -447,8 +466,12 @@ meta_wayland_transaction_ensure_entry (MetaWaylandTransaction *transaction,
   if (entry)
     return entry;
 
+  g_return_val_if_fail (surface, NULL);
+  surface = g_object_ref (surface);
+  g_return_val_if_fail (surface, NULL);
+
   entry = g_new0 (MetaWaylandTransactionEntry, 1);
-  g_hash_table_insert (transaction->entries, g_object_ref (surface), entry);
+  g_hash_table_insert (transaction->entries, surface, entry);
 
   return entry;
 }

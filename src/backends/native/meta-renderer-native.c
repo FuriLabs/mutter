@@ -63,10 +63,12 @@
 #include "backends/native/meta-output-kms.h"
 #include "backends/native/meta-render-device-gbm.h"
 #include "backends/native/meta-render-device-surfaceless.h"
+#include "backends/native/meta-renderer-native-gles3.h"
 #include "backends/native/meta-renderer-native-private.h"
 #include "backends/native/meta-renderer-view-native.h"
 #include "cogl/cogl.h"
 #include "common/meta-cogl-drm-formats.h"
+#include "common/meta-drm-format-helpers.h"
 #include "core/boxes-private.h"
 
 #ifdef HAVE_EGL_DEVICE
@@ -135,6 +137,9 @@ meta_renderer_native_gpu_data_free (MetaRendererNativeGpuData *renderer_gpu_data
         meta_render_device_get_egl_display (render_device);
       MetaRendererNative *renderer_native = renderer_gpu_data->renderer_native;
       MetaEgl *egl = meta_renderer_native_get_egl (renderer_native);
+
+      meta_renderer_native_gles3_forget_context (renderer_native->gles3,
+                                                 renderer_gpu_data->secondary.egl_context);
 
       meta_egl_destroy_context (egl,
                                 egl_display,
@@ -1805,6 +1810,7 @@ init_secondary_gpu_data_gpu (MetaRendererNativeGpuData *renderer_gpu_data,
   CoglContext *cogl_context;
   CoglDisplay *cogl_display;
   const char **missing_gl_extensions;
+  const char *egl_vendor;
 
   egl_display = meta_render_device_get_egl_display (render_device);
   if (egl_display == EGL_NO_DISPLAY)
@@ -1871,6 +1877,11 @@ init_secondary_gpu_data_gpu (MetaRendererNativeGpuData *renderer_gpu_data,
     meta_egl_has_extensions (egl, egl_display, NULL,
                              "EGL_EXT_image_dma_buf_import_modifiers",
                              NULL);
+
+  egl_vendor = meta_egl_query_string (egl, egl_display, EGL_VENDOR);
+  if (!g_strcmp0 (egl_vendor, "NVIDIA"))
+    renderer_gpu_data->secondary.needs_explicit_sync = TRUE;
+
   ret = TRUE;
 out:
   maybe_restore_cogl_egl_api (renderer_native);

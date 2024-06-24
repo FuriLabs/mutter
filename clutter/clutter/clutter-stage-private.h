@@ -81,10 +81,6 @@ CLUTTER_EXPORT
 void                _clutter_stage_maybe_setup_viewport  (ClutterStage          *stage,
                                                           ClutterStageView      *view);
 void                clutter_stage_maybe_relayout         (ClutterActor          *stage);
-GSList *            clutter_stage_find_updated_devices   (ClutterStage          *stage,
-                                                          ClutterStageView      *view);
-void                clutter_stage_update_devices         (ClutterStage          *stage,
-                                                          GSList                *devices);
 void                clutter_stage_finish_layout          (ClutterStage          *stage);
 
 CLUTTER_EXPORT
@@ -111,13 +107,6 @@ void clutter_stage_set_actor_needs_immediate_relayout (ClutterStage *stage);
 void clutter_stage_remove_device_entry (ClutterStage         *self,
                                         ClutterInputDevice   *device,
                                         ClutterEventSequence *sequence);
-ClutterActor * clutter_stage_pick_and_update_device (ClutterStage             *stage,
-                                                     ClutterInputDevice       *device,
-                                                     ClutterEventSequence     *sequence,
-                                                     ClutterInputDevice       *source_device,
-                                                     ClutterDeviceUpdateFlags  flags,
-                                                     graphene_point_t          point,
-                                                     uint32_t                  time_ms);
 
 void clutter_stage_unlink_grab (ClutterStage *self,
                                 ClutterGrab  *grab);
@@ -155,5 +144,11 @@ ClutterGrab * clutter_stage_grab_input_only (ClutterStage        *self,
 void clutter_stage_invalidate_devices (ClutterStage *stage);
 
 GPtrArray * clutter_stage_get_active_gestures_array (ClutterStage *self);
+
+ClutterActor * clutter_stage_update_device_for_event (ClutterStage *stage,
+                                                      ClutterEvent *event);
+
+void clutter_stage_update_devices_in_view (ClutterStage     *stage,
+                                           ClutterStageView *view);
 
 G_END_DECLS

@@ -868,6 +868,8 @@ libmutter-14.so.0 libmutter-14-0 #MINVER#
  meta_window_shape_ref@Base 43.0
  meta_window_shape_to_region@Base 43.0
  meta_window_shape_unref@Base 43.0
+ meta_window_should_be_showing@Base 46.1
+ meta_window_should_show@Base 46.1
  meta_window_shove_titlebar_onscreen@Base 43.0
  meta_window_showing_on_its_workspace@Base 43.0
  meta_window_stick@Base 43.0
@@ -1892,7 +1894,6 @@ libmutter-clutter-14.so.0 libmutter-14-0 #MINVER#
  clutter_stage_pointing_input_foreach@Base 45~rc
  clutter_stage_process_event@Base 45~beta.1
  clutter_stage_read_pixels@Base 43.0
- clutter_stage_repick_device@Base 43.0
  clutter_stage_schedule_update@Base 43.0
  clutter_stage_set_key_focus@Base 43.0
  clutter_stage_set_title@Base 43.0
@@ -2227,6 +2228,7 @@ libmutter-cogl-14.so.0 libmutter-14-0 #MINVER#
  cogl_context_free_timestamp_query@Base 43.0
  cogl_context_get_display@Base 43.0
  cogl_context_get_gpu_time_ns@Base 43.0
+ cogl_context_get_latest_sync_fd@Base 46.1
  cogl_context_get_named_pipeline@Base 43.0
  cogl_context_get_renderer@Base 43.0
  cogl_context_get_type@Base 46~beta
@@ -2409,6 +2411,7 @@ libmutter-cogl-14.so.0 libmutter-14-0 #MINVER#
  cogl_onscreen_dirty_closure_get_type@Base 46~beta
  cogl_onscreen_egl_get_egl_surface@Base 43.0
  cogl_onscreen_egl_get_type@Base 43.0
+ cogl_onscreen_egl_maybe_create_timestamp_query@Base 46.1
  cogl_onscreen_egl_set_egl_surface@Base 43.0
  cogl_onscreen_get_buffer_age@Base 43.0
  cogl_onscreen_get_frame_counter@Base 43.0
@@ -2615,12 +2618,12 @@ libmutter-cogl-14.so.0 libmutter-14-0 #MINVER#
  cogl_texture_set_premultiplied@Base 43.0
  cogl_texture_set_region@Base 43.0
  cogl_texture_set_region_from_bitmap@Base 43.0
- (arch=!hurd-i386 !i386)cogl_trace_context@Base 43.0
- (arch=!hurd-i386 !i386)cogl_trace_describe@Base 43.0
- (arch=!hurd-i386 !i386)cogl_trace_end@Base 43.0
- cogl_trace_mark@Base 46~beta
- (arch=!hurd-i386 !i386)cogl_trace_mutex@Base 43.0
- (arch=!hurd-i386 !i386)cogl_trace_thread_data@Base 43.0
+ (arch=!i386)cogl_trace_context@Base 43.0
+ (arch=!i386)cogl_trace_describe@Base 43.0
+ (arch=!i386)cogl_trace_end@Base 43.0
+ (arch=!i386)cogl_trace_mark@Base 46~beta
+ (arch=!i386)cogl_trace_mutex@Base 43.0
+ (arch=!i386)cogl_trace_thread_data@Base 43.0
  cogl_uint16_div_64k_to_half@Base 46~beta
  cogl_x11_onscreen_get_type@Base 43.0
  cogl_x11_onscreen_get_x11_window@Base 43.0
@@ -2663,6 +2666,7 @@ libmutter-mtk-14.so.0 libmutter-14-0 #MINVER#
  mtk_rectangle_intersect@Base 45~rc
  mtk_rectangle_is_adjacent_to@Base 46~beta
  mtk_rectangle_new@Base 45~rc
+ mtk_rectangle_new_empty@Base 46.1
  mtk_rectangle_overlap@Base 45~rc
  mtk_rectangle_scale_double@Base 46~beta
  mtk_rectangle_to_graphene_rect@Base 45~rc

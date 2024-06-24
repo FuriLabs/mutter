@@ -38,11 +38,13 @@
 enum
 {
   SYNC_EVENT,
+  SURFACE_PAINTED,
   N_SIGNALS
 };
 
 static guint signals[N_SIGNALS];
 static struct wl_callback *effects_complete_callback;
+static struct wl_callback *window_shown_callback;
 static struct wl_callback *view_verification_callback;
 
 struct _WaylandBufferClass
@@ -345,6 +347,9 @@ handle_registry_global (void               *user_data,
       if (display->capabilities &
           WAYLAND_DISPLAY_CAPABILITY_XDG_SHELL_V4)
         xdg_wm_base_version = 4;
+      if (display->capabilities &
+          WAYLAND_DISPLAY_CAPABILITY_XDG_SHELL_V6)
+        xdg_wm_base_version = 6;
 
       g_assert_cmpint (version, >=, xdg_wm_base_version);
 
@@ -424,6 +429,13 @@ wayland_display_new (WaylandDisplayCapabilities capabilities)
                                    wl_display_connect (NULL));
 }
 
+void
+wayland_display_dispatch (WaylandDisplay *display)
+{
+  if (wl_display_dispatch (display->display) == -1)
+    g_error ("wl_display_dispatch failed");
+}
+
 static void
 wayland_display_finalize (GObject *object)
 {
@@ -452,6 +464,16 @@ wayland_display_class_init (WaylandDisplayClass *klass)
                   G_TYPE_NONE,
                   1,
                   G_TYPE_UINT);
+
+  signals[SURFACE_PAINTED] =
+    g_signal_new ("surface-painted",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_LAST,
+                  0,
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE,
+                  1,
+                  WAYLAND_TYPE_SURFACE);
 }
 
 static void
@@ -487,9 +509,10 @@ handle_xdg_toplevel_configure (void                *data,
                                struct xdg_toplevel *xdg_toplevel,
                                int32_t              width,
                                int32_t              height,
-                               struct wl_array     *state)
+                               struct wl_array     *states)
 {
   WaylandSurface *surface = data;
+  uint32_t *p;
 
   if (width == 0)
     surface->width = surface->default_width;
@@ -500,6 +523,16 @@ handle_xdg_toplevel_configure (void                *data,
     surface->height = surface->default_height;
   else
     surface->height = height;
+
+  g_assert_null (surface->pending_state);
+  surface->pending_state = g_hash_table_new (NULL, NULL);
+
+  wl_array_for_each (p, states)
+    {
+      uint32_t state = *p;
+
+      g_hash_table_add (surface->pending_state, GUINT_TO_POINTER (state));
+    }
 }
 
 static void
@@ -509,9 +542,26 @@ handle_xdg_toplevel_close (void                *data,
   g_assert_not_reached ();
 }
 
+static void
+handle_xdg_toplevel_bounds (void                *data,
+                            struct xdg_toplevel *xdg_toplevel,
+                            int32_t              width,
+                            int32_t              height)
+{
+}
+
+static void
+handle_xdg_toplevel_wm_capabilities (void                *data,
+                                     struct xdg_toplevel *xdg_toplevel,
+                                     struct wl_array     *capabilities)
+{
+}
+
 static const struct xdg_toplevel_listener xdg_toplevel_listener = {
   handle_xdg_toplevel_configure,
   handle_xdg_toplevel_close,
+  handle_xdg_toplevel_bounds,
+  handle_xdg_toplevel_wm_capabilities,
 };
 
 static void
@@ -520,14 +570,24 @@ handle_xdg_surface_configure (void               *data,
                               uint32_t            serial)
 {
   WaylandSurface *surface = data;
+  struct wl_region *opaque_region;
 
   draw_surface (surface->display,
                 surface->wl_surface,
                 surface->width, surface->height,
                 surface->color);
+  opaque_region = wl_compositor_create_region (surface->display->compositor);
+  wl_region_add (opaque_region, 0, 0, surface->width, surface->height);
+  wl_surface_set_opaque_region (surface->wl_surface, opaque_region);
+  wl_region_destroy (opaque_region);
 
   xdg_surface_ack_configure (xdg_surface, serial);
   wl_surface_commit (surface->wl_surface);
+
+  g_clear_pointer (&surface->current_state, g_hash_table_unref);
+  surface->current_state = g_steal_pointer (&surface->pending_state);
+
+  g_signal_emit (surface->display, signals[SURFACE_PAINTED], 0, surface);
 }
 
 static const struct xdg_surface_listener xdg_surface_listener = {
@@ -542,6 +602,8 @@ wayland_surface_dispose (GObject *object)
   g_clear_pointer (&surface->xdg_toplevel, xdg_toplevel_destroy);
   g_clear_pointer (&surface->xdg_surface, xdg_surface_destroy);
   g_clear_pointer (&surface->wl_surface, wl_surface_destroy);
+  g_clear_pointer (&surface->pending_state, g_hash_table_unref);
+  g_clear_pointer (&surface->current_state, g_hash_table_unref);
 
   G_OBJECT_CLASS (wayland_surface_parent_class)->dispose (object);
 }
@@ -587,6 +649,19 @@ wayland_surface_new (WaylandDisplay *display,
   return surface;
 }
 
+gboolean
+wayland_surface_has_state (WaylandSurface          *surface,
+                           enum xdg_toplevel_state  state)
+{
+  return g_hash_table_contains (surface->current_state, GUINT_TO_POINTER (state));
+}
+
+void
+wayland_surface_set_opaque (WaylandSurface *surface)
+{
+  surface->is_opaque = TRUE;
+}
+
 const char *
 lookup_property_value (WaylandDisplay *display,
                        const char     *name)
@@ -618,10 +693,34 @@ wait_for_effects_completed (WaylandDisplay    *display,
                             NULL);
 
   while (effects_complete_callback)
-    {
-      if (wl_display_dispatch (display->display) == -1)
-        g_error ("%s: Failed to dispatch Wayland display", __func__);
-    }
+    wayland_display_dispatch (display);
+}
+
+static void
+window_shown (void               *data,
+              struct wl_callback *callback,
+              uint32_t            serial)
+{
+  wl_callback_destroy (callback);
+  window_shown_callback = NULL;
+}
+
+static const struct wl_callback_listener window_shown_listener = {
+  window_shown,
+};
+
+void
+wait_for_window_shown (WaylandDisplay    *display,
+                       struct wl_surface *surface)
+{
+  window_shown_callback =
+    test_driver_sync_window_shown (display->test_driver, surface);
+  wl_callback_add_listener (window_shown_callback,
+                            &window_shown_listener,
+                            NULL);
+
+  while (window_shown_callback)
+    wayland_display_dispatch (display);
 }
 
 static void
@@ -647,10 +746,7 @@ wait_for_view_verified (WaylandDisplay *display,
                             &view_verification_listener, NULL);
 
   while (view_verification_callback)
-    {
-      if (wl_display_dispatch (display->display) == -1)
-        g_error ("%s: Failed to dispatch Wayland display", __func__);
-    }
+    wayland_display_dispatch (display);
 }
 
 static void
@@ -670,10 +766,7 @@ wait_for_sync_event (WaylandDisplay *display,
   handler_id = g_signal_connect (display, "sync-event", G_CALLBACK (on_sync_event), NULL);
 
   while (expected_serial + 1 > display->sync_event_serial_next)
-    {
-      if (wl_display_dispatch (display->display) == -1)
-        g_error ("%s: Failed to dispatch Wayland display", __func__);
-    }
+    wayland_display_dispatch (display);
 
   g_signal_handler_disconnect (display, handler_id);
 }

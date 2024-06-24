@@ -579,6 +579,8 @@ if have_wayland
     'core/meta-service-channel.h',
     'wayland/meta-cursor-sprite-wayland.c',
     'wayland/meta-cursor-sprite-wayland.h',
+    'wayland/meta-drm-timeline.c',
+    'wayland/meta-drm-timeline.h',
     'wayland/meta-pointer-confinement-wayland.c',
     'wayland/meta-pointer-confinement-wayland.h',
     'wayland/meta-pointer-lock-wayland.c',
@@ -633,6 +635,8 @@ if have_wayland
     'wayland/meta-wayland-keyboard.h',
     'wayland/meta-wayland-legacy-xdg-foreign.c',
     'wayland/meta-wayland-legacy-xdg-foreign.h',
+    'wayland/meta-wayland-linux-drm-syncobj.c',
+    'wayland/meta-wayland-linux-drm-syncobj.h',
     'wayland/meta-wayland-outputs.c',
     'wayland/meta-wayland-outputs.h',
     'wayland/meta-wayland-pointer.c',
@@ -869,6 +873,8 @@ if have_wayland or have_native_backend
   mutter_sources += [
     'common/meta-cogl-drm-formats.c',
     'common/meta-cogl-drm-formats.h',
+    'common/meta-drm-format-helpers.c',
+    'common/meta-drm-format-helpers.h',
   ]
 endif
 
@@ -1077,6 +1083,7 @@ if have_wayland
     ['xdg-output', 'unstable', 'v1', ],
     ['xdg-shell', 'stable', ],
     ['xwayland-keyboard-grab', 'unstable', 'v1', ],
+    ['linux-drm-syncobj-v1', 'private', ],
   ]
   if have_wayland_eglstream
     wayland_eglstream_protocols_dir = wayland_eglstream_protocols_dep.get_variable('pkgdatadir')

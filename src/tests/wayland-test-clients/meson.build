@@ -67,6 +67,9 @@ wayland_test_clients = [
     'name': 'subsurface-reparenting',
   },
   {
+    'name': 'toplevel-show-states',
+  },
+  {
     'name': 'xdg-activation',
   },
   {
@@ -77,6 +80,9 @@ wayland_test_clients = [
   },
   {
     'name': 'xdg-toplevel-bounds',
+  },
+  {
+    'name': 'xdg-toplevel-suspended',
   },
   {
     'name': 'ycbcr',

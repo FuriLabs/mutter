@@ -1,3 +1,57 @@
+46.2
+====
+* Fix hardware cursor with non-atomic KMS drivers [Daniel; !3676]
+* Fix night light state getting stuck on monitor changes [Michel; !3742]
+* Fix sending preferred buffer transform [Robert; !3717]
+* Fix key press events with immediate release being ignored [Carlos; !3721]
+* Fix unsetting clipboard on screen lock [Florian; !3752]
+* Fix wrong input region of undecorated X11 windows [Sebastian K.; !3720]
+* Fix windows potentially shrinking unexpectedly on configure [Jonas Å.; !3755]
+* Fix popup menus sometimes closing immediately [Jonas D.; !3631]
+* Fixed crashes [Michel, Carlos, Keyu, Jonas Å., Sebastian K.; !3725, !3763,
+  !3715, !3711, !3758, !3749]
+* Misc. bug fixes and cleanups [Florian, Echo, Michel, Jonas Å., Sebastian W.,
+  Corentin, Bilal; !3723, !3744, !3737, !3743, !3735, !3731, !3700, !3750,
+  !3757, !3754, !3748, !3730, !3775]
+
+Contributors:
+  Jonas Ådahl, Michel Dänzer, Jonas Dreßler, Bilal Elmoussaoui, Carlos Garnacho,
+  Echo J, Sebastian Keller, Robert Mader, Florian Müllner, Corentin Noël,
+  Keyu Tao, Marco Trevisan (Treviño), Daniel van Vugt, Sebastian Wick
+
+Translators:
+  Hugo Carvalho [pt], Leônidas Araújo [pt_BR]
+
+46.1
+====
+* Implement linux-drm-syncobj-v1 [Austin; !3300]
+* Fix input lag on X11 nvidia [Daniel; !3685]
+* Fix scanout on secondary GPUs [Michel; !3674]
+* Don't apply max-render-time to secondary GPUs [Michel; !3689]
+* Fix reusing single-pixel buffers [Jonas Å.; !3702]
+* Improve scanout candidate check [Robert; !3699]
+* Always use logical pixels for bounds [Sophie; !3698]
+* Fix modifiers getting stuck during grabs [Carlos; !3704]
+* Fix night-light on displays without EDID [Sebastian W.; !3673]
+* Fix secondary GPU acceleration with nvidia driver [Jonas Å., Daniel; !3304]
+* Fix some XWayland clients being partially click-through [Sebastian K.; !3697]
+* Fix initial suspended state [Jonas Å.; !3475]
+* Fixed crashes [Bilal, Jonas Å., Sebastian W., Daniel;
+  !3683, !3666, !3691, !3708, !3678]
+* Misc. bug fixes and cleanups [Ray, Carlos, Bilal, Ivan, Barnabás, Jonas Å.,
+  Jonas D., Michel; !3672, !3681, !3686, !3687, !3671, !3679, !3690, !3703,
+  !3695, !2946, !3696, !3710, !3644, !3707]
+
+Contributors:
+  Jonas Ådahl, Michel Dänzer, Jonas Dreßler, Bilal Elmoussaoui, Carlos Garnacho,
+  Sophie Herold, Sebastian Keller, Robert Mader, Athmane MOKRAOUI,
+  Ivan Molodetskikh, Barnabás Pőcze, Austin Shafer, Ray Strode, Daniel van Vugt,
+  Sebastian Wick
+
+Translators:
+  A S Alam [pa], Athmane MOKRAOUI [kab], Rachida SACI [kab],
+  Nathan Follens [nl], Gwan-gyeong Mun [ko], Fabio Tomat [fur]
+
 46.0
 ====
 * Fix duplicate scroll events over libei [Peter; !3637]

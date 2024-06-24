@@ -168,6 +168,8 @@ static MetaWindow * meta_window_find_tile_match (MetaWindow   *window,
                                                  MetaTileMode  mode);
 static void update_edge_constraints (MetaWindow *window);
 
+static void set_hidden_suspended_state (MetaWindow *window);
+
 static void initable_iface_init (GInitableIface *initable_iface);
 
 typedef struct _MetaWindowPrivate
@@ -597,7 +599,7 @@ meta_window_class_init (MetaWindowClass *klass)
   obj_props[PROP_SUSPEND_STATE] =
     g_param_spec_enum ("suspend-state", NULL, NULL,
                        META_TYPE_WINDOW_SUSPEND_STATE,
-                       META_WINDOW_SUSPEND_STATE_SUSPENDED,
+                       META_WINDOW_SUSPEND_STATE_ACTIVE,
                        G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
   g_object_class_install_properties (object_class, PROP_LAST, obj_props);
@@ -715,7 +717,7 @@ meta_window_init (MetaWindow *window)
 {
   MetaWindowPrivate *priv = meta_window_get_instance_private (window);
 
-  priv->suspend_state = META_WINDOW_SUSPEND_STATE_SUSPENDED;
+  priv->suspend_state = META_WINDOW_SUSPEND_STATE_ACTIVE;
   window->stamp = next_window_stamp++;
   meta_prefs_add_listener (prefs_changed_callback, window);
   window->is_alive = TRUE;
@@ -1690,9 +1692,8 @@ window_has_buffer (MetaWindow *window)
   return TRUE;
 }
 
-gboolean
-meta_window_should_be_showing_on_workspace (MetaWindow    *window,
-                                            MetaWorkspace *workspace)
+static gboolean
+meta_window_is_showable (MetaWindow *window)
 {
 #ifdef HAVE_WAYLAND
   if (window->client_type == META_WINDOW_CLIENT_TYPE_WAYLAND &&
@@ -1704,12 +1705,72 @@ meta_window_should_be_showing_on_workspace (MetaWindow    *window,
       window->decorated && !window->frame)
     return FALSE;
 
-  /* Windows should be showing if they're located on the
-   * workspace and they're showing on their own workspace. */
+  return TRUE;
+}
+
+/**
+ * meta_window_should_show_on_workspace:
+ *
+ * Tells whether a window should be showing on the passed workspace, without
+ * taking into account whether it can immediately be shown. Whether it can be
+ * shown or not depends on what windowing system it was created from.
+ *
+ * Returns: %TRUE if the window should show.
+ */
+static gboolean
+meta_window_should_show_on_workspace (MetaWindow    *window,
+                                      MetaWorkspace *workspace)
+{
   return (meta_window_located_on_workspace (window, workspace) &&
           meta_window_showing_on_its_workspace (window));
 }
 
+/**
+ * meta_window_should_show:
+ *
+ * Tells whether a window should be showing on the current workspace, without
+ * taking into account whether it can immediately be shown. Whether it can be
+ * shown or not depends on what windowing system it was created from.
+ *
+ * Returns: %TRUE if the window should show.
+ */
+gboolean
+meta_window_should_show (MetaWindow *window)
+{
+  MetaWorkspaceManager *workspace_manager = window->display->workspace_manager;
+  MetaWorkspace *active_workspace = workspace_manager->active_workspace;
+
+  return meta_window_should_show_on_workspace (window, active_workspace);
+}
+
+/**
+ * meta_window_should_be_showing_on_workspace:
+ *
+ * Tells whether a window should be showing on the passed workspace, while
+ * taking whether it can be immediately be shown. Whether it can be shown or
+ * not depends on what windowing system it was created from.
+ *
+ * Returns: %TRUE if the window should and can be shown.
+ */
+gboolean
+meta_window_should_be_showing_on_workspace (MetaWindow    *window,
+                                            MetaWorkspace *workspace)
+{
+  if (!meta_window_is_showable (window))
+    return FALSE;
+
+  return meta_window_should_show_on_workspace (window, workspace);
+}
+
+/**
+ * meta_window_should_be_showing:
+ *
+ * Tells whether a window should be showing on the current workspace, while
+ * taking whether it can be immediately be shown. Whether it can be shown or
+ * not depends on what windowing system it was created from.
+ *
+ * Returns: %TRUE if the window should and can be shown.
+ */
 gboolean
 meta_window_should_be_showing (MetaWindow *window)
 {
@@ -1717,51 +1778,6 @@ meta_window_should_be_showing (MetaWindow *window)
   MetaWorkspace *active_workspace = workspace_manager->active_workspace;
 
   return meta_window_should_be_showing_on_workspace (window, active_workspace);
-}
-
-static void
-implement_showing (MetaWindow *window,
-                   gboolean    showing)
-{
-  /* Actually show/hide the window */
-  meta_verbose ("Implement showing = %d for window %s",
-                showing, window->desc);
-
-  /* Some windows are not stackable until being showed, so add those now. */
-  if (meta_window_is_stackable (window) && !meta_window_is_in_stack (window))
-    meta_stack_add (window->display->stack, window);
-
-  if (!showing)
-    {
-      /* When we manage a new window, we normally delay placing it
-       * until it is is first shown, but if we're previewing hidden
-       * windows we might want to know where they are on the screen,
-       * so we should place the window even if we're hiding it rather
-       * than showing it.
-       * Force placing windows only when they should be already mapped,
-       * see #751887
-       */
-      if (!window->placed && window_has_buffer (window))
-        meta_window_force_placement (window, FALSE);
-
-      meta_window_hide (window);
-
-      if (!window->override_redirect)
-        sync_client_window_mapped (window);
-    }
-  else
-    {
-      if (!window->override_redirect)
-        sync_client_window_mapped (window);
-
-      meta_window_show (window);
-    }
-}
-
-void
-meta_window_update_visibility (MetaWindow  *window)
-{
-  implement_showing (window, meta_window_should_be_showing (window));
 }
 
 void
@@ -2106,6 +2122,19 @@ enter_suspend_state_cb (gpointer user_data)
 }
 
 static void
+set_hidden_suspended_state (MetaWindow *window)
+{
+  MetaWindowPrivate *priv = meta_window_get_instance_private (window);
+
+  priv->suspend_state = META_WINDOW_SUSPEND_STATE_HIDDEN;
+  g_return_if_fail (!priv->suspend_timoeut_id);
+  priv->suspend_timoeut_id =
+    g_timeout_add_seconds (SUSPEND_HIDDEN_TIMEOUT_S,
+                           enter_suspend_state_cb,
+                           window);
+}
+
+static void
 update_suspend_state (MetaWindow *window)
 {
   MetaWindowPrivate *priv = meta_window_get_instance_private (window);
@@ -2122,13 +2151,8 @@ update_suspend_state (MetaWindow *window)
     }
   else if (priv->suspend_state == META_WINDOW_SUSPEND_STATE_ACTIVE)
     {
-      priv->suspend_state = META_WINDOW_SUSPEND_STATE_HIDDEN;
+      set_hidden_suspended_state (window);
       g_object_notify_by_pspec (G_OBJECT (window), obj_props[PROP_SUSPEND_STATE]);
-      g_return_if_fail (!priv->suspend_timoeut_id);
-      priv->suspend_timoeut_id =
-        g_timeout_add_seconds (SUSPEND_HIDDEN_TIMEOUT_S,
-                               enter_suspend_state_cb,
-                               window);
     }
 }
 
@@ -2169,6 +2193,53 @@ meta_window_is_suspended (MetaWindow *window)
     }
 
   g_assert_not_reached ();
+}
+
+static void
+implement_showing (MetaWindow *window,
+                   gboolean    showing)
+{
+  /* Actually show/hide the window */
+  meta_verbose ("Implement showing = %d for window %s",
+                showing, window->desc);
+
+  /* Some windows are not stackable until being showed, so add those now. */
+  if (meta_window_is_stackable (window) && !meta_window_is_in_stack (window))
+    meta_stack_add (window->display->stack, window);
+
+  if (!showing)
+    {
+      /* When we manage a new window, we normally delay placing it
+       * until it is is first shown, but if we're previewing hidden
+       * windows we might want to know where they are on the screen,
+       * so we should place the window even if we're hiding it rather
+       * than showing it.
+       * Force placing windows only when they should be already mapped,
+       * see #751887
+       */
+      if (!window->placed && window_has_buffer (window))
+        meta_window_force_placement (window, FALSE);
+
+      meta_window_hide (window);
+
+      if (!window->override_redirect)
+        sync_client_window_mapped (window);
+    }
+  else
+    {
+      if (!window->override_redirect)
+        sync_client_window_mapped (window);
+
+      meta_window_show (window);
+    }
+
+  update_suspend_state (window);
+}
+
+void
+meta_window_update_visibility (MetaWindow  *window)
+{
+  implement_showing (window, meta_window_should_be_showing (window));
 }
 
 static void
@@ -2227,7 +2298,7 @@ meta_window_show (MetaWindow *window)
           window->has_maximize_func)
         {
           MtkRectangle work_area;
-          meta_window_get_work_area_for_monitor (window, window->monitor->number, &work_area);
+          meta_window_get_work_area_current_monitor (window, &work_area);
           /* Automaximize windows that map with a size > MAX_UNMAXIMIZED_WINDOW_AREA of the work area */
           if (window->rect.width * window->rect.height > work_area.width * work_area.height * MAX_UNMAXIMIZED_WINDOW_AREA)
             {
@@ -3101,7 +3172,7 @@ meta_window_unmaximize (MetaWindow        *window,
       MtkRectangle old_frame_rect, old_buffer_rect;
       gboolean has_target_size;
 
-      meta_window_get_work_area_for_monitor (window, window->monitor->number, &work_area);
+      meta_window_get_work_area_current_monitor (window, &work_area);
       meta_window_get_frame_rect (window, &old_frame_rect);
       meta_window_get_buffer_rect (window, &old_buffer_rect);
 
@@ -3925,9 +3996,6 @@ meta_window_move_resize_internal (MetaWindow          *window,
 
   meta_stack_update_window_tile_matches (window->display->stack,
                                          workspace_manager->active_workspace);
-
-  if (flags & META_MOVE_RESIZE_WAYLAND_CLIENT_RESIZE)
-    meta_window_queue (window, META_QUEUE_MOVE_RESIZE);
 
   /* This is a workaround for #1627. We still don't have any tests that can
    * reproduce this issue reliably and this is not a proper fix! */
@@ -5837,9 +5905,7 @@ void
 meta_window_get_work_area_current_monitor (MetaWindow   *window,
                                            MtkRectangle *area)
 {
-  meta_window_get_work_area_for_monitor (window,
-                                         window->monitor->number,
-                                         area);
+  meta_window_get_work_area_for_logical_monitor (window, window->monitor, area);
 }
 
 /**
