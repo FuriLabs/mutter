@@ -1,73 +1,40 @@
-mutter (46.2-1ubuntu1) oracular; urgency=medium
-
-  * Merge with Debian. Remaining changes:
-    - Add x11-Add-support-for-fractional-scaling-using-Randr.patch
-    - Add window-Add-ability-to-override-the-edge-constraints.patch
-      + Make possible for extensions (such as Tiling Assistant) to override
-        window constraints
-    - Ignore test results on armhf & ppc64el
-
- -- Jeremy Bícha <jbicha@ubuntu.com>  Wed, 12 Jun 2024 16:30:58 -0400
-
-mutter (46.2-1) experimental; urgency=medium
+mutter (46.2-1ubuntu1.1) UNRELEASED; urgency=medium
 
   [ Daniel van Vugt ]
   * New upstream release 46.2 (LP: #2068598)
     - Fixed mouse clicks falling through to the window behind (LP: #2026194)
     - Fixed a crash in meta_wayland_transaction_commit (LP: #2061739)
     - Fixed night light getting stuck on (LP: #2066902)
-  * Update Support-Dynamic-triple-double-buffering.patch:
-    - Removed bogus changes introduced in 46.1-2 (unrelated files)
-    - Fixed debugging mode "MUTTER_DEBUG_TRIPLE_BUFFERING=always" which had
-      temporarily stopped working in 46.1 but also nobody should have been
-      using it.
-    - Updated commit message to mention the upstream source is maintained
-      in 'triple-buffering-v4-46'.
+  * New upstream release 46.1 (LP: #2064735):
+    - Fixed blank screen on hybrid GPU machines using nouveau (LP: #2066931)
+    - Fixed a monitor hotplug crash (LP: #2050865)
+    - Improved performance on secondary GPU monitors (LP: #2038801)
   * Refreshed patches:
+    - Support-Dynamic-triple-double-buffering.patch
     - meson-Do-not-mark-CI-test-tools-as-required.patch
     - Mark-several-additional-tests-as-flaky.patch
   * Add clutter/conform gesture tests to the list of known flaky ones:
-    it is a new test in mutter 46
-  * Add patch to compile gsettings schemas for use in build tests
+    it's a new test in Mutter 46 and not yet reliable.
+  * Add build-Compile-schemas-locally-for-use-in-build-tests.patch to compile
+    gsettings schemas for use in build tests.
 
   [ Jeremy Bícha ]
   * Stop compiling gsettings schemas in debian/rules
   * Opt into Salsa CI
-
- -- Jeremy Bícha <jbicha@ubuntu.com>  Wed, 12 Jun 2024 11:23:13 -0400
-
-mutter (46.1-2ubuntu1) oracular; urgency=medium
-
-  * Merge with Debian (LP: #2064735). Remaining changes:
-    - Add x11-Add-support-for-fractional-scaling-using-Randr.patch
-    - Add window-Add-ability-to-override-the-edge-constraints.patch
-      + Make possible for extensions (such as Tiling Assistant) to override
-        window constraints
-    - Ignore test results on armhf & ppc64el
-  * Drop compositor-sync-ring-Allow-the-gpu_fence-to-be-moved.patch:
-    applied in new release
-
- -- Jeremy Bícha <jbicha@ubuntu.com>  Fri, 03 May 2024 10:46:53 -0400
-
-mutter (46.1-2) experimental; urgency=medium
-
-  * Update libmutter-14-0.symbols for i386
   * Drop packaging references to Hurd since this is Linux-only
-
- -- Jeremy Bícha <jbicha@ubuntu.com>  Mon, 29 Apr 2024 16:04:02 -0400
-
-mutter (46.1-1) experimental; urgency=medium
-
-  [ Jeremy Bícha ]
-  * New upstream release
   * Update libmutter-14-0.symbols
   * Update Breaks
-  * Drop Nvidia-secondary-GPU-copy-acceleration.patch: applied in new release
+  * Refreshed patches:
+    - window-Add-ability-to-override-the-edge-constraints.patch
+    - x11-Add-support-for-fractional-scaling-using-Randr.patch
+  * Drop upstreamed patches:
+    - Nvidia-secondary-GPU-copy-acceleration.patch
+    - compositor-sync-ring-Allow-the-gpu_fence-to-be-moved.patch
 
-  [ Daniel van Vugt ]
-  * Update triple buffering patch
+  [ Marco Trevisan ]
+  * Add place-Always-center-initial-setup.patch (LP: #2016013)
 
- -- Jeremy Bícha <jbicha@ubuntu.com>  Mon, 29 Apr 2024 14:43:24 -0400
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Mon, 24 Jun 2024 17:03:48 +0800
 
 mutter (46.0-1ubuntu9) noble; urgency=medium
 
