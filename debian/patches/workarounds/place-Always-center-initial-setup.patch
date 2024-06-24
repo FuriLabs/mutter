@@ -2,7 +2,7 @@ From: =?utf-8?q?Florian_M=C3=BCllner?= <fmuellner@gnome.org>
 Date: Fri, 2 Dec 2022 22:49:41 +0100
 Subject: place: Always center initial-setup
 
-Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/gnome-shell-extension-tiling-assistant/+bug/2011611
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/2016013
 Origin: https://src.fedoraproject.org/rpms/mutter/blob/main/f/0001-place-Always-center-initial-setup-fedora-welcome.patch
 Forwarded: not-needed
 ---
