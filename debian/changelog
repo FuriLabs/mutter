@@ -1,3 +1,19 @@
+mutter (46.2-1ubuntu2) oracular; urgency=medium
+
+  [ Marco Trevisan ]
+  * Add place-Always-center-initial-setup.patch to always center the
+    initial setup window (LP: #2016013)
+
+  [ Daniel van Vugt ]
+  * Add backends-Handle-null-views-instead-of-creating-dummy-view.patch
+    to prevent "clutter_frame_clock_notify_presented: code should not be
+    reached" log spam in some Nvidia Wayland sessions (LP: #1967707)
+  * Add backends-Restore-support-for-X11-cursor-themes.patch to restore
+    support for X11 cursor themes, which was lost in Mutter 46.0
+    (LP: #2062377, LP: #2063869)
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Tue, 25 Jun 2024 15:26:37 +0800
+
 mutter (46.2-1ubuntu1) oracular; urgency=medium
 
   * Merge with Debian. Remaining changes:
