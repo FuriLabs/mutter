@@ -10,7 +10,7 @@ mutter (46.2-1ubuntu1.1) UNRELEASED; urgency=medium
     - Fixed a monitor hotplug crash (LP: #2050865)
     - Improved performance on secondary GPU monitors (LP: #2038801)
   * Refreshed patches:
-    - Support-Dynamic-triple-double-buffering.patch
+    - Support-Dynamic-triple-double-buffering.patch (LP: #2070437, LP: #2070438)
     - meson-Do-not-mark-CI-test-tools-as-required.patch
     - Mark-several-additional-tests-as-flaky.patch
   * Add clutter/conform gesture tests to the list of known flaky ones:
