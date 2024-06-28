@@ -44,7 +44,7 @@ mutter (46.2-1ubuntu0.24.04.1) noble; urgency=medium
   [ Marco Trevisan ]
   * Add place-Always-center-initial-setup.patch (LP: #2016013)
 
- -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Mon, 24 Jun 2024 17:03:48 +0800
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Fri, 28 Jun 2024 17:35:12 +0800
 
 mutter (46.0-1ubuntu9) noble; urgency=medium
 
