@@ -95,6 +95,57 @@ meta_cursor_get_name (MetaCursor cursor)
   return NULL;
 }
 
+const char *
+meta_cursor_get_legacy_name (MetaCursor cursor)
+{
+  switch (cursor)
+    {
+    case META_CURSOR_DEFAULT:
+      return "left_ptr";
+    case META_CURSOR_NORTH_RESIZE:
+      return "top_side";
+    case META_CURSOR_SOUTH_RESIZE:
+      return "bottom_side";
+    case META_CURSOR_WEST_RESIZE:
+      return "left_side";
+    case META_CURSOR_EAST_RESIZE:
+      return "right_side";
+    case META_CURSOR_SE_RESIZE:
+      return "bottom_right_corner";
+    case META_CURSOR_SW_RESIZE:
+      return "bottom_left_corner";
+    case META_CURSOR_NE_RESIZE:
+      return "top_right_corner";
+    case META_CURSOR_NW_RESIZE:
+      return "top_left_corner";
+    case META_CURSOR_MOVE_OR_RESIZE_WINDOW:
+      return "fleur";
+    case META_CURSOR_BUSY:
+      return "watch";
+    case META_CURSOR_DND_IN_DRAG:
+      return "dnd-none";
+    case META_CURSOR_DND_MOVE:
+      return "dnd-move";
+    case META_CURSOR_DND_COPY:
+      return "dnd-copy";
+    case META_CURSOR_DND_UNSUPPORTED_TARGET:
+      return "dnd-none";
+    case META_CURSOR_POINTING_HAND:
+      return "hand2";
+    case META_CURSOR_CROSSHAIR:
+      return "crosshair";
+    case META_CURSOR_IBEAM:
+      return "xterm";
+    case META_CURSOR_BLANK:
+    case META_CURSOR_NONE:
+    case META_CURSOR_LAST:
+      break;
+    }
+
+  g_assert_not_reached ();
+  return NULL;
+}
+
 static XcursorImages *
 create_blank_cursor_images (void)
 {
@@ -117,20 +168,23 @@ meta_cursor_sprite_xcursor_get_cursor (MetaCursorSpriteXcursor *sprite_xcursor)
 }
 
 static XcursorImages *
-load_cursor_on_client (MetaCursor cursor, int scale)
+load_cursor_on_client (MetaCursor cursor,
+                       int        scale)
 {
   XcursorImages *xcursor_images;
   int fallback_size, i;
-  /* Set a 'default' fallback */
-  MetaCursor cursors[] = { cursor, META_CURSOR_DEFAULT };
+  const char *cursor_names[2];
 
   if (cursor == META_CURSOR_BLANK)
     return create_blank_cursor_images ();
 
-  for (i = 0; i < G_N_ELEMENTS (cursors); i++)
+  cursor_names[0] = meta_cursor_get_name (cursor);
+  cursor_names[1] = meta_cursor_get_legacy_name (cursor);
+
+  for (i = 0; i < G_N_ELEMENTS (cursor_names); i++)
     {
       xcursor_images =
-        XcursorLibraryLoadImages (meta_cursor_get_name (cursors[i]),
+        XcursorLibraryLoadImages (cursor_names[i],
                                   meta_prefs_get_cursor_theme (),
                                   meta_prefs_get_cursor_size () * scale);
       if (xcursor_images)

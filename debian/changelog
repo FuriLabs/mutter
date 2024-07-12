@@ -1,3 +1,18 @@
+mutter (46.3.1-1) experimental; urgency=medium
+
+  [ Jeremy Bícha ]
+  * New upstream release
+  * Drop patch applied in new release
+
+  [ Daniel van Vugt ]
+  * Refresh Support-Dynamic-triple-double-buffering.patch
+
+  [ Marco Trevisan (Treviño) ]
+  * debian/patches: Import patch from Fedora to always center Initial Setup
+    (LP: #2016013)
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Mon, 08 Jul 2024 17:27:17 -0400
+
 mutter (46.2-1ubuntu2) oracular; urgency=medium
 
   [ Marco Trevisan ]

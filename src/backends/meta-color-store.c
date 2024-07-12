@@ -90,28 +90,25 @@ on_directory_profile_ready (MetaColorProfile *color_profile,
                             gboolean          success,
                             MetaColorStore   *color_store)
 {
-  if (!success)
-    {
-      g_hash_table_remove (color_store->pending_local_profiles,
-                           meta_color_profile_get_file_path (color_profile));
-      return;
-    }
+  g_autoptr (MetaColorProfile) stolen_color_profile = NULL;
+  g_autofree char *stolen_file_path = NULL;
 
-  g_object_ref (color_profile);
-
-  if (!g_hash_table_steal (color_store->pending_local_profiles,
-                           meta_color_profile_get_file_path (color_profile)))
+  if (!g_hash_table_steal_extended (color_store->pending_local_profiles,
+                                    meta_color_profile_get_file_path (color_profile),
+                                    (gpointer *) &stolen_file_path,
+                                    (gpointer *) &stolen_color_profile))
     g_warn_if_reached ();
+
+  if (!success)
+    return;
 
   g_hash_table_insert (color_store->profiles,
                        g_strdup (meta_color_profile_get_id (color_profile)),
-                       color_profile);
+                       g_object_ref (color_profile));
 
   meta_topic (META_DEBUG_COLOR, "Created colord profile '%s' from '%s'",
               meta_color_profile_get_id (color_profile),
               meta_color_profile_get_file_path (color_profile));
-
-  g_object_unref (color_profile);
 }
 
 static void

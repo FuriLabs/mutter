@@ -773,6 +773,8 @@ meta_screen_cast_stream_src_maybe_record_frame_with_timestamp (MetaScreenCastStr
 {
   MetaScreenCastStreamSrcPrivate *priv =
     meta_screen_cast_stream_src_get_instance_private (src);
+  MetaScreenCastStreamSrcClass *klass =
+    META_SCREEN_CAST_STREAM_SRC_GET_CLASS (src);
   MetaScreenCastRecordResult record_result =
     META_SCREEN_CAST_RECORD_RESULT_RECORDED_NOTHING;
   MtkRectangle crop_rect;
@@ -783,6 +785,15 @@ meta_screen_cast_stream_src_maybe_record_frame_with_timestamp (MetaScreenCastStr
 
   COGL_TRACE_BEGIN_SCOPED (MaybeRecordFrame,
                            "Meta::ScreenCastStreamSrc::maybe_record_frame_with_timestamp()");
+
+  if ((flags & META_SCREEN_CAST_RECORD_FLAG_CURSOR_ONLY) &&
+      klass->is_cursor_metadata_valid &&
+      klass->is_cursor_metadata_valid (src))
+    {
+      meta_topic (META_DEBUG_SCREEN_CAST,
+                  "Dropping cursor-only frame as the cursor didn't change");
+      return record_result;
+    }
 
   /* Accumulate the damaged region since we might not schedule a frame capture
    * eventually but once we do, we should report all the previous damaged areas.
@@ -876,8 +887,6 @@ meta_screen_cast_stream_src_maybe_record_frame_with_timestamp (MetaScreenCastStr
           struct spa_meta_region *spa_meta_video_crop;
 
           spa_data->chunk->size = spa_data->maxsize;
-          spa_data->chunk->stride =
-            meta_screen_cast_stream_src_calculate_stride (src, spa_data);
           spa_data->chunk->flags = SPA_CHUNK_FLAG_NONE;
 
           /* Update VideoCrop if needed */
@@ -1433,6 +1442,7 @@ on_stream_add_buffer (void             *data,
           return;
         }
     }
+  spa_data->chunk->stride = stride;
 
   if (priv->buffer_count == 1 && priv->needs_follow_up_with_buffers)
     {
