@@ -1,3 +1,9 @@
+mutter (46.3.1-1ubuntu2) oracular; urgency=medium
+
+  * Ignore test failures on ppc64el but stop ignoring on armhf
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Fri, 12 Jul 2024 16:12:56 -0400
+
 mutter (46.3.1-1ubuntu1) oracular; urgency=medium
 
   * Merge with Debian (LP: #2072992). Remaining changes:
