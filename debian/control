@@ -99,7 +99,7 @@ Architecture: linux-any
 Depends: adwaita-icon-theme,
          gnome-settings-daemon-common,
          gsettings-desktop-schemas (>= 40~alpha),
-         mutter-common (>= 46.0-1),
+         mutter-common (>= ${source:Version}),
          zenity,
          ${misc:Depends},
          ${shlibs:Depends}
