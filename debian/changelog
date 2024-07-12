@@ -1,3 +1,19 @@
+mutter (46.3.1-1ubuntu1) oracular; urgency=medium
+
+  * Merge with Debian (LP: #2072992). Remaining changes:
+    - Add x11-Add-support-for-fractional-scaling-using-Randr.patch
+    - Add window-Add-ability-to-override-the-edge-constraints.patch
+      + Make possible for extensions (such as Tiling Assistant) to override
+        window constraints
+    - Add backends-Handle-null-views-instead-of-creating-dummy-view.patch
+      to prevent "clutter_frame_clock_notify_presented: code should not be
+      reached" log spam in some Nvidia Wayland sessions (LP: #1967707)
+    - Ignore test results on armhf & ppc64el
+  * Drop backends-Restore-support-for-X11-cursor-themes.patch:
+    applied in new release
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Fri, 12 Jul 2024 11:47:07 -0400
+
 mutter (46.3.1-1) experimental; urgency=medium
 
   [ Jeremy Bícha ]
