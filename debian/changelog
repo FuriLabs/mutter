@@ -1,3 +1,50 @@
+mutter (46.3.1-4) unstable; urgency=medium
+
+  [ Daniel van Vugt ]
+  * Add patches to fix ppc64el build tests on Ubuntu (LP: #2073009)
+
+  [ Jeremy Bícha ]
+  * Stop disabling libdisplay-info on Ubuntu
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Sat, 27 Jul 2024 09:41:03 -0400
+
+mutter (46.3.1-3) unstable; urgency=medium
+
+  [ Simon McVittie ]
+  * Remove version constraints unnecessary since bullseye (oldstable)
+  * Explicitly version various dependencies as per meson.build
+  * Make the package cross-compilable
+    - d/control: Explicitly depend on gir1.2-*-dev for every GIR XML
+      module mentioned in 'includes:'
+    - d/control: Build-Depend on gobject-introspection (>= 1.80)
+      instead of libgirepository1.0-dev
+    - d/rules: Opt-in to cross-friendly gobject-introspection
+      (workaround for #1060838)
+    - d/control: Add ${gir:Provides} to gir1.2-mutter-14
+    - d/control: Add ${gir:Depends}, ${gir:Provides} to -dev package
+    - d/control: Remove unused Build-Depends on python3-attr, -jinja2.
+      ei-scanner from the libei source package needs these, but it's run
+      at libei build time and is not packaged.
+    - d/control: Require a build-architecture copy of cvt.
+      We run it during the build, and the xcvt package is not yet marked
+      Multi-Arch: foreign.
+  * d/control: Don't annotate python3-dbusmock as <!nocheck>, avoiding
+    FTBFS when built with nocheck.
+    The build system checks for this if we are building the "as-installed"
+    tests, even if we are not going to run tests during the build.
+
+  [ Jeremy Bícha ]
+  * Update patch to fix build with gcc-14 on some architectures
+    (Closes: #1077078)
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Sat, 27 Jul 2024 08:24:02 -0400
+
+mutter (46.3.1-2) unstable; urgency=medium
+
+  * Release to unstable
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Fri, 12 Jul 2024 18:26:34 -0400
+
 mutter (46.3.1-1ubuntu2) oracular; urgency=medium
 
   * Ignore test failures on ppc64el but stop ignoring on armhf
@@ -321,6 +368,13 @@ mutter (45.3-1ubuntu1) noble; urgency=medium
         window constraints
 
  -- Jeremy Bícha <jbicha@ubuntu.com>  Mon, 08 Jan 2024 14:42:36 -0500
+
+mutter (44.8-3.1) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * Rename libraries for 64-bit time_t transition.  Closes: #1064248
+
+ -- Benjamin Drung <bdrung@debian.org>  Wed, 28 Feb 2024 21:33:39 +0000
 
 mutter (45.3-1) experimental; urgency=medium
 

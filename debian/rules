@@ -30,8 +30,8 @@ ifneq ($(filter i386,$(DEB_HOST_ARCH)),)
 CONFFLAGS +=-Dprofiler=false
 endif
 
-ifeq ($(shell dpkg-vendor --query vendor),Ubuntu)
-CONFFLAGS += -Dlibdisplay_info=disabled
+ifneq ($(DEB_BUILD_ARCH),$(DEB_HOST_ARCH))
+CONFFLAGS += --cross-file=$(DEB_HOST_GNU_TYPE)-gobject-introspection.ini
 endif
 
 override_dh_gnome_clean:

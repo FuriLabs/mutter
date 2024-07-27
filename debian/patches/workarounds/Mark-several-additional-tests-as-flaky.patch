@@ -89,10 +89,10 @@ index c62eea6..4ba11f4 100644
    pointer = clutter_seat_create_virtual_device (seat, CLUTTER_POINTER_DEVICE);
  
 diff --git a/src/tests/meson.build b/src/tests/meson.build
-index 18314c9..60a2edb 100644
+index b98cfd4..a972096 100644
 --- a/src/tests/meson.build
 +++ b/src/tests/meson.build
-@@ -387,6 +387,7 @@ if have_native_tests
+@@ -389,6 +389,7 @@ if have_native_tests
        'name': 'input-capture',
        'suite': 'backends/native',
        'sources': [ 'input-capture-tests.c' ],
@@ -100,7 +100,7 @@ index 18314c9..60a2edb 100644
      },
      {
        'name': 'thread',
-@@ -678,8 +679,14 @@ if have_native_tests
+@@ -680,8 +681,14 @@ if have_native_tests
  
      test_depends = [ default_plugin ] + test_case.get('depends', [])
  
@@ -116,7 +116,7 @@ index 18314c9..60a2edb 100644
        env: test_env,
        depends: test_depends,
        is_parallel: false,
-@@ -733,8 +740,26 @@ stacking_tests = [
+@@ -735,8 +742,26 @@ stacking_tests = [
  ]
  
  foreach stacking_test: stacking_tests
@@ -144,7 +144,7 @@ index 18314c9..60a2edb 100644
      env: test_env,
      args: [
        files('stacking' / stacking_test + '.metatest'),
-@@ -743,7 +768,7 @@ foreach stacking_test: stacking_tests
+@@ -745,7 +770,7 @@ foreach stacking_test: stacking_tests
      timeout: 60,
    )
  

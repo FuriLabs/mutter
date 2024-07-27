@@ -7,6 +7,9 @@ workarounds/tests-Skip-thread-priority-test.patch
 workarounds/Mark-several-additional-tests-as-flaky.patch
 workarounds/kms-crtc-Increase-default-deadline-evasion-to-1000-micros.patch
 workarounds/place-Always-center-initial-setup.patch
+cogl-tests-Avoid-converting-16bpc-float-16bpc.patch
+cogl-tests-Avoid-rounding-truncation-ambiguity-in-8-16bpc.patch
+cogl-tests-Avoid-floats-when-converting-between-int-forma.patch
 ubuntu/x11-Add-support-for-fractional-scaling-using-Randr.patch
 ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
 ubuntu/backends-Handle-null-views-instead-of-creating-dummy-view.patch

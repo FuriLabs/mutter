@@ -27,7 +27,7 @@ index abe944b..d798bf9 100644
 +
 +#if defined  __arm__ || defined __i386__
 +  g_test_incomplete ("Modifying thread priority is not supported by this architecture");
-+  return;
++  return NULL;
 +#endif
 +
    g_assert_cmpint (priority, ==, 20);
