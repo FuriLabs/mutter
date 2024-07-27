@@ -57,10 +57,7 @@ TEST_COMMAND_FLAKY=env DEB_ALLOW_FLAKY_TESTS=1 $(TEST_COMMAND_BASE) --suite flak
 # Please keep this list in sync with debian/tests/installed-tests
 override_dh_auto_test:
 ifeq ($(filter nocheck,$(DEB_BUILD_OPTIONS)),)
-ifneq (,$(filter ppc64el,$(DEB_HOST_ARCH)))
-	-$(TEST_COMMAND)
-	-$(TEST_COMMAND_FLAKY) --logbase flaky-tests
-else ifeq (,$(filter mips mips64el mipsel riscv64 s390x alpha hppa powerpc sparc64 x32,$(DEB_HOST_ARCH)))
+ifeq (,$(filter mips mips64el mipsel riscv64 s390x alpha hppa powerpc sparc64 x32,$(DEB_HOST_ARCH)))
 	$(TEST_COMMAND)
 	-$(TEST_COMMAND_FLAKY) --logbase flaky-tests
 endif
