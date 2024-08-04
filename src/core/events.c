@@ -178,7 +178,7 @@ sequence_is_pointer_emulated (MetaDisplay        *display,
   return FALSE;
 }
 
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_X11
 static void
 maybe_unfreeze_pointer_events (MetaBackend          *backend,
                                const ClutterEvent   *event,
@@ -235,6 +235,7 @@ meta_display_handle_event (MetaDisplay        *display,
   ClutterEventSequence *sequence;
   ClutterEventType event_type;
   gboolean has_grab;
+  MetaTabletActionMapper *mapper;
 #ifdef HAVE_WAYLAND
   MetaWaylandCompositor *wayland_compositor;
   MetaWaylandTextInput *wayland_text_input = NULL;
@@ -318,24 +319,35 @@ meta_display_handle_event (MetaDisplay        *display,
         }
 
       handle_pad_event = !display->current_pad_osd || is_mode_switch;
+      mapper = META_TABLET_ACTION_MAPPER (display->pad_action_mapper);
 
       if (handle_pad_event &&
-          meta_pad_action_mapper_handle_event (display->pad_action_mapper, event))
+          meta_tablet_action_mapper_handle_event (mapper, event))
+        return CLUTTER_EVENT_STOP;
+    }
+  else if (event_type == CLUTTER_BUTTON_PRESS ||
+           event_type == CLUTTER_BUTTON_RELEASE)
+    {
+      mapper = META_TABLET_ACTION_MAPPER (display->tool_action_mapper);
+      if (((clutter_input_device_get_capabilities (device) & CLUTTER_INPUT_CAPABILITY_TABLET_TOOL) &&
+           meta_tablet_action_mapper_handle_event (mapper, event)) ||
+          clutter_event_get_button (event) == 0)
         return CLUTTER_EVENT_STOP;
     }
 
   if (event_type != CLUTTER_DEVICE_ADDED &&
       event_type != CLUTTER_DEVICE_REMOVED)
-    handle_idletime_for_event (display, event);
+    {
+      handle_idletime_for_event (display, event);
+    }
   else
-    meta_pad_action_mapper_handle_event (display->pad_action_mapper, event);
+    {
+      mapper = META_TABLET_ACTION_MAPPER (display->pad_action_mapper);
+      meta_tablet_action_mapper_handle_event (mapper, event);
+    }
 
   if (event_type == CLUTTER_MOTION)
     {
-      ClutterInputDevice *device;
-
-      device = clutter_event_get_device (event);
-
 #ifdef HAVE_WAYLAND
       if (wayland_compositor)
         {
@@ -428,7 +440,7 @@ meta_display_handle_event (MetaDisplay        *display,
       if (meta_window_handle_ungrabbed_event (window, event))
         return CLUTTER_EVENT_STOP;
 
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_X11
       /* Now replay the button press event to release our own sync grab. */
       maybe_unfreeze_pointer_events (backend, event, EVENTS_UNFREEZE_REPLAY);
 #endif
@@ -445,7 +457,7 @@ meta_display_handle_event (MetaDisplay        *display,
       /* We could not match the event with a window, make sure we sync
        * the pointer to discard the sequence and don't keep events frozen.
        */
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_X11
       maybe_unfreeze_pointer_events (backend, event, EVENTS_UNFREEZE_SYNC);
 #endif
     }

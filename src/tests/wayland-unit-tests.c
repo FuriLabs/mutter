@@ -424,13 +424,13 @@ on_window_added (MetaStack  *stack,
 
 static void
 on_window_actor_destroyed (MetaWindowActor       *actor,
-                           MetaWaylandTestDriver *test_driver)
+                           MetaWaylandTestDriver *driver)
 {
-  meta_wayland_test_driver_emit_sync_event (test_driver, 0);
+  meta_wayland_test_driver_emit_sync_event (driver, 0);
 }
 
 static void
-on_unmap_sync_point (MetaWaylandTestDriver *test_driver,
+on_unmap_sync_point (MetaWaylandTestDriver *driver,
                      unsigned int           sequence,
                      struct wl_resource    *surface_resource,
                      struct wl_client      *wl_client)
@@ -457,7 +457,7 @@ on_unmap_sync_point (MetaWaylandTestDriver *test_driver,
       MetaWindowActor *window_actor = meta_window_actor_from_actor (actor);
       g_signal_connect (window_actor, "destroy",
                         G_CALLBACK (on_window_actor_destroyed),
-                        test_driver);
+                        driver);
     }
   else if (sequence == 1)
     {
@@ -559,6 +559,16 @@ toplevel_activation (void)
 
   wayland_test_client =
     meta_wayland_test_client_new (test_context, "xdg-activation");
+  meta_wayland_test_client_finish (wayland_test_client);
+}
+
+static void
+toplevel_reuse_surface (void)
+{
+  MetaWaylandTestClient *wayland_test_client;
+
+  wayland_test_client =
+    meta_wayland_test_client_new (test_context, "toplevel-reuse-surface");
   meta_wayland_test_client_finish (wayland_test_client);
 }
 
@@ -878,7 +888,7 @@ enum
 };
 
 static void
-on_toplevel_suspended_sync_point (MetaWaylandTestDriver *test_driver,
+on_toplevel_suspended_sync_point (MetaWaylandTestDriver *driver,
                                   unsigned int           sequence,
                                   struct wl_resource    *surface_resource,
                                   struct wl_client      *wl_client)
@@ -1039,6 +1049,8 @@ init_tests (void)
   g_test_add_func ("/wayland/toplevel/bounds/monitors",
                    toplevel_bounds_monitors);
 #endif
+  g_test_add_func ("/wayland/toplevel/reuse-surface",
+                   toplevel_reuse_surface);
   g_test_add_func ("/wayland/xdg-foreign/set-parent-of",
                    xdg_foreign_set_parent_of);
   g_test_add_func ("/wayland/toplevel/show-states",

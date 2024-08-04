@@ -37,9 +37,6 @@
 #include "cogl/cogl-framebuffer.h"
 #include "cogl/cogl-texture-2d.h"
 
-#ifdef HAVE_EGL
-#include "cogl/cogl-egl.h"
-#endif
 
 /* Encodes three possibiloities result of transforming a quad */
 typedef enum
@@ -213,49 +210,11 @@ struct _CoglTextureClass
                             gboolean     value);
 };
 
-typedef enum _CoglTextureChangeFlags
-{
-  /* Whenever the internals of a texture are changed such that the
-   * underlying GL textures that represent the CoglTexture change then
-   * we notify cogl-material.c via
-   * _cogl_pipeline_texture_pre_change_notify
-   */
-  COGL_TEXTURE_CHANGE_GL_TEXTURES
-
-} CoglTextureChangeFlags;
-
-typedef struct _CoglTexturePixel  CoglTexturePixel;
-
-/* This is used by the texture backends to store the first pixel of
-   each GL texture. This is only used when glGenerateMipmap is not
-   available so that we can temporarily set GL_GENERATE_MIPMAP and
-   reupload a pixel */
-struct _CoglTexturePixel
-{
-  /* We need to store the format of the pixel because we store the
-     data in the source format which might end up being different for
-     each slice if a subregion is updated with a different format */
-  GLenum gl_format;
-  GLenum gl_type;
-  uint8_t data[4];
-};
-
 gboolean
 _cogl_texture_can_hardware_repeat (CoglTexture *texture);
 
 void
-_cogl_texture_transform_coords_to_gl (CoglTexture *texture,
-                                      float *s,
-                                      float *t);
-CoglTransformResult
-_cogl_texture_transform_quad_coords_to_gl (CoglTexture *texture,
-                                           float *coords);
-
-void
 _cogl_texture_pre_paint (CoglTexture *texture, CoglTexturePrePaintFlags flags);
-
-void
-_cogl_texture_ensure_non_quad_rendering (CoglTexture *texture);
 
 /*
  * This determines a CoglPixelFormat according to texture::components
@@ -361,9 +320,6 @@ _cogl_texture_set_allocated (CoglTexture *texture,
                              CoglPixelFormat internal_format,
                              int width,
                              int height);
-
-COGL_EXPORT CoglPixelFormat
-_cogl_texture_get_format (CoglTexture *texture);
 
 CoglTextureLoader *
 _cogl_texture_create_loader (void);

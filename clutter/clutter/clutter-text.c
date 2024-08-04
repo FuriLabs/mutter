@@ -24,7 +24,7 @@
 
 /**
  * ClutterText:
- * 
+ *
  * An actor for displaying and editing text
  *
  * #ClutterText is an actor that displays custom text using Pango
@@ -48,7 +48,6 @@
 #include "clutter/clutter-animatable.h"
 #include "clutter/clutter-backend-private.h"
 #include "clutter/clutter-binding-pool.h"
-#include "clutter/clutter-color.h"
 #include "clutter/clutter-debug.h"
 #include "clutter/clutter-enum-types.h"
 #include "clutter/clutter-keysyms.h"
@@ -111,7 +110,7 @@ typedef struct _ClutterTextPrivate
 
   gchar *preedit_str;
 
-  ClutterColor text_color;
+  CoglColor text_color;
 
   LayoutCache cached_layouts[N_CACHED_LAYOUTS];
   guint cache_age;
@@ -155,7 +154,7 @@ typedef struct _ClutterTextPrivate
 
   /* Where to draw the cursor */
   graphene_rect_t cursor_rect;
-  ClutterColor cursor_color;
+  CoglColor cursor_color;
   guint cursor_size;
 
   /* Box representing the paint volume. The box is lazily calculated
@@ -165,9 +164,9 @@ typedef struct _ClutterTextPrivate
   guint preedit_cursor_pos;
   gint preedit_n_chars;
 
-  ClutterColor selection_color;
+  CoglColor selection_color;
 
-  ClutterColor selected_text_color;
+  CoglColor selected_text_color;
 
   gunichar password_char;
 
@@ -274,10 +273,10 @@ static void buffer_connect_signals (ClutterText *self);
 static void buffer_disconnect_signals (ClutterText *self);
 static ClutterTextBuffer *get_buffer (ClutterText *self);
 
-static const ClutterColor default_cursor_color    = {   0,   0,   0, 255 };
-static const ClutterColor default_selection_color = {   0,   0,   0, 255 };
-static const ClutterColor default_text_color      = {   0,   0,   0, 255 };
-static const ClutterColor default_selected_text_color = {   0,   0,   0, 255 };
+static const CoglColor default_cursor_color    = {   0,   0,   0, 255 };
+static const CoglColor default_selection_color = {   0,   0,   0, 255 };
+static const CoglColor default_text_color      = {   0,   0,   0, 255 };
+static const CoglColor default_selected_text_color = {   0,   0,   0, 255 };
 
 static ClutterAnimatableInterface *parent_animatable_iface = NULL;
 
@@ -592,7 +591,7 @@ ensure_effective_pango_scale_attribute (ClutterText *self)
       scale_attrib = pango_attr_iterator_get (iter, PANGO_ATTR_SCALE);
 
       if (scale_attrib != NULL)
-        resource_scale *= ((PangoAttrFloat *) scale_attrib)->value;
+        resource_scale *= (float) ((PangoAttrFloat *) scale_attrib)->value;
 
       pango_attr_iterator_destroy (iter);
     }
@@ -964,7 +963,7 @@ clutter_text_create_layout (ClutterText *text,
        !((priv->editable && priv->single_line_mode) ||
          (priv->ellipsize == PANGO_ELLIPSIZE_NONE && !priv->wrap))))
     {
-      width = pixels_to_pango (allocation_width);
+      width = (int) pixels_to_pango (allocation_width);
     }
 
   /* Pango only uses height if ellipsization is enabled, so don't set
@@ -981,7 +980,7 @@ clutter_text_create_layout (ClutterText *text,
       priv->ellipsize != PANGO_ELLIPSIZE_NONE &&
       !priv->single_line_mode)
     {
-      height = pixels_to_pango (allocation_height);
+      height = (int) pixels_to_pango (allocation_height);
     }
 
   /* Search for a cached layout with the same width and keep
@@ -1137,8 +1136,8 @@ clutter_text_coords_to_position (ClutterText *self,
   /* Take any offset due to scrolling into account, and normalize
    * the coordinates to PangoScale units
    */
-  px = logical_pixels_to_pango (x - priv->text_logical_x, resource_scale);
-  py = logical_pixels_to_pango (y - priv->text_logical_y, resource_scale);
+  px = (int) logical_pixels_to_pango (x - priv->text_logical_x, resource_scale);
+  py = (int) logical_pixels_to_pango (y - priv->text_logical_y, resource_scale);
 
   pango_layout_xy_to_index (clutter_text_get_layout (self),
                             px, py,
@@ -1496,7 +1495,7 @@ clutter_text_set_property (GObject      *gobject,
       break;
 
     case PROP_COLOR:
-      clutter_text_set_color (self, clutter_value_get_color (value));
+      clutter_text_set_color (self, cogl_value_get_color (value));
       break;
 
     case PROP_FONT_NAME:
@@ -1584,7 +1583,7 @@ clutter_text_set_property (GObject      *gobject,
       break;
 
     case PROP_SELECTED_TEXT_COLOR:
-      clutter_text_set_selected_text_color (self, clutter_value_get_color (value));
+      clutter_text_set_selected_text_color (self, cogl_value_get_color (value));
       break;
 
     case PROP_INPUT_PURPOSE:
@@ -1632,7 +1631,7 @@ clutter_text_get_property (GObject    *gobject,
       break;
 
     case PROP_COLOR:
-      clutter_value_set_color (value, &priv->text_color);
+      cogl_value_set_color (value, &priv->text_color);
       break;
 
     case PROP_CURSOR_VISIBLE:
@@ -1640,7 +1639,7 @@ clutter_text_get_property (GObject    *gobject,
       break;
 
     case PROP_CURSOR_COLOR:
-      clutter_value_set_color (value, &priv->cursor_color);
+      cogl_value_set_color (value, &priv->cursor_color);
       break;
 
     case PROP_CURSOR_COLOR_SET:
@@ -1668,7 +1667,7 @@ clutter_text_get_property (GObject    *gobject,
       break;
 
     case PROP_SELECTION_COLOR:
-      clutter_value_set_color (value, &priv->selection_color);
+      cogl_value_set_color (value, &priv->selection_color);
       break;
 
     case PROP_SELECTION_COLOR_SET:
@@ -1716,7 +1715,7 @@ clutter_text_get_property (GObject    *gobject,
       break;
 
     case PROP_SELECTED_TEXT_COLOR:
-      clutter_value_set_color (value, &priv->selected_text_color);
+      cogl_value_set_color (value, &priv->selected_text_color);
       break;
 
     case PROP_SELECTED_TEXT_COLOR_SET:
@@ -1783,12 +1782,14 @@ clutter_text_finalize (GObject *gobject)
 
 typedef void (* ClutterTextSelectionFunc) (ClutterText           *text,
                                            const ClutterActorBox *box,
+                                           ClutterPaintContext   *paint_context,
                                            gpointer               user_data);
 
 static void
 clutter_text_foreach_selection_rectangle (ClutterText              *self,
                                           float                     scale,
                                           ClutterTextSelectionFunc  func,
+                                          ClutterPaintContext      *paint_context,
                                           gpointer                  user_data)
 {
   ClutterTextPrivate *priv = clutter_text_get_instance_private (self);
@@ -1864,7 +1865,7 @@ clutter_text_foreach_selection_rectangle (ClutterText              *self,
 
           clutter_actor_box_scale (&box, scale);
 
-          func (self, &box, user_data);
+          func (self, &box, paint_context, user_data);
         }
 
       g_free (ranges);
@@ -1887,6 +1888,7 @@ create_color_pipeline (void)
   if (G_UNLIKELY (color_pipeline == NULL))
     {
       color_pipeline = cogl_pipeline_new (ctx);
+      cogl_pipeline_set_static_name (color_pipeline, "ClutterText (color)");
       cogl_context_set_named_pipeline (ctx,
                                        &color_pipeline_key,
                                        color_pipeline);
@@ -1898,14 +1900,37 @@ create_color_pipeline (void)
 static void
 clutter_text_foreach_selection_rectangle_prescaled (ClutterText              *self,
                                                     ClutterTextSelectionFunc  func,
+                                                    ClutterPaintContext      *paint_context,
                                                     gpointer                  user_data)
 {
-  clutter_text_foreach_selection_rectangle (self, 1.0f, func, user_data);
+  clutter_text_foreach_selection_rectangle (self, 1.0f, func, paint_context, user_data);
+}
+
+typedef struct
+{
+  ClutterColorState *color_state;
+  ClutterColorState *target_color_state;
+} PangoPipelineData;
+
+static void
+setup_pango_pipeline (CoglPipeline *pipeline,
+                      gpointer      user_data)
+{
+  PangoPipelineData *pango_pipeline_data = user_data;
+  ClutterColorState *color_state =
+    pango_pipeline_data->color_state;
+  ClutterColorState *target_color_state =
+    pango_pipeline_data->target_color_state;
+
+  clutter_color_state_add_pipeline_transform (color_state,
+                                              target_color_state,
+                                              pipeline);
 }
 
 static void
 paint_selection_rectangle (ClutterText           *self,
                            const ClutterActorBox *box,
+                           ClutterPaintContext   *paint_context,
                            gpointer               user_data)
 {
   CoglFramebuffer *fb = user_data;
@@ -1914,8 +1939,13 @@ paint_selection_rectangle (ClutterText           *self,
   guint8 paint_opacity = clutter_actor_get_paint_opacity (actor);
   CoglPipeline *color_pipeline = create_color_pipeline ();
   PangoLayout *layout = clutter_text_get_layout (self);
+  ClutterColorState *color_state =
+    clutter_paint_context_get_color_state (paint_context);
+  ClutterColorState *target_color_state =
+    clutter_paint_context_get_target_color_state (paint_context);
   CoglColor cogl_color = { 0, };
-  const ClutterColor *color;
+  const CoglColor *color;
+  PangoPipelineData pango_pipeline_data = {};
 
   /* Paint selection background */
   if (priv->selection_color_set)
@@ -1926,12 +1956,20 @@ paint_selection_rectangle (ClutterText           *self,
     color = &priv->text_color;
 
   cogl_color_init_from_4f (&cogl_color,
-                           color->red / 255.0,
-                           color->green / 255.0,
-                           color->blue / 255.0,
-                           paint_opacity / 255.0 * color->alpha / 255.0);
+                           color->red / 255.0f,
+                           color->green / 255.0f,
+                           color->blue / 255.0f,
+                           paint_opacity / 255.0f * color->alpha / 255.0f);
   cogl_color_premultiply (&cogl_color);
   cogl_pipeline_set_color (color_pipeline, &cogl_color);
+
+  pango_pipeline_data = (PangoPipelineData) {
+    .color_state = color_state,
+    .target_color_state = target_color_state,
+  };
+  clutter_color_state_add_pipeline_transform (color_state,
+                                              target_color_state,
+                                              color_pipeline);
 
   cogl_framebuffer_push_rectangle_clip (fb,
                                         box->x1, box->y1,
@@ -1946,12 +1984,14 @@ paint_selection_rectangle (ClutterText           *self,
     color = &priv->text_color;
 
   cogl_color_init_from_4f (&cogl_color,
-                           color->red / 255.0,
-                           color->green / 255.0,
-                           color->blue / 255.0,
-                           paint_opacity / 255.0 * color->alpha / 255.0);
+                           color->red / 255.0f,
+                           color->green / 255.0f,
+                           color->blue / 255.0f,
+                           paint_opacity / 255.0f * color->alpha / 255.0f);
 
-  cogl_pango_show_layout (fb, layout, priv->text_x, 0, &cogl_color);
+  cogl_pango_show_layout (fb, layout, priv->text_x, 0, &cogl_color,
+                          setup_pango_pipeline,
+                          &pango_pipeline_data);
 
   cogl_framebuffer_pop_clip (fb);
   g_object_unref (color_pipeline);
@@ -1959,19 +1999,24 @@ paint_selection_rectangle (ClutterText           *self,
 
 /* Draws the selected text, its background, and the cursor */
 static void
-selection_paint (ClutterText     *self,
-                 CoglFramebuffer *fb)
+selection_paint (ClutterText         *self,
+                 CoglFramebuffer     *fb,
+                 ClutterPaintContext *paint_context)
 {
   ClutterTextPrivate *priv = clutter_text_get_instance_private (self);
   ClutterActor *actor = CLUTTER_ACTOR (self);
   guint8 paint_opacity = clutter_actor_get_paint_opacity (actor);
-  const ClutterColor *color;
+  const CoglColor *color;
 
   if (!clutter_text_should_draw_cursor (self))
     return;
 
   if (priv->position == priv->selection_bound)
     {
+      ClutterColorState *color_state =
+        clutter_paint_context_get_color_state (paint_context);
+      ClutterColorState *target_color_state =
+        clutter_paint_context_get_target_color_state (paint_context);
       CoglPipeline *color_pipeline = create_color_pipeline ();
       CoglColor cogl_color;
 
@@ -1983,12 +2028,16 @@ selection_paint (ClutterText     *self,
 
 
       cogl_color_init_from_4f (&cogl_color,
-                               color->red / 255.0,
-                               color->green / 255.0,
-                               color->blue / 255.0,
-                               paint_opacity / 255.0 * color->alpha / 255.0);
+                               color->red / 255.0f,
+                               color->green / 255.0f,
+                               color->blue / 255.0f,
+                               paint_opacity / 255.0f * color->alpha / 255.0f);
       cogl_color_premultiply (&cogl_color);
       cogl_pipeline_set_color (color_pipeline, &cogl_color);
+
+      clutter_color_state_add_pipeline_transform (color_state,
+                                                  target_color_state,
+                                                  color_pipeline);
 
       cogl_framebuffer_draw_rectangle (fb,
                                        color_pipeline,
@@ -2003,6 +2052,7 @@ selection_paint (ClutterText     *self,
     {
       clutter_text_foreach_selection_rectangle_prescaled (self,
                                                           paint_selection_rectangle,
+                                                          paint_context,
                                                           fb);
     }
 }
@@ -2581,10 +2631,10 @@ clutter_text_compute_layout_offsets (ClutterText           *self,
     }
 
   if (text_x != NULL)
-    *text_x = floorf (x);
+    *text_x = (int) floorf (x);
 
   if (text_y != NULL)
-    *text_y = floorf (y);
+    *text_y = (int) floorf (y);
 }
 
 #define TEXT_PADDING    2
@@ -2595,6 +2645,11 @@ clutter_text_paint (ClutterActor        *self,
 {
   ClutterText *text = CLUTTER_TEXT (self);
   ClutterTextPrivate *priv = clutter_text_get_instance_private (text);
+  ClutterColorState *color_state =
+    clutter_paint_context_get_color_state (paint_context);
+  ClutterColorState *target_color_state =
+    clutter_paint_context_get_target_color_state (paint_context);
+  g_autoptr (CoglSnippet) color_snippet = NULL;
   CoglFramebuffer *fb;
   PangoLayout *layout;
   ClutterActorBox alloc = { 0, };
@@ -2607,6 +2662,7 @@ clutter_text_paint (ClutterActor        *self,
   float alloc_width;
   float alloc_height;
   float resource_scale;
+  PangoPipelineData pango_pipeline_data = {};
 
   fb = clutter_paint_context_get_framebuffer (paint_context);
 
@@ -2682,14 +2738,14 @@ clutter_text_paint (ClutterActor        *self,
       cogl_framebuffer_push_rectangle_clip (fb, 0, 0, alloc_width, alloc_height);
       clip_set = TRUE;
 
-      actor_width = alloc_width - 2 * TEXT_PADDING;
-      text_width  = pango_to_pixels (logical_rect.width);
+      actor_width = (int) (alloc_width - 2 * TEXT_PADDING);
+      text_width = (int) pango_to_pixels (logical_rect.width);
 
       rtl = priv->resolved_direction == CLUTTER_TEXT_DIRECTION_RTL;
 
       if (actor_width < text_width)
         {
-          gint cursor_x = graphene_rect_get_x (&priv->cursor_rect);
+          gint cursor_x = (int) graphene_rect_get_x (&priv->cursor_rect);
 
           if (priv->position == -1)
             {
@@ -2740,8 +2796,8 @@ clutter_text_paint (ClutterActor        *self,
     {
       priv->text_x = text_x;
       priv->text_y = text_y;
-      priv->text_logical_x = roundf ((float) text_x / resource_scale);
-      priv->text_logical_y = roundf ((float) text_y / resource_scale);
+      priv->text_logical_x = (int) roundf ((float) text_x / resource_scale);
+      priv->text_logical_y = (int) roundf ((float) text_y / resource_scale);
 
       clutter_text_ensure_cursor_position (text, resource_scale);
     }
@@ -2754,13 +2810,20 @@ clutter_text_paint (ClutterActor        *self,
                 clutter_text_buffer_get_text (get_buffer (text)));
 
   cogl_color_init_from_4f (&color,
-                           priv->text_color.red / 255.0,
-                           priv->text_color.green / 255.0,
-                           priv->text_color.blue / 255.0,
-                           real_opacity / 255.0);
-  cogl_pango_show_layout (fb, layout, priv->text_x, priv->text_y, &color);
+                           priv->text_color.red / 255.0f,
+                           priv->text_color.green / 255.0f,
+                           priv->text_color.blue / 255.0f,
+                           real_opacity / 255.0f);
 
-  selection_paint (text, fb);
+  pango_pipeline_data = (PangoPipelineData) {
+    .color_state = color_state,
+    .target_color_state = target_color_state,
+  };
+  cogl_pango_show_layout (fb, layout, priv->text_x, priv->text_y, &color,
+                          setup_pango_pipeline,
+                          &pango_pipeline_data);
+
+  selection_paint (text, fb, paint_context);
 
   if (resource_scale != 1.0f)
     cogl_framebuffer_pop_matrix (fb);
@@ -2772,6 +2835,7 @@ clutter_text_paint (ClutterActor        *self,
 static void
 add_selection_to_paint_volume (ClutterText           *text,
                                const ClutterActorBox *box,
+                               ClutterPaintContext   *paint_context,
                                gpointer               user_data)
 {
   ClutterPaintVolume *total_volume = user_data;
@@ -2821,6 +2885,7 @@ clutter_text_get_paint_volume_for_cursor (ClutterText        *text,
       clutter_text_foreach_selection_rectangle (text,
                                                 1.0f / resource_scale,
                                                 add_selection_to_paint_volume,
+                                                NULL,
                                                 volume);
     }
 }
@@ -3571,9 +3636,9 @@ clutter_text_add_move_binding (ClutterBindingPool  *pool,
 }
 
 static void
-clutter_text_set_color_internal (ClutterText        *self,
-                                 GParamSpec         *pspec,
-                                 const ClutterColor *color)
+clutter_text_set_color_internal (ClutterText     *self,
+                                 GParamSpec      *pspec,
+                                 const CoglColor *color)
 {
   ClutterTextPrivate *priv =
     clutter_text_get_instance_private (self);
@@ -3634,9 +3699,9 @@ clutter_text_set_color_internal (ClutterText        *self,
 }
 
 static void
-clutter_text_set_color_animated (ClutterText        *self,
-                                 GParamSpec         *pspec,
-                                 const ClutterColor *color)
+clutter_text_set_color_animated (ClutterText     *self,
+                                 GParamSpec      *pspec,
+                                 const CoglColor *color)
 {
   ClutterActor *actor = CLUTTER_ACTOR (self);
   ClutterTextPrivate *priv = clutter_text_get_instance_private (self);
@@ -3685,22 +3750,22 @@ clutter_text_set_color_animated (ClutterText        *self,
   switch (pspec->param_id)
     {
     case PROP_COLOR:
-      clutter_transition_set_from (transition, CLUTTER_TYPE_COLOR,
+      clutter_transition_set_from (transition, COGL_TYPE_COLOR,
                                    &priv->text_color);
       break;
 
     case PROP_CURSOR_COLOR:
-      clutter_transition_set_from (transition, CLUTTER_TYPE_COLOR,
+      clutter_transition_set_from (transition, COGL_TYPE_COLOR,
                                    &priv->cursor_color);
       break;
 
     case PROP_SELECTION_COLOR:
-      clutter_transition_set_from (transition, CLUTTER_TYPE_COLOR,
+      clutter_transition_set_from (transition, COGL_TYPE_COLOR,
                                    &priv->selection_color);
       break;
 
     case PROP_SELECTED_TEXT_COLOR:
-      clutter_transition_set_from (transition, CLUTTER_TYPE_COLOR,
+      clutter_transition_set_from (transition, COGL_TYPE_COLOR,
                                    &priv->selected_text_color);
       break;
 
@@ -3708,7 +3773,7 @@ clutter_text_set_color_animated (ClutterText        *self,
       g_assert_not_reached ();
     }
 
-  clutter_transition_set_to (transition, CLUTTER_TYPE_COLOR, color);
+  clutter_transition_set_to (transition, COGL_TYPE_COLOR, color);
 
   /* always use the current easing state */
   clutter_timeline_set_duration (CLUTTER_TIMELINE (transition),
@@ -3728,27 +3793,27 @@ clutter_text_set_final_state (ClutterAnimatable *animatable,
 {
   if (strcmp (property_name, "color") == 0)
     {
-      const ClutterColor *color = clutter_value_get_color (value);
+      const CoglColor *color = cogl_value_get_color (value);
       clutter_text_set_color_internal (CLUTTER_TEXT (animatable),
                                        obj_props[PROP_COLOR], color);
     }
   else if (strcmp (property_name, "cursor-color") == 0)
     {
-      const ClutterColor *color = clutter_value_get_color (value);
+      const CoglColor *color = cogl_value_get_color (value);
       clutter_text_set_color_internal (CLUTTER_TEXT (animatable),
                                        obj_props[PROP_CURSOR_COLOR],
                                        color);
     }
   else if (strcmp (property_name, "selected-text-color") == 0)
     {
-      const ClutterColor *color = clutter_value_get_color (value);
+      const CoglColor *color = cogl_value_get_color (value);
       clutter_text_set_color_internal (CLUTTER_TEXT (animatable),
                                        obj_props[PROP_SELECTED_TEXT_COLOR],
                                        color);
     }
   else if (strcmp (property_name, "selection-color") == 0)
     {
-      const ClutterColor *color = clutter_value_get_color (value);
+      const CoglColor *color = cogl_value_get_color (value);
       clutter_text_set_color_internal (CLUTTER_TEXT (animatable),
                                        obj_props[PROP_SELECTION_COLOR],
                                        color);
@@ -3859,11 +3924,11 @@ clutter_text_class_init (ClutterTextClass *klass)
    *
    * The color used to render the text.
    */
-  pspec = clutter_param_spec_color ("color", NULL, NULL,
-                                    &default_text_color,
-                                    G_PARAM_READWRITE |
-                                    G_PARAM_STATIC_STRINGS |
-                                    CLUTTER_PARAM_ANIMATABLE);
+  pspec = cogl_param_spec_color ("color", NULL, NULL,
+                                 &default_text_color,
+                                 G_PARAM_READWRITE |
+                                 G_PARAM_STATIC_STRINGS |
+                                 CLUTTER_PARAM_ANIMATABLE);
   obj_props[PROP_COLOR] = pspec;
   g_object_class_install_property (gobject_class, PROP_COLOR, pspec);
 
@@ -3925,11 +3990,11 @@ clutter_text_class_init (ClutterTextClass *klass)
    *
    * The color of the cursor.
    */
-  pspec = clutter_param_spec_color ("cursor-color", NULL, NULL,
-                                    &default_cursor_color,
-                                    G_PARAM_READWRITE |
-                                    G_PARAM_STATIC_STRINGS |
-                                    CLUTTER_PARAM_ANIMATABLE);
+  pspec = cogl_param_spec_color ("cursor-color", NULL, NULL,
+                                 &default_cursor_color,
+                                 G_PARAM_READWRITE |
+                                 G_PARAM_STATIC_STRINGS |
+                                 CLUTTER_PARAM_ANIMATABLE);
   obj_props[PROP_CURSOR_COLOR] = pspec;
   g_object_class_install_property (gobject_class, PROP_CURSOR_COLOR, pspec);
 
@@ -3989,11 +4054,11 @@ clutter_text_class_init (ClutterTextClass *klass)
    *
    * The color of the selection.
    */
-  pspec = clutter_param_spec_color ("selection-color", NULL, NULL,
-                                    &default_selection_color,
-                                    G_PARAM_READWRITE |
-                                    G_PARAM_STATIC_STRINGS |
-                                    CLUTTER_PARAM_ANIMATABLE);
+  pspec = cogl_param_spec_color ("selection-color", NULL, NULL,
+                                 &default_selection_color,
+                                 G_PARAM_READWRITE |
+                                 G_PARAM_STATIC_STRINGS |
+                                 CLUTTER_PARAM_ANIMATABLE);
   obj_props[PROP_SELECTION_COLOR] = pspec;
   g_object_class_install_property (gobject_class, PROP_SELECTION_COLOR, pspec);
 
@@ -4161,11 +4226,11 @@ clutter_text_class_init (ClutterTextClass *klass)
    *
    * The color of selected text.
    */
-  pspec = clutter_param_spec_color ("selected-text-color", NULL, NULL,
-                                    &default_selected_text_color,
-                                    G_PARAM_READWRITE |
-                                    G_PARAM_STATIC_STRINGS |
-                                    CLUTTER_PARAM_ANIMATABLE);
+  pspec = cogl_param_spec_color ("selected-text-color", NULL, NULL,
+                                 &default_selected_text_color,
+                                 G_PARAM_READWRITE |
+                                 G_PARAM_STATIC_STRINGS |
+                                 CLUTTER_PARAM_ANIMATABLE);
   obj_props[PROP_SELECTED_TEXT_COLOR] = pspec;
   g_object_class_install_property (gobject_class, PROP_SELECTED_TEXT_COLOR, pspec);
 
@@ -4495,9 +4560,9 @@ clutter_text_new (void)
  * Return value: the newly created #ClutterText actor
  */
 ClutterActor *
-clutter_text_new_full (const gchar        *font_name,
-                       const gchar        *text,
-                       const ClutterColor *color)
+clutter_text_new_full (const gchar     *font_name,
+                       const gchar     *text,
+                       const CoglColor *color)
 {
   return g_object_new (CLUTTER_TYPE_TEXT,
                        "font-name", font_name,
@@ -5010,8 +5075,8 @@ clutter_text_get_cursor_visible (ClutterText *self)
  * text color.
  */
 void
-clutter_text_set_cursor_color (ClutterText        *self,
-                               const ClutterColor *color)
+clutter_text_set_cursor_color (ClutterText     *self,
+                               const CoglColor *color)
 {
   g_return_if_fail (CLUTTER_IS_TEXT (self));
 
@@ -5021,13 +5086,13 @@ clutter_text_set_cursor_color (ClutterText        *self,
 /**
  * clutter_text_get_cursor_color:
  * @self: a #ClutterText
- * @color: (out): return location for a #ClutterColor
+ * @color: (out): return location for a #CoglColor
  *
  * Retrieves the color of the cursor of a #ClutterText actor.
  */
 void
-clutter_text_get_cursor_color (ClutterText  *self,
-                               ClutterColor *color)
+clutter_text_get_cursor_color (ClutterText *self,
+                               CoglColor   *color)
 {
   ClutterTextPrivate *priv;
 
@@ -5185,8 +5250,8 @@ clutter_text_get_selection_bound (ClutterText *self)
  * the same as the text color.
  */
 void
-clutter_text_set_selection_color (ClutterText        *self,
-                                  const ClutterColor *color)
+clutter_text_set_selection_color (ClutterText     *self,
+                                  const CoglColor *color)
 {
   g_return_if_fail (CLUTTER_IS_TEXT (self));
 
@@ -5197,13 +5262,13 @@ clutter_text_set_selection_color (ClutterText        *self,
 /**
  * clutter_text_get_selection_color:
  * @self: a #ClutterText
- * @color: (out caller-allocates): return location for a #ClutterColor
+ * @color: (out caller-allocates): return location for a #CoglColor
  *
  * Retrieves the color of the selection of a #ClutterText actor.
  */
 void
 clutter_text_get_selection_color (ClutterText  *self,
-                                  ClutterColor *color)
+                                  CoglColor    *color)
 {
   ClutterTextPrivate *priv;
 
@@ -5226,8 +5291,8 @@ clutter_text_get_selection_color (ClutterText  *self,
  * selection color, which then falls back to cursor, and then text color.
  */
 void
-clutter_text_set_selected_text_color (ClutterText        *self,
-                                      const ClutterColor *color)
+clutter_text_set_selected_text_color (ClutterText     *self,
+                                      const CoglColor *color)
 {
   g_return_if_fail (CLUTTER_IS_TEXT (self));
 
@@ -5238,13 +5303,13 @@ clutter_text_set_selected_text_color (ClutterText        *self,
 /**
  * clutter_text_get_selected_text_color:
  * @self: a #ClutterText
- * @color: (out caller-allocates): return location for a [struct@Color]
+ * @color: (out caller-allocates): return location for a [struct@Cogl.Color]
  *
  * Retrieves the color of selected text of a #ClutterText actor.
  */
 void
-clutter_text_get_selected_text_color (ClutterText  *self,
-                                      ClutterColor *color)
+clutter_text_get_selected_text_color (ClutterText *self,
+                                      CoglColor   *color)
 {
   ClutterTextPrivate *priv;
 
@@ -5557,7 +5622,7 @@ clutter_text_get_layout (ClutterText *self)
 /**
  * clutter_text_set_color:
  * @self: a #ClutterText
- * @color: a #ClutterColor
+ * @color: a #CoglColor
  *
  * Sets the color of the contents of a #ClutterText actor.
  *
@@ -5567,8 +5632,8 @@ clutter_text_get_layout (ClutterText *self)
  * by [method@Actor.get_paint_opacity].
  */
 void
-clutter_text_set_color (ClutterText        *self,
-                        const ClutterColor *color)
+clutter_text_set_color (ClutterText     *self,
+                        const CoglColor *color)
 {
   g_return_if_fail (CLUTTER_IS_TEXT (self));
   g_return_if_fail (color != NULL);
@@ -5579,13 +5644,13 @@ clutter_text_set_color (ClutterText        *self,
 /**
  * clutter_text_get_color:
  * @self: a #ClutterText
- * @color: (out caller-allocates): return location for a [struct@Color]
+ * @color: (out caller-allocates): return location for a [struct@Cogl.Color]
  *
  * Retrieves the text color as set by [method@Text.set_color].
  */
 void
 clutter_text_get_color (ClutterText  *self,
-                        ClutterColor *color)
+                        CoglColor    *color)
 {
   ClutterTextPrivate *priv;
 

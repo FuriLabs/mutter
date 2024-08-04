@@ -32,12 +32,10 @@
 
 #include "config.h"
 
-#include "cogl/cogl-i18n-private.h"
 #include "cogl/cogl-util.h"
 #include "cogl/cogl-feature-private.h"
 #include "cogl/cogl-context-private.h"
 #include "cogl/cogl-framebuffer.h"
-#include "cogl/cogl-swap-chain-private.h"
 #include "cogl/cogl-renderer-private.h"
 #include "cogl/cogl-onscreen-template-private.h"
 #include "cogl/cogl-private.h"
@@ -45,12 +43,9 @@
 #include "cogl/cogl-frame-info-private.h"
 #include "cogl/cogl-framebuffer-private.h"
 #include "cogl/cogl-onscreen-private.h"
-#include "cogl/cogl-swap-chain-private.h"
 #include "cogl/cogl-xlib-renderer.h"
 #include "cogl/cogl-util.h"
-#include "cogl/cogl-poll-private.h"
 #include "cogl/driver/gl/cogl-pipeline-opengl-private.h"
-#include "cogl/winsys/cogl-glx.h"
 #include "cogl/winsys/cogl-glx-renderer-private.h"
 #include "cogl/winsys/cogl-glx-display-private.h"
 #include "cogl/winsys/cogl-onscreen-glx.h"
@@ -231,7 +226,7 @@ glx_event_filter_cb (XEvent *xevent, void *data)
 
       if (onscreen)
         {
-          CoglOnscreenDirtyInfo info;
+          MtkRectangle info;
 
           info.x = xevent->xexpose.x;
           info.y = xevent->xexpose.y;
@@ -264,8 +259,7 @@ static gboolean
 update_all_outputs (CoglRenderer *renderer)
 {
   GList *l;
-
-  _COGL_GET_CONTEXT (context, FALSE);
+  CoglContext *context = renderer->display->context;
 
   if (context->display == NULL) /* during connection */
     return FALSE;
@@ -476,12 +470,12 @@ update_winsys_features (CoglContext *context, GError **error)
   /* Note: glXCopySubBuffer and glBlitFramebuffer won't be throttled
    * by the SwapInterval so we have to throttle swap_region requests
    * manually... */
-  if (_cogl_winsys_has_feature (COGL_WINSYS_FEATURE_SWAP_REGION) &&
+  if (cogl_context_has_winsys_feature (context, COGL_WINSYS_FEATURE_SWAP_REGION) &&
       (glx_display->have_vblank_counter || glx_display->can_vblank_wait))
     COGL_FLAGS_SET (context->winsys_features,
                     COGL_WINSYS_FEATURE_SWAP_REGION_THROTTLE, TRUE);
 
-  if (_cogl_winsys_has_feature (COGL_WINSYS_FEATURE_SYNC_AND_COMPLETE_EVENT))
+  if (cogl_context_has_winsys_feature (context, COGL_WINSYS_FEATURE_SYNC_AND_COMPLETE_EVENT))
     {
       COGL_FLAGS_SET (context->winsys_features,
                       COGL_WINSYS_FEATURE_SWAP_BUFFERS_EVENT, TRUE);
@@ -493,7 +487,7 @@ update_winsys_features (CoglContext *context, GError **error)
                   COGL_PRIVATE_FEATURE_DIRTY_EVENTS,
                   TRUE);
 
-  if (_cogl_winsys_has_feature (COGL_WINSYS_FEATURE_BUFFER_AGE))
+  if (cogl_context_has_winsys_feature (context, COGL_WINSYS_FEATURE_BUFFER_AGE))
     COGL_FLAGS_SET (context->features, COGL_FEATURE_ID_BUFFER_AGE, TRUE);
 
   return TRUE;
@@ -633,8 +627,7 @@ create_gl3_context (CoglDisplay *display,
   /* We can't check the presence of this extension with the usual
      COGL_WINSYS_FEATURE machinery because that only gets initialized
      later when the CoglContext is created. */
-  if (display->renderer->xlib_want_reset_on_video_memory_purge &&
-      strstr (glx_renderer->glXQueryExtensionsString (xlib_renderer->xdpy,
+  if (strstr (glx_renderer->glXQueryExtensionsString (xlib_renderer->xdpy,
                                                       DefaultScreen (xlib_renderer->xdpy)),
               "GLX_NV_robustness_video_memory_purge"))
     {
@@ -860,18 +853,18 @@ _cogl_winsys_context_init (CoglContext *context, GError **error)
 {
   context->winsys = g_new0 (CoglContextGLX, 1);
 
-  cogl_xlib_renderer_add_filter (context->display->renderer,
-                                 glx_event_filter_cb,
-                                 context);
+  _cogl_renderer_add_native_filter (context->display->renderer,
+                                    (CoglNativeFilterFunc)glx_event_filter_cb,
+                                    context);
   return update_winsys_features (context, error);
 }
 
 static void
 _cogl_winsys_context_deinit (CoglContext *context)
 {
-  cogl_xlib_renderer_remove_filter (context->display->renderer,
-                                    glx_event_filter_cb,
-                                    context);
+  _cogl_renderer_remove_native_filter (context->display->renderer,
+                                       (CoglNativeFilterFunc)glx_event_filter_cb,
+                                       context);
   g_free (context->winsys);
 }
 
@@ -1074,9 +1067,9 @@ try_create_glx_pixmap (CoglContext *context,
    * number of 1-bits in color masks against the color depth requested
    * by the client.
    */
-  if (_cogl_util_popcountl (visual->red_mask |
-                            visual->green_mask |
-                            visual->blue_mask) == depth)
+  if (__builtin_popcountl (visual->red_mask |
+                           visual->green_mask |
+                           visual->blue_mask) == depth)
     attribs[i++] = GLX_TEXTURE_FORMAT_RGB_EXT;
   else
     attribs[i++] = GLX_TEXTURE_FORMAT_RGBA_EXT;
@@ -1126,7 +1119,7 @@ _cogl_winsys_texture_pixmap_x11_create (CoglTexturePixmapX11 *tex_pixmap)
   CoglTexturePixmapGLX *glx_tex_pixmap;
   CoglContext *ctx = cogl_texture_get_context (COGL_TEXTURE (tex_pixmap));
 
-  if (!_cogl_winsys_has_feature (COGL_WINSYS_FEATURE_TEXTURE_FROM_PIXMAP))
+  if (!cogl_context_has_winsys_feature (ctx, COGL_WINSYS_FEATURE_TEXTURE_FROM_PIXMAP))
     {
       tex_pixmap->winsys = NULL;
       return FALSE;
@@ -1332,7 +1325,7 @@ _cogl_winsys_texture_pixmap_x11_update (CoglTexturePixmapX11 *tex_pixmap,
 
       COGL_NOTE (TEXTURE_PIXMAP, "Rebinding GLXPixmap for %p", tex_pixmap);
 
-      _cogl_bind_gl_texture_transient (gl_target, gl_handle);
+      _cogl_bind_gl_texture_transient (ctx, gl_target, gl_handle);
 
       if (texture_info->pixmap_bound)
         glx_renderer->glXReleaseTexImage (xlib_renderer->xdpy,

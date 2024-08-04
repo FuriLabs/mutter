@@ -1,5 +1,6 @@
 clutter_tests_conform_c_args = [
   '-DG_LOG_DOMAIN="Clutter-Conform"',
+  '-DCOGL_ENABLE_MUTTER_API',
   '-DGETTEXT_PACKAGE="@0@"'.format(meson.project_name()),
 ]
 clutter_tests_conform_c_args += clutter_debug_c_args
@@ -32,7 +33,6 @@ clutter_conform_tests_classes_tests = [
 
 clutter_conform_tests_general_tests = [
   'binding-pool',
-  'color',
   'event-delivery',
   'frame-clock',
   'frame-clock-timeline',
@@ -40,6 +40,7 @@ clutter_conform_tests_general_tests = [
   'gesture',
   'gesture-relationship',
   'interval',
+  'pipeline-cache',
   'timeline',
   'timeline-interpolate',
   'timeline-progress',

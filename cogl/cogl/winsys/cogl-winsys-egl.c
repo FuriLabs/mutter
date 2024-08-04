@@ -32,16 +32,14 @@
 
 #include "config.h"
 
-#include "cogl/cogl-i18n-private.h"
 #include "cogl/cogl-util.h"
 #include "cogl/cogl-feature-private.h"
+#include "cogl/cogl-context.h"
 #include "cogl/cogl-context-private.h"
 #include "cogl/cogl-framebuffer.h"
 #include "cogl/cogl-onscreen-private.h"
-#include "cogl/cogl-swap-chain-private.h"
 #include "cogl/cogl-renderer-private.h"
 #include "cogl/cogl-onscreen-template-private.h"
-#include "cogl/cogl-egl.h"
 #include "cogl/cogl-private.h"
 #include "cogl/cogl-trace.h"
 #include "cogl/winsys/cogl-winsys-egl-private.h"
@@ -512,6 +510,9 @@ _cogl_winsys_context_init (CoglContext *context, GError **error)
       _cogl_has_private_feature (context, COGL_PRIVATE_FEATURE_OES_EGL_SYNC))
     COGL_FLAGS_SET (context->features, COGL_FEATURE_ID_FENCE, TRUE);
 
+  if (egl_renderer->private_features & COGL_EGL_WINSYS_FEATURE_NATIVE_FENCE_SYNC)
+    COGL_FLAGS_SET (context->features, COGL_FEATURE_ID_SYNC_FD, TRUE);
+
   if (egl_renderer->private_features & COGL_EGL_WINSYS_FEATURE_BUFFER_AGE)
     {
       COGL_FLAGS_SET (context->winsys_features,
@@ -540,42 +541,6 @@ _cogl_winsys_context_deinit (CoglContext *context)
 }
 
 #if defined(EGL_KHR_fence_sync) || defined(EGL_KHR_reusable_sync)
-static void *
-_cogl_winsys_fence_add (CoglContext *context)
-{
-  CoglRendererEGL *renderer = context->display->renderer->winsys;
-  void *ret;
-
-  if (renderer->pf_eglCreateSync)
-    ret = renderer->pf_eglCreateSync (renderer->edpy,
-                                      EGL_SYNC_FENCE_KHR,
-                                      NULL);
-  else
-    ret = NULL;
-
-  return ret;
-}
-
-static gboolean
-_cogl_winsys_fence_is_complete (CoglContext *context, void *fence)
-{
-  CoglRendererEGL *renderer = context->display->renderer->winsys;
-  EGLint ret;
-
-  ret = renderer->pf_eglClientWaitSync (renderer->edpy,
-                                        fence,
-                                        EGL_SYNC_FLUSH_COMMANDS_BIT_KHR,
-                                        0);
-  return (ret == EGL_CONDITION_SATISFIED_KHR);
-}
-
-static void
-_cogl_winsys_fence_destroy (CoglContext *context, void *fence)
-{
-  CoglRendererEGL *renderer = context->display->renderer->winsys;
-
-  renderer->pf_eglDestroySync (renderer->edpy, fence);
-}
 
 static int
 _cogl_winsys_get_sync_fd (CoglContext *context)
@@ -626,9 +591,6 @@ static CoglWinsysVtable _cogl_winsys_vtable =
     .context_deinit = _cogl_winsys_context_deinit,
 
 #if defined(EGL_KHR_fence_sync) || defined(EGL_KHR_reusable_sync)
-    .fence_add = _cogl_winsys_fence_add,
-    .fence_is_complete = _cogl_winsys_fence_is_complete,
-    .fence_destroy = _cogl_winsys_fence_destroy,
     .get_sync_fd = _cogl_winsys_get_sync_fd,
     .update_sync = _cogl_winsys_update_sync,
 #endif
@@ -716,7 +678,7 @@ _cogl_egl_query_wayland_buffer (CoglContext *ctx,
 #endif
 
 EGLDisplay
-cogl_egl_context_get_egl_display (CoglContext *context)
+cogl_context_get_egl_display (CoglContext *context)
 {
   CoglRendererEGL *egl_renderer = context->display->renderer->winsys;
 

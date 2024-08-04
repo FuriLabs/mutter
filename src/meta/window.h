@@ -104,9 +104,6 @@ META_EXPORT
 GType meta_window_get_type (void);
 
 META_EXPORT
-MetaFrame *meta_window_get_frame (MetaWindow *window);
-
-META_EXPORT
 gboolean meta_window_has_focus (MetaWindow *window);
 
 META_EXPORT
@@ -347,9 +344,6 @@ META_EXPORT
 MetaFrameType meta_window_get_frame_type (MetaWindow *window);
 
 META_EXPORT
-MtkRegion *meta_window_get_frame_bounds (MetaWindow *window);
-
-META_EXPORT
 MetaWindow *meta_window_get_tile_match (MetaWindow *window);
 
 META_EXPORT
@@ -422,15 +416,6 @@ gboolean meta_window_allows_move (MetaWindow *window);
 
 META_EXPORT
 gboolean meta_window_allows_resize (MetaWindow *window);
-
-META_EXPORT
-gboolean meta_window_is_client_decorated (MetaWindow *window);
-
-META_EXPORT
-gboolean meta_window_titlebar_is_onscreen    (MetaWindow *window);
-
-META_EXPORT
-void     meta_window_shove_titlebar_onscreen (MetaWindow *window);
 
 META_EXPORT
 uint64_t meta_window_get_id (MetaWindow *window);

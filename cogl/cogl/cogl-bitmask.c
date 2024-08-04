@@ -42,10 +42,7 @@
 
 /* This code assumes that we can cast an unsigned long to a pointer
    and back without losing any data */
-_COGL_STATIC_ASSERT (sizeof (unsigned long) <= sizeof (void *),
-                     "This toolchain breaks Cogl's assumption that it can "
-                     "safely cast an unsigned long to a pointer without "
-                     "losing data");
+G_STATIC_ASSERT (sizeof (unsigned long) <= sizeof (void *));
 
 #define ARRAY_INDEX(bit_num) \
   ((bit_num) / (sizeof (unsigned long) * 8))
@@ -288,7 +285,7 @@ _cogl_bitmask_popcount_in_array (const CoglBitmask *bitmask)
   int i;
 
   for (i = 0; i < array->len; i++)
-    pop += _cogl_util_popcountl (g_array_index (array, unsigned long, i));
+    pop += __builtin_popcountl (g_array_index (array, unsigned long, i));
 
   return pop;
 }
@@ -310,10 +307,10 @@ _cogl_bitmask_popcount_upto_in_array (const CoglBitmask *bitmask,
       int i;
 
       for (i = 0; i < array_index; i++)
-        pop += _cogl_util_popcountl (g_array_index (array, unsigned long, i));
+        pop += __builtin_popcountl (g_array_index (array, unsigned long, i));
 
       top_mask = g_array_index (array, unsigned long, array_index);
 
-      return pop + _cogl_util_popcountl (top_mask & ((1UL << bit_index) - 1));
+      return pop + __builtin_popcountl (top_mask & ((1UL << bit_index) - 1));
     }
 }

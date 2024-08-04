@@ -53,9 +53,7 @@
 #include "cogl/cogl-context-private.h"
 #include "cogl/cogl-offscreen-private.h"
 #include "cogl/cogl-framebuffer-private.h"
-#include "cogl/cogl1-context.h"
 #include "cogl/cogl-sub-texture.h"
-#include "cogl/cogl-primitive-texture.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -258,7 +256,7 @@ cogl_texture_get_height (CoglTexture *texture)
 }
 
 CoglPixelFormat
-_cogl_texture_get_format (CoglTexture *texture)
+cogl_texture_get_format (CoglTexture *texture)
 {
   if (!texture->allocated)
     cogl_texture_allocate (texture, NULL);
@@ -266,12 +264,10 @@ _cogl_texture_get_format (CoglTexture *texture)
   return COGL_TEXTURE_GET_CLASS (texture)->get_format (texture);
 }
 
-int
-cogl_texture_get_max_waste (CoglTexture *texture)
+static inline unsigned int
+_cogl_util_fls (unsigned int n)
 {
-  g_return_val_if_fail (COGL_IS_TEXTURE (texture), 0);
-
-  return COGL_TEXTURE_GET_CLASS (texture)->get_max_waste (texture);
+   return n == 0 ? 0 : sizeof (unsigned int) * 8 - __builtin_clz (n);
 }
 
 int
@@ -346,24 +342,6 @@ _cogl_texture_can_hardware_repeat (CoglTexture *texture)
   return COGL_TEXTURE_GET_CLASS (texture)->can_hardware_repeat (texture);
 }
 
-/* NB: You can't use this with textures comprised of multiple sub textures (use
- * cogl_texture_is_sliced() to check) since coordinate transformation for such
- * textures will be different for each slice. */
-void
-_cogl_texture_transform_coords_to_gl (CoglTexture *texture,
-                                      float *s,
-                                      float *t)
-{
-  COGL_TEXTURE_GET_CLASS (texture)->transform_coords_to_gl (texture, s, t);
-}
-
-CoglTransformResult
-_cogl_texture_transform_quad_coords_to_gl (CoglTexture *texture,
-                                           float *coords)
-{
-  return COGL_TEXTURE_GET_CLASS (texture)->transform_quad_coords_to_gl (texture, coords);
-}
-
 gboolean
 cogl_texture_get_gl_texture (CoglTexture *texture,
 			     GLuint *out_gl_handle,
@@ -400,12 +378,6 @@ _cogl_texture_pre_paint (CoglTexture *texture, CoglTexturePrePaintFlags flags)
                                                flags);
 }
 
-void
-_cogl_texture_ensure_non_quad_rendering (CoglTexture *texture)
-{
-  COGL_TEXTURE_GET_CLASS (texture)->ensure_non_quad_rendering (texture);
-}
-
 gboolean
 _cogl_texture_set_region_from_bitmap (CoglTexture *texture,
                                       int src_x,
@@ -430,7 +402,7 @@ _cogl_texture_set_region_from_bitmap (CoglTexture *texture,
   /* Note that we don't prepare the bitmap for upload here because
      some backends may be internally using a different format for the
      actual GL texture than that reported by
-     _cogl_texture_get_format. For example the atlas textures are
+     cogl_texture_get_format. For example the atlas textures are
      always stored in an RGBA texture even if the texture format is
      advertised as RGB. */
 
@@ -629,7 +601,7 @@ get_texture_bits_via_offscreen (CoglTexture *meta_texture,
    * framebuffer's internal format matches the internal format of the
    * parent meta_texture instead.
    */
-  real_format = _cogl_texture_get_format (meta_texture);
+  real_format = cogl_texture_get_format (meta_texture);
   _cogl_framebuffer_set_internal_format (framebuffer, real_format);
 
   bitmap = cogl_bitmap_new_for_data (ctx,
@@ -805,7 +777,7 @@ cogl_texture_get_data (CoglTexture *texture,
 
   g_return_val_if_fail (COGL_IS_TEXTURE (texture), 0);
 
-  texture_format = _cogl_texture_get_format (texture);
+  texture_format = cogl_texture_get_format (texture);
 
   /* Default to internal format if none specified */
   if (format == COGL_PIXEL_FORMAT_ANY)
@@ -836,7 +808,7 @@ cogl_texture_get_data (CoglTexture *texture,
 
   /* We can assume that whatever data GL gives us will have the
      premult status of the original texture */
-  if (COGL_PIXEL_FORMAT_CAN_HAVE_PREMULT (closest_format))
+  if (_cogl_pixel_format_can_have_premult (closest_format))
     closest_format = ((closest_format & ~COGL_PREMULT_BIT) |
                       (texture_format & COGL_PREMULT_BIT));
 
@@ -1138,7 +1110,7 @@ cogl_texture_allocate (CoglTexture *texture,
     return TRUE;
 
   if (texture->components == COGL_TEXTURE_COMPONENTS_RG &&
-      !cogl_has_feature (texture->context, COGL_FEATURE_ID_TEXTURE_RG))
+      !cogl_context_has_feature (texture->context, COGL_FEATURE_ID_TEXTURE_RG))
     g_set_error (error,
                  COGL_TEXTURE_ERROR,
                  COGL_TEXTURE_ERROR_FORMAT,
@@ -1230,7 +1202,7 @@ _cogl_texture_determine_internal_format (CoglTexture *texture,
 
         if (cogl_texture_get_premultiplied (texture))
           {
-            if (COGL_PIXEL_FORMAT_CAN_HAVE_PREMULT (format))
+            if (_cogl_pixel_format_can_have_premult (format))
               return format |= COGL_PREMULT_BIT;
             else
               return COGL_PIXEL_FORMAT_RGBA_8888_PRE;
@@ -1318,4 +1290,16 @@ cogl_texture_set_max_level_set (CoglTexture *texture,
                                 int          max_level_set)
 {
   texture->max_level_set = max_level_set;
+}
+
+void
+cogl_texture_set_auto_mipmap (CoglTexture *texture,
+                              gboolean     value)
+{
+  g_return_if_fail (COGL_IS_TEXTURE (texture) &&
+                    texture->is_primitive);
+
+  g_assert (COGL_TEXTURE_GET_CLASS (texture)->set_auto_mipmap != NULL);
+
+  COGL_TEXTURE_GET_CLASS (texture)->set_auto_mipmap (texture, value);
 }

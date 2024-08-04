@@ -43,7 +43,6 @@
 #include "cogl/cogl-point-in-poly-private.h"
 #include "cogl/cogl-trace.h"
 #include "cogl/cogl-private.h"
-#include "cogl/cogl1-context.h"
 
 #include <string.h>
 #include <gmodule.h>
@@ -164,8 +163,6 @@ _cogl_journal_new (CoglFramebuffer *framebuffer)
   journal->framebuffer = framebuffer;
   journal->entries = g_array_new (FALSE, FALSE, sizeof (CoglJournalEntry));
   journal->vertices = g_array_new (FALSE, FALSE, sizeof (float));
-
-  _cogl_list_init (&journal->pending_fences);
 
   return journal;
 }
@@ -350,7 +347,10 @@ _cogl_journal_flush_modelview_and_entries (CoglJournalEntry *batch_start,
       CoglColor color;
 
       if (outline == NULL)
-        outline = cogl_pipeline_new (ctx);
+        {
+          outline = cogl_pipeline_new (ctx);
+          cogl_pipeline_set_static_name (outline, "CoglJournal (outline)");
+        }
 
       /* The least significant three bits represent the three
          components so that the order of colours goes red, green,
@@ -359,15 +359,15 @@ _cogl_journal_flush_modelview_and_entries (CoglJournalEntry *batch_start,
          in the order 0xff, 0xcc, 0x99, and 0x66. This gives a total
          of 24 colours. If there are more than 24 batches on the stage
          then it will wrap around */
-      color_intensity = (0xff - 0x33 * (ctx->journal_rectangles_color >> 3) ) / 255.0;
+      color_intensity = (0xff - 0x33 * (ctx->journal_rectangles_color >> 3) ) / 255.0f;
       cogl_color_init_from_4f (&color,
                                (ctx->journal_rectangles_color & 1) ?
-                               color_intensity : 0.0,
+                               color_intensity : 0.0f,
                                (ctx->journal_rectangles_color & 2) ?
-                               color_intensity : 0.0,
+                               color_intensity : 0.0f,
                                (ctx->journal_rectangles_color & 4) ?
-                               color_intensity : 0.0,
-                               1.0);
+                               color_intensity : 0.0f,
+                               1.0f);
       cogl_pipeline_set_color (outline, &color);
 
       loop_attributes[0] = attributes[0]; /* we just want the position */
@@ -639,7 +639,7 @@ _cogl_journal_flush_vbo_offsets_and_entries (CoglJournalEntry *batch_start,
   state->current_vertex = 0;
 
   if (G_UNLIKELY (COGL_DEBUG_ENABLED (COGL_DEBUG_JOURNAL)) &&
-      cogl_has_feature (ctx, COGL_FEATURE_ID_MAP_BUFFER_FOR_READ))
+      cogl_context_has_feature (ctx, COGL_FEATURE_ID_MAP_BUFFER_FOR_READ))
     {
       uint8_t *verts;
 
@@ -1349,18 +1349,6 @@ _cogl_journal_all_entries_within_bounds (CoglJournal *journal,
   return TRUE;
 }
 
-static void
-post_fences (CoglJournal *journal)
-{
-  CoglFenceClosure *fence, *tmp;
-
-  _cogl_list_for_each_safe (fence, tmp, &journal->pending_fences, link)
-    {
-      _cogl_list_remove (&fence->link);
-      _cogl_fence_submit (fence);
-    }
-}
-
 /* XXX NB: When _cogl_journal_flush() returns all state relating
  * to pipelines, all glEnable flags and current matrix state
  * is undefined.
@@ -1387,7 +1375,6 @@ _cogl_journal_flush (CoglJournal *journal)
 
   if (journal->entries->len == 0)
     {
-      post_fences (journal);
       return;
     }
 
@@ -1488,8 +1475,6 @@ _cogl_journal_flush (CoglJournal *journal)
   _cogl_journal_discard (journal);
   COGL_TIMER_STOP (_cogl_uprof_context, discard_timer);
 
-  post_fences (journal);
-
   COGL_TIMER_STOP (_cogl_uprof_context, flush_timer);
 }
 
@@ -1526,7 +1511,7 @@ _cogl_journal_log_quad (CoglJournal  *journal,
   int next_entry;
   uint32_t disable_layers;
   CoglJournalEntry *entry;
-  CoglPipeline *final_pipeline;
+  CoglPipeline *final_pipeline, *color_authority;
   CoglClipStack *clip_stack;
   CoglPipelineFlushOptions flush_options;
   CoglMatrixStack *modelview_stack;
@@ -1561,7 +1546,9 @@ _cogl_journal_log_quad (CoglJournal  *journal,
 
   /* FIXME: This is a hacky optimization, since it will break if we
    * change the definition of CoglColor: */
-  _cogl_pipeline_get_colorubv (pipeline, (uint8_t *) v);
+  color_authority = _cogl_pipeline_get_authority (pipeline,
+                                                  COGL_PIPELINE_STATE_COLOR);
+  memcpy ((uint8_t *) v, &color_authority->color, sizeof (CoglColor));
   v++;
 
   memcpy (v, position, sizeof (float) * 2);
@@ -1718,11 +1705,11 @@ entry_to_screen_polygon (CoglFramebuffer *framebuffer,
  * to Cogl window/framebuffer coordinates (ranging from 0 to buffer-size) with
  * (0,0) being top left. */
 #define VIEWPORT_TRANSFORM_X(x, vp_origin_x, vp_width) \
-    (  ( ((x) + 1.0) * ((vp_width) / 2.0) ) + (vp_origin_x)  )
+    (  ( ((x) + 1.0f) * ((vp_width) / 2.0f) ) + (vp_origin_x)  )
 /* Note: for Y we first flip all coordinates around the X axis while in
  * normalized device coordinates */
 #define VIEWPORT_TRANSFORM_Y(y, vp_origin_y, vp_height) \
-    (  ( ((-(y)) + 1.0) * ((vp_height) / 2.0) ) + (vp_origin_y)  )
+    (  ( ((-(y)) + 1.0f) * ((vp_height) / 2.0f) ) + (vp_origin_y)  )
 
   /* Scale from normalized device coordinates (in range [-1,1]) to
    * window coordinates ranging [0,window-size] ... */

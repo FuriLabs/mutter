@@ -41,7 +41,7 @@ color_content_paint_content (ClutterContent      *content,
 {
   ColorContent *self = (ColorContent *) content;
   ClutterActorBox box, content_box;
-  ClutterColor color;
+  CoglColor color;
   PangoLayout *layout;
   PangoRectangle logical;
   ClutterPaintNode *node;
@@ -66,20 +66,20 @@ color_content_paint_content (ClutterContent      *content,
   box.x2 -= self->padding;
   box.y2 -= self->padding;
 
-  color.alpha = self->alpha * 255;
+  color.alpha = (uint8_t) (self->alpha * 255);
 
-  color.red = self->red * 255;
-  color.green = self->green * 255;
-  color.blue = self->blue * 255;
+  color.red = (uint8_t) (self->red * 255);
+  color.green = (uint8_t) (self->green * 255);
+  color.blue = (uint8_t) (self->blue * 255);
 
   node = clutter_color_node_new (&color);
   clutter_paint_node_add_rectangle (node, &box);
   clutter_paint_node_add_child (root, node);
   clutter_paint_node_unref (node);
 
-  color.red = (1.0 - self->red) * 255;
-  color.green = (1.0 - self->green) * 255;
-  color.blue = (1.0 - self->blue) * 255;
+  color.red = (uint8_t) ((1.0 - self->red) * 255);
+  color.green = (uint8_t) ((1.0 - self->green) * 255);
+  color.blue = (uint8_t) ((1.0 - self->blue) * 255);
 
   layout = clutter_actor_create_pango_layout (actor, "A");
   pango_layout_get_pixel_extents (layout, NULL, &logical);
@@ -124,9 +124,9 @@ color_content_paint_content (ClutterContent      *content,
 
   /* center */
   box.x1 = clutter_actor_box_get_x (&content_box)
-         + (clutter_actor_box_get_width (&content_box) - logical.width) / 2.0;
+         + (clutter_actor_box_get_width (&content_box) - logical.width) / 2.0f;
   box.y1 = clutter_actor_box_get_y (&content_box)
-         + (clutter_actor_box_get_height (&content_box) - logical.height) / 2.0;
+         + (clutter_actor_box_get_height (&content_box) - logical.height) / 2.0f;
   box.x2 = box.x1 + logical.width;
   box.y2 = box.y1 + logical.height;
   clutter_paint_node_add_rectangle (node, &box);
@@ -206,7 +206,7 @@ test_content_main (int argc, char *argv[])
   for (i = 0; i < n_rects; i++)
     {
       ClutterActor *box = clutter_actor_new ();
-      ClutterColor bg_color = {
+      CoglColor bg_color = {
         g_random_int_range (0, 255),
         g_random_int_range (0, 255),
         g_random_int_range (0, 255),
@@ -214,7 +214,7 @@ test_content_main (int argc, char *argv[])
       };
       char *name, *color;
 
-      color = clutter_color_to_string (&bg_color);
+      color = cogl_color_to_string (&bg_color);
       name = g_strconcat ("Box <", color, ">", NULL);
       clutter_actor_set_name (box, name);
 

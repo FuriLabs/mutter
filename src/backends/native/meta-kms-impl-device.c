@@ -20,8 +20,10 @@
 #include "backends/native/meta-kms-impl-device.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <glib/gstdio.h>
 #include <linux/dma-buf.h>
+#include <poll.h>
 #include <sys/ioctl.h>
 #include <sys/timerfd.h>
 #include <xf86drm.h>
@@ -71,6 +73,7 @@ typedef struct _CrtcDeadline
     GSource *source;
     gboolean armed;
     gboolean is_deadline_page_flip;
+    int64_t expected_deadline_time_us;
     int64_t expected_presentation_time_us;
     gboolean has_expected_presentation_time;
   } deadline;
@@ -263,6 +266,188 @@ meta_kms_impl_device_get_path (MetaKmsImplDevice *impl_device)
   return priv->path;
 }
 
+static MetaDeviceFile *
+meta_kms_impl_device_open_device_file (MetaKmsImplDevice  *impl_device,
+                                       const char         *path,
+                                       GError            **error)
+{
+  MetaKmsImplDevicePrivate *priv =
+    meta_kms_impl_device_get_instance_private (impl_device);
+  MetaKmsImplDeviceClass *klass = META_KMS_IMPL_DEVICE_GET_CLASS (impl_device);
+
+  return klass->open_device_file (impl_device, priv->path, error);
+}
+
+static gpointer
+kms_event_dispatch_in_impl (MetaThreadImpl  *impl,
+                            gpointer         user_data,
+                            GError         **error)
+{
+  MetaKmsImplDevice *impl_device = user_data;
+  gboolean ret;
+
+  ret = meta_kms_impl_device_dispatch (impl_device, error);
+  return GINT_TO_POINTER (ret);
+}
+
+static gboolean
+ensure_device_file (MetaKmsImplDevice  *impl_device,
+                    GError            **error)
+{
+  MetaKmsImplDevicePrivate *priv =
+    meta_kms_impl_device_get_instance_private (impl_device);
+  MetaDeviceFile *device_file;
+
+  if (priv->device_file)
+    return TRUE;
+
+  device_file = meta_kms_impl_device_open_device_file (impl_device,
+                                                       priv->path,
+                                                       error);
+  if (!device_file)
+    return FALSE;
+
+  priv->device_file = device_file;
+
+  if (!(priv->flags & META_KMS_DEVICE_FLAG_NO_MODE_SETTING))
+    {
+      priv->fd_source =
+        meta_thread_impl_register_fd (META_THREAD_IMPL (priv->impl),
+                                      meta_device_file_get_fd (device_file),
+                                      kms_event_dispatch_in_impl,
+                                      impl_device);
+      g_source_set_priority (priv->fd_source, G_PRIORITY_HIGH);
+    }
+
+  return TRUE;
+}
+
+gboolean
+meta_kms_impl_device_lease_objects (MetaKmsImplDevice  *impl_device,
+                                    GList              *connectors,
+                                    GList              *crtcs,
+                                    GList              *planes,
+                                    int                *out_fd,
+                                    uint32_t           *out_lessee_id,
+                                    GError            **error)
+{
+  MetaKmsImplDevicePrivate *priv =
+    meta_kms_impl_device_get_instance_private (impl_device);
+  uint32_t *object_ids;
+  int n_object_ids;
+  GList *l;
+  int retval;
+  uint32_t lessee_id;
+  int i = 0;
+
+  meta_assert_in_kms_impl (meta_kms_impl_get_kms (priv->impl));
+
+  if (!ensure_device_file (impl_device, error))
+    return FALSE;
+
+  meta_kms_impl_device_hold_fd (impl_device);
+
+  n_object_ids = (g_list_length (connectors) +
+                  g_list_length (crtcs) +
+                  g_list_length (planes));
+  object_ids = g_alloca (sizeof (uint32_t) * n_object_ids);
+
+  for (l = connectors; l; l = l->next)
+    {
+      MetaKmsConnector *connector = l->data;
+
+      object_ids[i++] = meta_kms_connector_get_id (connector);
+    }
+
+  for (l = crtcs; l; l = l->next)
+    {
+      MetaKmsCrtc *crtc = l->data;
+
+      object_ids[i++] = meta_kms_crtc_get_id (crtc);
+    }
+
+  for (l = planes; l; l = l->next)
+    {
+      MetaKmsPlane *plane = l->data;
+
+      object_ids[i++] = meta_kms_plane_get_id (plane);
+    }
+
+  retval = drmModeCreateLease (meta_kms_impl_device_get_fd (impl_device),
+                               object_ids, n_object_ids, 0,
+                               &lessee_id);
+
+  if (retval < 0)
+    {
+      meta_kms_impl_device_unhold_fd (impl_device);
+      g_set_error (error, G_IO_ERROR, g_io_error_from_errno (-retval),
+                   "Failed to create lease: %s", g_strerror (-retval));
+      return FALSE;
+    }
+
+  *out_fd = retval;
+  *out_lessee_id = lessee_id;
+
+  return TRUE;
+}
+
+gboolean
+meta_kms_impl_device_revoke_lease (MetaKmsImplDevice  *impl_device,
+                                   uint32_t            lessee_id,
+                                   GError            **error)
+{
+  MetaKmsImplDevicePrivate *priv =
+    meta_kms_impl_device_get_instance_private (impl_device);
+  int retval;
+
+  meta_assert_in_kms_impl (meta_kms_impl_get_kms (priv->impl));
+
+  retval = drmModeRevokeLease (meta_kms_impl_device_get_fd (impl_device),
+                               lessee_id);
+  meta_kms_impl_device_unhold_fd (impl_device);
+
+  if (retval != 0)
+    {
+      g_set_error (error, G_IO_ERROR, g_io_error_from_errno (-retval),
+                   "Failed to revoke lease: %s", g_strerror (-retval));
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
+gboolean
+meta_kms_impl_device_list_lessees (MetaKmsImplDevice  *impl_device,
+                                   uint32_t          **out_lessee_ids,
+                                   int                *out_num_lessee_ids,
+                                   GError            **error)
+{
+  MetaKmsImplDevicePrivate *priv =
+    meta_kms_impl_device_get_instance_private (impl_device);
+  drmModeLesseeListRes *list;
+  int i;
+  uint32_t *lessee_ids;
+
+  meta_assert_in_kms_impl (meta_kms_impl_get_kms (priv->impl));
+
+  list = drmModeListLessees (meta_kms_impl_device_get_fd (impl_device));
+
+  if (!list)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Failed to list lessees");
+      return FALSE;
+    }
+
+  lessee_ids = g_new0 (uint32_t, list->count);
+  for (i = 0; i < list->count; i++)
+    lessee_ids[i] = list->lessees[i];
+
+  *out_lessee_ids = lessee_ids;
+  *out_num_lessee_ids = list->count;
+  return TRUE;
+}
+
 gboolean
 meta_kms_impl_device_dispatch (MetaKmsImplDevice  *impl_device,
                                GError            **error)
@@ -311,18 +496,6 @@ meta_kms_impl_device_dispatch (MetaKmsImplDevice  *impl_device,
     }
 
   return TRUE;
-}
-
-static gpointer
-kms_event_dispatch_in_impl (MetaThreadImpl  *impl,
-                            gpointer         user_data,
-                            GError         **error)
-{
-  MetaKmsImplDevice *impl_device = user_data;
-  gboolean ret;
-
-  ret = meta_kms_impl_device_dispatch (impl_device, error);
-  return GINT_TO_POINTER (ret);
 }
 
 drmModePropertyPtr
@@ -889,50 +1062,6 @@ init_fallback_modes (MetaKmsImplDevice *impl_device)
   priv->fallback_modes = g_list_reverse (modes);
 }
 
-static MetaDeviceFile *
-meta_kms_impl_device_open_device_file (MetaKmsImplDevice  *impl_device,
-                                       const char         *path,
-                                       GError            **error)
-{
-  MetaKmsImplDevicePrivate *priv =
-    meta_kms_impl_device_get_instance_private (impl_device);
-  MetaKmsImplDeviceClass *klass = META_KMS_IMPL_DEVICE_GET_CLASS (impl_device);
-
-  return klass->open_device_file (impl_device, priv->path, error);
-}
-
-static gboolean
-ensure_device_file (MetaKmsImplDevice  *impl_device,
-                    GError            **error)
-{
-  MetaKmsImplDevicePrivate *priv =
-    meta_kms_impl_device_get_instance_private (impl_device);
-  MetaDeviceFile *device_file;
-
-  if (priv->device_file)
-    return TRUE;
-
-  device_file = meta_kms_impl_device_open_device_file (impl_device,
-                                                       priv->path,
-                                                       error);
-  if (!device_file)
-    return FALSE;
-
-  priv->device_file = device_file;
-
-  if (!(priv->flags & META_KMS_DEVICE_FLAG_NO_MODE_SETTING))
-    {
-      priv->fd_source =
-        meta_thread_impl_register_fd (META_THREAD_IMPL (priv->impl),
-                                      meta_device_file_get_fd (device_file),
-                                      kms_event_dispatch_in_impl,
-                                      impl_device);
-      g_source_set_priority (priv->fd_source, G_PRIORITY_HIGH);
-    }
-
-  return TRUE;
-}
-
 static void
 ensure_latched_fd_hold (MetaKmsImplDevice *impl_device)
 {
@@ -1067,6 +1196,49 @@ meta_kms_impl_device_get_fd (MetaKmsImplDevice *impl_device)
 }
 
 /**
+ * meta_kms_impl_device_open_non_privileged_fd:
+ * @impl_device: a #MetaKmsImplDevice object
+ *
+ * Returns a non-master file descriptor for the given impl_device. The caller is
+ * responsable of closing the file descriptor.
+ *
+ * On error, returns a negative value.
+ */
+int
+meta_kms_impl_device_open_non_privileged_fd (MetaKmsImplDevice *impl_device)
+{
+  int fd;
+  const char *path;
+  MetaKmsImplDevicePrivate *priv =
+    meta_kms_impl_device_get_instance_private (impl_device);
+
+  path = priv->path;
+
+  fd = open (path, O_RDWR | O_CLOEXEC);
+  if (fd < 0)
+    {
+      meta_topic (META_DEBUG_KMS,
+                  "Error getting non-master fd for device at '%s': %s",
+                  path,
+                  g_strerror (errno));
+      return -1;
+    }
+
+  if (drmIsMaster (fd))
+    {
+      if (drmDropMaster (fd) < 0)
+        {
+          meta_topic (META_DEBUG_KMS,
+                      "Error dropping master for device at '%s'",
+                      path);
+          return -1;
+        }
+    }
+
+  return fd;
+}
+
+/**
  * meta_kms_impl_device_get_signaled_sync_file:
  * @impl_device: a #MetaKmsImplDevice object
  *
@@ -1165,6 +1337,7 @@ arm_crtc_frame_deadline_timer (CrtcFrame *crtc_frame,
   timerfd_settime (crtc_frame->deadline.timer_fd,
                    TFD_TIMER_ABSTIME, &its, NULL);
 
+  crtc_frame->deadline.expected_deadline_time_us = next_deadline_us;
   crtc_frame->deadline.expected_presentation_time_us = next_presentation_us;
   crtc_frame->deadline.has_expected_presentation_time = next_presentation_us != 0;
   crtc_frame->deadline.armed = TRUE;
@@ -1395,6 +1568,10 @@ crtc_frame_deadline_dispatch (MetaThreadImpl  *thread_impl,
   g_autoptr (MetaKmsFeedback) feedback = NULL;
   uint64_t timer_value;
   ssize_t ret;
+  int64_t dispatch_time_us = 0;
+
+  if (meta_is_topic_enabled (META_DEBUG_KMS_DEADLINE))
+    dispatch_time_us = g_get_monotonic_time ();
 
   ret = read (crtc_frame->deadline.timer_fd,
               &timer_value,
@@ -1416,6 +1593,23 @@ crtc_frame_deadline_dispatch (MetaThreadImpl  *thread_impl,
                          crtc_frame->crtc,
                          g_steal_pointer (&crtc_frame->pending_update),
                          META_KMS_UPDATE_FLAG_NONE);
+
+  if (meta_is_topic_enabled (META_DEBUG_KMS_DEADLINE))
+    {
+      int64_t lateness_us, duration_us;
+
+      lateness_us = dispatch_time_us -
+                    crtc_frame->deadline.expected_deadline_time_us;
+      duration_us = g_get_monotonic_time () - dispatch_time_us;
+
+      meta_topic (META_DEBUG_KMS_DEADLINE,
+                  "Deadline dispatch started %3"G_GINT64_FORMAT "µs %s and "
+                  "completed %3"G_GINT64_FORMAT "µs after that.",
+                  ABS (lateness_us),
+                  lateness_us >= 0 ? "late" : "early",
+                  duration_us);
+    }
+
   if (meta_kms_feedback_did_pass (feedback))
     crtc_frame->deadline.is_deadline_page_flip = TRUE;
   disarm_crtc_frame_deadline_timer (crtc_frame);

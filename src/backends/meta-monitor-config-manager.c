@@ -99,6 +99,9 @@ is_crtc_assigned (MetaCrtc  *crtc,
 {
   unsigned int i;
 
+  if (meta_crtc_is_leased (crtc))
+    return TRUE;
+
   for (i = 0; i < crtc_assignments->len; i++)
     {
       MetaCrtcAssignment *assigned_crtc_assignment =
@@ -383,9 +386,9 @@ meta_monitor_config_manager_assign (MetaMonitorManager *manager,
                                     GPtrArray         **out_output_assignments,
                                     GError            **error)
 {
-  GPtrArray *crtc_assignments;
-  GPtrArray *output_assignments;
-  GArray *reserved_crtcs;
+  g_autoptr (GPtrArray) crtc_assignments = NULL;
+  g_autoptr (GPtrArray) output_assignments = NULL;
+  g_autoptr (GArray) reserved_crtcs = NULL;
   GList *l;
 
   crtc_assignments =
@@ -432,18 +435,11 @@ meta_monitor_config_manager_assign (MetaMonitorManager *manager,
                                          config, logical_monitor_config,
                                          crtc_assignments, output_assignments,
                                          reserved_crtcs, error))
-        {
-          g_ptr_array_free (crtc_assignments, TRUE);
-          g_ptr_array_free (output_assignments, TRUE);
-          g_array_free (reserved_crtcs, TRUE);
-          return FALSE;
-        }
+        return FALSE;
     }
 
-  g_array_free (reserved_crtcs, TRUE);
-
-  *out_crtc_assignments = crtc_assignments;
-  *out_output_assignments = output_assignments;
+  *out_crtc_assignments = g_steal_pointer (&crtc_assignments);
+  *out_output_assignments = g_steal_pointer (&output_assignments);
 
   return TRUE;
 }
@@ -1321,12 +1317,12 @@ create_for_switch_config_all_mirror (MetaMonitorConfigManager *config_manager)
 
   for (l = monitors; l; l = l->next)
     {
-      MetaMonitor *monitor = l->data;
+      MetaMonitor *other_monitor = l->data;
       MetaMonitorMode *mode = NULL;
       GList *ll;
       float scale;
 
-      for (ll = meta_monitor_get_modes (monitor); ll; ll = ll->next)
+      for (ll = meta_monitor_get_modes (other_monitor); ll; ll = ll->next)
         {
           gint mode_w, mode_h;
 
@@ -1340,10 +1336,10 @@ create_for_switch_config_all_mirror (MetaMonitorConfigManager *config_manager)
       if (!mode)
         continue;
 
-      scale = compute_scale_for_monitor (config_manager, monitor,
+      scale = compute_scale_for_monitor (config_manager, other_monitor,
                                          primary_monitor);
       best_scale = MAX (best_scale, scale);
-      monitor_configs = g_list_prepend (monitor_configs, create_monitor_config (monitor, mode));
+      monitor_configs = g_list_prepend (monitor_configs, create_monitor_config (other_monitor, mode));
     }
 
   scale_logical_monitor_width (layout_mode, best_scale,
@@ -1855,10 +1851,10 @@ meta_verify_logical_monitor_config (MetaLogicalMonitorConfig    *logical_monitor
   switch (layout_mode)
     {
     case META_LOGICAL_MONITOR_LAYOUT_MODE_LOGICAL:
-      expected_mode_width = roundf (expected_mode_width *
-                                    logical_monitor_config->scale);
-      expected_mode_height = roundf (expected_mode_height *
-                                     logical_monitor_config->scale);
+      expected_mode_width = (int) roundf (expected_mode_width *
+                                          logical_monitor_config->scale);
+      expected_mode_height = (int) roundf (expected_mode_height *
+                                           logical_monitor_config->scale);
       break;
     case META_LOGICAL_MONITOR_LAYOUT_MODE_PHYSICAL:
       break;

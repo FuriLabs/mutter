@@ -89,34 +89,34 @@ index 26125a2..af6b79d 100644
    pointer = clutter_seat_create_virtual_device (seat, CLUTTER_POINTER_DEVICE);
  
 diff --git a/src/tests/meson.build b/src/tests/meson.build
-index b98cfd4..a972096 100644
+index d575147..cbdb0c5 100644
 --- a/src/tests/meson.build
 +++ b/src/tests/meson.build
-@@ -389,6 +389,7 @@ if have_native_tests
-       'name': 'input-capture',
-       'suite': 'backends/native',
-       'sources': [ 'input-capture-tests.c' ],
-+      'flaky': true,
-     },
-     {
-       'name': 'thread',
-@@ -680,8 +681,14 @@ if have_native_tests
+@@ -393,6 +393,7 @@ test_cases += [
+     'name': 'input-capture',
+     'suite': 'backends/native',
+     'sources': [ 'input-capture-tests.c' ],
++    'flaky': true,
+   },
+   {
+     'name': 'thread',
+@@ -684,8 +685,14 @@ foreach test_case: test_cases
  
-     test_depends = [ default_plugin ] + test_case.get('depends', [])
+   test_depends = [ default_plugin ] + test_case.get('depends', [])
  
-+    extra_suites = []
++  extra_suites = []
 +
-+    if test_case.get('flaky', false)
-+      extra_suites += 'flaky'
-+    endif
++  if test_case.get('flaky', false)
++    extra_suites += 'flaky'
++  endif
 +
-     test(test_case['name'], test_executable,
--      suite: ['core', 'mutter/' + test_case['suite']],
-+      suite: ['core', 'mutter/' + test_case['suite']] + extra_suites,
-       env: test_env,
-       depends: test_depends,
-       is_parallel: false,
-@@ -735,8 +742,26 @@ stacking_tests = [
+   test(test_case['name'], test_executable,
+-    suite: ['core', 'mutter/' + test_case['suite']],
++    suite: ['core', 'mutter/' + test_case['suite']] + extra_suites,
+     env: test_env,
+     depends: test_depends,
+     is_parallel: false,
+@@ -746,8 +753,26 @@ stacking_tests = [
  ]
  
  foreach stacking_test: stacking_tests
@@ -144,8 +144,8 @@ index b98cfd4..a972096 100644
      env: test_env,
      args: [
        files('stacking' / stacking_test + '.metatest'),
-@@ -745,7 +770,7 @@ foreach stacking_test: stacking_tests
-     timeout: 60,
+@@ -757,7 +782,7 @@ foreach stacking_test: stacking_tests
+     should_fail: stacking_test.startswith('fixme-'),
    )
  
 -  if have_installed_tests

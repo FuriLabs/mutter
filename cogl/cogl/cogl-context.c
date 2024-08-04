@@ -35,6 +35,7 @@
 #include "cogl/cogl-profile.h"
 #include "cogl/cogl-util.h"
 #include "cogl/cogl-context-private.h"
+#include "cogl/cogl-context-test-utils.h"
 #include "cogl/cogl-display-private.h"
 #include "cogl/cogl-renderer-private.h"
 #include "cogl/cogl-journal-private.h"
@@ -44,7 +45,6 @@
 #include "cogl/cogl-framebuffer-private.h"
 #include "cogl/cogl-onscreen-private.h"
 #include "cogl/cogl-attribute-private.h"
-#include "cogl/cogl1-context.h"
 #include "cogl/winsys/cogl-winsys-private.h"
 
 #include <gio/gio.h>
@@ -160,8 +160,6 @@ cogl_context_class_init (CoglContextClass *class)
 extern void
 _cogl_create_context_driver (CoglContext *context);
 
-static CoglContext *_cogl_context = NULL;
-
 static void
 _cogl_init_feature_overrides (CoglContext *ctx)
 {
@@ -182,13 +180,13 @@ CoglContext *
 cogl_context_new (CoglDisplay *display,
                   GError **error)
 {
+  g_return_val_if_fail (display != NULL, NULL);
+
   CoglContext *context;
   uint8_t white_pixel[] = { 0xff, 0xff, 0xff, 0xff };
   const CoglWinsysVtable *winsys;
   int i;
   GError *local_error = NULL;
-
-  _cogl_init ();
 
 #ifdef COGL_ENABLE_PROFILE
   /* We need to be absolutely sure that uprof has been initialized
@@ -209,44 +207,14 @@ cogl_context_new (CoglDisplay *display,
   /* Allocate context memory */
   context = g_object_new (COGL_TYPE_CONTEXT, NULL);
 
-  /* XXX: Gross hack!
-   * Currently everything in Cogl just assumes there is a default
-   * context which it can access via _COGL_GET_CONTEXT() including
-   * code used to construct a CoglContext. Until all of that code
-   * has been updated to take an explicit context argument we have
-   * to immediately make our pointer the default context.
-   */
-  _cogl_context = context;
-
   /* Init default values */
   memset (context->features, 0, sizeof (context->features));
   memset (context->private_features, 0, sizeof (context->private_features));
   memset (context->winsys_features, 0, sizeof (context->winsys_features));
 
-  if (!display)
-    {
-      CoglRenderer *renderer = cogl_renderer_new ();
-      if (!cogl_renderer_connect (renderer, error))
-        {
-          g_object_unref (renderer);
-          g_object_unref (context);
-          return NULL;
-        }
-
-      display = cogl_display_new (renderer, NULL);
-      g_object_unref (renderer);
-    }
-  else
-    g_object_ref (display);
-
-  if (!cogl_display_setup (display, error))
-    {
-      g_object_unref (display);
-      g_object_unref (context);
-      return NULL;
-    }
-
-  context->display = display;
+  context->display = g_object_ref (display);
+  /* Keep a backpointer to the context */
+  display->context = context;
 
   /* This is duplicated data, but it's much more convenient to have
      the driver attached to the context and the value is accessed a
@@ -311,6 +279,8 @@ cogl_context_new (CoglDisplay *display,
   graphene_matrix_scale (&context->y_flip_matrix, 1, -1, 1);
 
   context->opaque_color_pipeline = cogl_pipeline_new (context);
+  cogl_pipeline_set_static_name (context->opaque_color_pipeline,
+                                 "CoglContext (opaque color)");
 
   context->codegen_header_buffer = g_string_new ("");
   context->codegen_source_buffer = g_string_new ("");
@@ -363,6 +333,8 @@ cogl_context_new (CoglDisplay *display,
     context->current_buffer[i] = NULL;
 
   context->stencil_pipeline = cogl_pipeline_new (context);
+  cogl_pipeline_set_static_name (context->stencil_pipeline,
+                                 "Cogl (stencil)");
 
   context->rectangle_byte_indices = NULL;
   context->rectangle_short_indices = NULL;
@@ -397,31 +369,10 @@ cogl_context_new (CoglDisplay *display,
   context->buffer_map_fallback_array = g_byte_array_new ();
   context->buffer_map_fallback_in_use = FALSE;
 
-  _cogl_list_init (&context->fences);
-
   context->named_pipelines =
     g_hash_table_new_full (NULL, NULL, NULL, g_object_unref);
 
   return context;
-}
-
-CoglContext *
-_cogl_context_get_default (void)
-{
-  GError *error = NULL;
-  /* Create if doesn't exist yet */
-  if (_cogl_context == NULL)
-    {
-      _cogl_context = cogl_context_new (NULL, &error);
-      if (!_cogl_context)
-        {
-          g_warning ("Failed to create default context: %s",
-                     error->message);
-          g_error_free (error);
-        }
-    }
-
-  return _cogl_context;
 }
 
 CoglDisplay *
@@ -434,6 +385,12 @@ CoglRenderer *
 cogl_context_get_renderer (CoglContext *context)
 {
   return context->display->renderer;
+}
+
+const char *
+_cogl_context_get_driver_vendor (CoglContext *context)
+{
+  return context->driver_vtable->get_vendor (context);
 }
 
 gboolean
@@ -486,7 +443,7 @@ cogl_context_get_latest_sync_fd (CoglContext *context)
 }
 
 CoglGraphicsResetStatus
-cogl_get_graphics_reset_status (CoglContext *context)
+cogl_context_get_graphics_reset_status (CoglContext *context)
 {
   return context->driver_vtable->get_graphics_reset_status (context);
 }
@@ -552,9 +509,33 @@ cogl_context_timestamp_query_get_time_ns (CoglContext        *context,
 int64_t
 cogl_context_get_gpu_time_ns (CoglContext *context)
 {
-  g_return_val_if_fail (cogl_has_feature (context,
-                                          COGL_FEATURE_ID_TIMESTAMP_QUERY),
+  g_return_val_if_fail (cogl_context_has_feature (context,
+                                                  COGL_FEATURE_ID_TIMESTAMP_QUERY),
                         0);
 
   return context->driver_vtable->get_gpu_time_ns (context);
+}
+
+/* FIXME: we should distinguish renderer and context features */
+gboolean
+cogl_context_has_winsys_feature (CoglContext       *context,
+                                 CoglWinsysFeature  feature)
+{
+  return COGL_FLAGS_GET (context->winsys_features, feature);
+}
+
+gboolean
+cogl_context_has_feature (CoglContext   *context,
+                          CoglFeatureID  feature)
+{
+  return COGL_FLAGS_GET (context->features, feature);
+}
+
+void
+cogl_context_flush (CoglContext *context)
+{
+  GList *l;
+
+  for (l = context->framebuffers; l; l = l->next)
+    _cogl_framebuffer_flush_journal (l->data);
 }

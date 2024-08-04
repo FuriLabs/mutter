@@ -99,7 +99,10 @@ struct _MetaWindowX11Private
 
   /* maintained by group.c */
   MetaGroup *group;
+  /* may be NULL! not all windows get decorated */
+  MetaFrame *frame;
 
+  gboolean has_custom_frame_extents;
   MetaSyncCounter sync_counter;
 
   /* Used by keybindings.c */
@@ -132,4 +135,17 @@ void meta_window_x11_group_leader_changed (MetaWindow *window);
 
 void meta_window_x11_set_frame_xwindow (MetaWindow *window,
                                         Window      xframe);
+
+gboolean meta_window_x11_is_ssd (MetaWindow *window);
+
+void meta_window_x11_get_session_geometry (MetaWindow  *window,
+                                           int         *x,
+                                           int         *y,
+                                           int         *width,
+                                           int         *height);
+
+gboolean
+meta_window_x11_get_frame_borders (MetaWindow       *window,
+                                   MetaFrameBorders *borders);
+
 G_END_DECLS

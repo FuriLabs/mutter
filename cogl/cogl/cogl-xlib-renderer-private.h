@@ -31,16 +31,36 @@
 #pragma once
 
 #include <X11/Xutil.h>
+#include <X11/extensions/Xrandr.h>
 
-#include "cogl/cogl-x11-renderer-private.h"
 #include "cogl/cogl-context.h"
-#include "cogl/cogl-output.h"
+
+typedef struct _CoglXlibOutput
+{
+  char *name;
+  int x;
+  int y;
+  int width;
+  int height;
+  int mm_width;
+  int mm_height;
+  float refresh_rate;
+  SubpixelOrder subpixel_order;
+} CoglXlibOutput;
+
+typedef struct _CoglX11Renderer
+{
+  int damage_base;
+  int randr_base;
+} CoglX11Renderer;
 
 typedef struct _CoglXlibRenderer
 {
   CoglX11Renderer _parent;
 
   Display *xdpy;
+
+  GList *outputs;
 
   unsigned long outputs_update_serial;
 } CoglXlibRenderer;
@@ -54,9 +74,12 @@ _cogl_xlib_renderer_disconnect (CoglRenderer *renderer);
 CoglXlibRenderer *
 _cogl_xlib_renderer_get_data (CoglRenderer *renderer);
 
-CoglOutput *
-_cogl_xlib_renderer_output_for_rectangle (CoglRenderer *renderer,
-                                          int x,
-                                          int y,
-                                          int width,
-                                          int height);
+float
+_cogl_xlib_renderer_refresh_rate_for_rectangle (CoglRenderer *renderer,
+                                                int           x,
+                                                int           y,
+                                                int           width,
+                                                int           height);
+
+Display *
+cogl_xlib_renderer_get_display (CoglRenderer *renderer);

@@ -358,7 +358,9 @@ meta_stage_new (MetaBackend *backend)
   MetaStage *stage;
   MetaMonitorManager *monitor_manager;
 
-  stage = g_object_new (META_TYPE_STAGE, NULL);
+  stage = g_object_new (META_TYPE_STAGE,
+                        "context", meta_backend_get_clutter_context (backend),
+                        NULL);
   stage->backend = backend;
 
   monitor_manager = meta_backend_get_monitor_manager (backend);
@@ -375,17 +377,17 @@ queue_redraw_clutter_rect (MetaStage       *stage,
                            graphene_rect_t *rect)
 {
   MtkRectangle clip = {
-    .x = floorf (rect->origin.x),
-    .y = floorf (rect->origin.y),
-    .width = ceilf (rect->size.width),
-    .height = ceilf (rect->size.height)
+    .x = (int) floorf (rect->origin.x),
+    .y = (int) floorf (rect->origin.y),
+    .width = (int) ceilf (rect->size.width),
+    .height = (int) ceilf (rect->size.height)
   };
   GList *l;
 
   /* Since we're flooring the coordinates, we need to enlarge the clip by the
    * difference between the actual coordinate and the floored value */
-  clip.width += ceilf (rect->origin.x - clip.x) * 2;
-  clip.height += ceilf (rect->origin.y - clip.y) * 2;
+  clip.width += (int) ceilf (rect->origin.x - clip.x) * 2;
+  clip.height += (int) ceilf (rect->origin.y - clip.y) * 2;
 
   for (l = clutter_stage_peek_stage_views (CLUTTER_STAGE (stage));
        l;

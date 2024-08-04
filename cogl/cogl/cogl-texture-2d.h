@@ -39,10 +39,6 @@
 #include "cogl/cogl-context.h"
 #include "cogl/cogl-bitmap.h"
 
-#ifdef HAVE_EGL
-#include "cogl/cogl-egl.h"
-#endif
-
 G_BEGIN_DECLS
 
 /**
@@ -101,8 +97,6 @@ typedef enum _CoglEglImageFlags
  * cogl_texture_set_premultiplied().
  *
  * Returns: (transfer full): A new #CoglTexture2D object with no storage yet allocated.
- *
- * Since: 2.0
  */
 COGL_EXPORT CoglTexture *
 cogl_texture_2d_new_with_format (CoglContext *ctx,
@@ -200,25 +194,27 @@ cogl_texture_2d_new_from_data (CoglContext *ctx,
 COGL_EXPORT CoglTexture *
 cogl_texture_2d_new_from_bitmap (CoglBitmap *bitmap);
 
-/**
- * cogl_egl_texture_2d_new_from_image: (skip)
- */
+#ifdef HAVE_EGL
+typedef gboolean (*CoglTexture2DEGLImageExternalAlloc) (CoglTexture2D *tex_2d,
+                                                        gpointer user_data,
+                                                        GError **error);
+#endif
+
 #if defined (HAVE_EGL) && defined (EGL_KHR_image_base)
 /* NB: The reason we require the width, height and format to be passed
  * even though they may seem redundant is because GLES 1/2 don't
  * provide a way to query these properties. */
+/**
+ * cogl_texture_2d_new_from_egl_image: (skip)
+ */
 COGL_EXPORT CoglTexture *
-cogl_egl_texture_2d_new_from_image (CoglContext *ctx,
+cogl_texture_2d_new_from_egl_image (CoglContext *ctx,
                                     int width,
                                     int height,
                                     CoglPixelFormat format,
                                     EGLImageKHR image,
                                     CoglEglImageFlags flags,
                                     GError **error);
-
-typedef gboolean (*CoglTexture2DEGLImageExternalAlloc) (CoglTexture2D *tex_2d,
-                                                        gpointer user_data,
-                                                        GError **error);
 
 /**
  * cogl_texture_2d_new_from_egl_image_external: (skip)
@@ -232,13 +228,6 @@ cogl_texture_2d_new_from_egl_image_external (CoglContext *ctx,
                                              GDestroyNotify destroy,
                                              GError **error);
 
-COGL_EXPORT void
-cogl_texture_2d_egl_image_external_bind (CoglTexture2D *tex_2d);
-
-COGL_EXPORT void
-cogl_texture_2d_egl_image_external_alloc_finish (CoglTexture2D *tex_2d,
-						 void *user_data,
-						 GDestroyNotify destroy);
 #endif
 
 G_END_DECLS

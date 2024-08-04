@@ -80,7 +80,7 @@
  *  clutter_actor_set_size (actor, 480, 640);
  *
  *  // set the background color of the actor
- *  clutter_actor_set_background_color (actor, &CLUTTER_COLOR_INIT (0xf5, 0x79, 0x00, 0xff));
+ *  clutter_actor_set_background_color (actor, &COGL_COLOR_INIT (0xf5, 0x79, 0x00, 0xff));
  *
  *  // set the bounding box of the child, relative to the parent
  *  ClutterActor *child = clutter_actor_new ();
@@ -88,7 +88,7 @@
  *  clutter_actor_set_size (child, 80, 240);
  *
  *  // set the background color of the child
- *  clutter_actor_set_background_color (child, &CLUTTER_COLOR_INIT (0x00, 0x00, 0xff, 0xff));
+ *  clutter_actor_set_background_color (child, &COGL_COLOR_INIT (0x00, 0x00, 0xff, 0xff));
  *
  *  // add the child to the actor
  *  clutter_actor_add_child (actor, child);
@@ -154,7 +154,7 @@
  *   clutter_actor_get_allocation_box (actor, &box);
  *
  *   // the cogl_texture variable is set elsewhere
- *   node = clutter_texture_node_new (cogl_texture, &CLUTTER_COLOR_INIT (255, 255, 255, 255),
+ *   node = clutter_texture_node_new (cogl_texture, &COGL_COLOR_INIT (255, 255, 255, 255),
  *                                    CLUTTER_SCALING_FILTER_TRILINEAR,
  *                                    CLUTTER_SCALING_FILTER_LINEAR);
  *
@@ -492,7 +492,6 @@
 #include "clutter/clutter-actor-meta-private.h"
 #include "clutter/clutter-animatable.h"
 #include "clutter/clutter-color-state.h"
-#include "clutter/clutter-color.h"
 #include "clutter/clutter-constraint-private.h"
 #include "clutter/clutter-content-private.h"
 #include "clutter/clutter-debug.h"
@@ -518,7 +517,7 @@
 #include "clutter/clutter-transition.h"
 
 
-static const ClutterColor transparent = { 0x00, 0x00, 0x00, 0x00 };
+static const CoglColor transparent = { 0x00, 0x00, 0x00, 0x00 };
 
 /* Internal enum used to control mapped state update.  This is a hint
  * which indicates when to do something other than just enforce
@@ -544,6 +543,8 @@ typedef enum
 
 struct _ClutterActorPrivate
 {
+  ClutterContext *context;
+
   /* request mode */
   ClutterRequestMode request_mode;
 
@@ -654,7 +655,7 @@ struct _ClutterActorPrivate
    */
   ClutterPaintVolume visible_paint_volume;
 
-  ClutterColor bg_color;
+  CoglColor bg_color;
 
   /* a string used for debugging messages */
   char *debug_name;
@@ -736,6 +737,8 @@ struct _ClutterActorPrivate
 enum
 {
   PROP_0,
+
+  PROP_CONTEXT,
 
   PROP_NAME,
 
@@ -929,8 +932,8 @@ static ClutterPaintVolume *_clutter_actor_get_paint_volume_mutable (ClutterActor
 
 static guint8   clutter_actor_get_paint_opacity_internal        (ClutterActor *self);
 
-static inline void clutter_actor_set_background_color_internal (ClutterActor *self,
-                                                                const ClutterColor *color);
+static inline void clutter_actor_set_background_color_internal (ClutterActor    *self,
+                                                                const CoglColor *color);
 
 static void on_layout_manager_changed (ClutterLayoutManager *manager,
                                        ClutterActor         *self);
@@ -961,6 +964,9 @@ static void pop_in_paint_unmapped_branch (ClutterActor *self,
                                           guint         count);
 
 static void clutter_actor_update_devices (ClutterActor *self);
+
+static void clutter_actor_set_color_state_internal (ClutterActor      *self,
+                                                    ClutterColorState *color_state);
 
 static GQuark quark_actor_layout_info = 0;
 static GQuark quark_actor_transform_info = 0;
@@ -2518,16 +2524,6 @@ _clutter_actor_propagate_queue_redraw (ClutterActor *self)
     }
 }
 
-static inline gboolean
-clutter_actor_needs_relayout (ClutterActor *self)
-{
-  ClutterActorPrivate *priv = self->priv;
-
-  return (priv->needs_width_request ||
-          priv->needs_height_request ||
-          priv->needs_allocation);
-}
-
 static void
 clutter_actor_real_queue_relayout (ClutterActor *self)
 {
@@ -2838,16 +2834,33 @@ clutter_actor_real_apply_transform (ClutterActor      *self,
     }
 
   if (info->rx_angle)
-    graphene_matrix_rotate (matrix, info->rx_angle, graphene_vec3_x_axis ());
+    {
+      graphene_matrix_rotate (matrix,
+                              (float) info->rx_angle,
+                              graphene_vec3_x_axis ());
+    }
 
   if (info->ry_angle)
-    graphene_matrix_rotate (matrix, info->ry_angle, graphene_vec3_y_axis ());
+    {
+      graphene_matrix_rotate (matrix,
+                              (float) info->ry_angle,
+                              graphene_vec3_y_axis ());
+    }
 
   if (info->rz_angle)
-    graphene_matrix_rotate (matrix, info->rz_angle, graphene_vec3_z_axis ());
+    {
+      graphene_matrix_rotate (matrix,
+                              (float) info->rz_angle,
+                              graphene_vec3_z_axis ());
+    }
 
   if (info->scale_x != 1.0 || info->scale_y != 1.0 || info->scale_z != 1.0)
-    graphene_matrix_scale (matrix, info->scale_x, info->scale_y, info->scale_z);
+    {
+      graphene_matrix_scale (matrix,
+                             (float) info->scale_x,
+                             (float) info->scale_y,
+                             (float) info->scale_z);
+    }
 
   /* basic translation: :allocation's origin and :z-position; instead
    * of decomposing the pivot and translation info separate operations,
@@ -3013,7 +3026,7 @@ _clutter_actor_apply_relative_transformation_matrix (ClutterActor      *self,
 static void
 _clutter_actor_draw_paint_volume_full (ClutterActor       *self,
                                        ClutterPaintVolume *pv,
-                                       const ClutterColor *color,
+                                       const CoglColor   *color,
                                        ClutterPaintNode   *node)
 {
   g_autoptr (ClutterPaintNode) pipeline_node = NULL;
@@ -3023,7 +3036,6 @@ _clutter_actor_draw_paint_volume_full (ClutterActor       *self,
   int n_vertices;
   CoglContext *ctx =
     clutter_backend_get_cogl_context (clutter_get_default_backend ());
-  CoglColor cogl_color;
 
   if (outline == NULL)
     outline = cogl_pipeline_new (ctx);
@@ -3057,12 +3069,7 @@ _clutter_actor_draw_paint_volume_full (ClutterActor       *self,
                                 n_vertices,
                                 (CoglVertexP3 *)line_ends);
 
-  cogl_color_init_from_4f (&cogl_color,
-                           color->red / 255.0,
-                           color->green / 255.0,
-                           color->blue / 255.0,
-                           color->alpha / 255.0);
-  cogl_pipeline_set_color (outline, &cogl_color);
+  cogl_pipeline_set_color (outline, color);
 
   pipeline_node = clutter_pipeline_node_new (outline);
   clutter_paint_node_set_static_name (pipeline_node,
@@ -3077,7 +3084,6 @@ _clutter_actor_draw_paint_volume (ClutterActor     *self,
                                   ClutterPaintNode *node)
 {
   ClutterPaintVolume *pv;
-  ClutterColor color;
 
   pv = _clutter_actor_get_paint_volume_mutable (self);
   if (!pv)
@@ -3092,18 +3098,16 @@ _clutter_actor_draw_paint_volume (ClutterActor     *self,
       clutter_paint_volume_set_width (&fake_pv, width);
       clutter_paint_volume_set_height (&fake_pv, height);
 
-      clutter_color_init (&color, 0, 0, 255, 255);
       _clutter_actor_draw_paint_volume_full (self, &fake_pv,
-                                             &color,
+                                             &COGL_COLOR_INIT (0, 0, 255, 255),
                                              node);
 
       clutter_paint_volume_free (&fake_pv);
     }
   else
     {
-      clutter_color_init (&color, 0, 255, 0, 255);
       _clutter_actor_draw_paint_volume_full (self, pv,
-                                             &color,
+                                             &COGL_COLOR_INIT (0, 255, 0, 255),
                                              node);
     }
 }
@@ -3115,25 +3119,25 @@ _clutter_actor_paint_cull_result (ClutterActor      *self,
                                   ClutterPaintNode  *node)
 {
   ClutterPaintVolume *pv;
-  ClutterColor color;
+  CoglColor color;
 
   if (success)
     {
       switch (result)
         {
         case CLUTTER_CULL_RESULT_IN:
-          clutter_color_init (&color, 0, 255, 0, 255);
+          color = COGL_COLOR_INIT (0, 255, 0, 255);
           break;
         case CLUTTER_CULL_RESULT_OUT:
-          clutter_color_init (&color, 0, 0, 255, 255);
+          color = COGL_COLOR_INIT (0, 0, 255, 255);
           break;
         default:
-          clutter_color_init (&color, 0, 255, 255, 255);
+          color = COGL_COLOR_INIT (0, 255, 255, 255);
           break;
         }
     }
   else
-    clutter_color_init (&color, 255, 255, 255, 255);
+    color = COGL_COLOR_INIT (255, 255, 255, 255);
 
   if (success && (pv = _clutter_actor_get_paint_volume_mutable (self)))
     _clutter_actor_draw_paint_volume_full (self, pv,
@@ -3352,7 +3356,7 @@ clutter_actor_paint_node (ClutterActor        *actor,
 {
   ClutterActorPrivate *priv = actor->priv;
   ClutterActorBox box;
-  ClutterColor bg_color;
+  CoglColor bg_color;
 
   box.x1 = 0.f;
   box.y1 = 0.f;
@@ -3363,7 +3367,7 @@ clutter_actor_paint_node (ClutterActor        *actor,
 
   if (!CLUTTER_ACTOR_IS_TOPLEVEL (actor) &&
       priv->bg_color_set &&
-      !clutter_color_equal (&priv->bg_color, &transparent))
+      !cogl_color_equal (&priv->bg_color, &transparent))
     {
       ClutterPaintNode *node;
 
@@ -3382,7 +3386,7 @@ clutter_actor_paint_node (ClutterActor        *actor,
     _clutter_content_paint_content (priv->content, actor, root, paint_context);
 
   if (CLUTTER_ACTOR_GET_CLASS (actor)->paint_node != NULL)
-    CLUTTER_ACTOR_GET_CLASS (actor)->paint_node (actor, root);
+    CLUTTER_ACTOR_GET_CLASS (actor)->paint_node (actor, root, paint_context);
 
   if (clutter_paint_node_get_n_children (root) == 0)
     return FALSE;
@@ -3455,6 +3459,8 @@ clutter_actor_paint (ClutterActor        *self,
                            _clutter_actor_get_debug_name (self));
     }
 #endif
+
+  clutter_paint_context_push_color_state (paint_context, priv->color_state);
 
   actor_node = clutter_actor_node_new (self, -1);
   root_node = clutter_paint_node_ref (actor_node);
@@ -3570,7 +3576,7 @@ clutter_actor_paint (ClutterActor        *self,
       if (G_UNLIKELY (clutter_paint_debug_flags & CLUTTER_DEBUG_REDRAWS))
         _clutter_actor_paint_cull_result (self, success, result, actor_node);
       else if (result == CLUTTER_CULL_RESULT_OUT && success)
-        return;
+        goto out;
     }
 
   if (priv->effects == NULL)
@@ -3589,6 +3595,9 @@ clutter_actor_paint (ClutterActor        *self,
    * unless a new redraw was queued up.
    */
   priv->is_dirty = priv->propagated_one_redraw;
+
+out:
+  clutter_paint_context_pop_color_state (paint_context);
 }
 
 /**
@@ -4518,6 +4527,10 @@ clutter_actor_set_property (GObject      *object,
 
   switch (prop_id)
     {
+    case PROP_CONTEXT:
+      priv->context = g_value_get_object (value);
+      break;
+
     case PROP_X:
       clutter_actor_set_x (actor, g_value_get_float (value));
       break;
@@ -4795,7 +4808,7 @@ clutter_actor_set_property (GObject      *object,
       break;
 
     case PROP_COLOR_STATE:
-      clutter_actor_set_color_state (actor, g_value_get_object (value));
+      clutter_actor_set_color_state_internal (actor, g_value_get_object (value));
       break;
 
     default:
@@ -4815,6 +4828,10 @@ clutter_actor_get_property (GObject    *object,
 
   switch (prop_id)
     {
+    case PROP_CONTEXT:
+      g_value_set_object (value, priv->context);
+      break;
+
     case PROP_X:
       g_value_set_float (value, clutter_actor_get_x (actor));
       break;
@@ -5549,6 +5566,12 @@ clutter_actor_constructor (GType gtype,
       clutter_actor_set_layout_manager (self, default_layout);
     }
 
+  if (!self->priv->context)
+    self->priv->context = _clutter_context_get_default ();
+
+  if (!self->priv->color_state)
+    clutter_actor_unset_color_state (self);
+
   return retval;
 }
 
@@ -5599,6 +5622,19 @@ clutter_actor_class_init (ClutterActorClass *klass)
   klass->destroy = clutter_actor_real_destroy;
 
   klass->layout_manager_type = G_TYPE_INVALID;
+
+  /**
+   * ClutterActor:context:
+   *
+   * The %ClutterContext of the actor
+   */
+  obj_props[PROP_CONTEXT] =
+    g_param_spec_object ("context", NULL, NULL,
+                         CLUTTER_TYPE_CONTEXT,
+                         G_PARAM_READWRITE |
+                         G_PARAM_STATIC_STRINGS |
+                         G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_EXPLICIT_NOTIFY);
 
   /**
    * ClutterActor:x:
@@ -6622,12 +6658,12 @@ clutter_actor_class_init (ClutterActorClass *klass)
    * The [property@Clutter.Actor:background-color] property is animatable.
    */
   obj_props[PROP_BACKGROUND_COLOR] =
-    clutter_param_spec_color ("background-color", NULL, NULL,
-                              &transparent,
-                              G_PARAM_READWRITE |
-                              G_PARAM_STATIC_STRINGS |
-                              G_PARAM_EXPLICIT_NOTIFY |
-                              CLUTTER_PARAM_ANIMATABLE);
+    cogl_param_spec_color ("background-color", NULL, NULL,
+                           &transparent,
+                           G_PARAM_READWRITE |
+                           G_PARAM_STATIC_STRINGS |
+                           G_PARAM_EXPLICIT_NOTIFY |
+                           CLUTTER_PARAM_ANIMATABLE);
 
   /**
    * ClutterActor:first-child:
@@ -12101,7 +12137,7 @@ clutter_actor_set_animatable_property (ClutterActor *actor,
       break;
 
     case PROP_BACKGROUND_COLOR:
-      clutter_actor_set_background_color_internal (actor, clutter_value_get_color (value));
+      clutter_actor_set_background_color_internal (actor, cogl_value_get_color (value));
       break;
 
     case PROP_PIVOT_POINT:
@@ -12308,8 +12344,8 @@ clutter_actor_transform_stage_point (ClutterActor *self,
   /* Keeping these as ints simplifies the multiplication (no significant
    * loss of precision here).
    */
-  du = ceilf (priv->allocation.x2 - priv->allocation.x1);
-  dv = ceilf (priv->allocation.y2 - priv->allocation.y1);
+  du = (int) ceilf (priv->allocation.x2 - priv->allocation.x1);
+  dv = (int) ceilf (priv->allocation.y2 - priv->allocation.y1);
 
   if (du == 0 || dv == 0)
     return FALSE;
@@ -12400,9 +12436,9 @@ clutter_actor_transform_stage_point (ClutterActor *self,
    * Now transform our point with the ST matrix; the notional w
    * coordinate is 1, hence the last part is simply added.
    */
-  xf = x * ST[0][0] + y * ST[1][0] + ST[2][0];
-  yf = x * ST[0][1] + y * ST[1][1] + ST[2][1];
-  wf = x * ST[0][2] + y * ST[1][2] + ST[2][2];
+  xf = (float) (x * ST[0][0] + y * ST[1][0] + ST[2][0]);
+  yf = (float) (x * ST[0][1] + y * ST[1][1] + ST[2][1]);
+  wf = (float) (x * ST[0][2] + y * ST[1][2] + ST[2][2]);
 
   if (x_out)
     *x_out = xf / wf;
@@ -12459,6 +12495,18 @@ clutter_actor_is_scaled (ClutterActor *self)
     return TRUE;
 
   return FALSE;
+}
+
+/**
+ * clutter_actor_get_context:
+ * @actor: a #ClutterActor
+ *
+ * Returns: (transfer none): the Clutter context
+ */
+ClutterContext *
+clutter_actor_get_context (ClutterActor *actor)
+{
+  return actor->priv->context;
 }
 
 ClutterActor *
@@ -12791,10 +12839,10 @@ clutter_actor_allocate_align_fill (ClutterActor           *self,
     x_align = 1.0 - x_align;
 
   if (!x_fill)
-    allocation.x1 += ((available_width - child_width) * x_align);
+    allocation.x1 += (float) ((available_width - child_width) * x_align);
 
   if (!y_fill)
-    allocation.y1 += ((available_height - child_height) * y_align);
+    allocation.y1 += (float) ((available_height - child_height) * y_align);
 
 out:
 
@@ -15848,12 +15896,12 @@ clutter_actor_get_margin_right (ClutterActor *self)
 
 static inline void
 clutter_actor_set_background_color_internal (ClutterActor *self,
-                                             const ClutterColor *color)
+                                             const CoglColor *color)
 {
   ClutterActorPrivate *priv = self->priv;
   GObject *obj;
 
-  if (priv->bg_color_set && clutter_color_equal (color, &priv->bg_color))
+  if (priv->bg_color_set && cogl_color_equal (color, &priv->bg_color))
     return;
 
   obj = G_OBJECT (self);
@@ -15870,7 +15918,7 @@ clutter_actor_set_background_color_internal (ClutterActor *self,
 /**
  * clutter_actor_set_background_color:
  * @self: a #ClutterActor
- * @color: (nullable): a #ClutterColor, or %NULL to unset a previously
+ * @color: (nullable): a #CoglColor, or %NULL to unset a previously
  *  set color
  *
  * Sets the background color of a #ClutterActor.
@@ -15884,8 +15932,8 @@ clutter_actor_set_background_color_internal (ClutterActor *self,
  * The [property@Clutter.Actor:background-color] property is animatable.
  */
 void
-clutter_actor_set_background_color (ClutterActor       *self,
-                                    const ClutterColor *color)
+clutter_actor_set_background_color (ClutterActor    *self,
+                                    const CoglColor *color)
 {
   ClutterActorPrivate *priv;
 
@@ -15913,13 +15961,13 @@ clutter_actor_set_background_color (ClutterActor       *self,
 /**
  * clutter_actor_get_background_color:
  * @self: a #ClutterActor
- * @color: (out caller-allocates): return location for a #ClutterColor
+ * @color: (out caller-allocates): return location for a #CoglColor
  *
  * Retrieves the color set using [method@Clutter.Actor.set_background_color].
  */
 void
 clutter_actor_get_background_color (ClutterActor *self,
-                                    ClutterColor *color)
+                                    CoglColor    *color)
 {
   g_return_if_fail (CLUTTER_IS_ACTOR (self));
   g_return_if_fail (color != NULL);
@@ -17287,7 +17335,7 @@ clutter_actor_get_content_box (ClutterActor    *self,
     case CLUTTER_CONTENT_GRAVITY_TOP:
       if (alloc_w > content_w)
         {
-          box->x1 += ceilf ((alloc_w - content_w) / 2.0);
+          box->x1 += ceilf ((alloc_w - content_w) / 2.0f);
           box->x2 = box->x1 + content_w;
         }
       box->y2 = box->y1 + MIN (content_h, alloc_h);
@@ -17306,7 +17354,7 @@ clutter_actor_get_content_box (ClutterActor    *self,
       box->x2 = box->x1 + MIN (content_w, alloc_w);
       if (alloc_h > content_h)
         {
-          box->y1 += ceilf ((alloc_h - content_h) / 2.0);
+          box->y1 += ceilf ((alloc_h - content_h) / 2.0f);
           box->y2 = box->y1 + content_h;
         }
       break;
@@ -17314,12 +17362,12 @@ clutter_actor_get_content_box (ClutterActor    *self,
     case CLUTTER_CONTENT_GRAVITY_CENTER:
       if (alloc_w > content_w)
         {
-          box->x1 += ceilf ((alloc_w - content_w) / 2.0);
+          box->x1 += ceilf ((alloc_w - content_w) / 2.0f);
           box->x2 = box->x1 + content_w;
         }
       if (alloc_h > content_h)
         {
-          box->y1 += ceilf ((alloc_h - content_h) / 2.0);
+          box->y1 += ceilf ((alloc_h - content_h) / 2.0f);
           box->y2 = box->y1 + content_h;
         }
       break;
@@ -17332,7 +17380,7 @@ clutter_actor_get_content_box (ClutterActor    *self,
         }
       if (alloc_h > content_h)
         {
-          box->y1 += ceilf ((alloc_h - content_h) / 2.0);
+          box->y1 += ceilf ((alloc_h - content_h) / 2.0f);
           box->y2 = box->y1 + content_h;
         }
       break;
@@ -17349,7 +17397,7 @@ clutter_actor_get_content_box (ClutterActor    *self,
     case CLUTTER_CONTENT_GRAVITY_BOTTOM:
       if (alloc_w > content_w)
         {
-          box->x1 += ceilf ((alloc_w - content_w) / 2.0);
+          box->x1 += ceilf ((alloc_w - content_w) / 2.0f);
           box->x2 = box->x1 + content_w;
         }
       if (alloc_h > content_h)
@@ -17385,16 +17433,16 @@ clutter_actor_get_content_box (ClutterActor    *self,
             box->y1 = 0.f;
             box->y2 = alloc_h;
 
-            box->x1 = (alloc_w - (alloc_h * r_c)) / 2.0f;
-            box->x2 = box->x1 + (alloc_h * r_c);
+            box->x1 = (float) ((alloc_w - (alloc_h * r_c)) / 2.0);
+            box->x2 = (float) (box->x1 + (alloc_h * r_c));
           }
         else
           {
             box->x1 = 0.f;
             box->x2 = alloc_w;
 
-            box->y1 = (alloc_h - (alloc_w / r_c)) / 2.0f;
-            box->y2 = box->y1 + (alloc_w / r_c);
+            box->y1 = (float) ((alloc_h - (alloc_w / r_c)) / 2.0);
+            box->y2 = (float) (box->y1 + (alloc_w / r_c));
           }
 
         CLUTTER_NOTE (LAYOUT,
@@ -17797,39 +17845,59 @@ clutter_actor_get_content_repeat (ClutterActor *self)
 }
 
 static ClutterColorState *
-create_srgb_color_state (ClutterActor *self)
+get_default_color_state (ClutterActor *self)
 {
-  ClutterColorState *color_state;
-
-  /* create default sRGB color state */
-  color_state = clutter_color_state_new (CLUTTER_COLORSPACE_SRGB);
+  ClutterContext *context = clutter_actor_get_context (self);
+  ClutterColorManager *color_manager =
+    clutter_context_get_color_manager (context);
+  ClutterColorState *color_state =
+    clutter_color_manager_get_default_color_state (color_manager);
 
   return color_state;
+}
+
+static void
+clutter_actor_set_color_state_internal (ClutterActor      *self,
+                                        ClutterColorState *color_state)
+{
+  ClutterActorPrivate *priv = clutter_actor_get_instance_private (self);
+
+  if (g_set_object (&priv->color_state, color_state))
+    g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_COLOR_STATE]);
+}
+
+/**
+ * clutter_actor_unset_color_state:
+ * @self: a #ClutterActor
+ *
+ * Set @self's color state to the default.
+ */
+void
+clutter_actor_unset_color_state (ClutterActor *self)
+{
+  ClutterColorState *default_color_state;
+
+  g_return_if_fail (CLUTTER_IS_ACTOR (self));
+
+  default_color_state = get_default_color_state (self);
+  clutter_actor_set_color_state_internal (self, default_color_state);
 }
 
 /**
  * clutter_actor_set_color_state:
  * @self: a #ClutterActor
- * @color_state: (nullable): a #ClutterColorState
+ * @color_state: a #ClutterColorState
  *
- * Set @self's color state to @color_state, or a default sRGB one if %NULL.
+ * Set @self's color state to @color_state.
  */
 void
 clutter_actor_set_color_state (ClutterActor      *self,
                                ClutterColorState *color_state)
 {
-  ClutterActorPrivate *priv;
-  g_autoptr (ClutterColorState) srgb = NULL;
-
   g_return_if_fail (CLUTTER_IS_ACTOR (self));
+  g_return_if_fail (CLUTTER_IS_COLOR_STATE (color_state));
 
-  priv = clutter_actor_get_instance_private (self);
-
-  if (!color_state)
-    color_state = srgb = create_srgb_color_state (self);
-
-  if (g_set_object (&priv->color_state, color_state))
-    g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_COLOR_STATE]);
+  clutter_actor_set_color_state_internal (self, color_state);
 }
 
 /**
@@ -18352,7 +18420,7 @@ clutter_actor_create_texture_paint_node (ClutterActor *self,
   ClutterActorPrivate *priv = clutter_actor_get_instance_private (self);
   ClutterPaintNode *node;
   ClutterActorBox box;
-  ClutterColor color;
+  CoglColor color;
 
   g_return_val_if_fail (CLUTTER_IS_ACTOR (self), NULL);
   g_return_val_if_fail (texture != NULL, NULL);

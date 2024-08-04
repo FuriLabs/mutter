@@ -164,6 +164,31 @@ meta_kms_connector_get_current_state (MetaKmsConnector *connector)
   return connector->current_state;
 }
 
+gboolean
+meta_kms_connector_is_for_lease (MetaKmsConnector *connector)
+{
+  const char *lease_connectors_str;
+
+  if (!connector->current_state)
+    return FALSE;
+
+  lease_connectors_str = getenv ("MUTTER_DEBUG_LEASE_CONNECTORS");
+  if (lease_connectors_str && *lease_connectors_str != '\0')
+    {
+      int n;
+      g_auto (GStrv) names;
+
+      names = g_strsplit (lease_connectors_str, ":", -1);
+      for (n = 0; n < g_strv_length (names); n++)
+        {
+          if (g_str_equal (meta_kms_connector_get_name (connector), names[n]))
+            return TRUE;
+        }
+    }
+
+  return connector->current_state->non_desktop;
+}
+
 static gboolean
 has_privacy_screen_software_toggle (MetaKmsConnector *connector)
 {
@@ -403,30 +428,30 @@ state_set_properties (MetaKmsConnectorState *state,
     state->vrr_capable = !!prop->value;
 }
 
-static CoglSubpixelOrder
-drm_subpixel_order_to_cogl_subpixel_order (drmModeSubPixel subpixel)
+static MetaSubpixelOrder
+drm_subpixel_order_to_meta_subpixel_order (drmModeSubPixel subpixel)
 {
   switch (subpixel)
     {
     case DRM_MODE_SUBPIXEL_NONE:
-      return COGL_SUBPIXEL_ORDER_NONE;
+      return META_SUBPIXEL_ORDER_NONE;
       break;
     case DRM_MODE_SUBPIXEL_HORIZONTAL_RGB:
-      return COGL_SUBPIXEL_ORDER_HORIZONTAL_RGB;
+      return META_SUBPIXEL_ORDER_HORIZONTAL_RGB;
       break;
     case DRM_MODE_SUBPIXEL_HORIZONTAL_BGR:
-      return COGL_SUBPIXEL_ORDER_HORIZONTAL_BGR;
+      return META_SUBPIXEL_ORDER_HORIZONTAL_BGR;
       break;
     case DRM_MODE_SUBPIXEL_VERTICAL_RGB:
-      return COGL_SUBPIXEL_ORDER_VERTICAL_RGB;
+      return META_SUBPIXEL_ORDER_VERTICAL_RGB;
       break;
     case DRM_MODE_SUBPIXEL_VERTICAL_BGR:
-      return COGL_SUBPIXEL_ORDER_VERTICAL_BGR;
+      return META_SUBPIXEL_ORDER_VERTICAL_BGR;
       break;
     case DRM_MODE_SUBPIXEL_UNKNOWN:
-      return COGL_SUBPIXEL_ORDER_UNKNOWN;
+      return META_SUBPIXEL_ORDER_UNKNOWN;
     }
-  return COGL_SUBPIXEL_ORDER_UNKNOWN;
+  return META_SUBPIXEL_ORDER_UNKNOWN;
 }
 
 static void
@@ -573,14 +598,14 @@ encode_u16_chromaticity (double value)
 {
   /* CTA-861.3 HDR Static Metadata Extension, 3.2.1 Static Metadata Type 1 */
   value = MAX (MIN (value, 1.0), 0.0);
-  return round (value / 0.00002);
+  return (uint16_t) round (value / 0.00002);
 }
 
 static uint16_t
 encode_u16_max_luminance (double value)
 {
   /* CTA-861.3 HDR Static Metadata Extension, 3.2.1 Static Metadata Type 1 */
-  return round (MAX (MIN (value, 65535.0), 0.0));
+  return (uint16_t) round (MAX (MIN (value, 65535.0), 0.0));
 }
 
 static uint16_t
@@ -588,21 +613,21 @@ encode_u16_min_luminance (double value)
 {
   /* CTA-861.3 HDR Static Metadata Extension, 3.2.1 Static Metadata Type 1 */
   value = MAX (MIN (value, 6.5535), 0.0);
-  return round (value / 0.0001);
+  return (uint16_t) round (value / 0.0001);
 }
 
 static uint16_t
 encode_u16_max_cll (double value)
 {
   /* CTA-861.3 HDR Static Metadata Extension, 3.2.1 Static Metadata Type 1 */
-  return round (MAX (MIN (value, 65535.0), 0.0));
+  return (uint16_t) round (MAX (MIN (value, 65535.0), 0.0));
 }
 
 static uint16_t
 encode_u16_max_fall (double value)
 {
   /* CTA-861.3 HDR Static Metadata Extension, 3.2.1 Static Metadata Type 1 */
-  return round (MAX (MIN (value, 65535.0), 0.0));
+  return (uint16_t) round (MAX (MIN (value, 65535.0), 0.0));
 }
 
 void
@@ -1080,7 +1105,7 @@ meta_kms_connector_read_state (MetaKmsConnector  *connector,
   state_set_properties (state, impl_device, connector, drm_connector);
 
   state->subpixel_order =
-    drm_subpixel_order_to_cogl_subpixel_order (drm_connector->subpixel);
+    drm_subpixel_order_to_meta_subpixel_order (drm_connector->subpixel);
 
   state_set_physical_dimensions (state, drm_connector);
 

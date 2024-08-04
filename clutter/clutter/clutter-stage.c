@@ -173,7 +173,7 @@ enum
 
 static guint stage_signals[LAST_SIGNAL] = { 0, };
 
-static const ClutterColor default_stage_color = { 255, 255, 255, 255 };
+static const CoglColor default_stage_color = { 255, 255, 255, 255 };
 
 static void free_pointer_device_entry (PointerDeviceEntry *entry);
 static void free_event_receiver (EventReceiver *receiver);
@@ -406,7 +406,7 @@ clutter_stage_do_paint_view (ClutterStage     *stage,
   graphene_frustum_t clip_frustum;
   ClutterPaintNode *root_node;
   CoglFramebuffer *fb;
-  ClutterColor bg_color;
+  CoglColor bg_color;
   int n_rectangles;
   ClutterPaintFlag paint_flags;
 
@@ -455,10 +455,15 @@ clutter_stage_do_paint_view (ClutterStage     *stage,
 
   fb = clutter_stage_view_get_framebuffer (view);
 
+  clutter_paint_context_push_color_state (paint_context,
+                                          clutter_actor_get_color_state (CLUTTER_ACTOR (stage)));
+
   root_node = clutter_root_node_new (fb, &bg_color, COGL_BUFFER_BIT_DEPTH);
   clutter_paint_node_set_static_name (root_node, "Stage (root)");
   clutter_paint_node_paint (root_node, paint_context);
   clutter_paint_node_unref (root_node);
+
+  clutter_paint_context_pop_color_state (paint_context);
 
   clutter_actor_paint (CLUTTER_ACTOR (stage), paint_context);
   clutter_paint_context_destroy (paint_context);
@@ -686,11 +691,12 @@ clutter_stage_compress_motion (ClutterStage       *stage,
                                    clutter_event_get_device_tool (event),
                                    clutter_event_get_state (event),
                                    coords,
-                                   GRAPHENE_POINT_INIT (dx + dst_dx, dy + dst_dy),
-                                   GRAPHENE_POINT_INIT (dx_unaccel + dst_dx_unaccel,
-                                                        dy_unaccel + dst_dy_unaccel),
-                                   GRAPHENE_POINT_INIT (dx_constrained + dst_dx_constrained,
-                                                        dy_constrained + dst_dy_constrained),
+                                   GRAPHENE_POINT_INIT ((float) (dx + dst_dx),
+                                                        (float) (dy + dst_dy)),
+                                   GRAPHENE_POINT_INIT ((float) (dx_unaccel + dst_dx_unaccel),
+                                                        (float) (dy_unaccel + dst_dy_unaccel)),
+                                   GRAPHENE_POINT_INIT ((float) (dx_constrained + dst_dx_constrained),
+                                                        (float) (dy_constrained + dst_dy_constrained)),
                                    NULL);
 }
 
@@ -1254,7 +1260,6 @@ clutter_stage_paint (ClutterActor        *actor,
       g_autoptr (GString) string = NULL;
       PangoLayout *layout;
       PangoRectangle logical;
-      ClutterColor color;
       g_autoptr (ClutterPaintNode) node = NULL;
       ClutterActorBox box;
 
@@ -1267,8 +1272,8 @@ clutter_stage_paint (ClutterActor        *actor,
       pango_layout_set_alignment (layout, PANGO_ALIGN_RIGHT);
       pango_layout_get_pixel_extents (layout, NULL, &logical);
 
-      clutter_color_init (&color, 255, 255, 255, 255);
-      node = clutter_text_node_new (layout, &color);
+      node = clutter_text_node_new (layout,
+                                    &COGL_COLOR_INIT (255, 255, 255, 255));
 
       box.x1 = view_layout.x;
       box.y1 = view_layout.y + 30;
@@ -1928,10 +1933,10 @@ clutter_stage_read_pixels (ClutterStage *stage,
   clutter_actor_get_allocation_box (CLUTTER_ACTOR (stage), &box);
 
   if (width < 0)
-    width = ceilf (box.x2 - box.x1);
+    width = (int) ceilf (box.x2 - box.x1);
 
   if (height < 0)
-    height = ceilf (box.y2 - box.y1);
+    height = (int) ceilf (box.y2 - box.y1);
 
   l = _clutter_stage_window_get_views (priv->impl);
 
@@ -1958,11 +1963,12 @@ clutter_stage_read_pixels (ClutterStage *stage,
   pixel_width = roundf (clip_rect.width * view_scale);
   pixel_height = roundf (clip_rect.height * view_scale);
 
-  pixels = g_malloc0 (pixel_width * pixel_height * 4);
+  pixels = g_malloc0 ((int) (pixel_width * pixel_height * 4));
   cogl_framebuffer_read_pixels (framebuffer,
-                                clip_rect.x * view_scale,
-                                clip_rect.y * view_scale,
-                                pixel_width, pixel_height,
+                                (int) (clip_rect.x * view_scale),
+                                (int) (clip_rect.y * view_scale),
+                                (int) pixel_width,
+                                (int) pixel_height,
                                 COGL_PIXEL_FORMAT_RGBA_8888,
                                 pixels);
 
@@ -2333,7 +2339,7 @@ view_2d_in_perspective (graphene_matrix_t *matrix,
                         float              width_2d,
                         float              height_2d)
 {
-  float top = z_near * tan (fov_y * G_PI / 360.0);
+  float top = z_near * tanf ((float) (fov_y * G_PI / 360.0f));
   float left = -top * aspect;
   float right = top * aspect;
   float bottom = -top;
@@ -2560,10 +2566,10 @@ clutter_stage_add_to_redraw_clip (ClutterStage       *stage,
       intersection_box.y2 <= intersection_box.y1)
     return;
 
-  stage_clip.x = intersection_box.x1;
-  stage_clip.y = intersection_box.y1;
-  stage_clip.width = intersection_box.x2 - stage_clip.x;
-  stage_clip.height = intersection_box.y2 - stage_clip.y;
+  stage_clip.x = (int) intersection_box.x1;
+  stage_clip.y = (int) intersection_box.y1;
+  stage_clip.width = (int) (intersection_box.x2 - stage_clip.x);
+  stage_clip.height = (int) (intersection_box.y2 - stage_clip.y);
 
   clutter_stage_add_redraw_clip (stage, &stage_clip);
 }
@@ -2667,6 +2673,7 @@ clutter_stage_paint_to_framebuffer (ClutterStage                *stage,
   ClutterStagePrivate *priv = clutter_stage_get_instance_private (stage);
   ClutterPaintContext *paint_context;
   g_autoptr (MtkRegion) redraw_clip = NULL;
+  ClutterColorState *color_state;
 
   COGL_TRACE_BEGIN_SCOPED (PaintToFramebuffer,
                            "Clutter::Stage::paint_to_framebuffer()");
@@ -2680,10 +2687,13 @@ clutter_stage_paint_to_framebuffer (ClutterStage                *stage,
     }
 
   redraw_clip = mtk_region_create_rectangle (rect);
+  color_state =
+    clutter_actor_get_color_state (CLUTTER_ACTOR (stage));
   paint_context =
     clutter_paint_context_new_for_framebuffer (framebuffer,
                                                redraw_clip,
-                                               paint_flags);
+                                               paint_flags,
+                                               color_state);
 
   cogl_framebuffer_push_matrix (framebuffer);
   cogl_framebuffer_set_projection_matrix (framebuffer, &priv->projection);
@@ -2860,14 +2870,17 @@ clutter_stage_capture_view_into (ClutterStage     *stage,
   backend = clutter_get_default_backend ();
   context = clutter_backend_get_cogl_context (backend);
   bitmap = cogl_bitmap_new_for_data (context,
-                                     texture_width, texture_height,
+                                     (int) texture_width,
+                                     (int) texture_height,
                                      COGL_PIXEL_FORMAT_CAIRO_ARGB32_COMPAT,
                                      stride,
                                      data);
 
   cogl_framebuffer_read_pixels_into_bitmap (framebuffer,
-                                            roundf ((rect->x - view_layout.x) * view_scale),
-                                            roundf ((rect->y - view_layout.y) * view_scale),
+                                            (int) roundf ((rect->x -
+                                                           view_layout.x) * view_scale),
+                                            (int) roundf ((rect->y -
+                                                           view_layout.y) * view_scale),
                                             COGL_READ_PIXELS_COLOR_BUFFER,
                                             bitmap);
 
@@ -3513,7 +3526,7 @@ clutter_stage_check_in_clear_area (ClutterStage         *stage,
     return FALSE;
 
   return mtk_region_contains_point (entry->clear_area,
-                                    point.x, point.y);
+                                    (int) point.x, (int) point.y);
 }
 
 static ClutterActor *
@@ -3839,6 +3852,20 @@ clutter_stage_grab_full (ClutterStage *stage,
   return clutter_grab_new (stage, actor, owns_actor);
 }
 
+/**
+ * clutter_grab_activate:
+ * @grab: a `ClutterGrab`
+ *
+ * Activates a grab onto its assigned actor. Events will be propagated as
+ * usual inside its hierarchy. Activating an already active grab will have
+ * no side effects.
+ *
+ * This method is necessary for grabs obtained through
+ * [method@Stage.grab_inactive]. Grabs obtained through [method@Stage.grab]
+ * will be activated implicitly.
+ *
+ * to undo the effects of this function, call [method@Grab.dismiss].
+ **/
 void
 clutter_grab_activate (ClutterGrab *grab)
 {
@@ -3923,6 +3950,16 @@ clutter_stage_grab (ClutterStage *stage,
   return grab;
 }
 
+/**
+ * clutter_stage_grab_inactive:
+ * @stage: The #ClutterStage
+ * @actor: The actor that will grab input
+ *
+ * Creates an inactive grab. The grab will become effective
+ * after [method@Grab.activate].
+ *
+ * Returns: (transfer full): an opaque #ClutterGrab handle
+ **/
 ClutterGrab *
 clutter_stage_grab_inactive (ClutterStage *stage,
                              ClutterActor *actor)

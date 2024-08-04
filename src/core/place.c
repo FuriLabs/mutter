@@ -68,8 +68,8 @@ northwest_cmp (gconstpointer a,
   by = b_frame.y;
 
   /* probably there's a fast good-enough-guess we could use here. */
-  from_origin_a = sqrt (ax * ax + ay * ay);
-  from_origin_b = sqrt (bx * bx + by * by);
+  from_origin_a = (int) sqrt (ax * ax + ay * ay);
+  from_origin_b = (int) sqrt (bx * bx + by * by);
 
   if (from_origin_a < from_origin_b)
     return -1;
@@ -101,8 +101,8 @@ northeast_cmp (gconstpointer a,
   by = b_frame.y;
 
   /* probably there's a fast good-enough-guess we could use here. */
-  from_origin_a = sqrt (ax * ax + ay * ay);
-  from_origin_b = sqrt (bx * bx + by * by);
+  from_origin_a = (int) sqrt (ax * ax + ay * ay);
+  from_origin_b = (int) sqrt (bx * bx + by * by);
 
   if (from_origin_a < from_origin_b)
     return -1;
@@ -127,7 +127,6 @@ find_next_cascade (MetaWindow *window,
   GList *tmp;
   GList *sorted;
   int cascade_origin_x, cascade_x, cascade_y;
-  MtkRectangle titlebar_rect;
   int x_threshold, y_threshold;
   MtkRectangle frame_rect;
   int window_width, window_height;
@@ -146,9 +145,8 @@ find_next_cascade (MetaWindow *window,
    * manually cascade.
    */
 #define CASCADE_FUZZ 15
-  meta_window_get_titlebar_rect (window, &titlebar_rect);
-  x_threshold = MAX (titlebar_rect.x, CASCADE_FUZZ);
-  y_threshold = MAX (titlebar_rect.y, CASCADE_FUZZ);
+  x_threshold = CASCADE_FUZZ;
+  y_threshold = CASCADE_FUZZ;
 
   /* Find furthest-SE origin of all workspaces.
    * cascade_x, cascade_y are the target position
@@ -202,13 +200,11 @@ find_next_cascade (MetaWindow *window,
 
       if (nearby)
         {
-          meta_window_get_titlebar_rect (w, &titlebar_rect);
-
           /* Cascade the window evenly by the titlebar height; this isn't a typo. */
           cascade_x = ltr
-            ? wx + titlebar_rect.height
-            : wx + ww - titlebar_rect.height - window_width;
-          cascade_y = wy + titlebar_rect.height;
+            ? wx + META_WINDOW_TITLEBAR_HEIGHT
+            : wx + ww - META_WINDOW_TITLEBAR_HEIGHT - window_width;
+          cascade_y = wy + META_WINDOW_TITLEBAR_HEIGHT;
 
           /* If we go off the screen, start over with a new cascade */
           if (((cascade_x + window_width) >
@@ -357,7 +353,9 @@ find_most_freespace (MetaWindow *window,
 }
 
 static gboolean
-window_overlaps_focus_window (MetaWindow *window)
+window_overlaps_focus_window (MetaWindow *window,
+                              int         new_x,
+                              int         new_y)
 {
   MetaWindow *focus_window;
   MtkRectangle window_frame, focus_frame, overlap;
@@ -367,6 +365,9 @@ window_overlaps_focus_window (MetaWindow *window)
     return FALSE;
 
   meta_window_get_frame_rect (window, &window_frame);
+  window_frame.x = new_x;
+  window_frame.y = new_y;
+
   meta_window_get_frame_rect (focus_window, &focus_frame);
 
   return mtk_rectangle_intersect (&window_frame,
@@ -388,9 +389,10 @@ window_place_centered (MetaWindow *window)
 }
 
 static void
-avoid_being_obscured_as_second_modal_dialog (MetaWindow *window,
-                                             int        *x,
-                                             int        *y)
+avoid_being_obscured_as_second_modal_dialog (MetaWindow    *window,
+                                             MetaPlaceFlag  flags,
+                                             int           *x,
+                                             int           *y)
 {
   /* We can't center this dialog if it was denied focus and it
    * overlaps with the focus window and this dialog is modal and this
@@ -412,12 +414,12 @@ avoid_being_obscured_as_second_modal_dialog (MetaWindow *window,
 
   /* denied_focus_and_not_transient is only set when focus_window != NULL */
 
-  if (window->denied_focus_and_not_transient &&
+  if (flags & META_PLACE_FLAG_DENIED_FOCUS_AND_NOT_TRANSIENT &&
       window->type == META_WINDOW_MODAL_DIALOG &&
 #ifdef HAVE_X11_CLIENT
       meta_window_x11_same_application (window, focus_window) &&
 #endif
-      window_overlaps_focus_window (window))
+      window_overlaps_focus_window (window, *x, *y))
     {
       find_most_freespace (window, focus_window, *x, *y, x, y);
       meta_topic (META_DEBUG_PLACEMENT,
@@ -735,8 +737,38 @@ meta_window_process_placement (MetaWindow        *window,
   *rel_y = y;
 }
 
+static GList *
+find_windows_relevant_for_placement (MetaWindow *window)
+{
+  GList *windows = NULL;
+  g_autoptr (GSList) all_windows = NULL;
+  GSList *l;
+
+  all_windows = meta_display_list_windows (window->display, META_LIST_DEFAULT);
+
+  for (l = all_windows; l; l = l->next)
+    {
+      MetaWindow *other_window = l->data;
+
+      if (other_window == window)
+        continue;
+
+      if (!meta_window_showing_on_its_workspace (other_window))
+        continue;
+
+      if (!window->on_all_workspaces &&
+          !meta_window_located_on_workspace (other_window, window->workspace))
+        continue;
+
+      windows = g_list_prepend (windows, other_window);
+    }
+
+  return windows;
+}
+
 void
 meta_window_place (MetaWindow        *window,
+                   MetaPlaceFlag      flags,
                    int                x,
                    int                y,
                    int               *new_x,
@@ -745,7 +777,7 @@ meta_window_place (MetaWindow        *window,
   MetaDisplay *display = meta_window_get_display (window);
   MetaContext *context = meta_display_get_context (display);
   MetaBackend *backend = meta_context_get_backend (context);
-  GList *windows = NULL;
+  g_autoptr (GList) windows = NULL;
   MetaLogicalMonitor *logical_monitor;
 
   meta_topic (META_DEBUG_PLACEMENT, "Placing window %s", window->desc);
@@ -837,7 +869,7 @@ meta_window_place (MetaWindow        *window,
         {
           meta_topic (META_DEBUG_PLACEMENT,
                       "Not placing window with PROGRAM_POSITION or USER_POSITION set");
-          avoid_being_obscured_as_second_modal_dialog (window, &x, &y);
+          avoid_being_obscured_as_second_modal_dialog (window, flags, &x, &y);
           goto done;
         }
     }
@@ -872,7 +904,7 @@ meta_window_place (MetaWindow        *window,
                       "Centered window %s over transient parent",
                       window->desc);
 
-          avoid_being_obscured_as_second_modal_dialog (window, &x, &y);
+          avoid_being_obscured_as_second_modal_dialog (window, flags, &x, &y);
 
           goto done;
         }
@@ -888,7 +920,6 @@ meta_window_place (MetaWindow        *window,
       MtkRectangle work_area;
       MtkRectangle frame_rect;
 
-      /* Warning, this function is a round trip! */
       logical_monitor = meta_backend_get_current_logical_monitor (backend);
 
       meta_window_get_work_area_for_logical_monitor (window,
@@ -905,33 +936,8 @@ meta_window_place (MetaWindow        *window,
       goto done_check_denied_focus;
     }
 
-  /* Find windows that matter (not minimized, on same workspace
-   * as placed window)
-   */
-  {
-    GSList *all_windows;
-    GSList *tmp;
+  windows = find_windows_relevant_for_placement (window);
 
-    all_windows = meta_display_list_windows (window->display, META_LIST_DEFAULT);
-
-    tmp = all_windows;
-    while (tmp != NULL)
-      {
-        MetaWindow *w = tmp->data;
-
-        if (w != window &&
-            meta_window_showing_on_its_workspace (w) &&
-            (window->on_all_workspaces ||
-             meta_window_located_on_workspace (w, window->workspace)))
-          windows = g_list_prepend (windows, w);
-
-        tmp = tmp->next;
-      }
-
-    g_slist_free (all_windows);
-  }
-
-  /* Warning, on X11 this might be a round trip! */
   logical_monitor = meta_backend_get_current_logical_monitor (backend);
 
   /* Maximize windows if they are too big for their work area (bit of
@@ -977,7 +983,7 @@ meta_window_place (MetaWindow        *window,
    * if at all possible.  This is guaranteed to only be called if the
    * focus_window is non-NULL, and we try to avoid that window.
    */
-  if (window->denied_focus_and_not_transient)
+  if (flags & META_PLACE_FLAG_DENIED_FOCUS_AND_NOT_TRANSIENT)
     {
       MetaWindow    *focus_window;
       gboolean       found_fit;
@@ -986,7 +992,7 @@ meta_window_place (MetaWindow        *window,
       g_assert (focus_window != NULL);
 
       /* No need to do anything if the window doesn't overlap at all */
-      found_fit = !window_overlaps_focus_window (window);
+      found_fit = !window_overlaps_focus_window (window, x, y);
 
       /* Try to do a first fit again, this time only taking into account the
        * focus window.
@@ -1014,9 +1020,6 @@ meta_window_place (MetaWindow        *window,
     }
 
  done:
-  if (windows)
-    g_list_free (windows);
-
   *new_x = x;
   *new_y = y;
 }

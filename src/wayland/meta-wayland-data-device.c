@@ -710,8 +710,8 @@ meta_wayland_data_device_start_drag (MetaWaylandDataDevice           *data_devic
                                        drag_start.x,
                                        drag_start.y,
                                        &surface_pos.x, &surface_pos.y);
-  drag_grab->drag_start_x = surface_pos.x;
-  drag_grab->drag_start_y = surface_pos.y;
+  drag_grab->drag_start_x = (int) surface_pos.x;
+  drag_grab->drag_start_y = (int) surface_pos.y;
 
   drag_grab->need_initial_focus = TRUE;
 
@@ -1042,7 +1042,6 @@ data_device_set_selection (struct wl_client   *client,
                            uint32_t            serial)
 {
   MetaWaylandDataDevice *data_device = wl_resource_get_user_data (resource);
-  MetaWaylandSeat *seat = wl_container_of (data_device, seat, data_device);
   MetaWaylandDataSource *source;
 
   if (source_resource)
@@ -1244,7 +1243,6 @@ void
 meta_wayland_data_device_set_focus (MetaWaylandDataDevice *data_device,
                                     MetaWaylandSurface    *surface)
 {
-  MetaWaylandSeat *seat = wl_container_of (data_device, seat, data_device);
   struct wl_client *focus_client = NULL;
   struct wl_resource *data_device_resource;
 

@@ -23,11 +23,12 @@
 
 #include "compositor/compositor-private.h"
 #include "compositor/edge-resistance.h"
-#include "core/frame.h"
 #include "core/window-private.h"
 #include "meta/meta-enum-types.h"
 
 #ifdef HAVE_X11_CLIENT
+#include "x11/meta-x11-frame.h"
+#include "x11/meta-x11-keybindings-private.h"
 #include "x11/window-x11.h"
 #endif
 
@@ -393,7 +394,9 @@ meta_window_drag_end (MetaWindowDrag *window_drag)
 
   meta_topic (META_DEBUG_WINDOW_OPS,
               "Restoring passive key grabs on %s", grab_window->desc);
+#ifdef HAVE_X11
   meta_window_grab_keys (grab_window);
+#endif
 
   meta_display_set_cursor (display, META_CURSOR_DEFAULT);
 
@@ -1207,8 +1210,8 @@ update_move (MetaWindowDrag          *window_drag,
   dy = y - window_drag->anchor_root_y;
 
   meta_window_get_frame_rect (window, &frame_rect);
-  new_x = x - (frame_rect.width * window_drag->anchor_rel_x);
-  new_y = y - (frame_rect.height * window_drag->anchor_rel_y);
+  new_x = (int) (x - (frame_rect.width * window_drag->anchor_rel_x));
+  new_y = (int) (y - (frame_rect.height * window_drag->anchor_rel_y));
 
   meta_verbose ("x,y = %d,%d anchor ptr %d,%d rel anchor pos %f,%f dx,dy %d,%d",
                 x, y,
@@ -1269,17 +1272,14 @@ update_move (MetaWindowDrag          *window_drag,
         ((double) (x - window_drag->initial_window_pos.x)) /
         ((double) window_drag->initial_window_pos.width);
 
-      window_drag->initial_window_pos.x = x - window->saved_rect.width * prop;
+      window_drag->initial_window_pos.x =
+        (int) (x - window->saved_rect.width * prop);
 
       /* If we started dragging the window from above the top of the window,
        * pretend like we started dragging from the middle of the titlebar
        * instead, as the "correct" anchoring looks wrong. */
       if (window_drag->anchor_root_y < window_drag->initial_window_pos.y)
-        {
-          MtkRectangle titlebar_rect;
-          meta_window_get_titlebar_rect (window, &titlebar_rect);
-          window_drag->anchor_root_y = window_drag->initial_window_pos.y + titlebar_rect.height / 2;
-        }
+        window_drag->anchor_root_y = window_drag->initial_window_pos.y + META_WINDOW_TITLEBAR_HEIGHT / 2;
 
       window->saved_rect.x = window_drag->initial_window_pos.x;
       window->saved_rect.y = window_drag->initial_window_pos.y;
@@ -1303,6 +1303,9 @@ update_move (MetaWindowDrag          *window_drag,
       const MetaLogicalMonitor *wmonitor;
       MtkRectangle work_area;
       int monitor;
+#ifdef HAVE_X11_CLIENT
+      MetaFrame *frame;
+#endif
 
       window->tile_mode = META_TILE_NONE;
       wmonitor = window->monitor;
@@ -1327,12 +1330,14 @@ update_move (MetaWindowDrag          *window_drag,
                   window->saved_rect.x = work_area.x;
                   window->saved_rect.y = work_area.y;
 
-                  if (window->frame)
+#ifdef HAVE_X11_CLIENT
+                  frame = META_IS_WINDOW_X11 (window) ? meta_window_x11_get_frame (window) : NULL;
+                  if (frame)
                     {
-                      window->saved_rect.x += window->frame->child_x;
-                      window->saved_rect.y += window->frame->child_y;
+                      window->saved_rect.x += frame->child_x;
+                      window->saved_rect.y += frame->child_y;
                     }
-
+#endif
                   window->unconstrained_rect.x = window->saved_rect.x;
                   window->unconstrained_rect.y = window->saved_rect.y;
 
@@ -1633,7 +1638,7 @@ end_grab_op (MetaWindowDrag     *window_drag,
 
   clutter_event_get_coords (event, &x, &y);
   modifiers = clutter_event_get_state (event);
-  check_threshold_reached (window_drag, x, y);
+  check_threshold_reached (window_drag, (int) x, (int) y);
 
   /* If the user was snap moving then ignore the button
    * release because they may have let go of shift before
@@ -1657,14 +1662,14 @@ end_grab_op (MetaWindowDrag     *window_drag,
           if (window_drag->preview_tile_mode != META_TILE_NONE)
             meta_window_tile (window, window_drag->preview_tile_mode);
           else
-            update_move (window_drag, flags, x, y);
+            update_move (window_drag, flags, (int) x, (int) y);
         }
       else if (meta_grab_op_is_resizing (window_drag->grab_op))
         {
           if (window->tile_match != NULL)
             flags |= (META_EDGE_RESISTANCE_SNAP | META_EDGE_RESISTANCE_WINDOWS);
 
-          update_resize (window_drag, flags, x, y);
+          update_resize (window_drag, flags, (int) x, (int) y);
           maybe_maximize_tiled_window (window);
         }
     }
@@ -1729,17 +1734,17 @@ process_pointer_event (MetaWindowDrag     *window_drag,
       if (modifier_state & CLUTTER_CONTROL_MASK)
         flags |= META_EDGE_RESISTANCE_WINDOWS;
 
-      check_threshold_reached (window_drag, x, y);
+      check_threshold_reached (window_drag, (int) x, (int) y);
       if (meta_grab_op_is_moving (window_drag->grab_op))
         {
-          queue_update_move (window_drag, flags, x, y);
+          queue_update_move (window_drag, flags, (int) x, (int) y);
         }
       else if (meta_grab_op_is_resizing (window_drag->grab_op))
         {
           if (window->tile_match != NULL)
             flags |= (META_EDGE_RESISTANCE_SNAP | META_EDGE_RESISTANCE_WINDOWS);
 
-          queue_update_resize (window_drag, flags, x, y);
+          queue_update_resize (window_drag, flags, (int) x, (int) y);
         }
       break;
     case CLUTTER_TOUCH_CANCEL:
@@ -1788,8 +1793,8 @@ meta_window_drag_begin (MetaWindowDrag       *window_drag,
     }
   else if (window_drag->pos_hint_set)
     {
-      root_x = window_drag->pos_hint.x;
-      root_y = window_drag->pos_hint.y;
+      root_x = (int) window_drag->pos_hint.x;
+      root_y = (int) window_drag->pos_hint.y;
     }
   else
     {
@@ -1798,8 +1803,8 @@ meta_window_drag_begin (MetaWindowDrag       *window_drag,
       graphene_point_t pos;
 
       clutter_seat_query_state (seat, device, sequence, &pos, NULL);
-      root_x = pos.x;
-      root_y = pos.y;
+      root_x = (int) pos.x;
+      root_y = (int) pos.y;
     }
 
   meta_topic (META_DEBUG_WINDOW_OPS,
@@ -1857,7 +1862,9 @@ meta_window_drag_begin (MetaWindowDrag       *window_drag,
     }
 
   /* Temporarily release the passive key grabs on the window */
+#ifdef HAVE_X11
   meta_window_ungrab_keys (grab_window);
+#endif
 
   g_set_object (&window_drag->effective_grab_window, grab_window);
   window_drag->unmanaged_id =

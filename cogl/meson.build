@@ -34,15 +34,13 @@ if have_egl
   ]
 endif
 
-if have_x11_client
+if have_x11
   cogl_pkg_deps += [
     x11_dep,
   ]
   cogl_pkg_private_deps += [
     xext_dep,
-    xfixes_dep,
     xdamage_dep,
-    xcomposite_dep,
     xrandr_dep,
   ]
 endif
@@ -86,8 +84,6 @@ cogl_debug_c_args = []
 if buildtype != 'plain'
   if get_option('debug')
     cogl_debug_c_args += [
-      '-DCOGL_GL_DEBUG',
-      '-DCOGL_OBJECT_DEBUG',
       '-DCOGL_ENABLE_DEBUG',
     ]
   else

@@ -58,7 +58,7 @@
 #define GL_UNKNOWN_CONTEXT_RESET_ARB 0x8255
 #endif
 
-#ifdef COGL_GL_DEBUG
+#ifdef COGL_ENABLE_DEBUG
 /* GL error to string conversion */
 static const struct {
   GLuint error_code;
@@ -94,7 +94,7 @@ _cogl_gl_error_to_string (GLenum error_code)
 
   return "Unknown GL error";
 }
-#endif /* COGL_GL_DEBUG */
+#endif /* COGL_ENABLE_DEBUG */
 
 CoglGLContext *
 _cogl_driver_gl_context (CoglContext *context)
@@ -254,7 +254,7 @@ _cogl_driver_gl_flush_framebuffer_state (CoglContext          *ctx,
         {
           /* NB: Currently we only take advantage of binding separate
            * read/write buffers for framebuffer blit purposes. */
-          g_return_if_fail (cogl_has_feature
+          g_return_if_fail (cogl_context_has_feature
                             (ctx, COGL_FEATURE_ID_BLIT_FRAMEBUFFER));
 
           cogl_gl_framebuffer_bind (draw_gl_framebuffer, GL_DRAW_FRAMEBUFFER);
@@ -301,7 +301,7 @@ _cogl_gl_util_catch_out_of_memory (CoglContext *ctx, GError **error)
     {
       if (gl_error == GL_OUT_OF_MEMORY)
         out_of_memory = TRUE;
-#ifdef COGL_GL_DEBUG
+#ifdef COGL_ENABLE_DEBUG
       else
         {
           g_warning ("%s: GL error (%d): %s\n",
@@ -415,6 +415,12 @@ _cogl_context_get_gl_version (CoglContext *context)
 
 }
 
+const char *
+_cogl_context_get_gl_vendor (CoglContext *context)
+{
+  return (const char *) context->glGetString (GL_VENDOR);
+}
+
 gboolean
 _cogl_gl_util_parse_gl_version (const char *version_string,
                                 int *major_out,
@@ -510,8 +516,8 @@ cogl_gl_create_timestamp_query (CoglContext *context)
 {
   CoglTimestampQuery *query;
 
-  g_return_val_if_fail (cogl_has_feature (context,
-                                          COGL_FEATURE_ID_TIMESTAMP_QUERY),
+  g_return_val_if_fail (cogl_context_has_feature (context,
+                                                  COGL_FEATURE_ID_TIMESTAMP_QUERY),
                         NULL);
 
   query = g_new0 (CoglTimestampQuery, 1);
@@ -557,8 +563,8 @@ cogl_gl_get_gpu_time_ns (CoglContext *context)
 {
   int64_t gpu_time_ns;
 
-  g_return_val_if_fail (cogl_has_feature (context,
-                                          COGL_FEATURE_ID_TIMESTAMP_QUERY),
+  g_return_val_if_fail (cogl_context_has_feature (context,
+                                                  COGL_FEATURE_ID_TIMESTAMP_QUERY),
                         0);
 
   GE (context, glGetInteger64v (GL_TIMESTAMP, &gpu_time_ns));

@@ -16,22 +16,20 @@ endif
 cogl_deprecated_headers = [
   'deprecated/cogl-program.h',
   'deprecated/cogl-shader.h',
-  'deprecated/cogl-clutter.h',
 ]
 
 cogl_headers = [
   'cogl.h',
+  'cogl-atlas.h',
   'cogl-atlas-texture.h',
   'cogl-attribute-buffer.h',
   'cogl-attribute.h',
   'cogl-bitmap.h',
   'cogl-color.h',
-  'cogl1-context.h',
   'cogl-context.h',
   'cogl-depth-state.h',
   'cogl-display.h',
   'cogl-dma-buf-handle.h',
-  'cogl-fence.h',
   'cogl-framebuffer.h',
   'cogl-frame-info.h',
   'cogl-glib-source.h',
@@ -44,19 +42,15 @@ cogl_headers = [
   'cogl-offscreen.h',
   'cogl-onscreen.h',
   'cogl-onscreen-template.h',
-  'cogl-output.h',
   'cogl-pipeline.h',
   'cogl-pipeline-layer-state.h',
   'cogl-pipeline-state.h',
   'cogl-pixel-buffer.h',
-  'cogl-poll.h',
   'cogl-primitive.h',
-  'cogl-primitive-texture.h',
   'cogl-renderer.h',
   'cogl-scanout.h',
   'cogl-snippet.h',
   'cogl-sub-texture.h',
-  'cogl-swap-chain.h',
   'cogl-texture-2d.h',
   'cogl-texture-2d-sliced.h',
   'cogl-texture.h',
@@ -149,7 +143,7 @@ cogl_sources = [
   'cogl-atlas-texture-private.h',
   'cogl-atlas-texture.c',
   'cogl-atlas.c',
-  'cogl-atlas.h',
+  'cogl-atlas-private.h',
   'cogl-attribute-buffer-private.h',
   'cogl-attribute-buffer.c',
   'cogl-attribute-private.h',
@@ -172,7 +166,6 @@ cogl_sources = [
   'cogl-clip-stack.h',
   'cogl-closure-list-private.h',
   'cogl-closure-list.c',
-  'cogl-color-private.h',
   'cogl-color.c',
   'cogl-context-private.h',
   'cogl-context.c',
@@ -190,8 +183,6 @@ cogl_sources = [
   'cogl-driver.h',
   'cogl-feature-private.c',
   'cogl-feature-private.h',
-  'cogl-fence-private.h',
-  'cogl-fence.c',
   'cogl-flags.h',
   'cogl-frame-info-private.h',
   'cogl-frame-info.c',
@@ -205,7 +196,6 @@ cogl_sources = [
   'cogl-graphene.c',
   'cogl-half-float.c',
   'cogl-half-float.h',
-  'cogl-i18n-private.h',
   'cogl-index-buffer-private.h',
   'cogl-index-buffer.c',
   'cogl-indices-private.h',
@@ -231,8 +221,6 @@ cogl_sources = [
   'cogl-onscreen-template.c',
   'cogl-onscreen-template.h',
   'cogl-onscreen.c',
-  'cogl-output-private.h',
-  'cogl-output.c',
   'cogl-pipeline-cache-private.h',
   'cogl-pipeline-cache.c',
   'cogl-pipeline-cache.h',
@@ -254,10 +242,7 @@ cogl_sources = [
   'cogl-pixel-format.c',
   'cogl-point-in-poly-private.h',
   'cogl-point-in-poly.c',
-  'cogl-poll-private.h',
-  'cogl-poll.c',
   'cogl-primitive-private.h',
-  'cogl-primitive-texture.c',
   'cogl-primitive.c',
   'cogl-primitives-private.h',
   'cogl-primitives.c',
@@ -280,9 +265,6 @@ cogl_sources = [
   'cogl-spans.h',
   'cogl-sub-texture-private.h',
   'cogl-sub-texture.c',
-  'cogl-swap-chain-private.h',
-  'cogl-swap-chain.c',
-  'cogl-swap-chain.h',
   'cogl-texture-2d-private.h',
   'cogl-texture-2d-sliced-private.h',
   'cogl-texture-2d-sliced.c',
@@ -291,10 +273,8 @@ cogl_sources = [
   'cogl-texture-private.h',
   'cogl-texture.c',
   'cogl-trace.c',
-  'cogl-util.c',
   'cogl-util.h',
   'cogl.c',
-  'deprecated/cogl-clutter.c',
   'deprecated/cogl-program-private.h',
   'deprecated/cogl-program.c',
   'deprecated/cogl-shader-private.h',
@@ -307,13 +287,11 @@ cogl_sources = [
 if have_x11
   cogl_gir_includes += ['xlib-2.0']
   cogl_nonintrospected_headers += [
-    'cogl-xlib.h',
     'winsys/cogl-texture-pixmap-x11.h',
   ]
   cogl_sources += [
     'cogl-x11-onscreen.c',
     'cogl-x11-onscreen.h',
-    'cogl-x11-renderer-private.h',
     'cogl-xlib-renderer-private.h',
     'cogl-xlib-renderer.c',
     'winsys/cogl-texture-pixmap-x11-private.h',
@@ -325,9 +303,6 @@ if have_x11
 endif
 
 if have_glx
-  cogl_nonintrospected_headers += [
-    'winsys/cogl-glx.h',
-  ]
   cogl_sources += [
     'winsys/cogl-glx-display-private.h',
     'winsys/cogl-glx-renderer-private.h',
@@ -340,11 +315,7 @@ if have_glx
 endif
 
 if have_egl
-  cogl_nonintrospected_headers += [
-    'cogl-egl.h',
-  ]
   cogl_sources += [
-    'cogl-egl-private.h',
     'winsys/cogl-onscreen-egl.c',
     'winsys/cogl-onscreen-egl.h',
     'winsys/cogl-winsys-egl-feature-functions.h',
@@ -423,9 +394,6 @@ if have_introspection
     extra_args: introspection_args + [
       '-UCOGL_COMPILATION',
       '-D__COGL_H_INSIDE__',
-      '-D__COGL_XLIB_H_INSIDE__',
-      '-D__COGL_EGL_H_INSIDE__',
-      '-D__COGL_GLX_H_INSIDE__',
       '-DCOGL_GIR_SCANNING',
     ],
     header: 'cogl/cogl.h',

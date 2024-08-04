@@ -27,13 +27,13 @@
 
 #include "meta/meta-backend.h"
 #include "meta/meta-idle-monitor.h"
+#include "meta/meta-orientation-manager.h"
 #include "backends/meta-backend-types.h"
 #include "backends/meta-cursor-renderer.h"
 #include "backends/meta-egl.h"
 #include "backends/meta-input-mapper-private.h"
 #include "backends/meta-input-settings-private.h"
 #include "backends/meta-monitor-manager-private.h"
-#include "backends/meta-orientation-manager.h"
 #include "backends/meta-pointer-constraint.h"
 #include "backends/meta-renderer.h"
 #include "backends/meta-settings-private.h"
@@ -125,6 +125,9 @@ META_EXPORT_TEST
 ClutterBackend * meta_backend_get_clutter_backend (MetaBackend *backend);
 
 META_EXPORT_TEST
+ClutterContext * meta_backend_get_clutter_context (MetaBackend *backend);
+
+META_EXPORT_TEST
 ClutterSeat * meta_backend_get_default_seat (MetaBackend *backend);
 
 MetaIdleMonitor * meta_backend_get_idle_monitor (MetaBackend        *backend,
@@ -135,8 +138,6 @@ MetaIdleManager * meta_backend_get_idle_manager (MetaBackend *backend);
 META_EXPORT_TEST
 MetaColorManager * meta_backend_get_color_manager (MetaBackend *backend);
 
-META_EXPORT_TEST
-MetaOrientationManager * meta_backend_get_orientation_manager (MetaBackend *backend);
 META_EXPORT_TEST
 MetaCursorTracker * meta_backend_get_cursor_tracker (MetaBackend *backend);
 MetaCursorRenderer * meta_backend_get_cursor_renderer_for_device (MetaBackend        *backend,
@@ -221,4 +222,10 @@ META_EXPORT_TEST
 uint32_t meta_clutter_button_to_evdev (uint32_t clutter_button);
 
 META_EXPORT_TEST
+uint32_t meta_clutter_tool_button_to_evdev (uint32_t clutter_button);
+
+META_EXPORT_TEST
 uint32_t meta_evdev_button_to_clutter (uint32_t evdev_button);
+
+META_EXPORT_TEST
+uint32_t meta_evdev_tool_button_to_clutter (uint32_t evdev_button);

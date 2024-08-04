@@ -41,7 +41,6 @@
 #include "cogl/cogl-texture-private.h"
 #include "cogl/cogl-texture-2d-private.h"
 #include "cogl/cogl-private.h"
-#include "cogl/cogl1-context.h"
 
 static const CoglBlitMode *_cogl_blit_default_mode = NULL;
 
@@ -83,6 +82,7 @@ _cogl_blit_texture_render_begin (CoglBlitData *data)
   if (ctx->blit_texture_pipeline == NULL)
     {
       ctx->blit_texture_pipeline = cogl_pipeline_new (ctx);
+      cogl_pipeline_set_static_name (ctx->blit_texture_pipeline, "CoglBlit");
 
       cogl_pipeline_set_layer_filters (ctx->blit_texture_pipeline, 0,
                                        COGL_PIPELINE_FILTER_NEAREST,
@@ -156,9 +156,9 @@ _cogl_blit_framebuffer_begin (CoglBlitData *data)
   /* We can only blit between FBOs if both textures have the same
      premult convention and the blit framebuffer extension is
      supported. */
-  if ((_cogl_texture_get_format (data->src_tex) & COGL_PREMULT_BIT) !=
-      (_cogl_texture_get_format (data->dst_tex) & COGL_PREMULT_BIT) ||
-      !cogl_has_feature (ctx, COGL_FEATURE_ID_BLIT_FRAMEBUFFER))
+  if ((cogl_texture_get_format (data->src_tex) & COGL_PREMULT_BIT) !=
+      (cogl_texture_get_format (data->dst_tex) & COGL_PREMULT_BIT) ||
+      !cogl_context_has_feature (ctx, COGL_FEATURE_ID_BLIT_FRAMEBUFFER))
     return FALSE;
 
   dst_offscreen = _cogl_offscreen_new_with_texture_full
@@ -273,7 +273,7 @@ _cogl_blit_copy_tex_sub_image_end (CoglBlitData *data)
 static gboolean
 _cogl_blit_get_tex_data_begin (CoglBlitData *data)
 {
-  data->format = _cogl_texture_get_format (data->src_tex);
+  data->format = cogl_texture_get_format (data->src_tex);
 
   g_return_val_if_fail (cogl_pixel_format_get_n_planes (data->format) == 1,
                         FALSE);

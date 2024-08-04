@@ -85,20 +85,12 @@ CoglDisplay *
 cogl_display_new (CoglRenderer         *renderer,
                   CoglOnscreenTemplate *onscreen_template)
 {
+  g_return_val_if_fail (renderer != NULL, NULL);
+
   CoglDisplay *display = g_object_new (COGL_TYPE_DISPLAY, NULL);
-  GError *error = NULL;
 
-  _cogl_init ();
-
-  display->renderer = renderer;
-  if (renderer)
-    g_object_ref (renderer);
-  else
-    display->renderer = cogl_renderer_new ();
-
-  if (!cogl_renderer_connect (display->renderer, &error))
-    g_error ("Failed to connect to renderer: %s\n", error->message);
-
+  display->renderer = g_object_ref (renderer);
+  renderer->display = display;
   display->setup = FALSE;
 
   cogl_display_set_onscreen_template (display, onscreen_template);
@@ -129,7 +121,7 @@ cogl_display_set_onscreen_template (CoglDisplay *display,
   /* NB: we want to maintain the invariable that there is always an
    * onscreen template associated with a CoglDisplay... */
   if (!onscreen_template)
-    display->onscreen_template = cogl_onscreen_template_new (NULL);
+    display->onscreen_template = cogl_onscreen_template_new ();
 }
 
 gboolean

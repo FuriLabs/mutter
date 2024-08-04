@@ -56,7 +56,7 @@ struct _MetaWaylandOutput
 
   /* Protocol state */
   MtkRectangle layout;
-  CoglSubpixelOrder subpixel_order;
+  MetaSubpixelOrder subpixel_order;
   MetaMonitorTransform transform;
   MetaMonitorMode *mode;
   MetaMonitorMode *preferred_mode;
@@ -110,21 +110,21 @@ static const struct wl_output_interface meta_wl_output_interface = {
 };
 
 static enum wl_output_subpixel
-cogl_subpixel_order_to_wl_output_subpixel (CoglSubpixelOrder subpixel_order)
+meta_subpixel_order_to_wl_output_subpixel (MetaSubpixelOrder subpixel_order)
 {
   switch (subpixel_order)
     {
-    case COGL_SUBPIXEL_ORDER_UNKNOWN:
+    case META_SUBPIXEL_ORDER_UNKNOWN:
       return WL_OUTPUT_SUBPIXEL_UNKNOWN;
-    case COGL_SUBPIXEL_ORDER_NONE:
+    case META_SUBPIXEL_ORDER_NONE:
       return WL_OUTPUT_SUBPIXEL_NONE;
-    case COGL_SUBPIXEL_ORDER_HORIZONTAL_RGB:
+    case META_SUBPIXEL_ORDER_HORIZONTAL_RGB:
       return WL_OUTPUT_SUBPIXEL_HORIZONTAL_RGB;
-    case COGL_SUBPIXEL_ORDER_HORIZONTAL_BGR:
+    case META_SUBPIXEL_ORDER_HORIZONTAL_BGR:
       return WL_OUTPUT_SUBPIXEL_HORIZONTAL_BGR;
-    case COGL_SUBPIXEL_ORDER_VERTICAL_RGB:
+    case META_SUBPIXEL_ORDER_VERTICAL_RGB:
       return WL_OUTPUT_SUBPIXEL_VERTICAL_RGB;
-    case COGL_SUBPIXEL_ORDER_VERTICAL_BGR:
+    case META_SUBPIXEL_ORDER_VERTICAL_BGR:
       return WL_OUTPUT_SUBPIXEL_VERTICAL_BGR;
     }
 
@@ -205,11 +205,13 @@ send_output_events (struct wl_resource *resource,
   if (old_mode == old_preferred_mode)
     old_mode_flags |= WL_OUTPUT_MODE_PREFERRED;
 
-  refresh_rate_khz = meta_monitor_mode_get_refresh_rate (mode) * 1000;
-  old_refresh_rate_khz = meta_monitor_mode_get_refresh_rate (old_mode) * 1000;
+  refresh_rate_khz =
+    (int32_t) (meta_monitor_mode_get_refresh_rate (mode) * 1000);
+  old_refresh_rate_khz =
+    (int32_t) (meta_monitor_mode_get_refresh_rate (old_mode) * 1000);
 
-  scale_int = ceilf (meta_logical_monitor_get_scale (logical_monitor));
-  old_scale_int = ceilf (wayland_output->scale);
+  scale_int = (int) ceilf (meta_logical_monitor_get_scale (logical_monitor));
+  old_scale_int = (int) ceilf (wayland_output->scale);
 
   meta_monitor_mode_get_resolution (mode, &mode_width, &mode_height);
   meta_monitor_mode_get_resolution (old_mode,
@@ -223,7 +225,7 @@ send_output_events (struct wl_resource *resource,
       const char *product;
       int physical_width_mm;
       int physical_height_mm;
-      CoglSubpixelOrder subpixel_order;
+      MetaSubpixelOrder subpixel_order;
       enum wl_output_subpixel wl_subpixel_order;
       uint32_t wl_transform;
 
@@ -236,7 +238,7 @@ send_output_events (struct wl_resource *resource,
 
       subpixel_order = meta_monitor_get_subpixel_order (monitor);
       wl_subpixel_order =
-        cogl_subpixel_order_to_wl_output_subpixel (subpixel_order);
+        meta_subpixel_order_to_wl_output_subpixel (subpixel_order);
 
       wl_transform = wl_output_transform_from_transform (transform);
 

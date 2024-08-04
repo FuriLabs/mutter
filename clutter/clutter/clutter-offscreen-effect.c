@@ -25,7 +25,7 @@
 
 /**
  * ClutterOffscreenEffect:
- * 
+ *
  * Base class for effects using offscreen buffers
  *
  * #ClutterOffscreenEffect is an abstract class that can be used by
@@ -52,7 +52,7 @@
  * function, which encapsulates the effective painting of the texture that
  * contains the result of the offscreen redirection.
  *
- * The size of the target material is defined to be as big as the
+ * The size of the target pipeline is defined to be as big as the
  * transformed size of the [class@Actor] using the offscreen effect.
  * Sub-classes of #ClutterOffscreenEffect can change the texture creation
  * code to provide bigger textures by overriding the
@@ -156,7 +156,9 @@ clutter_offscreen_effect_real_create_texture (ClutterOffscreenEffect *effect,
   CoglContext *ctx =
     clutter_backend_get_cogl_context (clutter_get_default_backend ());
 
-  return cogl_texture_2d_new_with_size (ctx, MAX (width, 1), MAX (height, 1));
+  return cogl_texture_2d_new_with_size (ctx,
+                                        (int) MAX (width, 1),
+                                        (int) MAX (height, 1));
 }
 
 static void
@@ -349,8 +351,8 @@ clutter_offscreen_effect_pre_paint (ClutterEffect       *effect,
       box = raw_box;
       _clutter_actor_box_enlarge_for_effects (&box);
 
-      priv->fbo_offset_x = box.x1;
-      priv->fbo_offset_y = box.y1;
+      priv->fbo_offset_x = (int) box.x1;
+      priv->fbo_offset_y = (int) box.y1;
     }
   else
     {
@@ -359,8 +361,8 @@ clutter_offscreen_effect_pre_paint (ClutterEffect       *effect,
       box = raw_box;
       _clutter_actor_box_enlarge_for_effects (&box);
 
-      priv->fbo_offset_x = box.x1 - raw_box.x1;
-      priv->fbo_offset_y = box.y1 - raw_box.y1;
+      priv->fbo_offset_x = (int) (box.x1 - raw_box.x1);
+      priv->fbo_offset_y = (int) (box.y1 - raw_box.y1);
     }
 
   clutter_actor_box_scale (&box, ceiled_resource_scale);
@@ -370,7 +372,7 @@ clutter_offscreen_effect_pre_paint (ClutterEffect       *effect,
   target_height = ceilf (target_height);
 
   /* First assert that the framebuffer is the right size... */
-  if (!update_fbo (effect, target_width, target_height, resource_scale))
+  if (!update_fbo (effect, (int) target_width, (int) target_height, resource_scale))
     goto disable_effect;
 
   offscreen = COGL_FRAMEBUFFER (priv->offscreen);
@@ -427,7 +429,7 @@ clutter_offscreen_effect_real_paint_target (ClutterOffscreenEffect *effect,
   float paint_opacity;
   CoglColor color;
 
-  paint_opacity = clutter_actor_get_paint_opacity (priv->actor) / 255.0;
+  paint_opacity = clutter_actor_get_paint_opacity (priv->actor) / 255.0f;
 
   cogl_color_init_from_4f (&color,
                            paint_opacity, paint_opacity,
@@ -464,12 +466,12 @@ clutter_offscreen_effect_paint_texture (ClutterOffscreenEffect *effect,
   graphene_matrix_t transform;
   float unscale;
 
-  unscale = 1.0 / clutter_actor_get_resource_scale (priv->actor);
-  graphene_matrix_init_scale (&transform, unscale, unscale, 1.0);
+  unscale = 1.0f / clutter_actor_get_resource_scale (priv->actor);
+  graphene_matrix_init_scale (&transform, unscale, unscale, 1.0f);
   graphene_matrix_translate (&transform,
                              &GRAPHENE_POINT3D_INIT (priv->fbo_offset_x,
                                                      priv->fbo_offset_y,
-                                                     0.0));
+                                                     0.0f));
 
   if (!graphene_matrix_is_identity (&transform))
     {
@@ -484,7 +486,7 @@ clutter_offscreen_effect_paint_texture (ClutterOffscreenEffect *effect,
       node = transform_node;
     }
 
-  /* paint the target material; this is virtualized for
+  /* paint the target pipeline; this is virtualized for
    * sub-classes that require special hand-holding
    */
   clutter_offscreen_effect_paint_target (effect, node, paint_context);
@@ -638,7 +640,7 @@ clutter_offscreen_effect_init (ClutterOffscreenEffect *self)
  * implementation should update any references to the texture after
  * chaining-up to the parent's pre_paint implementation. This can be
  * used instead of [method@OffscreenEffect.get_texture] when the
- * effect subclass wants to paint using its own material.
+ * effect subclass wants to paint using its own pipeline.
  *
  * Return value: (transfer none): a #CoglTexture or %NULL. The
  *   returned texture is owned by Clutter and it should not be

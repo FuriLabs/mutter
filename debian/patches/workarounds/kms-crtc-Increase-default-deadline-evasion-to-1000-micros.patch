@@ -15,7 +15,7 @@ Last-Update: 2024-03-10
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/src/backends/native/meta-kms-crtc.c b/src/backends/native/meta-kms-crtc.c
-index a087208..8fcb2d9 100644
+index e66f8ea..a760da1 100644
 --- a/src/backends/native/meta-kms-crtc.c
 +++ b/src/backends/native/meta-kms-crtc.c
 @@ -28,7 +28,7 @@

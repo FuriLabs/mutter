@@ -36,6 +36,7 @@
 #include "clutter/clutter-effect.h"
 #include "clutter/clutter-event.h"
 #include "clutter/clutter-layout-manager.h"
+#include "clutter/clutter-pipeline-cache.h"
 #include "clutter/clutter-settings.h"
 #include "clutter/clutter-stage-manager.h"
 #include "clutter/clutter-stage.h"
@@ -43,14 +44,6 @@
 G_BEGIN_DECLS
 
 typedef struct _ClutterContext      ClutterContext;
-
-#define CLUTTER_REGISTER_VALUE_TRANSFORM_TO(TYPE_TO,func)             { \
-  g_value_register_transform_func (g_define_type_id, TYPE_TO, func);    \
-}
-
-#define CLUTTER_REGISTER_VALUE_TRANSFORM_FROM(TYPE_FROM,func)         { \
-  g_value_register_transform_func (TYPE_FROM, g_define_type_id, func);  \
-}
 
 #define CLUTTER_REGISTER_INTERVAL_PROGRESS(func)                      { \
   clutter_interval_register_progress_func (g_define_type_id, func);     \
@@ -78,6 +71,8 @@ typedef struct _ClutterContext      ClutterContext;
  * call so this macro could end up faster anyway. We can't just add 0.5f
  * because it will break for negative numbers. */
 #define CLUTTER_NEARBYINT(x) ((int) ((x) < 0.0f ? (x) - 0.5f : (x) + 0.5f))
+
+typedef struct _ClutterColorTransformKey ClutterColorTransformKey;
 
 typedef enum
 {
@@ -158,6 +153,8 @@ gboolean        _clutter_run_progress_function  (GType gtype,
                                                  GValue *retval);
 
 void            clutter_timeline_cancel_delay (ClutterTimeline *timeline);
+
+void clutter_interval_register_progress_funcs (void);
 
 static inline void
 clutter_round_to_256ths (float *f)

@@ -323,6 +323,10 @@ struct _CoglPipeline
    * and corresponding authorities_cache_dirty:1 bitfield
    */
 
+  /* Array of opaque capabilities tagged by owners of pipelines.
+   */
+  GArray *capabilities;
+
   /* bitfields */
 
   /* Weak pipelines don't count as dependants on their parents which
@@ -364,6 +368,9 @@ struct _CoglPipeline
    * string with a pipeline which can be an aid when trying to trace
    * where the pipeline originates from */
   const char      *static_breadcrumb;
+
+  /* Pointer to a static string with a descriptive name, or NULL. */
+  const char *name;
 };
 
 struct _CoglPipelineClass
@@ -611,7 +618,7 @@ _cogl_get_n_args_for_combine_func (CoglPipelineCombineFunc func);
  *
  * typedef struct {
  *   CoglPipeline *validated_source;
- * } MyValidatedMaterialCache;
+ * } MyValidatedPipelineCache;
  *
  * static void
  * destroy_cache_cb (CoglObject *object, void *user_data)
@@ -622,7 +629,7 @@ _cogl_get_n_args_for_combine_func (CoglPipelineCombineFunc func);
  * static void
  * invalidate_cache_cb (CoglPipeline *destroyed, void *user_data)
  * {
- *   MyValidatedMaterialCache *cache = user_data;
+ *   MyValidatedPipelineCache *cache = user_data;
  *   g_object_unref (cache->validated_source);
  *   cache->validated_source = NULL;
  * }
@@ -631,13 +638,13 @@ _cogl_get_n_args_for_combine_func (CoglPipelineCombineFunc func);
  * get_validated_pipeline (CoglPipeline *source)
  * {
  *   _cogl_my_cache_key = g_quark_from_static_string ("my-cache-key");
- *   MyValidatedMaterialCache *cache =
+ *   MyValidatedPipelineCache *cache =
  *     g_object_get_qdata (G_OBJECT (source),
  *                         _cogl_my_cache_key);
  *   if (G_UNLIKELY (cache == NULL))
  *     {
- *       cache = g_new0 (MyValidatedMaterialCache, 1);
- * 
+ *       cache = g_new0 (MyValidatedPipelineCache, 1);
+ *
  *       g_object_set_qdata_full (G_OBJECT (source),
  *                                _cogl_my_cache_key,
  *                                cache, destroy_cache_cb);
@@ -668,13 +675,6 @@ CoglPipeline *
 _cogl_pipeline_weak_copy (CoglPipeline *pipeline,
                           CoglPipelineDestroyCallback callback,
                           void *user_data);
-
-void
-_cogl_pipeline_set_progend (CoglPipeline *pipeline, int progend);
-
-void
-_cogl_pipeline_get_colorubv (CoglPipeline *pipeline,
-                             uint8_t       *color);
 
 /* XXX: At some point it could be good for this to accept a mask of
  * the state groups we are interested in comparing since we can
@@ -718,9 +718,6 @@ _cogl_pipeline_get_layer_matrix (CoglPipeline *pipeline,
 
 void
 _cogl_pipeline_texture_storage_change_notify (CoglTexture *texture);
-
-void
-_cogl_pipeline_apply_legacy_state (CoglPipeline *pipeline);
 
 void
 _cogl_pipeline_apply_overrides (CoglPipeline *pipeline,
@@ -779,10 +776,6 @@ gboolean
 _cogl_pipeline_layer_and_unit_numbers_equal (CoglPipeline *pipeline0,
                                              CoglPipeline *pipeline1);
 
-gboolean
-_cogl_pipeline_need_texture_combine_separate
-                                    (CoglPipelineLayer *combine_authority);
-
 void
 _cogl_pipeline_init_state_hash_functions (void);
 
@@ -797,3 +790,7 @@ _cogl_pipeline_get_layer_state_for_fragment_codegen (CoglContext *context);
 
 CoglPipelineState
 _cogl_pipeline_get_state_for_fragment_codegen (CoglContext *context);
+
+void
+cogl_pipeline_add_capability_from_snippet (CoglPipeline *pipeline,
+                                           CoglSnippet  *snippet);

@@ -43,14 +43,11 @@
 #include "cogl/cogl-texture-driver.h"
 #include "cogl/cogl-rectangle-map.h"
 #include "cogl/cogl-journal-private.h"
-#include "cogl/cogl-atlas.h"
-#include "cogl/cogl1-context.h"
+#include "cogl/cogl-atlas-private.h"
 #include "cogl/cogl-sub-texture.h"
 #include "cogl/driver/gl/cogl-texture-gl-private.h"
 
 #include <stdlib.h>
-
-static GQuark atlas_private_key = 0;
 
 G_DEFINE_FINAL_TYPE (CoglAtlasTexture, cogl_atlas_texture, COGL_TYPE_TEXTURE)
 
@@ -80,8 +77,8 @@ cogl_atlas_texture_dispose (GObject *object)
 }
 
 static CoglTexture *
-_cogl_atlas_texture_create_sub_texture (CoglTexture *full_texture,
-                                        const CoglRectangleMapEntry *rectangle)
+_cogl_atlas_texture_create_sub_texture (CoglTexture        *full_texture,
+                                        const MtkRectangle *rectangle)
 {
   CoglContext *ctx = cogl_texture_get_context (full_texture);
   /* Create a subtexture for the given rectangle not including the
@@ -95,9 +92,9 @@ _cogl_atlas_texture_create_sub_texture (CoglTexture *full_texture,
 }
 
 static void
-_cogl_atlas_texture_update_position_cb (void *user_data,
-                                        CoglTexture *new_texture,
-                                        const CoglRectangleMapEntry *rectangle)
+_cogl_atlas_texture_update_position_cb (void               *user_data,
+                                        CoglTexture        *new_texture,
+                                        const MtkRectangle *rectangle)
 {
   CoglAtlasTexture *atlas_tex = user_data;
 
@@ -113,7 +110,7 @@ _cogl_atlas_texture_update_position_cb (void *user_data,
 
 static void
 _cogl_atlas_texture_pre_reorganize_foreach_cb
-                                         (const CoglRectangleMapEntry *entry,
+                                         (const MtkRectangle *entry,
                                           void *rectangle_data,
                                           void *user_data)
 {
@@ -141,7 +138,7 @@ _cogl_atlas_texture_pre_reorganize_cb (void *data)
    * We are assuming that texture atlas migration never happens
    * during a flush so we don't have to consider recursion here.
    */
-  cogl_flush ();
+  cogl_context_flush (atlas->context);
 
   if (atlas->map)
     _cogl_rectangle_map_foreach (atlas->map,
@@ -157,7 +154,7 @@ typedef struct
 } CoglAtlasTextureGetRectanglesData;
 
 static void
-_cogl_atlas_texture_get_rectangles_cb (const CoglRectangleMapEntry *entry,
+_cogl_atlas_texture_get_rectangles_cb (const MtkRectangle *entry,
                                        void *rectangle_data,
                                        void *user_data)
 {
@@ -170,8 +167,6 @@ static void
 _cogl_atlas_texture_post_reorganize_cb (void *user_data)
 {
   CoglAtlas *atlas = user_data;
-
-  _COGL_GET_CONTEXT (ctx, NO_RETVAL);
 
   if (atlas->map)
     {
@@ -204,44 +199,22 @@ _cogl_atlas_texture_post_reorganize_cb (void *user_data)
     }
 
   /* Notify any listeners that an atlas has changed */
-  g_hook_list_invoke (&ctx->atlas_reorganize_callbacks, FALSE);
-}
-
-static void
-_cogl_atlas_texture_atlas_destroyed_cb (void *user_data)
-{
-  _COGL_GET_CONTEXT (ctx, NO_RETVAL);
-
-  /* Remove the atlas from the global list */
-  ctx->atlases = g_slist_remove (ctx->atlases, user_data);
+  g_hook_list_invoke (&atlas->context->atlas_reorganize_callbacks, FALSE);
 }
 
 static CoglAtlas *
 _cogl_atlas_texture_create_atlas (CoglContext *ctx)
 {
-  atlas_private_key = g_quark_from_static_string ("-cogl-atlas-texture-create-key");
+  CoglAtlas *atlas = cogl_atlas_new (ctx, COGL_PIXEL_FORMAT_RGBA_8888,
+                                     0,
+                                     _cogl_atlas_texture_update_position_cb);
 
-  CoglAtlas *atlas = _cogl_atlas_new (COGL_PIXEL_FORMAT_RGBA_8888,
-                                      0,
-                                      _cogl_atlas_texture_update_position_cb);
-
-  _cogl_atlas_add_reorganize_callback (atlas,
-                                       _cogl_atlas_texture_pre_reorganize_cb,
-                                       _cogl_atlas_texture_post_reorganize_cb,
-                                       atlas);
+  cogl_atlas_add_reorganize_callback (atlas,
+                                      _cogl_atlas_texture_pre_reorganize_cb,
+                                      _cogl_atlas_texture_post_reorganize_cb,
+                                      atlas);
 
   ctx->atlases = g_slist_prepend (ctx->atlases, atlas);
-
-  /* Set some data on the atlas so we can get notification when it is
-     destroyed in order to remove it from the list. ctx->atlases
-     effectively holds a weak reference. We don't need a strong
-     reference because the atlas textures take a reference on the
-     atlas so it will stay alive */
-  g_object_set_qdata_full (G_OBJECT (atlas),
-                           atlas_private_key,
-                           atlas,
-                           _cogl_atlas_texture_atlas_destroyed_cb);
-
   return atlas;
 }
 
@@ -286,9 +259,10 @@ static int
 _cogl_atlas_texture_get_max_waste (CoglTexture *tex)
 {
   CoglAtlasTexture *atlas_tex = COGL_ATLAS_TEXTURE (tex);
+  CoglTextureClass *klass = COGL_TEXTURE_GET_CLASS (atlas_tex->sub_texture);
 
   /* Forward on to the sub texture */
-  return cogl_texture_get_max_waste (atlas_tex->sub_texture);
+  return klass->get_max_waste (COGL_TEXTURE (atlas_tex->sub_texture));
 }
 
 static gboolean
@@ -315,9 +289,10 @@ _cogl_atlas_texture_transform_coords_to_gl (CoglTexture *tex,
                                             float *t)
 {
   CoglAtlasTexture *atlas_tex = COGL_ATLAS_TEXTURE (tex);
+  CoglTextureClass *klass = COGL_TEXTURE_GET_CLASS (atlas_tex->sub_texture);
 
   /* Forward on to the sub texture */
-  _cogl_texture_transform_coords_to_gl (atlas_tex->sub_texture, s, t);
+  klass->transform_coords_to_gl (atlas_tex->sub_texture, s, t);
 }
 
 static CoglTransformResult
@@ -325,10 +300,10 @@ _cogl_atlas_texture_transform_quad_coords_to_gl (CoglTexture *tex,
                                                  float *coords)
 {
   CoglAtlasTexture *atlas_tex = COGL_ATLAS_TEXTURE (tex);
+  CoglTextureClass *klass = COGL_TEXTURE_GET_CLASS (atlas_tex->sub_texture);
 
   /* Forward on to the sub texture */
-  return _cogl_texture_transform_quad_coords_to_gl (atlas_tex->sub_texture,
-                                                    coords);
+  return klass->transform_quad_coords_to_gl (atlas_tex->sub_texture, coords);
 }
 
 static gboolean
@@ -360,11 +335,13 @@ static void
 _cogl_atlas_texture_migrate_out_of_atlas (CoglAtlasTexture *atlas_tex)
 {
   CoglTexture *standalone_tex;
+  CoglContext *ctx;
 
   /* Make sure this texture is not in the atlas */
   if (!atlas_tex->atlas)
     return;
 
+  ctx = cogl_texture_get_context (COGL_TEXTURE (atlas_tex));
   COGL_NOTE (ATLAS, "Migrating texture out of the atlas");
 
   /* We don't know if any journal entries currently depend on
@@ -375,7 +352,7 @@ _cogl_atlas_texture_migrate_out_of_atlas (CoglAtlasTexture *atlas_tex)
    * We are assuming that texture atlas migration never happens
    * during a flush so we don't have to consider recursion here.
    */
-  cogl_flush ();
+  cogl_context_flush (ctx);
 
   standalone_tex =
     _cogl_atlas_copy_rectangle (atlas_tex->atlas,
@@ -427,13 +404,14 @@ static void
 _cogl_atlas_texture_ensure_non_quad_rendering (CoglTexture *tex)
 {
   CoglAtlasTexture *atlas_tex = COGL_ATLAS_TEXTURE (tex);
+  CoglTextureClass *klass = COGL_TEXTURE_GET_CLASS (atlas_tex->sub_texture);
 
   /* Sub textures can't support non-quad rendering so we'll just
      migrate the texture out */
   _cogl_atlas_texture_migrate_out_of_atlas (atlas_tex);
 
   /* Forward on to the sub texture */
-  _cogl_texture_ensure_non_quad_rendering (atlas_tex->sub_texture);
+  klass->ensure_non_quad_rendering (atlas_tex->sub_texture);
 }
 
 static gboolean
@@ -522,7 +500,7 @@ _cogl_atlas_texture_convert_bitmap_for_upload (CoglAtlasTexture *atlas_tex,
 
   /* We'll prepare to upload using the format of the actual texture of
      the atlas texture instead of the format reported by
-     _cogl_texture_get_format which would be the original internal
+     cogl_texture_get_format which would be the original internal
      format specified when the texture was created. However we'll
      preserve the premult status of the internal format because the
      images are all stored in the original premult format of the
@@ -673,10 +651,10 @@ allocate_space (CoglAtlasTexture *atlas_tex,
        * can cause the atlas to be freed */
       atlas = g_object_ref (l->data);
       /* Try to make some space in the atlas for the texture */
-      if (_cogl_atlas_reserve_space (atlas,
-                                     /* Add two pixels for the border */
-                                     width + 2, height + 2,
-                                     atlas_tex))
+      if (cogl_atlas_reserve_space (atlas,
+                                    /* Add two pixels for the border */
+                                    width + 2, height + 2,
+                                    atlas_tex))
         {
           /* keep the atlas reference */
           break;
@@ -692,10 +670,10 @@ allocate_space (CoglAtlasTexture *atlas_tex,
     {
       atlas = _cogl_atlas_texture_create_atlas (ctx);
       COGL_NOTE (ATLAS, "Created new atlas for textures: %p", atlas);
-      if (!_cogl_atlas_reserve_space (atlas,
-                                      /* Add two pixels for the border */
-                                      width + 2, height + 2,
-                                      atlas_tex))
+      if (!cogl_atlas_reserve_space (atlas,
+                                     /* Add two pixels for the border */
+                                     width + 2, height + 2,
+                                     atlas_tex))
         {
           /* Ok, this means we really can't add it to the atlas */
           g_object_unref (atlas);
@@ -928,51 +906,10 @@ cogl_atlas_texture_new_from_bitmap (CoglBitmap *bmp)
                                           loader);
 }
 
-CoglTexture *
-cogl_atlas_texture_new_from_data (CoglContext *ctx,
-                                  int width,
-                                  int height,
-                                  CoglPixelFormat format,
-                                  int rowstride,
-                                  const uint8_t *data,
-                                  GError **error)
-{
-  CoglBitmap *bmp;
-  CoglTexture *atlas_tex;
-
-  g_return_val_if_fail (format != COGL_PIXEL_FORMAT_ANY, NULL);
-  g_return_val_if_fail (cogl_pixel_format_get_n_planes (format) == 1, NULL);
-  g_return_val_if_fail (data != NULL, NULL);
-
-  /* Rowstride from width if not given */
-  if (rowstride == 0)
-    rowstride = width * cogl_pixel_format_get_bytes_per_pixel (format, 0);
-
-  /* Wrap the data into a bitmap */
-  bmp = cogl_bitmap_new_for_data (ctx,
-                                  width, height,
-                                  format,
-                                  rowstride,
-                                  (uint8_t *) data);
-
-  atlas_tex = cogl_atlas_texture_new_from_bitmap (bmp);
-
-  g_object_unref (bmp);
-
-  if (atlas_tex &&
-      !cogl_texture_allocate (COGL_TEXTURE (atlas_tex), error))
-    {
-      g_object_unref (atlas_tex);
-      return NULL;
-    }
-
-  return atlas_tex;
-}
-
 void
-_cogl_atlas_texture_add_reorganize_callback (CoglContext *ctx,
-                                             GHookFunc callback,
-                                             void *user_data)
+cogl_atlas_texture_add_reorganize_callback (CoglContext *ctx,
+                                            GHookFunc callback,
+                                            void *user_data)
 {
   GHook *hook = g_hook_alloc (&ctx->atlas_reorganize_callbacks);
   hook->func = callback;
@@ -981,7 +918,7 @@ _cogl_atlas_texture_add_reorganize_callback (CoglContext *ctx,
 }
 
 void
-_cogl_atlas_texture_remove_reorganize_callback (CoglContext *ctx,
+cogl_atlas_texture_remove_reorganize_callback (CoglContext *ctx,
                                                 GHookFunc callback,
                                                 void *user_data)
 {

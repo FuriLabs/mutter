@@ -41,11 +41,11 @@
 #include "cogl/cogl-texture-private.h"
 #include "cogl/cogl-blend-string.h"
 #include "cogl/cogl-journal-private.h"
-#include "cogl/cogl-color-private.h"
+#include "cogl/cogl-color.h"
 #include "cogl/cogl-util.h"
 #include "cogl/cogl-profile.h"
 #include "cogl/cogl-depth-state-private.h"
-#include "cogl/cogl1-context.h"
+#include "cogl/cogl-snippet-private.h"
 
 #include <glib.h>
 #include <glib/gprintf.h>
@@ -98,7 +98,7 @@ destroy_weak_children_cb (CoglNode *node,
                                          NULL);
 
       pipeline->destroy_callback (pipeline, pipeline->destroy_data);
-      _cogl_pipeline_node_unparent_real (COGL_NODE (pipeline));
+      _cogl_pipeline_node_unparent (COGL_NODE (pipeline));
     }
 
   return TRUE;
@@ -119,7 +119,7 @@ cogl_pipeline_dispose (GObject *object)
 
   g_assert (_cogl_list_empty (&COGL_NODE (pipeline)->children));
 
-  _cogl_pipeline_node_unparent_real (COGL_NODE (pipeline));
+  _cogl_pipeline_node_unparent (COGL_NODE (pipeline));
 
   if (pipeline->differences & COGL_PIPELINE_STATE_USER_SHADER &&
       pipeline->big_state->user_program)
@@ -153,6 +153,8 @@ cogl_pipeline_dispose (GObject *object)
     g_free (pipeline->big_state);
 
   recursively_free_layer_caches (pipeline);
+
+  g_clear_pointer (&pipeline->capabilities, g_array_unref);
 
   G_OBJECT_CLASS (cogl_pipeline_parent_class)->dispose (object);
 }
@@ -282,9 +284,9 @@ _cogl_pipeline_set_parent (CoglPipeline *pipeline,
                            gboolean take_strong_reference)
 {
   /* Chain up */
-  _cogl_pipeline_node_set_parent_real (COGL_NODE (pipeline),
-                                       COGL_NODE (parent),
-                                       take_strong_reference);
+  _cogl_pipeline_node_set_parent (COGL_NODE (pipeline),
+                                  COGL_NODE (parent),
+                                  take_strong_reference);
 
   /* Since we just changed the ancestry of the pipeline its cache of
    * layers could now be invalid so free it... */
@@ -328,6 +330,11 @@ _cogl_pipeline_copy (CoglPipeline *src, gboolean is_weak)
   pipeline->real_blend_enable = src->real_blend_enable;
   pipeline->dirty_real_blend_enable = src->dirty_real_blend_enable;
   pipeline->unknown_color_alpha = src->unknown_color_alpha;
+
+  if (src->capabilities)
+    pipeline->capabilities = g_array_copy (src->capabilities);
+
+  pipeline->name = src->name;
 
   /* XXX:
    * consider generalizing the idea of "cached" properties. These
@@ -1076,7 +1083,7 @@ _cogl_pipeline_pre_change_notify (CoglPipeline     *pipeline,
           /* XXX: note we use cogl_flush() not _cogl_flush_journal() so
            * we will flush *all* known journals that might reference the
            * current pipeline. */
-          cogl_flush ();
+          cogl_context_flush (pipeline->context);
         }
     }
 
@@ -2350,11 +2357,12 @@ _cogl_pipeline_init_layer_state_hash_functions (void)
     _cogl_pipeline_layer_hash_fragment_snippets_state;
 
   {
-  /* So we get a big error if we forget to update this code! */
-  _COGL_STATIC_ASSERT (COGL_PIPELINE_LAYER_STATE_SPARSE_COUNT == 9,
-                       "Don't forget to install a hash function for new "
-                       "pipeline state and update assert at end of "
-                       "_cogl_pipeline_init_state_hash_functions");
+    /* So we get a big error if we forget to update this code!
+     * Make sure to install a hash function for newly added
+     * pipeline state and update assert
+     * in _cogl_pipeline_init_state_hash_functions
+     */
+    G_STATIC_ASSERT (COGL_PIPELINE_STATE_SPARSE_COUNT == 14);
   }
 }
 
@@ -2458,11 +2466,12 @@ _cogl_pipeline_init_state_hash_functions (void)
     _cogl_pipeline_hash_fragment_snippets_state;
 
   {
-  /* So we get a big error if we forget to update this code! */
-  _COGL_STATIC_ASSERT (COGL_PIPELINE_STATE_SPARSE_COUNT == 14,
-                       "Make sure to install a hash function for "
-                       "newly added pipeline state and update assert "
-                       "in _cogl_pipeline_init_state_hash_functions");
+    /* So we get a big error if we forget to update this code!
+     * Make sure to install a hash function for newly added
+     * pipeline state and update assert
+     * in _cogl_pipeline_init_state_hash_functions
+     */
+    G_STATIC_ASSERT (COGL_PIPELINE_STATE_SPARSE_COUNT == 14);
   }
 }
 
@@ -2791,4 +2800,74 @@ cogl_pipeline_get_uniform_location (CoglPipeline *pipeline,
                        GINT_TO_POINTER (ctx->n_uniform_names));
 
   return ctx->n_uniform_names++;
+}
+
+typedef struct
+{
+  GQuark domain;
+  unsigned int capability;
+} CapabilityEntry;
+
+static void
+cogl_pipeline_add_capability (CoglPipeline *pipeline,
+                              GQuark        domain,
+                              unsigned int  capability)
+{
+  CapabilityEntry entry = {
+    .domain = domain,
+    .capability = capability,
+  };
+
+  if (!pipeline->capabilities)
+    pipeline->capabilities = g_array_new (FALSE, FALSE, sizeof (entry));
+
+  g_array_append_val (pipeline->capabilities, entry);
+}
+
+void
+cogl_pipeline_add_capability_from_snippet (CoglPipeline *pipeline,
+                                           CoglSnippet  *snippet)
+{
+  GQuark capability_domain;
+  unsigned int capability;
+
+  if (cogl_snippet_get_capability (snippet, &capability_domain, &capability))
+    cogl_pipeline_add_capability (pipeline, capability_domain, capability);
+}
+
+gboolean
+cogl_pipeline_has_capability (CoglPipeline *pipeline,
+                              GQuark        domain,
+                              unsigned int  capability)
+{
+  int i;
+
+  if (!pipeline->capabilities)
+    return FALSE;
+
+  for (i = 0; i < pipeline->capabilities->len; i++)
+    {
+      CapabilityEntry *entry = &g_array_index (pipeline->capabilities,
+                                               CapabilityEntry,
+                                               i);
+
+      if (entry->domain == domain &&
+          entry->capability == capability)
+        return TRUE;
+    }
+
+  return FALSE;
+}
+
+void
+cogl_pipeline_set_static_name (CoglPipeline *pipeline,
+                               const char   *name)
+{
+  pipeline->name = name;
+}
+
+const char *
+cogl_pipeline_get_name (CoglPipeline *pipeline)
+{
+  return pipeline->name;
 }

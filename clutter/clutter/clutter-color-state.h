@@ -39,9 +39,36 @@ G_DECLARE_FINAL_TYPE (ClutterColorState, clutter_color_state,
                       GObject)
 
 CLUTTER_EXPORT
-ClutterColorState * clutter_color_state_new (ClutterColorspace colorspace);
+ClutterColorState * clutter_color_state_new (ClutterContext          *context,
+                                             ClutterColorspace        colorspace,
+                                             ClutterTransferFunction  transfer_function);
+
+CLUTTER_EXPORT
+char * clutter_color_state_to_string (ClutterColorState *color_state);
+
+CLUTTER_EXPORT
+unsigned int clutter_color_state_get_id (ClutterColorState *color_state);
 
 CLUTTER_EXPORT
 ClutterColorspace clutter_color_state_get_colorspace (ClutterColorState *color_state);
+
+CLUTTER_EXPORT
+ClutterTransferFunction clutter_color_state_get_transfer_function (ClutterColorState *color_state);
+
+CLUTTER_EXPORT
+void clutter_color_state_add_pipeline_transform (ClutterColorState *color_state,
+                                                 ClutterColorState *target_color_state,
+                                                 CoglPipeline      *pipeline);
+
+CLUTTER_EXPORT
+gboolean clutter_color_state_equals (ClutterColorState *color_state,
+                                     ClutterColorState *other_color_state);
+
+CLUTTER_EXPORT
+ClutterEncodingRequiredFormat clutter_color_state_required_format (ClutterColorState *color_state);
+
+CLUTTER_EXPORT
+ClutterColorState * clutter_color_state_get_blending (ClutterColorState *color_state,
+                                                      gboolean           force);
 
 G_END_DECLS

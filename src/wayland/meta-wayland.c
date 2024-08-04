@@ -34,7 +34,6 @@
 #endif
 
 #include "clutter/clutter.h"
-#include "cogl/cogl-egl.h"
 #include "compositor/meta-surface-actor-wayland.h"
 #include "core/events.h"
 #include "core/meta-context-private.h"
@@ -56,6 +55,7 @@
 #include "wayland/meta-wayland-subsurface.h"
 #include "wayland/meta-wayland-tablet-manager.h"
 #include "wayland/meta-wayland-transaction.h"
+#include "wayland/meta-wayland-xdg-dialog.h"
 #include "wayland/meta-wayland-xdg-foreign.h"
 #include "wayland/meta-wayland-linux-drm-syncobj.h"
 
@@ -69,6 +69,7 @@
 #ifdef HAVE_NATIVE_BACKEND
 #include "backends/native/meta-frame-native.h"
 #include "backends/native/meta-renderer-native.h"
+#include "wayland/meta-wayland-drm-lease.h"
 #endif
 
 enum
@@ -757,7 +758,7 @@ meta_wayland_init_egl (MetaWaylandCompositor *compositor)
   ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
   CoglContext *cogl_context =
     clutter_backend_get_cogl_context (clutter_backend);
-  EGLDisplay egl_display = cogl_egl_context_get_egl_display (cogl_context);
+  EGLDisplay egl_display = cogl_context_get_egl_display (cogl_context);
   g_autoptr (GError) error = NULL;
 
   if (!meta_egl_has_extensions (egl, egl_display, NULL,
@@ -818,6 +819,9 @@ meta_wayland_compositor_new (MetaContext *context)
   compositor = g_object_new (META_TYPE_WAYLAND_COMPOSITOR, NULL);
   compositor->context = context;
 
+  wl_display_set_default_max_buffer_size (compositor->wayland_display,
+                                          1024 * 1024);
+
   wayland_event_source = wayland_event_source_new (compositor->wayland_display);
 
   /* XXX: Here we are setting the wayland event source to have a
@@ -870,6 +874,11 @@ meta_wayland_compositor_new (MetaContext *context)
   meta_wayland_transaction_init (compositor);
   meta_wayland_idle_inhibit_init (compositor);
   meta_wayland_drm_syncobj_init (compositor);
+  meta_wayland_init_xdg_wm_dialog (compositor);
+
+#ifdef HAVE_NATIVE_BACKEND
+  meta_wayland_drm_lease_manager_init (compositor);
+#endif
 
 #ifdef HAVE_WAYLAND_EGLSTREAM
   {

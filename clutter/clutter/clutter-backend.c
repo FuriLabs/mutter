@@ -26,7 +26,7 @@
 
 /**
  * ClutterBackend:
- * 
+ *
  * Backend abstraction
  *
  * Clutter can be compiled against different backends. Each backend
@@ -51,8 +51,6 @@
 #include "clutter/clutter-stage-window.h"
 
 #include "cogl/cogl.h"
-
-#define DEFAULT_FONT_NAME       "Sans 10"
 
 enum
 {
@@ -118,12 +116,10 @@ clutter_backend_do_real_create_context (ClutterBackend  *backend,
                                         GError         **error)
 {
   ClutterBackendClass *klass;
-  CoglSwapChain *swap_chain;
+
+  cogl_init ();
 
   klass = CLUTTER_BACKEND_GET_CLASS (backend);
-
-  swap_chain = NULL;
-
   CLUTTER_NOTE (BACKEND, "Creating Cogl renderer");
   backend->cogl_renderer = klass->get_renderer (backend, error);
 
@@ -135,15 +131,11 @@ clutter_backend_do_real_create_context (ClutterBackend  *backend,
   if (!cogl_renderer_connect (backend->cogl_renderer, error))
     goto error;
 
-  CLUTTER_NOTE (BACKEND, "Creating Cogl swap chain");
-  swap_chain = cogl_swap_chain_new ();
-
   CLUTTER_NOTE (BACKEND, "Creating Cogl display");
   if (klass->get_display != NULL)
     {
       backend->cogl_display = klass->get_display (backend,
                                                   backend->cogl_renderer,
-                                                  swap_chain,
                                                   error);
     }
   else
@@ -151,7 +143,7 @@ clutter_backend_do_real_create_context (ClutterBackend  *backend,
       CoglOnscreenTemplate *tmpl;
       gboolean res;
 
-      tmpl = cogl_onscreen_template_new (swap_chain);
+      tmpl = cogl_onscreen_template_new ();
 
       /* XXX: I have some doubts that this is a good design.
        *
@@ -185,16 +177,12 @@ clutter_backend_do_real_create_context (ClutterBackend  *backend,
 
   /* the display owns the renderer and the swap chain */
   g_object_unref (backend->cogl_renderer);
-  g_object_unref (swap_chain);
 
   return TRUE;
 
 error:
   g_clear_object (&backend->cogl_display);
   g_clear_object (&backend->cogl_renderer);
-
-  if (swap_chain != NULL)
-    g_object_unref (swap_chain);
 
   return FALSE;
 }
@@ -267,7 +255,7 @@ clutter_backend_real_create_context (ClutterBackend  *backend,
       return FALSE;
     }
 
-  backend->cogl_source = cogl_glib_source_new (backend->cogl_context, G_PRIORITY_DEFAULT);
+  backend->cogl_source = cogl_glib_source_new (backend->cogl_renderer, G_PRIORITY_DEFAULT);
   g_source_attach (backend->cogl_source, NULL);
 
   return TRUE;

@@ -157,7 +157,7 @@ paint_damage_region (ClutterStageWindow *stage_window,
   if (G_UNLIKELY (overlay_blue == NULL))
     {
       overlay_blue = cogl_pipeline_new (ctx);
-      cogl_color_init_from_4f (&blue_color, 0.0, 0.0, 0.2, 0.2);
+      cogl_color_init_from_4f (&blue_color, 0.0f, 0.0f, 0.2f, 0.2f);
       cogl_pipeline_set_color (overlay_blue, &blue_color);
     }
 
@@ -184,7 +184,7 @@ paint_damage_region (ClutterStageWindow *stage_window,
       if (G_UNLIKELY (overlay_red == NULL))
         {
           overlay_red = cogl_pipeline_new (ctx);
-          cogl_color_init_from_4f (&red_color, 0.2, 0.0, 0.0, 0.2);
+          cogl_color_init_from_4f (&red_color, 0.2f, 0.0f, 0.0f, 0.2f);
           cogl_pipeline_set_color (overlay_red, &red_color);
         }
 
@@ -472,6 +472,7 @@ should_use_clipped_redraw (gboolean              is_full_redraw,
   gboolean can_blit_sub_buffer;
   gboolean can_use_clipped_redraw;
   gboolean is_warmed_up;
+  CoglContext *context = cogl_framebuffer_get_context (framebuffer);
 
   if (is_full_redraw)
     return FALSE;
@@ -490,7 +491,7 @@ should_use_clipped_redraw (gboolean              is_full_redraw,
     }
 
   can_blit_sub_buffer =
-    cogl_clutter_winsys_has_feature (COGL_WINSYS_FEATURE_SWAP_REGION);
+    cogl_context_has_winsys_feature (context, COGL_WINSYS_FEATURE_SWAP_REGION);
   can_use_clipped_redraw =
     _clutter_stage_window_can_clip_redraws (stage_window) &&
     (can_blit_sub_buffer || has_buffer_age);
@@ -509,6 +510,7 @@ meta_stage_impl_redraw_view_primary (MetaStageImpl    *stage_impl,
   ClutterStageWindow *stage_window = CLUTTER_STAGE_WINDOW (stage_impl);
   MetaStageView *view = META_STAGE_VIEW (stage_view);
   CoglFramebuffer *fb = clutter_stage_view_get_framebuffer (stage_view);
+  CoglContext *context = cogl_framebuffer_get_context (fb);
   CoglFramebuffer *onscreen = clutter_stage_view_get_onscreen (stage_view);
   MtkRectangle view_rect;
   gboolean is_full_redraw;
@@ -536,7 +538,7 @@ meta_stage_impl_redraw_view_primary (MetaStageImpl    *stage_impl,
 
   has_buffer_age =
     COGL_IS_ONSCREEN (onscreen) &&
-    cogl_clutter_winsys_has_feature (COGL_WINSYS_FEATURE_BUFFER_AGE);
+    cogl_context_has_winsys_feature (context, COGL_WINSYS_FEATURE_BUFFER_AGE);
 
   redraw_clip = clutter_stage_view_take_accumulated_redraw_clip (stage_view);
 
@@ -577,7 +579,7 @@ meta_stage_impl_redraw_view_primary (MetaStageImpl    *stage_impl,
         {
           queued_redraw_clip =
             scale_offset_and_clamp_region (fb_clip_region,
-                                           1.0 / fb_scale,
+                                           1.0f / fb_scale,
                                            view_rect.x,
                                            view_rect.y);
         }
@@ -658,7 +660,7 @@ meta_stage_impl_redraw_view_primary (MetaStageImpl    *stage_impl,
        */
       g_clear_pointer (&redraw_clip, mtk_region_unref);
       redraw_clip = scale_offset_and_clamp_region (fb_clip_region,
-                                                   1.0 / fb_scale,
+                                                   1.0f / fb_scale,
                                                    view_rect.x,
                                                    view_rect.y);
     }

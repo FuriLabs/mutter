@@ -41,12 +41,14 @@
 
 #include "compositor/compositor-private.h"
 #include "core/display-private.h"
-#include "core/frame.h"
+#include "core/stack.h"
+#include "core/window-private.h"
 #include "meta/util.h"
 
 #ifdef HAVE_X11_CLIENT
 #include "mtk/mtk-x11.h"
 #include "x11/meta-x11-display-private.h"
+#include "x11/meta-x11-frame.h"
 #include "x11/window-x11.h"
 #endif
 
@@ -377,7 +379,12 @@ meta_stack_op_apply (MetaStackTracker *tracker,
 
         if (META_STACK_ID_IS_X11 (op->add.window) &&
             (apply_flags & NO_RESTACK_X_WINDOWS) != 0)
-          return FALSE;
+          {
+            meta_topic (META_DEBUG_STACK, "STACK_OP_ADD: Ignoring addition "
+                        "of %s as per NO_RESTACK_X_WINDOWS",
+                        get_window_desc (tracker, op->remove.window));
+            return FALSE;
+          }
 
         old_pos = find_window (stack, op->add.window);
         if (old_pos >= 0)
@@ -397,7 +404,12 @@ meta_stack_op_apply (MetaStackTracker *tracker,
 
         if (META_STACK_ID_IS_X11 (op->remove.window) &&
             (apply_flags & NO_RESTACK_X_WINDOWS) != 0)
-          return FALSE;
+          {
+            meta_topic (META_DEBUG_STACK, "STACK_OP_REMOVE: Ignoring removal "
+                        "of %s as per NO_RESTACK_X_WINDOWS",
+                        get_window_desc (tracker, op->remove.window));
+            return FALSE;
+          }
 
         old_pos = find_window (stack, op->remove.window);
         if (old_pos < 0)
@@ -571,6 +583,9 @@ on_stack_changed (MetaStack        *stack,
   GList *l;
   GArray *hidden_stack_ids;
   GList *sorted;
+#ifdef HAVE_X11_CLIENT
+  MetaFrame *frame;
+#endif
 
   COGL_TRACE_BEGIN_SCOPED (StackChanged, "Meta::StackTracker::on_stack_changed()");
 
@@ -586,34 +601,33 @@ on_stack_changed (MetaStack        *stack,
   for (l = sorted; l; l = l->next)
     {
       MetaWindow *w = l->data;
-      uint64_t stack_id;
+      uint64_t stack_id = w->stamp;
 
       if (w->unmanaging)
         continue;
 
       meta_topic (META_DEBUG_STACK, "  %u:%d - %s ",
-		  w->layer, w->stack_position, w->desc);
+                  w->layer, w->stack_position, w->desc);
 
 #ifdef HAVE_X11_CLIENT
       if (w->client_type == META_WINDOW_CLIENT_TYPE_X11)
         {
-          if (w->frame)
-	          stack_id = w->frame->xwindow;
+          frame = meta_window_x11_get_frame (w);
+          if (frame)
+            stack_id = frame->xwindow;
           else
-	          stack_id = meta_window_x11_get_xwindow (w);
+            stack_id = meta_window_x11_get_xwindow (w);
         }
-      else
 #endif
-        stack_id = w->stamp;
 
       /* We don't restack hidden windows along with the rest, though they are
        * reflected in the _NET hints. Hidden windows all get pushed below
        * the screens fullscreen guard_window. */
       if (w->hidden)
-	{
+        {
           g_array_append_val (hidden_stack_ids, stack_id);
-	  continue;
-	}
+          continue;
+        }
 
       g_array_append_val (all_root_children_stacked, stack_id);
     }
@@ -1031,6 +1045,9 @@ meta_stack_tracker_sync_stack (MetaStackTracker *tracker)
   GList *meta_windows;
   int n_windows;
   int i;
+#ifdef HAVE_X11_CLIENT
+  MetaFrame *frame;
+#endif
 
   if (tracker->sync_stack_later)
     {
@@ -1055,19 +1072,28 @@ meta_stack_tracker_sync_stack (MetaStackTracker *tracker)
         {
           MetaX11Display *x11_display = tracker->display->x11_display;
           MetaWindow *meta_window = NULL;
+          Window xwindow = (Window) window;
 
           if (x11_display)
-            meta_window = meta_x11_display_lookup_x_window (x11_display, (Window) window);
+            meta_window = meta_x11_display_lookup_x_window (x11_display, xwindow);
 
           /* When mapping back from xwindow to MetaWindow we have to be a bit careful;
            * children of the root could include unmapped windows created by toolkits
            * for internal purposes, including ones that we have registered in our
-           * XID => window table. (Wine uses a toplevel for _NET_WM_USER_TIME_WINDOW;
+           * XID => window table (such as user time or frame windows) and we
+           * don't want to duplicate them not to break the compositor assumption
+           * that the list we pass contains unique IDs (leading to crashes due
+           * to wrong removals on destruction).
+           * Only include the unframed windows whose XID matches the one we're
+           * handling or we'd end up including all the internal windows we've
+           * associated to the same meta window, such as the user time windows.
+           * (Wine uses a toplevel for _NET_WM_USER_TIME_WINDOW;
            * see window-prop.c:reload_net_wm_user_time_window() for registration.)
            */
+          frame = meta_window ? meta_window_x11_get_frame (meta_window) : NULL;
           if (meta_window &&
-              ((Window)window == meta_window_x11_get_xwindow (meta_window) ||
-               (meta_window->frame && (Window)window == meta_window->frame->xwindow)))
+              (xwindow == meta_window_x11_get_xwindow (meta_window) ||
+               (frame && xwindow == frame->xwindow)))
             meta_windows = g_list_prepend (meta_windows, meta_window);
         }
       else

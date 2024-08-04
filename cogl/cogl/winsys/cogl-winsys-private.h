@@ -38,12 +38,6 @@
 #include "cogl/winsys/cogl-texture-pixmap-x11-private.h"
 #endif
 
-#ifdef HAVE_EGL
-#include "cogl/cogl-egl-private.h"
-#endif
-
-#include "cogl/cogl-poll.h"
-
 COGL_EXPORT uint32_t
 _cogl_winsys_error_quark (void);
 
@@ -56,6 +50,32 @@ typedef enum /*< prefix=COGL_WINSYS_ERROR >*/
   COGL_WINSYS_ERROR_CREATE_ONSCREEN,
   COGL_WINSYS_ERROR_MAKE_CURRENT,
 } CoglWinsysError;
+
+/**
+ * CoglRendererConstraint:
+ * @COGL_RENDERER_CONSTRAINT_USES_X11: Require the renderer to be X11 based
+ * @COGL_RENDERER_CONSTRAINT_USES_XLIB: Require the renderer to be X11
+ *                                      based and use Xlib
+ * @COGL_RENDERER_CONSTRAINT_USES_EGL: Require the renderer to be EGL based
+ *
+ * These constraint flags are hard-coded features of the different renderer
+ * backends. Sometimes a platform may support multiple rendering options which
+ * Cogl will usually choose from automatically. Some of these features are
+ * important to higher level applications and frameworks though, such as
+ * whether a renderer is X11 based because an application might only support
+ * X11 based input handling. An application might also need to ensure EGL is
+ * used internally too if they depend on access to an EGLDisplay for some
+ * purpose.
+ *
+ * Applications should ideally minimize how many of these constraints
+ * they depend on to ensure maximum portability.
+ */
+typedef enum
+{
+  COGL_RENDERER_CONSTRAINT_USES_X11 = (1 << 0),
+  COGL_RENDERER_CONSTRAINT_USES_XLIB = (1 << 1),
+  COGL_RENDERER_CONSTRAINT_USES_EGL = (1 << 2),
+} CoglRendererConstraint;
 
 typedef struct _CoglWinsysVtable
 {
@@ -130,17 +150,6 @@ typedef struct _CoglWinsysVtable
                                      CoglTexturePixmapStereoMode stereo_mode);
 #endif
 
-  void *
-  (*fence_add) (CoglContext *ctx);
-
-  gboolean
-  (*fence_is_complete) (CoglContext *ctx,
-                        void        *fence);
-
-  void
-  (*fence_destroy) (CoglContext *ctx,
-                    void        *fence);
-
   void
   (*update_sync) (CoglContext *ctx);
 
@@ -150,6 +159,3 @@ typedef struct _CoglWinsysVtable
 } CoglWinsysVtable;
 
 typedef const CoglWinsysVtable *(*CoglWinsysVtableGetter) (void);
-
-gboolean
-_cogl_winsys_has_feature (CoglWinsysFeature feature);

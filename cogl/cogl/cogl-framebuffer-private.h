@@ -44,16 +44,15 @@ typedef enum
   COGL_FRAMEBUFFER_DRIVER_TYPE_BACK,
 } CoglFramebufferDriverType;
 
-struct _CoglFramebufferDriverConfig
+typedef struct _CoglFramebufferDriverConfig
 {
   CoglFramebufferDriverType type;
 
   gboolean disable_depth_and_stencil;
-};
+} CoglFramebufferDriverConfig;
 
 typedef struct
 {
-  CoglSwapChain *swap_chain;
   gboolean need_stencil;
   int samples_per_pixel;
   gboolean stereo_enabled;
@@ -75,8 +74,7 @@ typedef enum _CoglFramebufferStateIndex
   COGL_FRAMEBUFFER_STATE_INDEX_PROJECTION         = 5,
   COGL_FRAMEBUFFER_STATE_INDEX_FRONT_FACE_WINDING = 6,
   COGL_FRAMEBUFFER_STATE_INDEX_DEPTH_WRITE        = 7,
-  COGL_FRAMEBUFFER_STATE_INDEX_STEREO_MODE        = 8,
-  COGL_FRAMEBUFFER_STATE_INDEX_MAX                = 9
+  COGL_FRAMEBUFFER_STATE_INDEX_MAX                = 8
 } CoglFramebufferStateIndex;
 
 typedef enum _CoglFramebufferState
@@ -89,7 +87,6 @@ typedef enum _CoglFramebufferState
   COGL_FRAMEBUFFER_STATE_PROJECTION         = 1<<5,
   COGL_FRAMEBUFFER_STATE_FRONT_FACE_WINDING = 1<<6,
   COGL_FRAMEBUFFER_STATE_DEPTH_WRITE        = 1<<7,
-  COGL_FRAMEBUFFER_STATE_STEREO_MODE        = 1<<8
 } CoglFramebufferState;
 
 #define COGL_FRAMEBUFFER_STATE_ALL ((1<<COGL_FRAMEBUFFER_STATE_INDEX_MAX) - 1)
@@ -148,9 +145,6 @@ cogl_framebuffer_update_size (CoglFramebuffer *framebuffer,
 void
 _cogl_framebuffer_set_internal_format (CoglFramebuffer *framebuffer,
                                        CoglPixelFormat internal_format);
-
-CoglPixelFormat
-cogl_framebuffer_get_internal_format (CoglFramebuffer *framebuffer);
 
 void
 _cogl_framebuffer_clear_without_flush4f (CoglFramebuffer *framebuffer,

@@ -1,13 +1,13 @@
 project('mutter', 'c',
-  version: '46.4',
-  meson_version: '>= 0.60.0',
+  version: '47.beta',
+  meson_version: '>= 1.3.0',
   license: 'GPLv2+'
 )
 
 split_version = meson.project_version().split('.')
 
 # API version, bump each development cycle
-libmutter_api_version = '14'
+libmutter_api_version = '15'
 
 mutter_srcdir = meson.current_source_dir()
 mutter_builddir = meson.current_build_dir()
@@ -45,11 +45,11 @@ udev_req = '>= 228'
 gudev_req = '>= 232'
 
 # wayland version requirements
-wayland_server_req = '>= 1.22'
-wayland_protocols_req = '>= 1.33'
+wayland_server_req = '>= 1.23'
+wayland_protocols_req = '>= 1.36'
 
 # native backend version requirements
-libinput_req = '>= 1.19.0'
+libinput_req = '>= 1.26.0'
 gbm_req = '>= 21.3'
 libdrm_req = '>= 2.4.118'
 
@@ -123,9 +123,7 @@ gthread_dep = dependency('gobject-2.0', version: glib_req)
 gmodule_no_export_dep = dependency('gmodule-no-export-2.0', version: glib_req)
 gnome_settings_daemon_dep = dependency('gnome-settings-daemon', required: false)
 xkbcommon_dep = dependency('xkbcommon', version: xkbcommon_req)
-ice_dep = dependency('ice')
 atk_dep = dependency('atk', version: atk_req)
-dbus_dep = dependency('dbus-1')
 colord_dep = dependency('colord', version: colord_req)
 lcms2_dep = dependency('lcms2', version: lcms2_req)
 harfbuzz_dep = dependency('harfbuzz', version: harfbuzz_req)
@@ -133,8 +131,7 @@ libeis_dep = dependency('libeis-1.0', version: libei_req)
 libei_dep = dependency('libei-1.0', version: libei_req)
 
 have_wayland = get_option('wayland')
-# For now always require X11 support
-have_x11 = true
+have_x11 = get_option('x11')
 have_xwayland = get_option('xwayland')
 have_x11_client = have_x11 or have_xwayland
 
@@ -156,17 +153,20 @@ if have_x11_client
   xext_dep = dependency('xext')
   xfixes_dep = dependency('xfixes', version: xfixes_req)
   xi_dep = dependency('xi', version: xi_req)
-  xtst_dep = dependency('xtst')
   xkbfile_dep = dependency('xkbfile')
   xkeyboard_config_dep = dependency('xkeyboard-config')
-  xkbcommon_x11_dep = dependency('xkbcommon-x11')
-  xrender_dep = dependency('xrender')
   x11_xcb_dep = dependency('x11-xcb')
   xrandr_dep = dependency('xrandr', version: xrandr_req)
-  xcb_randr_dep = dependency('xcb-randr')
   xcb_res_dep = dependency('xcb-res')
   xinerama_dep = dependency('xinerama')
   xau_dep = dependency('xau')
+
+  if have_x11
+    ice_dep = dependency('ice')
+    xcb_randr_dep = dependency('xcb-randr')
+    xkbcommon_x11_dep = dependency('xkbcommon-x11')
+    xtst_dep = dependency('xtst')
+  endif
 endif
 
 use_libdisplay_info = get_option('libdisplay_info')
@@ -194,14 +194,14 @@ if have_egl
   egl_dep = dependency('egl')
 endif
 
-have_glx = get_option('glx') and have_x11_client
+have_glx = get_option('glx') and have_x11
 if have_glx
   if not have_gl
     error('GLX support requires OpenGL to be enabled')
   endif
 endif
 
-have_egl_xlib = have_egl and have_x11_client
+have_egl_xlib = have_egl and have_x11
 
 have_gles2 = get_option('gles2')
 if have_gles2
@@ -271,6 +271,11 @@ endif
 
 if have_wayland or have_native_backend
   libdrm_dep = dependency('libdrm', version: libdrm_req)
+  have_drm_plane_size_hint = cc.has_type('struct drm_plane_size_hint',
+                                         dependencies: libdrm_dep,
+                                         prefix: '#include <drm_mode.h>')
+else
+  have_drm_plane_size_hint = false
 endif
 
 have_egl_device = get_option('egl_device')
@@ -285,7 +290,7 @@ if have_wayland_eglstream
   endif
 endif
 
-have_sm = get_option('sm')
+have_sm = get_option('sm') and have_x11
 if have_sm
   sm_dep = dependency('sm')
 endif
@@ -300,14 +305,10 @@ if have_pango_ft2
   pangoft2_dep = dependency('pangoft2')
 endif
 
-have_startup_notification = get_option('startup_notification')
+have_startup_notification = get_option('startup_notification') and have_x11_client
 if have_startup_notification
-  if have_x11_client
-    libstartup_notification_dep = dependency('libstartup-notification-1.0',
-                                             version: libstartup_notification_req)
-  else
-    error('startup_notification requires X11 or Xwayland to be enabled')
-  endif
+  libstartup_notification_dep = dependency('libstartup-notification-1.0',
+                                           version: libstartup_notification_req)
 endif
 
 have_remote_desktop = get_option('remote_desktop')
@@ -348,21 +349,25 @@ int main (int argc, char ** argv) {
 have_malloc_trim = meson.get_compiler('c').has_function('malloc_trim')
 
 have_documentation = get_option('docs')
-have_tests = get_option('tests')
-have_core_tests = false
+have_tests = get_option('tests').enable_auto_if(have_native_backend).enabled()
+have_mutter_tests = false
 have_cogl_tests = false
 have_clutter_tests = false
-have_native_tests = false
 have_kvm_tests = false
 have_tty_tests = false
 have_installed_tests = false
+have_x11_tests = false
 
 if have_tests
   gtk3_dep = dependency('gtk+-3.0', version: gtk3_req)
   dbusmock_dep = python.find_installation('python3', modules: ['dbusmock'], required: false)
 
-  have_core_tests = get_option('core_tests')
-  if have_core_tests
+  if not have_native_backend
+    error('Tests require the native backend to be enabled')
+  endif
+
+  have_mutter_tests = get_option('mutter_tests')
+  if have_mutter_tests
     if not have_wayland
       error('Tests require Wayland to be enabled')
     endif
@@ -371,15 +376,6 @@ if have_tests
     endif
     if not dbusmock_dep.found()
       error('Tests require python-dbusmock')
-    endif
-  endif
-  have_native_tests = get_option('native_tests')
-  if have_native_tests
-    if not have_native_backend
-      error('Native tests require the native backend')
-    endif
-    if not have_remote_desktop
-      error('Native tests require remote desktop')
     endif
   endif
   have_kvm_tests = get_option('kvm_tests')
@@ -422,13 +418,12 @@ if have_tests
 
   add_test_setup('plain')
 
-  xvfb = find_program('xvfb-run')
-  xvfb_args = [
-    '-a',
-    '-s',
-    '+iglx -noreset',
-  ]
-  xvfb_command = [xvfb] + xvfb_args
+  if have_x11
+    xvfb = find_program('xvfb-run', required: false)
+    if xvfb.found()
+      have_x11_tests = true
+    endif
+  endif
 
   add_test_setup('CI',
     env: [
@@ -436,7 +431,6 @@ if have_tests
     ],
     exe_wrapper: [
       default_test_wrappers,
-      xvfb_command,
     ],
     timeout_multiplier: 10,
   )
@@ -527,6 +521,8 @@ if buildtype != 'plain'
     '-Wno-unused-parameter',
     '-Wno-missing-field-initializers',
     '-Wno-type-limits',
+    '-Wshadow',
+    '-Wfloat-conversion',
   ]
 
   if get_option('debug')
@@ -576,6 +572,7 @@ cdata.set('HAVE_PANGO_FT2', have_pango_ft2)
 cdata.set('HAVE_TIMERFD', have_timerfd)
 cdata.set('HAVE_MALLOC_TRIM', have_malloc_trim)
 cdata.set('HAVE_EVENTFD', have_eventfd)
+cdata.set('HAVE_DRM_PLANE_SIZE_HINT', have_drm_plane_size_hint)
 
 if have_x11_client
   xkb_base = xkeyboard_config_dep.get_variable('xkb_base')
@@ -759,9 +756,10 @@ summary('Xwayland byte-swapped clients', have_xwayland_byte_swapped_clients, sec
 summary('Xwayland enable EI portal', have_xwayland_enable_ei_portal, section: 'Options')
 
 summary('Enabled', have_tests, section: 'Tests')
-summary('Core tests', have_core_tests, section: 'Tests')
+summary('Mutter tests', have_mutter_tests, section: 'Tests')
 summary('Cogl tests', have_cogl_tests, section: 'Tests')
 summary('Clutter tests', have_clutter_tests, section: 'Tests')
-summary('KVM tests', get_option('kvm_tests'), section: 'Tests')
+summary('KVM tests', have_kvm_tests, section: 'Tests')
+summary('X11 backend', have_x11_tests, section: 'Tests')
 summary('Installed tests', have_installed_tests, section: 'Tests')
 summary('Coverage', get_option('b_coverage'), section: 'Tests')

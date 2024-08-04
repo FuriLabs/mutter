@@ -65,6 +65,9 @@ G_BEGIN_DECLS
 
 typedef PangoCairoFontMap CoglPangoFontMap;
 
+typedef void (* CoglPangoPipelineSetup) (CoglPipeline *pipeline,
+                                         gpointer      user_data);
+
 /**
  * cogl_pango_font_map_new:
  *
@@ -73,7 +76,7 @@ typedef PangoCairoFontMap CoglPangoFontMap;
  * Return value: (transfer full): the newly created #PangoFontMap
  */
 COGL_EXPORT PangoFontMap *
-cogl_pango_font_map_new (void);
+cogl_pango_font_map_new (CoglContext *context);
 
 /**
  * cogl_pango_font_map_create_context:
@@ -92,9 +95,9 @@ cogl_pango_font_map_create_context (CoglPangoFontMap *font_map);
  * @dpi: The resolution in "dots per inch". (Physical inches aren't
  *       actually involved; the terminology is conventional.)
  *
- * Sets the resolution for the @font_map. 
- * 
- * This is a scale factor between points specified in a 
+ * Sets the resolution for the @font_map.
+ *
+ * This is a scale factor between points specified in a
  * [struct@Pango.FontDescription] and Cogl units.
  * The default value is %96, meaning that a 10 point font will be 13
  * units high. (10 * 96. / 72. = 13.3).
@@ -102,15 +105,6 @@ cogl_pango_font_map_create_context (CoglPangoFontMap *font_map);
 COGL_EXPORT void
 cogl_pango_font_map_set_resolution (CoglPangoFontMap *font_map,
                                     double dpi);
-
-/**
- * cogl_pango_font_map_clear_glyph_cache:
- * @font_map: a #CoglPangoFontMap
- *
- * Clears the glyph cache for @font_map.
- */
-COGL_EXPORT void
-cogl_pango_font_map_clear_glyph_cache (CoglPangoFontMap *font_map);
 
 /**
  * cogl_pango_ensure_glyph_cache_for_layout:
@@ -138,18 +132,6 @@ cogl_pango_font_map_set_use_mipmapping (CoglPangoFontMap *font_map,
                                         gboolean value);
 
 /**
- * cogl_pango_font_map_get_use_mipmapping:
- * @font_map: a #CoglPangoFontMap
- *
- * Retrieves whether the [class@CoglPango.Renderer] used by @font_map will use
- * mipmapping when rendering the glyphs.
- *
- * Return value: %TRUE if mipmapping is used, %FALSE otherwise.
- */
-COGL_EXPORT gboolean
-cogl_pango_font_map_get_use_mipmapping (CoglPangoFontMap *font_map);
-
-/**
  * cogl_pango_font_map_get_renderer:
  * @font_map: a #CoglPangoFontMap
  *
@@ -172,11 +154,13 @@ cogl_pango_font_map_get_renderer (CoglPangoFontMap *font_map);
  * @y) within the `framebuffer`'s current model-view coordinate space.
  */
 COGL_EXPORT void
-cogl_pango_show_layout (CoglFramebuffer *framebuffer,
-                        PangoLayout *layout,
-                        float x,
-                        float y,
-                        const CoglColor *color);
+cogl_pango_show_layout (CoglFramebuffer        *framebuffer,
+                        PangoLayout            *layout,
+                        float                   x,
+                        float                   y,
+                        const CoglColor        *color,
+                        CoglPangoPipelineSetup  pipeline_setup,
+                        gpointer                pipeline_setup_userdata);
 
 /**
  * cogl_pango_show_layout_line: (skip)
@@ -190,11 +174,13 @@ cogl_pango_show_layout (CoglFramebuffer *framebuffer,
  * @y) within the `framebuffer`'s current model-view coordinate space.
  */
 COGL_EXPORT void
-cogl_pango_show_layout_line (CoglFramebuffer *framebuffer,
-                             PangoLayoutLine *line,
-                             float x,
-                             float y,
-                             const CoglColor *color);
+cogl_pango_show_layout_line (CoglFramebuffer        *framebuffer,
+                             PangoLayoutLine        *line,
+                             float                   x,
+                             float                   y,
+                             const CoglColor        *color,
+                             CoglPangoPipelineSetup  pipeline_setup,
+                             gpointer                pipeline_setup_userdata);
 
 
 #define COGL_PANGO_TYPE_RENDERER                (cogl_pango_renderer_get_type ())

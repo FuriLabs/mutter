@@ -34,6 +34,7 @@
 #include "cogl/cogl-context-private.h"
 #include "cogl/cogl-framebuffer-private.h"
 #include "cogl/cogl-framebuffer.h"
+#include "cogl/cogl-indices-private.h"
 #include "cogl/cogl-offscreen-private.h"
 #include "cogl/cogl-texture-private.h"
 #include "cogl/driver/gl/cogl-util-gl-private.h"
@@ -92,10 +93,10 @@ cogl_gl_framebuffer_flush_viewport_state (CoglGlFramebuffer *gl_framebuffer)
              viewport_height);
 
   GE (cogl_framebuffer_get_context (framebuffer),
-      glViewport (viewport_x,
-                  gl_viewport_y,
-                  viewport_width,
-                  viewport_height));
+      glViewport ((GLint) viewport_x,
+                  (GLint) gl_viewport_y,
+                  (GLsizei) viewport_width,
+                  (GLsizei) viewport_height));
 }
 
 static void
@@ -190,15 +191,6 @@ cogl_gl_framebuffer_flush_front_face_winding_state (CoglGlFramebuffer *gl_frameb
   context->current_pipeline_age--;
 }
 
-static void
-cogl_gl_framebuffer_flush_stereo_mode_state (CoglGlFramebuffer *gl_framebuffer)
-{
-  CoglGlFramebufferClass *klass =
-    COGL_GL_FRAMEBUFFER_GET_CLASS (gl_framebuffer);
-
-  klass->flush_stereo_mode_state (gl_framebuffer);
-}
-
 void
 cogl_gl_framebuffer_flush_state_differences (CoglGlFramebuffer *gl_framebuffer,
                                              unsigned long      differences)
@@ -234,9 +226,6 @@ cogl_gl_framebuffer_flush_state_differences (CoglGlFramebuffer *gl_framebuffer,
         case COGL_FRAMEBUFFER_STATE_INDEX_DEPTH_WRITE:
           /* Nothing to do for depth write state change; the state will always
            * be taken into account when flushing the pipeline's depth state. */
-          break;
-        case COGL_FRAMEBUFFER_STATE_INDEX_STEREO_MODE:
-          cogl_gl_framebuffer_flush_stereo_mode_state (gl_framebuffer);
           break;
         default:
           g_warn_if_reached ();
@@ -336,21 +325,6 @@ cogl_gl_framebuffer_draw_attributes (CoglFramebufferDriver  *driver,
       glDrawArrays ((GLenum)mode, first_vertex, n_vertices));
 }
 
-static size_t
-sizeof_index_type (CoglIndicesType type)
-{
-  switch (type)
-    {
-    case COGL_INDICES_TYPE_UNSIGNED_BYTE:
-      return 1;
-    case COGL_INDICES_TYPE_UNSIGNED_SHORT:
-      return 2;
-    case COGL_INDICES_TYPE_UNSIGNED_INT:
-      return 4;
-    }
-  g_return_val_if_reached (0);
-}
-
 static void
 cogl_gl_framebuffer_draw_indexed_attributes (CoglFramebufferDriver  *driver,
                                              CoglPipeline           *pipeline,
@@ -383,7 +357,7 @@ cogl_gl_framebuffer_draw_indexed_attributes (CoglFramebufferDriver  *driver,
   base = _cogl_buffer_gl_bind (buffer,
                                COGL_BUFFER_BIND_TARGET_INDEX_BUFFER, NULL);
   buffer_offset = cogl_indices_get_offset (indices);
-  index_size = sizeof_index_type (cogl_indices_get_indices_type (indices));
+  index_size = cogl_indices_type_get_size (cogl_indices_get_indices_type (indices));
 
   switch (cogl_indices_get_indices_type (indices))
     {
@@ -484,7 +458,7 @@ cogl_gl_framebuffer_read_pixels_into_bitmap (CoglFramebufferDriver  *driver,
       uint8_t *tmp_data;
       gboolean succeeded;
 
-      if (COGL_PIXEL_FORMAT_CAN_HAVE_PREMULT (read_format))
+      if (_cogl_pixel_format_can_have_premult (read_format))
         {
           read_format = ((read_format & ~COGL_PREMULT_BIT) |
                          (internal_format & COGL_PREMULT_BIT));
@@ -548,7 +522,7 @@ cogl_gl_framebuffer_read_pixels_into_bitmap (CoglFramebufferDriver  *driver,
       /* We match the premultiplied state of the target buffer to the
        * premultiplied state of the framebuffer so that it will get
        * converted to the right format below */
-      if (COGL_PIXEL_FORMAT_CAN_HAVE_PREMULT (format))
+      if (_cogl_pixel_format_can_have_premult (format))
         bmp_format = ((format & ~COGL_PREMULT_BIT) |
                       (internal_format & COGL_PREMULT_BIT));
       else

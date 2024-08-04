@@ -65,7 +65,6 @@ ensure_bits_initialized (CoglGlFramebufferFbo *gl_framebuffer_fbo)
     cogl_framebuffer_driver_get_framebuffer (driver);
   CoglContext *ctx = cogl_framebuffer_get_context (framebuffer);
   CoglFramebufferBits *bits = &gl_framebuffer_fbo->bits;
-  g_autoptr (GError) error = NULL;
 
   if (!gl_framebuffer_fbo->dirty_bitmasks)
     return TRUE;
@@ -205,24 +204,6 @@ cogl_gl_framebuffer_fbo_bind (CoglGlFramebuffer *gl_framebuffer,
   CoglContext *ctx = cogl_framebuffer_get_context (framebuffer);
 
   GE (ctx, glBindFramebuffer (target, gl_framebuffer_fbo->gl_fbo.fbo_handle));
-}
-
-static void
-cogl_gl_framebuffer_fbo_flush_stereo_mode_state (CoglGlFramebuffer *gl_framebuffer)
-{
-  CoglFramebufferDriver *driver = COGL_FRAMEBUFFER_DRIVER (gl_framebuffer);
-  CoglFramebuffer *framebuffer =
-    cogl_framebuffer_driver_get_framebuffer (driver);
-
-  switch (cogl_framebuffer_get_stereo_mode (framebuffer))
-    {
-    case COGL_STEREO_BOTH:
-      break;
-    case COGL_STEREO_LEFT:
-    case COGL_STEREO_RIGHT:
-      g_warn_if_reached ();
-      break;
-    }
 }
 
 static GList *
@@ -647,6 +628,4 @@ cogl_gl_framebuffer_fbo_class_init (CoglGlFramebufferFboClass *klass)
   driver_class->discard_buffers = cogl_gl_framebuffer_fbo_discard_buffers;
 
   gl_framebuffer_class->bind = cogl_gl_framebuffer_fbo_bind;
-  gl_framebuffer_class->flush_stereo_mode_state =
-    cogl_gl_framebuffer_fbo_flush_stereo_mode_state;
 }

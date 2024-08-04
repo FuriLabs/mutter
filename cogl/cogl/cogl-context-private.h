@@ -45,12 +45,9 @@
 #include "cogl/cogl-pipeline-cache.h"
 #include "cogl/cogl-texture-2d.h"
 #include "cogl/cogl-sampler-cache-private.h"
-#include "cogl/cogl-gl-header.h"
 #include "cogl/cogl-framebuffer-private.h"
 #include "cogl/cogl-offscreen-private.h"
 #include "cogl/cogl-onscreen-private.h"
-#include "cogl/cogl-fence-private.h"
-#include "cogl/cogl-poll-private.h"
 #include "cogl/cogl-private.h"
 #include "cogl/winsys/cogl-winsys-private.h"
 
@@ -254,9 +251,6 @@ struct _CoglContext
   GHashTable *uniform_name_hash;
   int n_uniform_names;
 
-  CoglPollSource *fences_poll_source;
-  CoglList fences;
-
   GHashTable *named_pipelines;
 
   /* This defines a list of function pointers that Cogl uses from
@@ -281,9 +275,6 @@ struct _CoglContext
 #undef COGL_EXT_END
 };
 
-COGL_EXPORT CoglContext *
-_cogl_context_get_default (void);
-
 const CoglWinsysVtable *
 _cogl_context_get_winsys (CoglContext *context);
 
@@ -296,13 +287,6 @@ _cogl_context_get_winsys (CoglContext *context);
 gboolean
 _cogl_context_update_features (CoglContext *context,
                                GError **error);
-
-/* Obtains the context and returns retval if NULL */
-#define _COGL_GET_CONTEXT(ctxvar, retval) \
-CoglContext *ctxvar = _cogl_context_get_default (); \
-if (ctxvar == NULL) return retval;
-
-#define NO_RETVAL
 
 void
 _cogl_context_set_current_projection_entry (CoglContext *context,

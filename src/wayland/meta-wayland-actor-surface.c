@@ -49,14 +49,6 @@ G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (MetaWaylandActorSurface,
                                      META_TYPE_WAYLAND_SURFACE_ROLE)
 
 static void
-meta_wayland_actor_surface_constructed (GObject *object)
-{
-  G_OBJECT_CLASS (meta_wayland_actor_surface_parent_class)->constructed (object);
-
-  meta_wayland_actor_surface_reset_actor (META_WAYLAND_ACTOR_SURFACE (object));
-}
-
-static void
 clear_surface_actor (MetaWaylandActorSurface *actor_surface)
 {
   MetaWaylandActorSurfacePrivate *priv =
@@ -106,6 +98,8 @@ meta_wayland_actor_surface_assigned (MetaWaylandSurfaceRole *surface_role)
     meta_wayland_actor_surface_get_instance_private (META_WAYLAND_ACTOR_SURFACE (surface_role));
   MetaWaylandSurface *surface =
     meta_wayland_surface_role_get_surface (surface_role);
+
+  meta_wayland_actor_surface_reset_actor (META_WAYLAND_ACTOR_SURFACE (surface_role));
 
   if (wl_list_empty (&surface->unassigned.pending_frame_callback_list))
     return;
@@ -189,13 +183,18 @@ meta_wayland_actor_surface_real_sync_actor_state (MetaWaylandActorSurface *actor
     {
       CoglSnippet *snippet;
       gboolean is_y_inverted;
+      ClutterColorState *color_state;
       MetaMultiTexture *texture;
 
       snippet = meta_wayland_buffer_create_snippet (buffer);
       is_y_inverted = meta_wayland_buffer_is_y_inverted (buffer);
 
+      color_state =
+        clutter_actor_get_color_state (CLUTTER_ACTOR (surface_actor));
+
       texture = meta_wayland_surface_get_texture (surface);
       meta_shaped_texture_set_texture (stex, texture);
+      meta_shaped_texture_set_color_state (stex, color_state);
       meta_shaped_texture_set_snippet (stex, snippet);
       meta_shaped_texture_set_is_y_inverted (stex, is_y_inverted);
       meta_shaped_texture_set_buffer_scale (stex, surface->applied_state.scale);
@@ -277,10 +276,10 @@ meta_wayland_actor_surface_real_sync_actor_state (MetaWaylandActorSurface *actor
   META_WAYLAND_SURFACE_FOREACH_SUBSURFACE (&surface->applied_state,
                                            subsurface_surface)
     {
-      MetaWaylandActorSurface *actor_surface;
+      MetaWaylandActorSurface *actor_subsurface;
 
-      actor_surface = META_WAYLAND_ACTOR_SURFACE (subsurface_surface->role);
-      meta_wayland_actor_surface_sync_actor_state (actor_surface);
+      actor_subsurface = META_WAYLAND_ACTOR_SURFACE (subsurface_surface->role);
+      meta_wayland_actor_surface_sync_actor_state (actor_subsurface);
     }
 }
 
@@ -388,7 +387,6 @@ meta_wayland_actor_surface_class_init (MetaWaylandActorSurfaceClass *klass)
     META_WAYLAND_SURFACE_ROLE_CLASS (klass);
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
-  object_class->constructed = meta_wayland_actor_surface_constructed;
   object_class->dispose = meta_wayland_actor_surface_dispose;
 
   surface_role_class->assigned = meta_wayland_actor_surface_assigned;
@@ -429,11 +427,11 @@ meta_wayland_actor_surface_reset_actor (MetaWaylandActorSurface *actor_surface)
   META_WAYLAND_SURFACE_FOREACH_SUBSURFACE (&surface->applied_state,
                                            subsurface_surface)
     {
-      MetaWaylandActorSurface *actor_surface;
+      MetaWaylandActorSurface *actor_subsurface;
 
-      actor_surface = META_WAYLAND_ACTOR_SURFACE (subsurface_surface->role);
-      meta_wayland_actor_surface_reset_actor (actor_surface);
-      meta_wayland_actor_surface_sync_actor_state (actor_surface);
+      actor_subsurface = META_WAYLAND_ACTOR_SURFACE (subsurface_surface->role);
+      meta_wayland_actor_surface_reset_actor (actor_subsurface);
+      meta_wayland_actor_surface_sync_actor_state (actor_subsurface);
     }
 
   clear_surface_actor (actor_surface);

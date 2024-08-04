@@ -47,7 +47,6 @@
 #include "core/boxes-private.h"
 #include "core/display-private.h"
 #include "core/events.h"
-#include "core/frame.h"
 #include "core/keybindings-private.h"
 #include "core/meta-clipboard-manager.h"
 #include "core/meta-workspace-manager-private.h"
@@ -69,7 +68,7 @@
 #include "backends/x11/cm/meta-backend-x11-cm.h"
 #include "backends/x11/nested/meta-backend-x11-nested.h"
 #include "compositor/meta-compositor-x11.h"
-#include "meta/group.h"
+#include "meta/meta-x11-group.h"
 #include "x11/meta-startup-notification-x11.h"
 #include "x11/meta-x11-display-private.h"
 #include "x11/window-x11.h"
@@ -157,6 +156,7 @@ enum
   X11_DISPLAY_CLOSING,
   OVERLAY_KEY,
   ACCELERATOR_ACTIVATED,
+  ACCELERATOR_DEACTIVATED,
   MODIFIERS_ACCELERATOR_ACTIVATED,
   FOCUS_WINDOW,
   WINDOW_CREATED,
@@ -331,6 +331,14 @@ meta_display_class_init (MetaDisplayClass *klass)
                   NULL, NULL, NULL,
                   G_TYPE_NONE, 3, G_TYPE_UINT, CLUTTER_TYPE_INPUT_DEVICE, G_TYPE_UINT);
 
+  display_signals[ACCELERATOR_DEACTIVATED] =
+    g_signal_new ("accelerator-deactivated",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_LAST,
+                  0,
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE, 3, G_TYPE_UINT, CLUTTER_TYPE_INPUT_DEVICE, G_TYPE_UINT);
+
   /**
    * MetaDisplay::modifiers-accelerator-activated:
    * @display: the #MetaDisplay instance
@@ -409,7 +417,7 @@ meta_display_class_init (MetaDisplayClass *klass)
    * @message: (allow-none): The message to display, or %NULL
    *  to clear a previous restart message.
    *
-   * The signal will be emitted to indicate that the compositor 
+   * The signal will be emitted to indicate that the compositor
    * should show a message during restart.
    *
    * This is emitted when [func@Meta.restart] is called, either by Mutter
@@ -656,7 +664,7 @@ create_compositor (MetaDisplay *display)
   if (META_IS_BACKEND_NATIVE (backend))
     return META_COMPOSITOR (meta_compositor_native_new (display, backend));
 #endif
-#ifdef HAVE_XWAYLAND
+#if defined(HAVE_XWAYLAND) && defined(HAVE_X11)
   if (META_IS_BACKEND_X11_NESTED (backend))
     return META_COMPOSITOR (meta_compositor_server_new (display, backend));
 #endif
@@ -793,7 +801,7 @@ disable_input_capture (MetaInputCapture *input_capture,
   priv->enable_input_capture = FALSE;
 }
 
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_X11
 static gboolean
 meta_display_init_x11_display (MetaDisplay  *display,
                                GError      **error)
@@ -852,7 +860,6 @@ meta_display_init_x11_finish (MetaDisplay   *display,
   return TRUE;
 }
 
-#ifdef HAVE_XWAYLAND
 static void
 on_xserver_started (MetaXWaylandManager *manager,
                     GAsyncResult        *result,
@@ -881,7 +888,6 @@ on_xserver_started (MetaXWaylandManager *manager,
       g_task_return_boolean (task, TRUE);
     }
 }
-#endif /* HAVE_XWAYLAND */
 
 void
 meta_display_init_x11 (MetaDisplay         *display,
@@ -890,21 +896,17 @@ meta_display_init_x11 (MetaDisplay         *display,
                        gpointer             user_data)
 {
   g_autoptr (GTask) task = NULL;
-#ifdef HAVE_XWAYLAND
   MetaWaylandCompositor *compositor;
-#endif
 
   task = g_task_new (display, cancellable, callback, user_data);
   g_task_set_source_tag (task, meta_display_init_x11);
 
-#ifdef HAVE_XWAYLAND
   compositor = wayland_compositor_from_display (display);
 
   meta_xwayland_start_xserver (&compositor->xwayland_manager,
                                cancellable,
                                (GAsyncReadyCallback) on_xserver_started,
                                g_steal_pointer (&task));
-#endif
 }
 
 static void
@@ -919,6 +921,7 @@ on_mandatory_x11_initialized (MetaDisplay  *display,
 }
 #endif /* HAVE_XWAYLAND */
 
+#ifdef HAVE_X11_CLIENT
 void
 meta_display_shutdown_x11 (MetaDisplay *display)
 {
@@ -931,6 +934,7 @@ meta_display_shutdown_x11 (MetaDisplay *display)
   g_clear_object (&display->x11_display);
   meta_stack_thaw (display->stack);
 }
+#endif
 
 MetaDisplay *
 meta_display_new (MetaContext  *context,
@@ -958,7 +962,9 @@ meta_display_new (MetaContext  *context,
   display->autoraise_window = NULL;
   display->focus_window = NULL;
   display->workspace_manager = NULL;
+#ifdef HAVE_X11_CLIENT
   display->x11_display = NULL;
+#endif
 
   display->current_cursor = -1; /* invalid/unset */
   display->check_fullscreen_later = 0;
@@ -987,6 +993,7 @@ meta_display_new (MetaContext  *context,
                            display, G_CONNECT_SWAPPED);
 
   display->pad_action_mapper = meta_pad_action_mapper_new (monitor_manager);
+  display->tool_action_mapper = meta_tool_action_mapper_new (backend);
 
   input_capture = meta_backend_get_input_capture (backend);
   meta_input_capture_set_event_router (input_capture,
@@ -1240,7 +1247,9 @@ meta_display_close (MetaDisplay *display,
                    meta_stack_tracker_free);
 
   g_clear_pointer (&display->compositor, meta_compositor_destroy);
+#ifdef HAVE_X11_CLIENT
   meta_display_shutdown_x11 (display);
+#endif
   g_clear_object (&display->stack);
 
   /* Must be after all calls to meta_window_unmanage() since they
@@ -1692,7 +1701,7 @@ root_cursor_prepare_at (MetaCursorSpriteXcursor *sprite_xcursor,
           meta_cursor_sprite_xcursor_set_theme_scale (sprite_xcursor,
                                                       (int) ceiled_scale);
           meta_cursor_sprite_set_texture_scale (cursor_sprite,
-                                                1.0 / ceiled_scale);
+                                                1.0f / ceiled_scale);
         }
     }
   else
@@ -1708,8 +1717,8 @@ root_cursor_prepare_at (MetaCursorSpriteXcursor *sprite_xcursor,
       if (logical_monitor)
         {
           meta_cursor_sprite_xcursor_set_theme_scale (sprite_xcursor,
-                                                      logical_monitor->scale);
-          meta_cursor_sprite_set_texture_scale (cursor_sprite, 1.0);
+                                                      (int) logical_monitor->scale);
+          meta_cursor_sprite_set_texture_scale (cursor_sprite, 1.0f);
         }
     }
 }
@@ -1866,21 +1875,21 @@ meta_display_ping_window (MetaWindow *window,
 
   for (l = display->pending_pings; l; l = l->next)
     {
-      MetaPingData *ping_data = l->data;
+      MetaPingData *pending_ping_data = l->data;
 
-      if (window == ping_data->window)
+      if (window == pending_ping_data->window)
         {
           meta_topic (META_DEBUG_PING,
                       "Window %s already is being pinged with serial %u",
-                      window->desc, ping_data->serial);
+                      window->desc, pending_ping_data->serial);
           return;
         }
 
-      if (serial == ping_data->serial)
+      if (serial == pending_ping_data->serial)
         {
           meta_warning ("Ping serial %u was reused for window %s, "
                         "previous use was for window %s.",
-                        serial, window->desc, ping_data->window->desc);
+                        serial, window->desc, pending_ping_data->window->desc);
           return;
         }
     }
@@ -2495,6 +2504,17 @@ meta_display_accelerator_activate (MetaDisplay           *display,
                  clutter_event_get_time ((const ClutterEvent *) event));
 }
 
+void
+meta_display_accelerator_deactivate (MetaDisplay           *display,
+                                     guint                  action,
+                                     const ClutterKeyEvent *event)
+{
+  g_signal_emit (display, display_signals[ACCELERATOR_DEACTIVATED], 0,
+                 action,
+                 clutter_event_get_source_device ((const ClutterEvent *) event),
+                 clutter_event_get_time ((const ClutterEvent *) event));
+}
+
 gboolean
 meta_display_modifiers_accelerator_activate (MetaDisplay *display)
 {
@@ -2529,17 +2549,6 @@ MetaCompositor *
 meta_display_get_compositor (MetaDisplay *display)
 {
   return display->compositor;
-}
-
-/**
- * meta_display_get_x11_display: (skip)
- * @display: a #MetaDisplay
- *
- */
-MetaX11Display *
-meta_display_get_x11_display (MetaDisplay *display)
-{
-  return display->x11_display;
 }
 
 /**
@@ -3205,9 +3214,9 @@ check_fullscreen_func (gpointer data)
     {
       /* DOCK window stacking depends on the monitor's fullscreen
          status so we need to trigger a re-layering. */
-      MetaWindow *window = meta_stack_get_top (display->stack);
-      if (window)
-        meta_stack_update_layer (display->stack, window);
+      MetaWindow *top_window = meta_stack_get_top (display->stack);
+      if (top_window)
+        meta_stack_update_layer (display->stack, top_window);
 
       g_signal_emit (display, display_signals[IN_FULLSCREEN_CHANGED], 0, NULL);
     }
@@ -3825,8 +3834,8 @@ focus_on_pointer_rest_callback (gpointer data)
   if ((int) point.x != focus_data->pointer_x ||
       (int) point.y != focus_data->pointer_y)
     {
-      focus_data->pointer_x = point.x;
-      focus_data->pointer_y = point.y;
+      focus_data->pointer_x = (int) point.x;
+      focus_data->pointer_y = (int) point.y;
       return G_SOURCE_CONTINUE;
     }
 

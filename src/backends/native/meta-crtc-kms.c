@@ -206,6 +206,15 @@ meta_crtc_kms_set_gamma_lut (MetaCrtc           *crtc,
   clutter_stage_schedule_update (CLUTTER_STAGE (stage));
 }
 
+static gboolean
+meta_crtc_kms_is_leased (MetaCrtc *crtc)
+{
+  MetaCrtcKms *crtc_kms = META_CRTC_KMS (crtc);
+  MetaKmsCrtc *kms_crtc = meta_crtc_kms_get_kms_crtc (crtc_kms);
+
+  return meta_kms_crtc_is_leased (kms_crtc);
+}
+
 typedef struct _CrtcKmsAssignment
 {
   MetaKmsPlane *primary_plane;
@@ -247,6 +256,25 @@ is_plane_assigned (MetaKmsPlane     *plane,
   return FALSE;
 }
 
+static gboolean
+is_plane_leased (MetaKmsDevice *kms_device,
+                 MetaKmsPlane  *kms_plane)
+{
+  GList *l;
+
+  for (l = meta_kms_device_get_crtcs (kms_device); l; l = l->next)
+    {
+      MetaKmsCrtc *kms_crtc = l->data;
+      MetaCrtcKms *crtc_kms = meta_crtc_kms_from_kms_crtc (kms_crtc);
+
+      if (meta_kms_crtc_is_leased (kms_crtc) &&
+          crtc_kms->assigned_primary_plane == kms_plane)
+        return TRUE;
+    }
+
+  return FALSE;
+}
+
 static MetaKmsPlane *
 find_unassigned_plane (MetaCrtcKms      *crtc_kms,
                        MetaKmsPlaneType  kms_plane_type,
@@ -268,6 +296,9 @@ find_unassigned_plane (MetaCrtcKms      *crtc_kms,
 
       if (is_plane_assigned (kms_plane, kms_plane_type,
                              crtc_assignments))
+        continue;
+
+      if (is_plane_leased (kms_device, kms_plane))
         continue;
 
       return kms_plane;
@@ -324,6 +355,27 @@ meta_crtc_kms_set_config (MetaCrtc             *crtc,
 
   crtc_kms->assigned_primary_plane = kms_assignment->primary_plane;
   crtc_kms->assigned_cursor_plane = kms_assignment->cursor_plane;
+}
+
+void
+meta_crtc_kms_assign_planes (MetaCrtcKms  *crtc_kms,
+                             MetaKmsPlane *primary_plane,
+                             MetaKmsPlane *cursor_plane)
+{
+  crtc_kms->assigned_primary_plane = primary_plane;
+  crtc_kms->assigned_cursor_plane = cursor_plane;
+}
+
+static void
+meta_crtc_kms_unset_config (MetaCrtc *crtc)
+{
+  MetaCrtcKms *crtc_kms = META_CRTC_KMS (crtc);
+
+  if (meta_crtc_kms_is_leased (crtc))
+    return;
+
+  crtc_kms->assigned_primary_plane = NULL;
+  crtc_kms->assigned_cursor_plane = NULL;
 }
 
 static gboolean
@@ -476,6 +528,8 @@ meta_crtc_kms_class_init (MetaCrtcKmsClass *klass)
   crtc_class->set_gamma_lut = meta_crtc_kms_set_gamma_lut;
   crtc_class->assign_extra = meta_crtc_kms_assign_extra;
   crtc_class->set_config = meta_crtc_kms_set_config;
+  crtc_class->unset_config = meta_crtc_kms_unset_config;
+  crtc_class->is_leased = meta_crtc_kms_is_leased;
 
   crtc_native_class->is_transform_handled = meta_crtc_kms_is_transform_handled;
   crtc_native_class->is_hw_cursor_supported = meta_crtc_kms_is_hw_cursor_supported;

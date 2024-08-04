@@ -42,6 +42,8 @@
 
 typedef struct _MetaWindowQueue MetaWindowQueue;
 
+#define META_WINDOW_TITLEBAR_HEIGHT 50
+
 typedef enum
 {
   META_CLIENT_TYPE_UNKNOWN = 0,
@@ -70,11 +72,17 @@ typedef enum
   META_MOVE_RESIZE_CONSTRAIN = 1 << 13,
 } MetaMoveResizeFlags;
 
+typedef enum _MetaPlaceFlag
+{
+  META_PLACE_FLAG_NONE = 0,
+  META_PLACE_FLAG_FORCE_MOVE = 1 << 0,
+  META_PLACE_FLAG_DENIED_FOCUS_AND_NOT_TRANSIENT = 1 << 1,
+} MetaPlaceFlag;
+
 typedef enum
 {
   META_MOVE_RESIZE_RESULT_MOVED               = 1 << 0,
   META_MOVE_RESIZE_RESULT_RESIZED             = 1 << 1,
-  META_MOVE_RESIZE_RESULT_FRAME_SHAPE_CHANGED = 1 << 2,
   META_MOVE_RESIZE_RESULT_STATE_CHANGED       = 1 << 3,
 } MetaMoveResizeResultFlags;
 
@@ -215,8 +223,6 @@ struct _MetaWindow
   MetaLogicalMonitor *highest_scale_monitor;
   MetaWorkspace *workspace;
   MetaWindowClientType client_type;
-  /* may be NULL! not all windows get decorated */
-  MetaFrame *frame;
   int depth;
   char *desc; /* used in debug spew */
   char *title;
@@ -263,7 +269,7 @@ struct _MetaWindow
 
   double tile_hfraction;
 
-  uint64_t preferred_output_winsys_id;
+  MetaLogicalMonitorId *preferred_logical_monitor;
 
   /* Area to cover when in fullscreen mode.  If _NET_WM_FULLSCREEN_MONITORS has
    * been overridden (via a client message), the window will cover the union of
@@ -275,9 +281,6 @@ struct _MetaWindow
     MetaLogicalMonitor *left;
     MetaLogicalMonitor *right;
   } fullscreen_monitors;
-
-  /* if non-NULL, the bounds of the window frame */
-  MtkRegion *frame_bounds;
 
   /* _NET_WM_WINDOW_OPACITY rescaled to 0xFF */
   guint8 opacity;
@@ -302,7 +305,6 @@ struct _MetaWindow
      know about for this window */
   guint32 net_wm_user_time;
 
-  gboolean has_custom_frame_extents;
   MetaFrameBorder custom_frame_extents;
 
   /* The rectangles here are in "frame rect" coordinates. See the
@@ -520,9 +522,6 @@ struct _MetaWindow
   /* Have we placed this window? */
   guint placed : 1;
 
-  /* Is this not a transient of the focus window which is being denied focus? */
-  guint denied_focus_and_not_transient : 1;
-
   /* Has this window not ever been shown yet? */
   guint showing_for_first_time : 1;
 
@@ -617,9 +616,6 @@ struct _MetaWindowClass
 
   gboolean (*set_transient_for) (MetaWindow *window,
                                  MetaWindow *parent);
-
-  void (* map)   (MetaWindow *window);
-  void (* unmap) (MetaWindow *window);
 };
 
 /* These differ from window->has_foo_func in that they consider
@@ -691,24 +687,6 @@ META_EXPORT_TEST
 gboolean    meta_window_should_show (MetaWindow  *window);
 
 void        meta_window_update_struts      (MetaWindow  *window);
-
-/* gets position we need to set to stay in current position,
- * assuming position will be gravity-compensated. i.e.
- * this is the position a client would send in a configure
- * request.
- */
-void        meta_window_get_gravity_position (MetaWindow  *window,
-                                              MetaGravity  gravity,
-                                              int         *x,
-                                              int         *y);
-/* Get geometry for saving in the session; x/y are gravity
- * position, and w/h are in resize inc above the base size.
- */
-void        meta_window_get_session_geometry (MetaWindow  *window,
-                                              int         *x,
-                                              int         *y,
-                                              int         *width,
-                                              int         *height);
 
 gboolean    meta_window_geometry_contains_rect (MetaWindow   *window,
                                                 MtkRectangle *rect);
@@ -803,10 +781,8 @@ void meta_window_set_opacity              (MetaWindow *window,
 gboolean meta_window_handle_ungrabbed_event (MetaWindow         *window,
                                              const ClutterEvent *event);
 
-void meta_window_get_client_area_rect (const MetaWindow *window,
-                                       MtkRectangle     *rect);
-void meta_window_get_titlebar_rect (MetaWindow   *window,
-                                    MtkRectangle *titlebar_rect);
+void meta_window_get_client_area_rect (MetaWindow   *window,
+                                       MtkRectangle *rect);
 
 void meta_window_activate_full (MetaWindow     *window,
                                 guint32         timestamp,
@@ -818,6 +794,7 @@ MetaLogicalMonitor * meta_window_find_monitor_from_frame_rect (MetaWindow *windo
 
 MetaLogicalMonitor * meta_window_find_monitor_from_id (MetaWindow *window);
 
+META_EXPORT_TEST
 MetaLogicalMonitor * meta_window_get_main_logical_monitor (MetaWindow *window);
 MetaLogicalMonitor * meta_window_get_highest_scale_monitor (MetaWindow *window);
 void meta_window_update_monitor (MetaWindow                   *window,
@@ -828,8 +805,13 @@ void meta_window_set_urgent (MetaWindow *window,
 
 void meta_window_move_resize_internal (MetaWindow          *window,
                                        MetaMoveResizeFlags  flags,
+                                       MetaPlaceFlag        place_flags,
                                        MetaGravity          gravity,
                                        MtkRectangle         frame_rect);
+
+void meta_window_move_resize (MetaWindow          *window,
+                              MetaMoveResizeFlags  flags,
+                              MtkRectangle         frame_rect);
 
 void meta_window_grab_op_began (MetaWindow *window, MetaGrabOp op);
 void meta_window_grab_op_ended (MetaWindow *window, MetaGrabOp op);
@@ -845,8 +827,8 @@ void meta_window_emit_size_changed (MetaWindow *window);
 
 MetaPlacementRule *meta_window_get_placement_rule (MetaWindow *window);
 
-void meta_window_force_placement (MetaWindow *window,
-                                  gboolean    force_move);
+void meta_window_force_placement (MetaWindow    *window,
+                                  MetaPlaceFlag  flags);
 
 void meta_window_force_restore_shortcuts (MetaWindow         *window,
                                           ClutterInputDevice *source);
@@ -887,3 +869,18 @@ int meta_get_window_suspend_timeout_s (void);
 
 gboolean
 meta_window_should_attach_to_parent (MetaWindow *window);
+
+/**
+ * meta_window_set_normal_hints:
+ * @window:   The window to set the size hints on.
+ * @hints:    Either some size hints, or NULL for default.
+ *
+ * Sets the size hints for a window.  This happens when a
+ * WM_NORMAL_HINTS property is set on a window, but it is public
+ * because the size hints are set to defaults when a window is
+ * created.  See
+ * http://tronche.com/gui/x/icccm/sec-4.html#WM_NORMAL_HINTS
+ * for the X details.
+ */
+void meta_window_set_normal_hints (MetaWindow    *window,
+                                   MetaSizeHints *hints);

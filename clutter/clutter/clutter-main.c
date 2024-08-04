@@ -32,7 +32,6 @@
 #include "clutter/clutter-event-private.h"
 #include "clutter/clutter-input-device-private.h"
 #include "clutter/clutter-input-pointer-a11y-private.h"
-#include "clutter/clutter-graphene.h"
 #include "clutter/clutter-main.h"
 #include "clutter/clutter-mutter.h"
 #include "clutter/clutter-private.h"
@@ -53,6 +52,8 @@ typedef struct
   gpointer data;
   GDestroyNotify notify;
 } ClutterThreadsDispatch;
+
+G_DEFINE_QUARK (clutter_pipeline_capability, clutter_pipeline_capability)
 
 /* main context */
 static ClutterContext *ClutterCntx       = NULL;

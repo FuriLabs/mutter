@@ -56,24 +56,8 @@ G_BEGIN_DECLS
 #define COGL_PRIVATE(x) private_member_ ## x
 #endif
 
-#ifndef __GI_SCANNER__
-/* To help catch accidental changes to public structs that should
- * be stack allocated we use this macro to compile time assert that
- * a struct size is as expected.
- */
-#define COGL_STRUCT_SIZE_ASSERT(TYPE, SIZE) \
-typedef struct { \
-          char compile_time_assert_ ## TYPE ## _size[ \
-              (sizeof (TYPE) == (SIZE)) ? 1 : -1]; \
-        } _ ## TYPE ## SizeCheck
-#else
-#define COGL_STRUCT_SIZE_ASSERT(TYPE, SIZE)
-#endif
-
+typedef struct _CoglColor CoglColor;
 typedef struct _CoglFramebuffer CoglFramebuffer;
-
-typedef struct _CoglColor               CoglColor;
-typedef struct _CoglTextureVertex       CoglTextureVertex;
 
 /**
  * CoglDmaBufHandle: (free-func cogl_dma_buf_handle_free)
@@ -82,88 +66,6 @@ typedef struct _CoglTextureVertex       CoglTextureVertex;
  * with cogl_dma_buf_handle_free().
  */
 typedef struct _CoglDmaBufHandle CoglDmaBufHandle;
-
-/* Enum declarations */
-
-#define COGL_A_BIT              (1 << 4)
-#define COGL_BGR_BIT            (1 << 5)
-#define COGL_AFIRST_BIT         (1 << 6)
-#define COGL_PREMULT_BIT        (1 << 7)
-#define COGL_DEPTH_BIT          (1 << 8)
-#define COGL_STENCIL_BIT        (1 << 9)
-
-/**
- * CoglBufferTarget:
- * @COGL_WINDOW_BUFFER: FIXME
- * @COGL_OFFSCREEN_BUFFER: FIXME
- *
- * Target flags for FBOs.
- */
-typedef enum
-{
-  COGL_WINDOW_BUFFER      = (1 << 1),
-  COGL_OFFSCREEN_BUFFER   = (1 << 2)
-} CoglBufferTarget;
-
-struct _CoglColor
-{
-  /*< private >*/
-  uint8_t COGL_PRIVATE (red);
-  uint8_t COGL_PRIVATE (green);
-  uint8_t COGL_PRIVATE (blue);
-
-  uint8_t COGL_PRIVATE (alpha);
-};
-COGL_STRUCT_SIZE_ASSERT (CoglColor, 4);
-
-/**
- * CoglTextureVertex:
- * @x: Model x-coordinate
- * @y: Model y-coordinate
- * @z: Model z-coordinate
- * @tx: Texture x-coordinate
- * @ty: Texture y-coordinate
- * @color: The color to use at this vertex. This is ignored if
- *   use_color is %FALSE when calling cogl_polygon()
- *
- * Used to specify vertex information when calling cogl_polygon()
- */
-struct _CoglTextureVertex
-{
-  float x, y, z;
-  float tx, ty;
-
-  CoglColor color;
-};
-COGL_STRUCT_SIZE_ASSERT (CoglTextureVertex, 24);
-
-/**
- * COGL_BLEND_STRING_ERROR:
- *
- * #GError domain for blend string parser errors
- */
-#define COGL_BLEND_STRING_ERROR (cogl_blend_string_error_quark ())
-
-/**
- * CoglBlendStringError:
- * @COGL_BLEND_STRING_ERROR_PARSE_ERROR: Generic parse error
- * @COGL_BLEND_STRING_ERROR_ARGUMENT_PARSE_ERROR: Argument parse error
- * @COGL_BLEND_STRING_ERROR_INVALID_ERROR: Internal parser error
- * @COGL_BLEND_STRING_ERROR_GPU_UNSUPPORTED_ERROR: Blend string not
- *   supported by the GPU
- *
- * Error enumeration for the blend strings parser
- */
-typedef enum /*< prefix=COGL_BLEND_STRING_ERROR >*/
-{
-  COGL_BLEND_STRING_ERROR_PARSE_ERROR,
-  COGL_BLEND_STRING_ERROR_ARGUMENT_PARSE_ERROR,
-  COGL_BLEND_STRING_ERROR_INVALID_ERROR,
-  COGL_BLEND_STRING_ERROR_GPU_UNSUPPORTED_ERROR
-} CoglBlendStringError;
-
-COGL_EXPORT uint32_t
-cogl_blend_string_error_quark (void);
 
 #define COGL_SYSTEM_ERROR (_cogl_system_error_quark ())
 
@@ -180,7 +82,7 @@ cogl_blend_string_error_quark (void);
  * variety of reasons. For example:
  *
  * - You've tried to use a feature that is not advertised by
- *   [func@Cogl.has_feature].
+ *   [method@Cogl.Context.has_feature].
  * - The GPU can not handle the configuration you have requested.
  *   An example might be if you try to use too many texture
  *   layers in a single #CoglPipeline
@@ -251,7 +153,7 @@ typedef enum
  * @COGL_VERTICES_MODE_TRIANGLES: FIXME, equivalent to `GL_TRIANGLES`
  * @COGL_VERTICES_MODE_TRIANGLE_STRIP: FIXME, equivalent to `GL_TRIANGLE_STRIP`
  * @COGL_VERTICES_MODE_TRIANGLE_FAN: FIXME, equivalent to `GL_TRIANGLE_FAN`
- * 
+ *
  * Different ways of interpreting vertices when drawing.
  */
 typedef enum
@@ -268,9 +170,9 @@ typedef enum
 /* NB: The above definitions are taken from gl.h equivalents */
 
 
-/* XXX: should this be CoglMaterialDepthTestFunction?
+/* XXX: should this be CoglPipelineDepthTestFunction?
  * It makes it very verbose but would be consistent with
- * CoglMaterialWrapMode */
+ * CoglPipelineWrapMode */
 
 /**
  * CoglDepthTestFunction:
@@ -408,22 +310,6 @@ typedef enum /*< prefix=COGL_READ_PIXELS >*/
 {
   COGL_READ_PIXELS_COLOR_BUFFER = 1L << 0
 } CoglReadPixelsFlags;
-
-/**
- * CoglStereoMode:
- * @COGL_STEREO_BOTH: draw to both stereo buffers
- * @COGL_STEREO_LEFT: draw only to the left stereo buffer
- * @COGL_STEREO_RIGHT: draw only to the left stereo buffer
- *
- * Represents how draw should affect the two buffers
- * of a stereo framebuffer. See cogl_framebuffer_set_stereo_mode().
- */
-typedef enum
-{
-  COGL_STEREO_BOTH,
-  COGL_STEREO_LEFT,
-  COGL_STEREO_RIGHT
-} CoglStereoMode;
 
 typedef struct _CoglScanout CoglScanout;
 typedef struct _CoglScanoutBuffer CoglScanoutBuffer;

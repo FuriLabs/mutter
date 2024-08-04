@@ -71,6 +71,8 @@ struct _MetaKeyBinding
   MetaKeyCombo combo;
   MetaResolvedKeyCombo resolved_combo;
   gint flags;
+  /* The binding should respond to release, and was just pressed */
+  gboolean release_pending;
   MetaKeyHandler *handler;
 };
 
@@ -133,8 +135,6 @@ typedef struct
 
 void     meta_display_init_keys             (MetaDisplay *display);
 void     meta_display_shutdown_keys         (MetaDisplay *display);
-void     meta_window_grab_keys              (MetaWindow  *window);
-void     meta_window_ungrab_keys            (MetaWindow  *window);
 gboolean meta_keybindings_process_event     (MetaDisplay        *display,
                                              MetaWindow         *window,
                                              const ClutterEvent *event);
@@ -151,9 +151,6 @@ void meta_prefs_get_overlay_binding (MetaKeyCombo *combo);
 void meta_prefs_get_locate_pointer_binding (MetaKeyCombo *combo);
 const char *meta_prefs_get_iso_next_group_option (void);
 gboolean meta_prefs_is_locate_pointer_enabled (void);
-
-void meta_x11_display_grab_keys   (MetaX11Display *x11_display);
-void meta_x11_display_ungrab_keys (MetaX11Display *x11_display);
 
 gboolean meta_display_process_keybinding_event (MetaDisplay        *display,
                                                 const char         *name,

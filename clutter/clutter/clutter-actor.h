@@ -222,7 +222,8 @@ struct _ClutterActorClass
   gboolean (* has_overlaps)         (ClutterActor         *self);
 
   void     (* paint_node)           (ClutterActor         *self,
-                                     ClutterPaintNode     *root);
+                                     ClutterPaintNode     *root,
+                                     ClutterPaintContext  *paint_context);
 
   gboolean (* touch_event)          (ClutterActor         *self,
                                      ClutterEvent         *event);
@@ -562,20 +563,24 @@ CLUTTER_EXPORT
 ClutterContentRepeat            clutter_actor_get_content_repeat                (ClutterActor               *self);
 
 CLUTTER_EXPORT
-void clutter_actor_set_color_state (ClutterActor      *self,
-                                    ClutterColorState *color_state);
+void                            clutter_actor_set_color_state                   (ClutterActor               *self,
+                                                                                 ClutterColorState          *color_state);
+
 CLUTTER_EXPORT
-ClutterColorState *clutter_actor_get_color_state (ClutterActor *self);
+void                            clutter_actor_unset_color_state                 (ClutterActor               *self);
+
+CLUTTER_EXPORT
+ClutterColorState *             clutter_actor_get_color_state                   (ClutterActor               *self);
 
 CLUTTER_EXPORT
 void                            clutter_actor_get_content_box                   (ClutterActor               *self,
                                                                                  ClutterActorBox            *box);
 CLUTTER_EXPORT
 void                            clutter_actor_set_background_color              (ClutterActor               *self,
-                                                                                 const ClutterColor         *color);
+                                                                                 const CoglColor            *color);
 CLUTTER_EXPORT
 void                            clutter_actor_get_background_color              (ClutterActor               *self,
-                                                                                 ClutterColor               *color);
+                                                                                 CoglColor                  *color);
 CLUTTER_EXPORT
 const ClutterPaintVolume *      clutter_actor_get_paint_volume                  (ClutterActor               *self);
 CLUTTER_EXPORT
@@ -662,6 +667,10 @@ gboolean                        clutter_actor_contains                          
                                                                                  ClutterActor               *descendant);
 CLUTTER_EXPORT
 ClutterActor*                   clutter_actor_get_stage                         (ClutterActor               *actor);
+
+CLUTTER_EXPORT
+ClutterContext *                clutter_actor_get_context                       (ClutterActor *actor);
+
 CLUTTER_EXPORT
 void                            clutter_actor_set_child_below_sibling           (ClutterActor               *self,
                                                                                  ClutterActor               *child,

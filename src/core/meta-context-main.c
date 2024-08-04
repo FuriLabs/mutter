@@ -216,7 +216,7 @@ find_session_type (GError **error)
     }
 
   /* Legacy support for starting through xinit */
-  if (is_tty && (g_getenv ("MUTTER_DISPLAY") || g_getenv ("DISPLAY")))
+  if (is_tty && g_getenv ("DISPLAY"))
     {
       session_type = strdup ("x11");
       goto out;
@@ -313,7 +313,7 @@ meta_context_main_configure (MetaContext   *context,
     {
       MetaDebugControl *debug_control = meta_context_get_debug_control (context);
 
-      meta_debug_control_export (debug_control);
+      meta_debug_control_set_exported (debug_control, TRUE);
     }
 
   g_unsetenv ("DESKTOP_AUTOSTART_ID");
@@ -639,6 +639,7 @@ meta_context_main_add_option_entries (MetaContextMain *context_main)
       N_("Run as a wayland compositor"),
       NULL
     },
+#ifdef HAVE_X11
     {
       "nested", 0, 0, G_OPTION_ARG_NONE,
       &context_main->options.nested,
@@ -651,6 +652,7 @@ meta_context_main_add_option_entries (MetaContextMain *context_main)
       N_("Run wayland compositor without starting Xwayland"),
       NULL
     },
+#endif
     {
       "wayland-display", 0, 0, G_OPTION_ARG_STRING,
       &context_main->options.wayland_display,

@@ -152,7 +152,7 @@ mtk_rectangle_union (const MtkRectangle *rect1,
  * @src2: another #MtkRectangle
  * @dest: (out caller-allocates): an empty #MtkRectangle, to be filled
  *   with the coordinates of the intersection.
- * 
+ *
  * Find the intersection between the two rectangles
  *
  * Returns: TRUE is some intersection exists and is not degenerate, FALSE
@@ -286,6 +286,41 @@ mtk_rectangle_contains_rect (const MtkRectangle *outer_rect,
 }
 
 /**
+ * mtk_rectangle_contains_point:
+ * @rect: A rectangle
+ * @x: X coordinate of the point
+ * @y: Y coordinate of the point
+ *
+ * Returns: Whether the rectangle contains the point
+ */
+gboolean
+mtk_rectangle_contains_point (const MtkRectangle *rect,
+                              int                 x,
+                              int                 y)
+{
+  return mtk_rectangle_contains_pointf (rect, x, y);
+}
+
+/**
+ * mtk_rectangle_contains_pointf:
+ * @rect: A rectangle
+ * @x: X coordinate of the point
+ * @y: Y coordinate of the point
+ *
+ * Returns: Whether the rectangle contains the point
+ */
+gboolean
+mtk_rectangle_contains_pointf (const MtkRectangle *rect,
+                               float               x,
+                               float               y)
+{
+  return (x >= rect->x &&
+          x <  (rect->x + rect->width) &&
+          y >= rect->y &&
+          y <  (rect->y + rect->height));
+}
+
+/**
  * mtk_rectangle_to_graphene_rect:
  * @rect: A rectangle
  *
@@ -323,10 +358,10 @@ mtk_rectangle_from_graphene_rect (const graphene_rect_t *rect,
     case MTK_ROUNDING_STRATEGY_SHRINK:
       {
         *dest = (MtkRectangle) {
-          .x = ceilf (rect->origin.x),
-          .y = ceilf (rect->origin.y),
-          .width = floorf (rect->size.width),
-          .height = floorf (rect->size.height),
+          .x = (int) ceilf (rect->origin.x),
+          .y = (int) ceilf (rect->origin.y),
+          .width = (int) floorf (rect->size.width),
+          .height = (int) floorf (rect->size.height),
         };
       }
       break;
@@ -337,20 +372,20 @@ mtk_rectangle_from_graphene_rect (const graphene_rect_t *rect,
         graphene_rect_round_extents (&clamped, &clamped);
 
         *dest = (MtkRectangle) {
-          .x = clamped.origin.x,
-          .y = clamped.origin.y,
-          .width = clamped.size.width,
-          .height = clamped.size.height,
+          .x = (int) clamped.origin.x,
+          .y = (int) clamped.origin.y,
+          .width = (int) clamped.size.width,
+          .height = (int) clamped.size.height,
         };
       }
       break;
     case MTK_ROUNDING_STRATEGY_ROUND:
       {
         *dest = (MtkRectangle) {
-          .x = roundf (rect->origin.x),
-          .y = roundf (rect->origin.y),
-          .width = roundf (rect->size.width),
-          .height = roundf (rect->size.height),
+          .x = (int) roundf (rect->origin.x),
+          .y = (int) roundf (rect->origin.y),
+          .width = (int) roundf (rect->size.width),
+          .height = (int) roundf (rect->size.height),
         };
       }
     }
@@ -384,7 +419,7 @@ mtk_rectangle_scale_double (const MtkRectangle  *rect,
   graphene_rect_t tmp = GRAPHENE_RECT_INIT (rect->x, rect->y,
                                             rect->width, rect->height);
 
-  graphene_rect_scale (&tmp, scale, scale, &tmp);
+  graphene_rect_scale (&tmp, (float) scale, (float) scale, &tmp);
   mtk_rectangle_from_graphene_rect (&tmp, rounding_strategy, dest);
 }
 

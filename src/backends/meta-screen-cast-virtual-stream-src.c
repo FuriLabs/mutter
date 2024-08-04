@@ -16,9 +16,16 @@
  *
  */
 
+/* Till https://gitlab.freedesktop.org/pipewire/pipewire/-/issues/4065 is fixed */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-conversion"
+
 #include "config.h"
 
 #include "backends/meta-screen-cast-virtual-stream-src.h"
+
+#include <spa/param/video/format-utils.h>
+#include <spa/buffer/meta.h>
 
 #include "backends/meta-crtc-mode.h"
 #include "backends/meta-cursor-tracker-private.h"
@@ -651,8 +658,8 @@ create_virtual_monitor (MetaScreenCastVirtualStreamSrc  *virtual_src,
   g_autofree char *serial = NULL;
   g_autoptr (MetaVirtualMonitorInfo) info = NULL;
 
-  width = video_format->size.width;
-  height = video_format->size.height;
+  width = (int) video_format->size.width;
+  height = (int) video_format->size.height;
   refresh_rate = ((float) video_format->max_framerate.num /
                   video_format->max_framerate.denom);
   serial = g_strdup_printf ("0x%.6x", ++virtual_monitor_src_seq);
@@ -701,8 +708,6 @@ ensure_virtual_monitor (MetaScreenCastVirtualStreamSrc *virtual_src,
   virtual_monitor = create_virtual_monitor (virtual_src, video_format, &error);
   if (!virtual_monitor)
     {
-      MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (virtual_src);
-
       g_warning ("Failed to create virtual monitor with size %dx%d: %s",
                  video_format->size.width, video_format->size.height,
                  error->message);
@@ -792,3 +797,5 @@ meta_screen_cast_virtual_stream_src_class_init (MetaScreenCastVirtualStreamSrcCl
   src_class->notify_params_updated =
     meta_screen_cast_virtual_stream_src_notify_params_updated;
 }
+
+#pragma GCC diagnostic pop

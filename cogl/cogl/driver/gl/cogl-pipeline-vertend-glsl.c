@@ -108,8 +108,7 @@ destroy_shader_state (void *user_data)
 {
   CoglPipelineVertendShaderStateCache *cache = user_data;
   CoglPipelineVertendShaderState *shader_state = cache->shader_state;
-
-  _COGL_GET_CONTEXT (ctx, NO_RETVAL);
+  CoglContext *ctx = cache->instance->context;
 
   if (shader_state->cache_entry &&
       shader_state->cache_entry->pipeline != cache->instance)
@@ -216,7 +215,7 @@ _cogl_glsl_shader_set_source_with_boilerplate (CoglContext *ctx,
   strings[count] = version_string;
   lengths[count++] = -1;
 
-  if (cogl_has_feature (ctx, COGL_FEATURE_ID_TEXTURE_EGL_IMAGE_EXTERNAL))
+  if (cogl_context_has_feature (ctx, COGL_FEATURE_ID_TEXTURE_EGL_IMAGE_EXTERNAL))
     {
       static const char image_external_extension[] =
         "#extension GL_OES_EGL_image_external : require\n";
@@ -298,9 +297,11 @@ _cogl_glsl_shader_set_source_with_boilerplate (CoglContext *ctx,
       for (i = 0; lines[i]; i++)
         g_string_append_printf (buf, "%4d: %s\n", i + 1, lines[i]);
 
-      g_message ("%s shader:\n%s",
+      g_message ("%s shader (%s; %u):\n%s",
                  shader_gl_type == GL_VERTEX_SHADER ?
                  "vertex" : "fragment",
+                 pipeline->name ? pipeline->name : "unknown",
+                 shader_gl_handle,
                  buf->str);
       g_string_free (buf, TRUE);
     }
@@ -388,8 +389,7 @@ _cogl_pipeline_vertend_glsl_start (CoglPipeline *pipeline,
   CoglPipelineVertendShaderState *shader_state;
   CoglPipelineCacheEntry *cache_entry = NULL;
   CoglProgram *user_program = cogl_pipeline_get_user_program (pipeline);
-
-  _COGL_GET_CONTEXT (ctx, NO_RETVAL);
+  CoglContext *ctx = pipeline->context;
 
   /* Now lookup our glsl backend private state (allocating if
    * necessary) */
@@ -511,8 +511,6 @@ _cogl_pipeline_vertend_glsl_add_layer (CoglPipeline *pipeline,
   CoglPipelineSnippetData snippet_data;
   int layer_index = layer->index;
 
-  _COGL_GET_CONTEXT (ctx, FALSE);
-
   shader_state = get_shader_state (pipeline);
 
   if (shader_state->source == NULL)
@@ -579,8 +577,7 @@ _cogl_pipeline_vertend_glsl_end (CoglPipeline *pipeline,
                                  unsigned long pipelines_difference)
 {
   CoglPipelineVertendShaderState *shader_state;
-
-  _COGL_GET_CONTEXT (ctx, FALSE);
+  CoglContext *ctx = pipeline->context;
 
   shader_state = get_shader_state (pipeline);
 
@@ -726,7 +723,7 @@ _cogl_pipeline_vertend_glsl_pre_change_notify (CoglPipeline *pipeline,
                                                CoglPipelineState change,
                                                const CoglColor *new_color)
 {
-  _COGL_GET_CONTEXT (ctx, NO_RETVAL);
+  CoglContext *ctx = pipeline->context;
 
   if ((change & _cogl_pipeline_get_state_for_vertex_codegen (ctx)))
     dirty_shader_state (pipeline);

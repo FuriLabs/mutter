@@ -455,7 +455,7 @@ meta_wayland_drm_syncobj_manager_new (MetaWaylandCompositor *compositor,
   MetaEgl *egl = meta_backend_get_egl (backend);
   ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
   CoglContext *cogl_context = clutter_backend_get_cogl_context (clutter_backend);
-  EGLDisplay egl_display = cogl_egl_context_get_egl_display (cogl_context);
+  EGLDisplay egl_display = cogl_context_get_egl_display (cogl_context);
   MetaWaylandDrmSyncobjManager *drm_syncobj_manager;
   EGLDeviceEXT egl_device;
   g_autofd int drm_fd = -1;
@@ -465,9 +465,7 @@ meta_wayland_drm_syncobj_manager_new (MetaWaylandCompositor *compositor,
 
   g_assert (backend && egl && clutter_backend && cogl_context && egl_display);
 
-  if (!meta_egl_has_extensions (egl, egl_display, NULL,
-                                "EGL_ANDROID_native_fence_sync",
-                                NULL))
+  if (!cogl_context_has_feature (cogl_context, COGL_FEATURE_ID_SYNC_FD))
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED,
                    "Missing 'EGL_ANDROID_native_fence_sync'");

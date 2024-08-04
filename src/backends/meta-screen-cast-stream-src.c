@@ -18,6 +18,12 @@
  *
  */
 
+#pragma GCC diagnostic push
+/* Till https://gitlab.freedesktop.org/pipewire/pipewire/-/issues/3915 is fixed */
+#pragma GCC diagnostic ignored "-Wshadow"
+/* Till https://gitlab.freedesktop.org/pipewire/pipewire/-/issues/4065 is fixed */
+#pragma GCC diagnostic ignored "-Wfloat-conversion"
+
 #include "config.h"
 
 #include "backends/meta-screen-cast-stream-src.h"
@@ -335,7 +341,7 @@ draw_cursor_sprite_via_offscreen (MetaScreenCastStreamSrc  *src,
 
   bitmap_texture = cogl_texture_2d_new_with_size (cogl_context,
                                                   bitmap_width, bitmap_height);
-  cogl_primitive_texture_set_auto_mipmap (bitmap_texture, FALSE);
+  cogl_texture_set_auto_mipmap (bitmap_texture, FALSE);
   if (!cogl_texture_allocate (bitmap_texture, error))
     {
       g_object_unref (bitmap_texture);
@@ -391,8 +397,8 @@ meta_screen_cast_stream_src_draw_cursor_into (MetaScreenCastStreamSrc  *src,
 
   texture_width = cogl_texture_get_width (cursor_texture);
   texture_height = cogl_texture_get_height (cursor_texture);
-  width = texture_width * scale;
-  height = texture_height * scale;
+  width = (int) ceilf (texture_width * scale);
+  height = (int) ceilf (texture_height * scale);
 
   if (texture_width == width &&
       texture_height == height &&
@@ -509,8 +515,8 @@ meta_screen_cast_stream_src_set_cursor_sprite_metadata (MetaScreenCastStreamSrc 
 
   texture_width = cogl_texture_get_width (cursor_texture);
   texture_height = cogl_texture_get_height (cursor_texture);
-  bitmap_width = ceilf (texture_width * scale);
-  bitmap_height = ceilf (texture_height * scale);
+  bitmap_width = (int) ceilf (texture_width * scale);
+  bitmap_height = (int) ceilf (texture_height * scale);
 
   spa_meta_bitmap->size.width = bitmap_width;
   spa_meta_bitmap->size.height = bitmap_height;
@@ -1836,3 +1842,5 @@ meta_screen_cast_stream_src_get_preferred_format (MetaScreenCastStreamSrc *src)
 
   return klass->get_preferred_format (src);
 }
+
+#pragma GCC diagnostic pop

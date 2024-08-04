@@ -43,6 +43,9 @@ typedef const CoglWinsysVtable *(*CoglCustomWinsysVtableGetter) (CoglRenderer *r
 struct _CoglRenderer
 {
   GObject parent_instance;
+
+  CoglDisplay *display;
+
   gboolean connected;
   CoglDriver driver_override;
   const CoglDriverVtable *driver_vtable;
@@ -50,21 +53,11 @@ struct _CoglRenderer
   const CoglWinsysVtable *winsys_vtable;
   void *custom_winsys_user_data;
   CoglCustomWinsysVtableGetter custom_winsys_vtable_getter;
-  CoglWinsysID winsys_id_override;
-  GList *constraints;
-
-  GArray *poll_fds;
-  int poll_fds_age;
-  GList *poll_sources;
 
   CoglList idle_closures;
 
-  GList *outputs;
-
 #ifdef HAVE_X11
   Display *foreign_xdpy;
-  gboolean xlib_enable_event_retrieval;
-  gboolean xlib_want_reset_on_video_memory_purge;
 #endif
 
   CoglDriver driver;
@@ -80,10 +73,6 @@ struct _CoglRenderer
 typedef CoglFilterReturn (* CoglNativeFilterFunc) (void *native_event,
                                                    void *data);
 
-CoglFilterReturn
-_cogl_renderer_handle_native_event (CoglRenderer *renderer,
-                                    void *event);
-
 void
 _cogl_renderer_add_native_filter (CoglRenderer *renderer,
                                   CoglNativeFilterFunc func,
@@ -93,7 +82,3 @@ void
 _cogl_renderer_remove_native_filter (CoglRenderer *renderer,
                                      CoglNativeFilterFunc func,
                                      void *data);
-
-void *
-_cogl_renderer_get_proc_address (CoglRenderer *renderer,
-                                 const char   *name);

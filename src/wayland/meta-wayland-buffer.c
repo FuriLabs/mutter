@@ -53,7 +53,6 @@
 
 #include "backends/meta-backend-private.h"
 #include "clutter/clutter.h"
-#include "cogl/cogl-egl.h"
 #include "meta/util.h"
 #include "wayland/meta-wayland-dma-buf.h"
 #include "wayland/meta-wayland-private.h"
@@ -184,7 +183,7 @@ meta_wayland_buffer_realize (MetaWaylandBuffer *buffer)
         meta_backend_get_clutter_backend (backend);
       CoglContext *cogl_context =
         clutter_backend_get_cogl_context (clutter_backend);
-      EGLDisplay egl_display = cogl_egl_context_get_egl_display (cogl_context);
+      EGLDisplay egl_display = cogl_context_get_egl_display (cogl_context);
 
       if (meta_egl_query_wayland_buffer (egl, egl_display, buffer->resource,
                                          EGL_TEXTURE_FORMAT, &format,
@@ -446,7 +445,7 @@ shm_buffer_attach (MetaWaylandBuffer  *buffer,
       CoglTexture *cogl_texture = meta_multi_texture_get_plane (*texture, 0);
 
       if (!meta_multi_texture_is_simple (*texture) ||
-          _cogl_texture_get_format (cogl_texture) == cogl_format)
+          cogl_texture_get_format (cogl_texture) == cogl_format)
         {
           buffer->is_y_inverted = TRUE;
           return TRUE;
@@ -481,7 +480,7 @@ egl_image_buffer_attach (MetaWaylandBuffer  *buffer,
   MetaEgl *egl = meta_backend_get_egl (backend);
   ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
   CoglContext *cogl_context = clutter_backend_get_cogl_context (clutter_backend);
-  EGLDisplay egl_display = cogl_egl_context_get_egl_display (cogl_context);
+  EGLDisplay egl_display = cogl_context_get_egl_display (cogl_context);
   int format, width, height, y_inverted;
   CoglPixelFormat cogl_format;
   EGLImageKHR egl_image;
@@ -540,7 +539,7 @@ egl_image_buffer_attach (MetaWaylandBuffer  *buffer,
     return FALSE;
 
   flags = COGL_EGL_IMAGE_FLAG_NONE;
-  texture_2d = cogl_egl_texture_2d_new_from_image (cogl_context,
+  texture_2d = cogl_texture_2d_new_from_egl_image (cogl_context,
                                                    width, height,
                                                    cogl_format,
                                                    egl_image,
@@ -811,7 +810,7 @@ process_shm_buffer_damage (MetaWaylandBuffer *buffer,
       plane_stride = shm_stride[plane_index];
 
       cogl_texture = meta_multi_texture_get_plane (texture, i);
-      subformat = _cogl_texture_get_format (cogl_texture);
+      subformat = cogl_texture_get_format (cogl_texture);
       bpp = cogl_pixel_format_get_bytes_per_pixel (subformat, 0);
 
       for (j = 0; j < n_rectangles; j++)

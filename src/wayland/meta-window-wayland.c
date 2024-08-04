@@ -108,7 +108,7 @@ get_window_geometry_scale_for_logical_monitor (MetaLogicalMonitor *logical_monit
   if (meta_backend_is_stage_views_scaled (backend))
     return 1;
   else
-    return meta_logical_monitor_get_scale (logical_monitor);
+    return (int) meta_logical_monitor_get_scale (logical_monitor);
 }
 
 static void
@@ -268,8 +268,6 @@ meta_window_wayland_move_resize_internal (MetaWindow                *window,
   int new_y;
   int new_buffer_x;
   int new_buffer_y;
-
-  g_assert (window->frame == NULL);
 
   /* don't do anything if we're dropping the window, see #751847 */
   if (window->unmanaging)
@@ -484,14 +482,24 @@ scale_size (int  *width,
 {
   if (*width < G_MAXINT)
     {
-      float new_width = (*width * scale);
-      *width = (int) MIN (new_width, G_MAXINT);
+      float new_width;
+
+      new_width = (*width * scale);
+      if (new_width > G_MAXINT)
+        *width = G_MAXINT;
+      else
+        *width = (int) new_width;
     }
 
   if (*height < G_MAXINT)
     {
-      float new_height = (*height * scale);
-      *height = (int) MIN (new_height, G_MAXINT);
+      float new_height;
+
+      new_height = (*height * scale);
+      if (new_height > G_MAXINT)
+        *height = G_MAXINT;
+      else
+        *height = (int) new_height;
     }
 }
 
@@ -819,16 +827,6 @@ meta_window_wayland_calculate_layer (MetaWindow *window)
 }
 
 static void
-meta_window_wayland_map (MetaWindow *window)
-{
-}
-
-static void
-meta_window_wayland_unmap (MetaWindow *window)
-{
-}
-
-static void
 meta_window_wayland_constructed (GObject *object)
 {
   MetaWindow *window = META_WINDOW (object);
@@ -937,8 +935,6 @@ meta_window_wayland_class_init (MetaWindowWaylandClass *klass)
   window_class->can_ping = meta_window_wayland_can_ping;
   window_class->are_updates_frozen = meta_window_wayland_are_updates_frozen;
   window_class->calculate_layer = meta_window_wayland_calculate_layer;
-  window_class->map = meta_window_wayland_map;
-  window_class->unmap = meta_window_wayland_unmap;
   window_class->is_focus_async = meta_window_wayland_is_focus_async;
   window_class->get_wayland_surface = meta_window_wayland_get_wayland_surface;
   window_class->set_transient_for = meta_window_wayland_set_transient_for;
@@ -1159,7 +1155,14 @@ meta_window_wayland_finish_move_resize (MetaWindow              *window,
    * scale new_geom to physical pixels given what buffer scale and texture scale
    * is in use. */
 
-  geometry_scale = meta_window_wayland_get_geometry_scale (window);
+  acked_configuration = acquire_acked_configuration (wl_window, pending,
+                                                     &is_client_resize);
+
+  if (acked_configuration)
+    geometry_scale = acked_configuration->scale;
+  else
+    geometry_scale = meta_window_wayland_get_geometry_scale (window);
+
   new_geom.x *= geometry_scale;
   new_geom.y *= geometry_scale;
   new_geom.width *= geometry_scale;
@@ -1188,9 +1191,6 @@ meta_window_wayland_finish_move_resize (MetaWindow              *window,
     }
 
   flags = META_MOVE_RESIZE_WAYLAND_FINISH_MOVE_RESIZE;
-
-  acked_configuration = acquire_acked_configuration (wl_window, pending,
-                                                     &is_client_resize);
 
   window_drag = meta_compositor_get_current_window_drag (display->compositor);
 
@@ -1266,7 +1266,11 @@ meta_window_wayland_finish_move_resize (MetaWindow              *window,
     gravity = meta_resize_gravity_from_grab_op (meta_window_drag_get_grab_op (window_drag));
   else
     gravity = META_GRAVITY_STATIC;
-  meta_window_move_resize_internal (window, flags, gravity, rect);
+  meta_window_move_resize_internal (window,
+                                    flags,
+                                    META_PLACE_FLAG_NONE,
+                                    gravity,
+                                    rect);
 }
 
 void
@@ -1287,13 +1291,12 @@ meta_window_place_with_placement_rule (MetaWindow        *window,
   window->unconstrained_rect.height = placement_rule->height;
 
   window->calc_placement = first_placement;
-  meta_window_move_resize_internal (window,
-                                    (META_MOVE_RESIZE_MOVE_ACTION |
-                                     META_MOVE_RESIZE_RESIZE_ACTION |
-                                     META_MOVE_RESIZE_PLACEMENT_CHANGED |
-                                     META_MOVE_RESIZE_CONSTRAIN),
-                                    META_GRAVITY_NORTH_WEST,
-                                    window->unconstrained_rect);
+  meta_window_move_resize (window,
+                           (META_MOVE_RESIZE_MOVE_ACTION |
+                            META_MOVE_RESIZE_RESIZE_ACTION |
+                            META_MOVE_RESIZE_PLACEMENT_CHANGED |
+                            META_MOVE_RESIZE_CONSTRAIN),
+                           window->unconstrained_rect);
   window->calc_placement = FALSE;
 }
 
@@ -1401,7 +1404,7 @@ meta_window_wayland_get_min_size (MetaWindow *window,
   *width = MAX (current_width, 0);
   *height = MAX (current_height, 0);
 
-  scale = 1.0 / (float) meta_window_wayland_get_geometry_scale (window);
+  scale = 1.0f / meta_window_wayland_get_geometry_scale (window);
   scale_size (width, height, scale);
 }
 
@@ -1436,7 +1439,7 @@ meta_window_wayland_get_max_size (MetaWindow *window,
   *width = CLAMP (current_width, 0, G_MAXINT);
   *height = CLAMP (current_height, 0, G_MAXINT);
 
-  scale = 1.0 / (float) meta_window_wayland_get_geometry_scale (window);
+  scale = 1.0f / meta_window_wayland_get_geometry_scale (window);
   scale_size (width, height, scale);
 }
 
@@ -1445,4 +1448,20 @@ meta_window_wayland_is_acked_fullscreen (MetaWindowWayland *wl_window)
 {
   return (wl_window->last_acked_configuration &&
           wl_window->last_acked_configuration->is_fullscreen);
+}
+
+gboolean
+meta_window_wayland_get_pending_serial (MetaWindowWayland *wl_window,
+                                        uint32_t          *serial)
+{
+  if (wl_window->pending_configurations)
+    {
+      MetaWaylandWindowConfiguration *configuration =
+        wl_window->pending_configurations->data;
+
+      *serial = configuration->serial;
+      return TRUE;
+    }
+
+  return FALSE;
 }

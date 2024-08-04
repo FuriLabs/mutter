@@ -186,9 +186,9 @@ meta_shadow_unref (MetaShadow *shadow)
  *   drawing.
  *
  * Paints the shadow at the given position, for the specified actual
- * size of the region. 
+ * size of the region.
  *
- * Since a #MetaShadow can be shared between different sizes with 
+ * Since a #MetaShadow can be shared between different sizes with
  * the same extracted [struct@Meta.WindowShape] the size needs to be passed in here.
  */
 void
@@ -216,8 +216,8 @@ meta_shadow_paint (MetaShadow      *shadow,
     return;
 
   cogl_color_init_from_4f (&color,
-                           opacity / 255.0, opacity / 255.0,
-                           opacity / 255.0, opacity / 255.0);
+                           opacity / 255.0f, opacity / 255.0f,
+                           opacity / 255.0f, opacity / 255.0f);
   cogl_pipeline_set_color (shadow->pipeline, &color);
 
   if (shadow->scale_width)
@@ -954,6 +954,7 @@ make_shadow (MetaShadow *shadow,
   g_free (buffer);
 
   shadow->pipeline = meta_create_texture_pipeline (shadow->texture);
+  cogl_pipeline_set_static_name (shadow->pipeline, "MetaShadowFactory");
 }
 
 static MetaShadowParams *

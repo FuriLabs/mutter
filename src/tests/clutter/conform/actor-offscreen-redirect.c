@@ -54,8 +54,8 @@ foo_actor_paint (ClutterActor        *actor,
 
   /* Paint a red rectangle with the right opacity */
   pipeline = cogl_pipeline_new (ctx);
-  cogl_color_init_from_4f (&color, 1.0, 0.0, 0.0,
-                           foo_actor->last_paint_opacity / 255.);
+  cogl_color_init_from_4f (&color, 1.0f, 0.0f, 0.0f,
+                           foo_actor->last_paint_opacity / 255.0f);
   cogl_pipeline_set_color (pipeline, &color);
 
   framebuffer = clutter_paint_context_get_framebuffer (paint_context);
@@ -415,7 +415,7 @@ actor_offscreen_redirect (void)
   data.stage = clutter_test_get_stage ();
   data.parent_container = clutter_actor_new ();
   clutter_actor_set_background_color (data.parent_container,
-                                      &(ClutterColor) { 255, 255, 255, 255 });
+                                      &(CoglColor) { 255, 255, 255, 255 });
 
   data.container = g_object_new (foo_group_get_type (), NULL);
   data.foo_actor = g_object_new (foo_actor_get_type (), NULL);

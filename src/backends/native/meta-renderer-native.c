@@ -70,6 +70,7 @@
 #include "common/meta-cogl-drm-formats.h"
 #include "common/meta-drm-format-helpers.h"
 #include "core/boxes-private.h"
+#include "core/meta-debug-control-private.h"
 
 #ifdef HAVE_EGL_DEVICE
 #include "backends/native/meta-render-device-egl-stream.h"
@@ -679,7 +680,7 @@ meta_renderer_native_create_dma_buf_framebuffer (MetaRendererNative  *renderer_n
     return NULL;
 
   flags = COGL_EGL_IMAGE_FLAG_NO_GET_DATA;
-  cogl_tex = cogl_egl_texture_2d_new_from_image (cogl_context,
+  cogl_tex = cogl_texture_2d_new_from_egl_image (cogl_context,
                                                  width,
                                                  height,
                                                  cogl_format,
@@ -1213,6 +1214,7 @@ meta_renderer_native_pop_pending_mode_set (MetaRendererNative *renderer_native,
 
 static CoglOffscreen *
 meta_renderer_native_create_offscreen (MetaRendererNative    *renderer_native,
+                                       CoglPixelFormat        format,
                                        gint                   view_width,
                                        gint                   view_height,
                                        GError               **error)
@@ -1222,8 +1224,18 @@ meta_renderer_native_create_offscreen (MetaRendererNative    *renderer_native,
   CoglOffscreen *fb;
   CoglTexture *tex;
 
-  tex = cogl_texture_2d_new_with_size (cogl_context, view_width, view_height);
-  cogl_primitive_texture_set_auto_mipmap (tex, FALSE);
+  if (format == COGL_PIXEL_FORMAT_ANY)
+    {
+      tex = cogl_texture_2d_new_with_size (cogl_context,
+                                           view_width, view_height);
+    }
+  else
+    {
+      tex = cogl_texture_2d_new_with_format (cogl_context,
+                                             view_width, view_height,
+                                             format);
+    }
+  cogl_texture_set_auto_mipmap (tex, FALSE);
 
   if (!cogl_texture_allocate (tex, error))
     {
@@ -1240,6 +1252,36 @@ meta_renderer_native_create_offscreen (MetaRendererNative    *renderer_native,
     }
 
   return fb;
+}
+
+static CoglOffscreen *
+create_offscreen_with_formats (MetaRendererNative  *renderer_native,
+                               CoglPixelFormat     *formats,
+                               size_t               n_formats,
+                               int                  width,
+                               int                  height,
+                               GError             **error)
+{
+  g_autoptr (GError) local_error = NULL;
+  size_t i;
+
+  for (i = 0; i < n_formats; i++)
+    {
+      CoglOffscreen *offscreen;
+
+      g_clear_error (&local_error);
+
+      offscreen = meta_renderer_native_create_offscreen (renderer_native,
+                                                         formats[i],
+                                                         width,
+                                                         height,
+                                                         &local_error);
+      if (offscreen)
+        return offscreen;
+    }
+
+  g_propagate_error (error, g_steal_pointer (&local_error));
+  return NULL;
 }
 
 static const CoglWinsysVtable *
@@ -1313,48 +1355,75 @@ should_force_shadow_fb (MetaRendererNative *renderer_native,
   if (meta_renderer_is_hardware_accelerated (renderer))
     return FALSE;
 
-  if (!cogl_has_feature (cogl_context, COGL_FEATURE_ID_BLIT_FRAMEBUFFER))
+  if (!cogl_context_has_feature (cogl_context, COGL_FEATURE_ID_BLIT_FRAMEBUFFER))
     return FALSE;
 
   return meta_kms_device_prefers_shadow_buffer (kms_device);
 }
 
-static CoglFramebuffer *
-create_fallback_offscreen (MetaRendererNative *renderer_native,
-                           int                 width,
-                           int                 height)
+static ClutterColorspace
+get_color_space_from_output (MetaOutput *output)
 {
-  CoglOffscreen *fallback_offscreen;
-  GError *error = NULL;
-
-  fallback_offscreen = meta_renderer_native_create_offscreen (renderer_native,
-                                                              width,
-                                                              height,
-                                                              &error);
-  if (!fallback_offscreen)
+  switch (meta_output_peek_color_space (output))
     {
-      g_error ("Failed to create fallback offscreen framebuffer: %s",
-               error->message);
+    case META_OUTPUT_COLORSPACE_DEFAULT:
+    case META_OUTPUT_COLORSPACE_UNKNOWN:
+      return CLUTTER_COLORSPACE_DEFAULT;
+    case META_OUTPUT_COLORSPACE_BT2020:
+      return CLUTTER_COLORSPACE_BT2020;
+    }
+  g_assert_not_reached ();
+}
+
+static ClutterTransferFunction
+get_transfer_function_from_output (MetaOutput *output)
+{
+  const MetaOutputHdrMetadata *hdr_metadata =
+    meta_output_peek_hdr_metadata (output);
+
+  if (!hdr_metadata->active)
+    return CLUTTER_TRANSFER_FUNCTION_DEFAULT;
+
+  switch (meta_output_peek_hdr_metadata (output)->eotf)
+    {
+    case META_OUTPUT_HDR_METADATA_EOTF_PQ:
+      return CLUTTER_TRANSFER_FUNCTION_PQ;
+    case META_OUTPUT_HDR_METADATA_EOTF_TRADITIONAL_GAMMA_SDR:
+      return CLUTTER_TRANSFER_FUNCTION_DEFAULT;
+    case META_OUTPUT_HDR_METADATA_EOTF_TRADITIONAL_GAMMA_HDR:
+    case META_OUTPUT_HDR_METADATA_EOTF_HLG:
+    default:
+      g_warning ("Unhandled HDR EOTF");
+      return CLUTTER_TRANSFER_FUNCTION_DEFAULT;
     }
 
-  return COGL_FRAMEBUFFER (fallback_offscreen);
+  g_assert_not_reached ();
 }
 
 static MetaRendererView *
-meta_renderer_native_create_view (MetaRenderer       *renderer,
-                                  MetaLogicalMonitor *logical_monitor,
-                                  MetaOutput         *output,
-                                  MetaCrtc           *crtc)
+meta_renderer_native_create_view (MetaRenderer        *renderer,
+                                  MetaLogicalMonitor  *logical_monitor,
+                                  MetaOutput          *output,
+                                  MetaCrtc            *crtc,
+                                  GError             **error)
 {
   MetaRendererNative *renderer_native = META_RENDERER_NATIVE (renderer);
   MetaBackend *backend = meta_renderer_get_backend (renderer);
+  MetaContext *context = meta_backend_get_context (backend);
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (backend);
+  MetaDebugControl *debug_control = meta_context_get_debug_control (context);
   CoglContext *cogl_context =
     cogl_context_from_renderer_native (renderer_native);
   CoglDisplay *cogl_display = cogl_context_get_display (cogl_context);
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
   const MetaCrtcConfig *crtc_config;
   const MetaCrtcModeInfo *crtc_mode_info;
+  ClutterColorspace colorspace;
+  ClutterTransferFunction transfer_function;
+  gboolean force_linear;
+  g_autoptr (ClutterColorState) color_state = NULL;
+  g_autoptr (ClutterColorState) blending_color_state = NULL;
   MetaMonitorTransform view_transform;
   g_autoptr (CoglFramebuffer) framebuffer = NULL;
   g_autoptr (CoglOffscreen) offscreen = NULL;
@@ -1365,7 +1434,7 @@ meta_renderer_native_create_view (MetaRenderer       *renderer,
   MtkRectangle view_layout;
   MetaRendererViewNative *view_native;
   EGLSurface egl_surface;
-  GError *error = NULL;
+  GError *local_error = NULL;
 
   crtc_config = meta_crtc_get_config (crtc);
   crtc_mode_info = meta_crtc_mode_get_info (crtc_config->mode);
@@ -1379,15 +1448,13 @@ meta_renderer_native_create_view (MetaRenderer       *renderer,
 
       if (!meta_renderer_native_ensure_gpu_data (renderer_native,
                                                  gpu_kms,
-                                                 &error))
+                                                 &local_error))
         {
-          g_warning ("Failed to create secondary GPU data for %s: %s",
-                      meta_gpu_kms_get_file_path (gpu_kms),
-                      error->message);
-          use_shadowfb = FALSE;
-          framebuffer = create_fallback_offscreen (renderer_native,
-                                                   onscreen_width,
-                                                   onscreen_height);
+          g_propagate_prefixed_error (error, local_error,
+                                      "Failed to create secondary GPU data for %s: ",
+                                      meta_gpu_kms_get_file_path (gpu_kms));
+
+          return NULL;
         }
       else
         {
@@ -1401,15 +1468,12 @@ meta_renderer_native_create_view (MetaRenderer       *renderer,
                                                       onscreen_width,
                                                       onscreen_height);
 
-          if (!cogl_framebuffer_allocate (COGL_FRAMEBUFFER (onscreen_native), &error))
+          if (!cogl_framebuffer_allocate (COGL_FRAMEBUFFER (onscreen_native), &local_error))
             {
-              g_warning ("Failed to allocate onscreen framebuffer for %s: %s",
-                         meta_gpu_kms_get_file_path (gpu_kms),
-                         error->message);
-              use_shadowfb = FALSE;
-              framebuffer = create_fallback_offscreen (renderer_native,
-                                                       onscreen_width,
-                                                       onscreen_height);
+              g_propagate_prefixed_error (error, local_error,
+                                          "Failed to allocate onscreen framebuffer for %s: ",
+                                          meta_gpu_kms_get_file_path (gpu_kms));
+              return NULL;
             }
           else
             {
@@ -1424,26 +1488,75 @@ meta_renderer_native_create_view (MetaRenderer       *renderer,
     {
       CoglOffscreen *virtual_onscreen;
 
-      g_assert (META_IS_CRTC_VIRTUAL (crtc));
-
       virtual_onscreen = meta_renderer_native_create_offscreen (renderer_native,
+                                                                COGL_PIXEL_FORMAT_ANY,
                                                                 onscreen_width,
                                                                 onscreen_height,
-                                                                &error);
+                                                                &local_error);
       if (!virtual_onscreen)
-        g_error ("Failed to allocate back buffer texture: %s", error->message);
+        g_error ("Failed to allocate back buffer texture: %s", local_error->message);
       use_shadowfb = FALSE;
       framebuffer = COGL_FRAMEBUFFER (virtual_onscreen);
+    }
+
+  colorspace = get_color_space_from_output (output);
+  transfer_function = get_transfer_function_from_output (output);
+
+  color_state = clutter_color_state_new (clutter_context,
+                                         colorspace,
+                                         transfer_function);
+
+  force_linear = meta_debug_control_is_linear_blending_forced (debug_control);
+  blending_color_state = clutter_color_state_get_blending (color_state,
+                                                           force_linear);
+
+  if (meta_is_topic_enabled (META_DEBUG_RENDER))
+    {
+      g_autofree char *cs_str =
+        clutter_color_state_to_string (color_state);
+      g_autofree char *blending_cs_str =
+        clutter_color_state_to_string (blending_color_state);
+
+      meta_topic (META_DEBUG_RENDER,
+                  "ColorState for view %s:\n  %s",
+                  meta_output_get_name (output),
+                  blending_cs_str);
+
+      meta_topic (META_DEBUG_RENDER,
+                  "ColorState for output %s:\n  %s",
+                  meta_output_get_name (output),
+                  cs_str);
     }
 
   view_transform = calculate_view_transform (monitor_manager,
                                              logical_monitor,
                                              output,
                                              crtc);
-  if (view_transform != META_MONITOR_TRANSFORM_NORMAL)
+
+  if (view_transform != META_MONITOR_TRANSFORM_NORMAL ||
+      !clutter_color_state_equals (color_state, blending_color_state))
     {
       int offscreen_width;
       int offscreen_height;
+      CoglPixelFormat formats[10];
+      size_t n_formats = 0;
+      CoglPixelFormat format;
+      ClutterEncodingRequiredFormat required_format =
+        clutter_color_state_required_format (blending_color_state);
+
+      if (required_format <= CLUTTER_ENCODING_REQUIRED_FORMAT_UINT8)
+        {
+          formats[n_formats++] = cogl_framebuffer_get_internal_format (framebuffer);
+        }
+      else
+        {
+          formats[n_formats++] = COGL_PIXEL_FORMAT_XRGB_FP_16161616;
+          formats[n_formats++] = COGL_PIXEL_FORMAT_XBGR_FP_16161616;
+          formats[n_formats++] = COGL_PIXEL_FORMAT_RGBA_FP_16161616_PRE;
+          formats[n_formats++] = COGL_PIXEL_FORMAT_BGRA_FP_16161616_PRE;
+          formats[n_formats++] = COGL_PIXEL_FORMAT_ARGB_FP_16161616_PRE;
+          formats[n_formats++] = COGL_PIXEL_FORMAT_ABGR_FP_16161616_PRE;
+        }
 
       if (meta_monitor_transform_is_rotated (view_transform))
         {
@@ -1456,12 +1569,22 @@ meta_renderer_native_create_view (MetaRenderer       *renderer,
           offscreen_height = onscreen_height;
         }
 
-      offscreen = meta_renderer_native_create_offscreen (renderer_native,
-                                                         offscreen_width,
-                                                         offscreen_height,
-                                                         &error);
+      offscreen = create_offscreen_with_formats (renderer_native,
+                                                 formats,
+                                                 n_formats,
+                                                 offscreen_width,
+                                                 offscreen_height,
+                                                 &local_error);
       if (!offscreen)
-        g_error ("Failed to allocate back buffer texture: %s", error->message);
+        g_error ("Failed to allocate back buffer texture: %s", local_error->message);
+
+      format =
+        cogl_framebuffer_get_internal_format (COGL_FRAMEBUFFER (offscreen));
+      meta_topic (META_DEBUG_RENDER,
+                  "Using an additional intermediate %s offscreen (%dx%d) for %s",
+                  cogl_pixel_format_to_string (format),
+                  offscreen_width, offscreen_height,
+                  meta_output_get_name (output));
     }
 
   if (meta_backend_is_stage_views_scaled (backend))
@@ -1480,6 +1603,8 @@ meta_renderer_native_create_view (MetaRenderer       *renderer,
                               "scale", scale,
                               "framebuffer", framebuffer,
                               "offscreen", offscreen,
+                              "color-state", blending_color_state,
+                              "output-color-state", color_state,
                               "use-shadowfb", use_shadowfb,
                               "transform", view_transform,
                               "refresh-rate", crtc_mode_info->refresh_rate,
@@ -2117,14 +2242,20 @@ meta_renderer_native_ensure_gpu_data (MetaRendererNative  *renderer_native,
 
 static void
 on_gpu_added (MetaBackendNative  *backend_native,
-              MetaGpuKms         *gpu_kms,
+              MetaGpu            *gpu,
               MetaRendererNative *renderer_native)
 {
   MetaBackend *backend = META_BACKEND (backend_native);
   ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
   CoglContext *cogl_context = clutter_backend_get_cogl_context (clutter_backend);
   CoglDisplay *cogl_display = cogl_context_get_display (cogl_context);
+  MetaGpuKms *gpu_kms;
   GError *error = NULL;
+
+  if (!META_IS_GPU_KMS (gpu))
+    return;
+
+  gpu_kms = META_GPU_KMS (gpu);
 
   if (!create_renderer_gpu_data (renderer_native, gpu_kms, &error))
     {
@@ -2169,12 +2300,14 @@ meta_renderer_native_unset_modes (MetaRendererNative *renderer_native)
   for (l = meta_backend_get_gpus (backend); l; l = l->next)
     {
       MetaGpu *gpu = l->data;
-      MetaKmsDevice *kms_device =
-        meta_gpu_kms_get_kms_device (META_GPU_KMS (gpu));
+      MetaKmsDevice *kms_device;
       GList *k;
-      g_autoptr (MetaKmsFeedback) kms_feedback = NULL;
       MetaKmsUpdate *kms_update = NULL;
 
+      if (!META_IS_GPU_KMS (gpu))
+        continue;
+
+      kms_device = meta_gpu_kms_get_kms_device (META_GPU_KMS (gpu));
       for (k = meta_gpu_get_crtcs (gpu); k; k = k->next)
         {
           MetaCrtc *crtc = k->data;
@@ -2301,21 +2434,28 @@ meta_renderer_native_initable_init (GInitable     *initable,
   MetaBackend *backend = meta_renderer_get_backend (renderer);
   GList *gpus;
   GList *l;
+  gboolean has_gpu_kms = FALSE;
 
   gpus = meta_backend_get_gpus (backend);
-  if (gpus)
+  for (l = gpus; l; l = l->next)
+    {
+      MetaGpu *gpu = META_GPU (l->data);
+      MetaGpuKms *gpu_kms;
+
+      if (!META_IS_GPU_KMS (gpu))
+        continue;
+
+      has_gpu_kms = TRUE;
+      gpu_kms = META_GPU_KMS (l->data);
+      if (!create_renderer_gpu_data (renderer_native, gpu_kms, error))
+        return FALSE;
+    }
+
+  if (has_gpu_kms)
     {
       MetaKmsDevice *kms_device;
       MetaKmsDeviceFlag flags;
       const char *kms_modifiers_debug_env;
-
-      for (l = gpus; l; l = l->next)
-        {
-          MetaGpuKms *gpu_kms = META_GPU_KMS (l->data);
-
-          if (!create_renderer_gpu_data (renderer_native, gpu_kms, error))
-            return FALSE;
-        }
 
       renderer_native->primary_gpu_kms = choose_primary_gpu (backend,
                                                              renderer_native,

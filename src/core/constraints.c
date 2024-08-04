@@ -38,6 +38,11 @@
 #include "core/workspace-private.h"
 #include "meta/prefs.h"
 
+#ifdef HAVE_X11_CLIENT
+#include "x11/meta-x11-frame.h"
+#include "x11/window-x11-private.h"
+#endif
+
 /*
 This is the short and sweet version of how to hack on this file; see
 doc/how-constraints-works.txt for the gory details.  The basics of
@@ -90,7 +95,7 @@ constrain_whatever (MetaWindow         *window,
   // we know we can return TRUE here because we exited early
   // if the constraint could not be satisfied; not that the
   // return value is heeded in this case...
-  return TRUE; 
+  return TRUE;
 }
 ```
 */
@@ -215,6 +220,7 @@ static void setup_constraint_info        (MetaBackend         *backend,
                                           const MtkRectangle  *orig,
                                           MtkRectangle        *new);
 static void place_window_if_needed       (MetaWindow     *window,
+                                          MetaPlaceFlag   place_flags,
                                           ConstraintInfo *info);
 static void update_onscreen_requirements (MetaWindow     *window,
                                           ConstraintInfo *info);
@@ -287,6 +293,7 @@ do_all_constraints (MetaWindow         *window,
 void
 meta_window_constrain (MetaWindow          *window,
                        MetaMoveResizeFlags  flags,
+                       MetaPlaceFlag        place_flags,
                        MetaGravity          resize_gravity,
                        const MtkRectangle  *orig,
                        MtkRectangle        *new,
@@ -314,7 +321,7 @@ meta_window_constrain (MetaWindow          *window,
                          resize_gravity,
                          orig,
                          new);
-  place_window_if_needed (window, &info);
+  place_window_if_needed (window, place_flags, &info);
 
   while (!satisfied && priority <= PRIORITY_MAXIMUM) {
     gboolean check_only = TRUE;
@@ -527,8 +534,9 @@ get_start_rect_for_resize (MetaWindow     *window,
 }
 
 static void
-place_window_if_needed(MetaWindow     *window,
-                       ConstraintInfo *info)
+place_window_if_needed (MetaWindow     *window,
+                        MetaPlaceFlag   place_flags,
+                        ConstraintInfo *info)
 {
   gboolean did_placement;
 
@@ -571,7 +579,8 @@ place_window_if_needed(MetaWindow     *window,
         }
       else
         {
-          meta_window_place (window, orig_rect.x, orig_rect.y,
+          meta_window_place (window, place_flags,
+                             orig_rect.x, orig_rect.y,
                              &placed_rect.x, &placed_rect.y);
 
           /* placing the window may have changed the monitor.  Find the
@@ -609,15 +618,15 @@ place_window_if_needed(MetaWindow     *window,
            */
           if (info->current.width >= info->work_area_monitor.width)
             {
-              info->current.width = .75 * info->work_area_monitor.width;
-              info->current.x = info->work_area_monitor.x +
-                       .125 * info->work_area_monitor.width;
+              info->current.width = (int) (0.75f * info->work_area_monitor.width);
+              info->current.x = (int) (info->work_area_monitor.x +
+                                       0.125f * info->work_area_monitor.width);
             }
           if (info->current.height >= info->work_area_monitor.height)
             {
-              info->current.height = .75 * info->work_area_monitor.height;
-              info->current.y = info->work_area_monitor.y +
-                       .083 * info->work_area_monitor.height;
+              info->current.height = (int) (0.75f * info->work_area_monitor.height);
+              info->current.y = (int) (info->work_area_monitor.y +
+                                       0.083f * info->work_area_monitor.height);
             }
 
           /* idle_move_resize() uses the unconstrained_rect, so make sure it
@@ -708,27 +717,30 @@ update_onscreen_requirements (MetaWindow     *window,
   /* Update whether we want future constraint runs to require the
    * titlebar to be visible.
    */
-  if (window->frame && window->decorated)
+#ifdef HAVE_X11_CLIENT
+  if (window->client_type == META_WINDOW_CLIENT_TYPE_X11 && window->decorated)
     {
-      MtkRectangle titlebar_rect, frame_rect;
+      MtkRectangle frame_rect;
+      MetaFrame *frame = meta_window_x11_get_frame (window);
 
-      meta_window_get_titlebar_rect (window, &titlebar_rect);
+      if (!frame)
+        return;
+
       meta_window_get_frame_rect (window, &frame_rect);
-
       /* translate into screen coordinates */
-      titlebar_rect.x = frame_rect.x;
-      titlebar_rect.y = frame_rect.y;
+      frame_rect.height = META_WINDOW_TITLEBAR_HEIGHT;
 
       old = window->require_titlebar_visible;
       window->require_titlebar_visible =
         meta_rectangle_overlaps_with_region (info->usable_screen_region,
-                                             &titlebar_rect);
+                                             &frame_rect);
       if (old != window->require_titlebar_visible)
         meta_topic (META_DEBUG_GEOMETRY,
                     "require_titlebar_visible for %s toggled to %s",
                     window->desc,
                     window->require_titlebar_visible ? "TRUE" : "FALSE");
     }
+#endif
 }
 
 static inline void
@@ -1568,13 +1580,13 @@ constrain_aspect_ratio (MetaWindow         *window,
     case META_GRAVITY_WEST:
     case META_GRAVITY_EAST:
       /* Yeah, I suck for doing implicit rounding -- sue me */
-      new_height = CLAMP (new_height, new_width / maxr,  new_width / minr);
+      new_height = (int) CLAMP (new_height, new_width / maxr,  new_width / minr);
       break;
 
     case META_GRAVITY_NORTH:
     case META_GRAVITY_SOUTH:
       /* Yeah, I suck for doing implicit rounding -- sue me */
-      new_width  = CLAMP (new_width,  new_height * minr, new_height * maxr);
+      new_width = (int) CLAMP (new_width,  new_height * minr, new_height * maxr);
       break;
 
     case META_GRAVITY_NORTH_WEST:
@@ -1601,9 +1613,8 @@ constrain_aspect_ratio (MetaWindow         *window,
                                                       new_width, new_height,
                                                       &best_width, &best_height);
 
-      /* Yeah, I suck for doing implicit rounding -- sue me */
-      new_width  = best_width;
-      new_height = best_height;
+      new_width = (int) best_width;
+      new_height = (int) best_height;
 
       break;
     }
@@ -1702,11 +1713,20 @@ constrain_to_single_monitor (MetaWindow         *window,
                              ConstraintPriority  priority,
                              gboolean            check_only)
 {
+  /* a quirk for x11 clients that tries to move their windows
+   * by themselves when doing interactive moves.
+   */
+  gboolean client_driven_interactive_move = TRUE;
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (info->backend);
 
   if (priority > PRIORITY_ENTIRELY_VISIBLE_ON_SINGLE_MONITOR)
     return TRUE;
+
+#ifdef HAVE_X11_CLIENT
+  if (window->client_type == META_WINDOW_CLIENT_TYPE_X11)
+    client_driven_interactive_move = meta_window_x11_get_frame (window) == NULL;
+#endif
 
   /* Exit early if we know the constraint won't apply--note that this constraint
    * is only meant for normal windows (e.g. we don't want docks to be shoved
@@ -1717,7 +1737,7 @@ constrain_to_single_monitor (MetaWindow         *window,
       window->type == META_WINDOW_DOCK ||
       meta_monitor_manager_get_num_logical_monitors (monitor_manager) == 1 ||
       !window->require_on_single_monitor ||
-      !window->frame ||
+      client_driven_interactive_move ||
       info->is_user_action ||
       meta_window_get_placement_rule (window))
     return TRUE;
@@ -1770,6 +1790,9 @@ constrain_titlebar_visible (MetaWindow         *window,
   int horiz_amount_offscreen, vert_amount_offscreen;
   int horiz_amount_onscreen,  vert_amount_onscreen;
   MetaWindowDrag *window_drag;
+#ifdef HAVE_X11_CLIENT
+  MetaFrameBorders borders;
+#endif
 
   if (priority > PRIORITY_TITLEBAR_VISIBLE)
     return TRUE;
@@ -1826,19 +1849,18 @@ constrain_titlebar_visible (MetaWindow         *window,
   vert_amount_offscreen  = info->current.height - vert_amount_onscreen;
   horiz_amount_offscreen = MAX (horiz_amount_offscreen, 0);
   vert_amount_offscreen  = MAX (vert_amount_offscreen,  0);
+  bottom_amount = vert_amount_offscreen;
   /* Allow the titlebar to touch the bottom panel;  If there is no titlebar,
    * require vert_amount to remain on the screen.
    */
-  if (window->frame)
+#ifdef HAVE_X11_CLIENT
+  if (window->client_type == META_WINDOW_CLIENT_TYPE_X11 &&
+      meta_window_x11_get_frame_borders (window, &borders))
     {
-      MetaFrameBorders borders;
-      meta_frame_calc_borders (window->frame, &borders);
-
       bottom_amount = info->current.height - borders.visible.top;
       vert_amount_onscreen = borders.visible.top;
     }
-  else
-    bottom_amount = vert_amount_offscreen;
+#endif
 
   /* Extend the region, have a helper function handle the constraint,
    * then return the region to its original size.
@@ -1876,6 +1898,9 @@ constrain_partially_onscreen (MetaWindow         *window,
   int top_amount, bottom_amount;
   int horiz_amount_offscreen, vert_amount_offscreen;
   int horiz_amount_onscreen,  vert_amount_onscreen;
+#ifdef HAVE_X11_CLIENT
+  MetaFrameBorders borders;
+#endif
 
   if (priority > PRIORITY_PARTIALLY_VISIBLE_ON_WORKAREA)
     return TRUE;
@@ -1905,19 +1930,18 @@ constrain_partially_onscreen (MetaWindow         *window,
   horiz_amount_offscreen = MAX (horiz_amount_offscreen, 0);
   vert_amount_offscreen  = MAX (vert_amount_offscreen,  0);
   top_amount = vert_amount_offscreen;
+  bottom_amount = vert_amount_offscreen;
   /* Allow the titlebar to touch the bottom panel;  If there is no titlebar,
    * require vert_amount to remain on the screen.
    */
-  if (window->frame)
+#ifdef HAVE_X11_CLIENT
+  if (window->client_type == META_WINDOW_CLIENT_TYPE_X11 &&
+      meta_window_x11_get_frame_borders (window, &borders))
     {
-      MetaFrameBorders borders;
-      meta_frame_calc_borders (window->frame, &borders);
-
       bottom_amount = info->current.height - borders.visible.top;
       vert_amount_onscreen = borders.visible.top;
     }
-  else
-    bottom_amount = vert_amount_offscreen;
+#endif
 
   /* Extend the region, have a helper function handle the constraint,
    * then return the region to its original size.

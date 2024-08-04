@@ -61,10 +61,11 @@ create_offscreen (CoglContext *cogl_context,
 }
 
 static MetaRendererView *
-meta_renderer_x11_nested_create_view (MetaRenderer       *renderer,
-                                      MetaLogicalMonitor *logical_monitor,
-                                      MetaOutput         *output,
-                                      MetaCrtc           *crtc)
+meta_renderer_x11_nested_create_view (MetaRenderer        *renderer,
+                                      MetaLogicalMonitor  *logical_monitor,
+                                      MetaOutput          *output,
+                                      MetaCrtc            *crtc,
+                                      GError             **error)
 {
   MetaBackend *backend = meta_renderer_get_backend (renderer);
   ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
@@ -83,8 +84,8 @@ meta_renderer_x11_nested_create_view (MetaRenderer       *renderer,
     view_scale = 1.0;
 
   crtc_config = meta_crtc_get_config (crtc);
-  width = roundf (crtc_config->layout.size.width * view_scale);
-  height = roundf (crtc_config->layout.size.height * view_scale);
+  width = (int) roundf (crtc_config->layout.size.width * view_scale);
+  height = (int) roundf (crtc_config->layout.size.height * view_scale);
 
   fake_onscreen = create_offscreen (cogl_context, width, height);
 

@@ -3,6 +3,15 @@ include:
   - remote: 'https://gitlab.freedesktop.org/freedesktop/ci-templates/-/raw/34f4ade99434043f88e164933f570301fd18b125/templates/ci-fairy.yml'
   - project: 'Infrastructure/openshift-images/gnome-release-service'
     file: '/ci-templates/release-module.yml'
+  - component: gitlab.gnome.org/GNOME/citemplates/gnomeos-build-sysext@1.0.0-alpha
+    inputs:
+      meson-options:
+        -Dxwayland_initfd=enabled
+        -Dprofiler=true
+
+build-sysext:
+  before_script:
+    - .gitlab-ci/install-gnomeos-sysext-dependencies.sh $CI_PROJECT_DIR/extension
 
 stages:
  - review
@@ -87,7 +96,7 @@ variables:
     - .skip-git-clone
   variables:
     FDO_DISTRIBUTION_VERSION: 40
-    BASE_TAG: '2024-04-29.0'
+    BASE_TAG: '2024-07-16.0'
     MUTTER_USER: 'meta-user'
     FDO_DISTRIBUTION_PACKAGES:
       asciidoc
@@ -122,6 +131,7 @@ variables:
       dnf builddep -y gnome-shell --setopt=install_weak_deps=False
       dnf builddep -y kernel --setopt=install_weak_deps=False
       dnf builddep -y gi-docgen --setopt=install_weak_deps=False
+      dnf builddep -y wayland --setopt=install_weak_deps=False
 
       ./.gitlab-ci/install-meson-project.sh \
         https://gitlab.gnome.org/jadahl/catch.git \
@@ -131,9 +141,17 @@ variables:
         https://gitlab.gnome.org/GNOME/gi-docgen.git \
         main
 
+      ./.gitlab-ci/install-common-dependencies.sh
+
       rpm -e --nodeps gnome-bluetooth-libs-devel \
                       mutter mutter-devel \
-                      gnome-shell
+                      gnome-shell \
+                      gtk3
+
+      # Contains fixes needed for tests not included in 3.24.33
+      ./.gitlab-ci/install-meson-project.sh \
+        https://gitlab.gnome.org/GNOME/gtk.git \
+        gtk-3-24 46fe3224dd771b91e6976d5a632b452e2179a4f0
 
       # Work-around for podman-push aborting on permission issue
       # https://gitlab.gnome.org/Infrastructure/Infrastructure/-/issues/1247
@@ -355,6 +373,7 @@ check-code-style:
         --warnlevel 2
         -Dbuildtype=debugoptimized
         -Db_coverage=true
+        -Ddocs=true
         $BASE_MESON_OPTIONS
         $EXTRA_MESON_OPTIONS
     - meson compile -C build
@@ -422,8 +441,29 @@ build-without-native-backend-and-wayland@x86_64:
         -Dudev=false
         -Dwayland=false
         -Dxwayland=false
-        -Dcore_tests=false
-        -Dnative_tests=false
+        -Dtests=disabled
+        -Dintrospection=false
+    - meson compile -C build
+    - sudo meson install --no-rebuild -C build
+  artifacts:
+    paths:
+      - build/meson-logs
+
+build-wayland-xwayland@x86_64:
+  extends:
+    - .mutter.distribution-image
+    - .mutter.fedora@x86_64
+  stage: build
+  needs:
+    - job: build-fedora-container@x86_64
+      artifacts: false
+  script:
+    - meson setup . build --werror --prefix /usr
+        -Dbuildtype=debugoptimized
+        -Dwayland=true
+        -Dxwayland=true
+        -Dx11=false
+        -Dtests=disabled
         -Dintrospection=false
     - meson compile -C build
     - sudo meson install --no-rebuild -C build
@@ -444,8 +484,8 @@ build-wayland-only@x86_64:
         -Dbuildtype=debugoptimized
         -Dwayland=true
         -Dxwayland=false
-        -Dcore_tests=false
-        -Dnative_tests=false
+        -Dx11=false
+        -Dtests=disabled
         -Dintrospection=false
     - meson compile -C build
     - sudo meson install --no-rebuild -C build
@@ -455,7 +495,6 @@ build-wayland-only@x86_64:
 
 .test-setup:
   variables:
-    XDG_RUNTIME_DIR: "$CI_PROJECT_DIR/runtime-dir"
     GSETTINGS_SCHEMA_DIR: "$CI_PROJECT_DIR/build/data"
     MUTTER_DEBUG_DUMMY_MODE_SPECS: "800x600@10.0"
     PIPEWIRE_DEBUG: 2
@@ -467,9 +506,6 @@ build-wayland-only@x86_64:
     GTK_A11Y: "none"
   before_script:
     - !reference [.mutter.git-clone, before_script]
-    # Disable e.g. audio support to not dead lock screen cast tests
-    - mkdir -m 700 $XDG_RUNTIME_DIR
-    - pipewire & sleep 2
 
 .test-mutter-base:
   extends:
@@ -500,16 +536,18 @@ build-wayland-only@x86_64:
     - .test-mutter-base
   script:
     - glib-compile-schemas $GSETTINGS_SCHEMA_DIR
-    - xvfb-run -a -s "$XVFB_SERVER_ARGS"
-        ./src/tests/meta-dbus-runner.py
-          --launch=wireplumber
-          meson test
-            -C build
-            --setup plain
-            --no-suite 'mutter/kvm'
-            --no-rebuild
-            --timeout-multiplier 10
-            --print-errorlogs
+    - mkdir -m 1777 /tmp/.X11-unix
+    - ./src/tests/meta-dbus-runner.py
+        --launch=pipewire
+        --launch=wireplumber
+        --
+        meson test
+          -C build
+          --setup plain
+          --no-suite 'mutter/kvm'
+          --no-rebuild
+          --timeout-multiplier 10
+          --print-errorlogs
   artifacts:
     reports:
       junit: "build/meson-logs/testlog-plain.junit.xml"
@@ -596,7 +634,14 @@ can-run-gnome-shell@x86_64:
     - .gitlab-ci/checkout-gnome-shell.sh
     - meson setup gnome-shell gnome-shell/build --prefix /usr -Dbuildtype=debugoptimized -Dman=false --werror --fatal-meson-warnings
     - sudo meson install -C gnome-shell/build
-    - dbus-run-session -- xvfb-run meson test -C gnome-shell/build --no-rebuild --timeout-multiplier 5
+    - mkdir -m 1777 /tmp/.X11-unix
+    - dbus-run-session -- meson test -C gnome-shell/build --no-rebuild --timeout-multiplier 5
+  artifacts:
+    expire_in: 7 day
+    name: "mutter-${CI_JOB_NAME}-${CI_COMMIT_REF_NAME}"
+    when: on_failure
+    paths:
+      - gnome-shell/build/meson-logs
 
 test-mutter-coverity:
   rules:
@@ -661,10 +706,12 @@ dist-mutter:
     - meson setup . build --werror --prefix /usr
         -Dbuildtype=debugoptimized
     - glib-compile-schemas $GSETTINGS_SCHEMA_DIR
-    - xvfb-run -a -s "$XVFB_SERVER_ARGS"
-        ./src/tests/meta-dbus-runner.py
-          --launch=wireplumber
-          meson dist -C build
+    - mkdir -m 1777 /tmp/.X11-unix
+    - ./src/tests/meta-dbus-runner.py
+        --launch=pipewire
+        --launch=wireplumber
+        --
+        meson dist -C build
   artifacts:
     expire_in: 7 day
     name: "mutter-${CI_JOB_NAME}-${CI_COMMIT_REF_NAME}"
@@ -711,11 +758,8 @@ reference:
     - .mutter.fedora@x86_64
   stage: docs
   needs:
-    - job: build-fedora-container@x86_64
-      artifacts: false
+    - build-mutter@x86_64
   script:
-    - meson setup . build --werror -Ddocs=true -Dtests=false
-    - ninja -C build
     - mkdir references
     - cp -r doc/website/* ./references
     - mv build/doc/reference/{cally/cally,clutter/clutter,cogl/cogl,cogl-pango/cogl-pango,meta/meta,mtk/mtk} references/

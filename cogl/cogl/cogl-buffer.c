@@ -104,7 +104,6 @@ cogl_buffer_dispose (GObject *object)
   CoglBuffer *buffer = COGL_BUFFER (object);
 
   g_return_if_fail (!(buffer->flags & COGL_BUFFER_FLAG_MAPPED));
-  g_return_if_fail (buffer->immutable_ref == 0);
 
   if (buffer->flags & COGL_BUFFER_FLAG_BUFFER_OBJECT)
     buffer->context->driver_vtable->buffer_destroy (buffer);
@@ -217,7 +216,6 @@ cogl_buffer_init (CoglBuffer *buffer)
   buffer->flags = COGL_BUFFER_FLAG_NONE;
   buffer->store_created = FALSE;
   buffer->data = NULL;
-  buffer->immutable_ref = 0;
 }
 
 unsigned int
@@ -247,18 +245,6 @@ cogl_buffer_get_update_hint (CoglBuffer *buffer)
     return FALSE;
 
   return buffer->update_hint;
-}
-
-static void
-warn_about_midscene_changes (void)
-{
-  static gboolean seen = FALSE;
-  if (!seen)
-    {
-      g_warning ("Mid-scene modification of buffers has "
-                 "undefined results\n");
-      seen = TRUE;
-    }
 }
 
 void *
@@ -295,9 +281,6 @@ cogl_buffer_map_range (CoglBuffer *buffer,
 {
   g_return_val_if_fail (COGL_IS_BUFFER (buffer), NULL);
   g_return_val_if_fail (!(buffer->flags & COGL_BUFFER_FLAG_MAPPED), NULL);
-
-  if (G_UNLIKELY (buffer->immutable_ref))
-    warn_about_midscene_changes ();
 
   buffer->data = buffer->map_range (buffer,
                                     offset,
@@ -382,11 +365,10 @@ _cogl_buffer_unmap_for_fill_or_fallback (CoglBuffer *buffer)
        * smaller buffers, though that would probably not help for
        * deferred renderers.
        */
-      _cogl_buffer_set_data (buffer,
-                             ctx->buffer_map_fallback_offset,
-                             ctx->buffer_map_fallback_array->data,
-                             ctx->buffer_map_fallback_array->len,
-                             NULL);
+      cogl_buffer_set_data (buffer,
+                            ctx->buffer_map_fallback_offset,
+                            ctx->buffer_map_fallback_array->data,
+                            ctx->buffer_map_fallback_array->len);
       buffer->flags &= ~COGL_BUFFER_FLAG_MAPPED_FALLBACK;
     }
   else
@@ -394,49 +376,19 @@ _cogl_buffer_unmap_for_fill_or_fallback (CoglBuffer *buffer)
 }
 
 gboolean
-_cogl_buffer_set_data (CoglBuffer *buffer,
-                       size_t offset,
-                       const void *data,
-                       size_t size,
-                       GError **error)
+cogl_buffer_set_data (CoglBuffer *buffer,
+                      size_t      offset,
+                      const void *data,
+                      size_t      size)
 {
+  GError *ignore_error = NULL;
+  gboolean status;
+
   g_return_val_if_fail (COGL_IS_BUFFER (buffer), FALSE);
   g_return_val_if_fail ((offset + size) <= buffer->size, FALSE);
 
-  if (G_UNLIKELY (buffer->immutable_ref))
-    warn_about_midscene_changes ();
+  status = buffer->set_data (buffer, offset, data, size, &ignore_error);
 
-  return buffer->set_data (buffer, offset, data, size, error);
-}
-
-gboolean
-cogl_buffer_set_data (CoglBuffer *buffer,
-                      size_t offset,
-                      const void *data,
-                      size_t size)
-{
-  GError *ignore_error = NULL;
-  gboolean status =
-    _cogl_buffer_set_data (buffer, offset, data, size, &ignore_error);
   g_clear_error (&ignore_error);
   return status;
 }
-
-CoglBuffer *
-_cogl_buffer_immutable_ref (CoglBuffer *buffer)
-{
-  g_return_val_if_fail (COGL_IS_BUFFER (buffer), NULL);
-
-  buffer->immutable_ref++;
-  return buffer;
-}
-
-void
-_cogl_buffer_immutable_unref (CoglBuffer *buffer)
-{
-  g_return_if_fail (COGL_IS_BUFFER (buffer));
-  g_return_if_fail (buffer->immutable_ref > 0);
-
-  buffer->immutable_ref--;
-}
-

@@ -50,6 +50,8 @@ struct _MetaKmsCrtc
   MetaKmsCrtcState current_state;
 
   MetaKmsCrtcPropTable prop_table;
+
+  gboolean is_leased;
 };
 
 G_DEFINE_TYPE (MetaKmsCrtc, meta_kms_crtc, G_TYPE_OBJECT)
@@ -105,6 +107,19 @@ gboolean
 meta_kms_crtc_is_active (MetaKmsCrtc *crtc)
 {
   return crtc->current_state.is_active;
+}
+
+gboolean
+meta_kms_crtc_is_leased (MetaKmsCrtc *crtc)
+{
+  return crtc->is_leased;
+}
+
+void
+meta_kms_crtc_set_is_leased (MetaKmsCrtc *crtc,
+                             gboolean     leased)
+{
+  crtc->is_leased = leased;
 }
 
 static void
@@ -584,8 +599,8 @@ meta_kms_crtc_determine_deadline (MetaKmsCrtc  *crtc,
     {
       next_presentation_us = 0;
       next_deadline_us =
-        s2us (vblank.reply.tval_sec) + vblank.reply.tval_usec + 0.5 +
-        G_USEC_PER_SEC / MINIMUM_REFRESH_RATE;
+        (int64_t) (s2us (vblank.reply.tval_sec) + vblank.reply.tval_usec + 0.5 +
+                   G_USEC_PER_SEC / MINIMUM_REFRESH_RATE);
     }
   else
     {
@@ -596,8 +611,8 @@ meta_kms_crtc_determine_deadline (MetaKmsCrtc  *crtc,
       drm_mode = &crtc->current_state.drm_mode;
 
       next_presentation_us =
-        s2us (vblank.reply.tval_sec) + vblank.reply.tval_usec + 0.5 +
-        G_USEC_PER_SEC / meta_calculate_drm_mode_refresh_rate (drm_mode);
+        (int64_t) (s2us (vblank.reply.tval_sec) + vblank.reply.tval_usec + 0.5 +
+                   G_USEC_PER_SEC / meta_calculate_drm_mode_refresh_rate (drm_mode));
 
       /*
        *                         1

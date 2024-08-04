@@ -58,7 +58,7 @@ frame_cb (ClutterTimeline  *timeline,
 }
 
 static void
-material_rectangle_paint (ClutterActor        *actor,
+pipeline_rectangle_paint (ClutterActor        *actor,
                           ClutterPaintContext *paint_context,
                           gpointer             data)
 {
@@ -114,7 +114,7 @@ test_cogl_multitexture_main (int argc, char *argv[])
 {
   GError            *error = NULL;
   ClutterActor      *stage;
-  ClutterColor       stage_color = { 0x61, 0x56, 0x56, 0xff };
+  CoglColor stage_color = { 0x61, 0x56, 0x56, 0xff };
   g_autofree TestMultiLayerPipelineState *state = g_new0 (TestMultiLayerPipelineState, 1);
   gfloat             stage_w, stage_h;
   gchar            **files;
@@ -144,7 +144,7 @@ test_cogl_multitexture_main (int argc, char *argv[])
   state->group = clutter_actor_new ();
   clutter_actor_set_position (state->group, stage_w / 2, stage_h / 2);
   g_signal_connect (state->group, "paint",
-                    G_CALLBACK (material_rectangle_paint), state);
+                    G_CALLBACK (pipeline_rectangle_paint), state);
 
   files = g_new (gchar*, 4);
   files[0] = g_build_filename (TESTS_DATADIR, "redhand_alpha.png", NULL);

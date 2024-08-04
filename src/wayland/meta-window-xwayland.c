@@ -20,9 +20,9 @@
 
 #include <X11/Xatom.h>
 
-#include "core/frame.h"
 #include "mtk/mtk-x11.h"
 #include "x11/meta-x11-display-private.h"
+#include "x11/meta-x11-frame.h"
 #include "x11/window-x11.h"
 #include "x11/window-x11-private.h"
 #include "x11/xprops.h"
@@ -197,7 +197,7 @@ apply_allow_commits_x11_property (MetaWindowXwayland *xwayland_window,
   if (!x11_display)
     return;
 
-  frame = meta_window_get_frame (window);
+  frame = meta_window_x11_get_frame (window);
   if (!frame)
     xwin = meta_window_x11_get_xwindow (window);
   else

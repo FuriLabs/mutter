@@ -20,8 +20,10 @@
 
 #include "backends/meta-cursor-sprite-xcursor.h"
 
+#include "backends/meta-backend-private.h"
 #include "backends/meta-cursor.h"
 #include "backends/meta-cursor-renderer.h"
+#include "backends/meta-cursor-tracker-private.h"
 #include "clutter/clutter.h"
 #include "cogl/cogl.h"
 #include "meta/prefs.h"
@@ -151,8 +153,8 @@ create_blank_cursor_images (void)
 {
   XcursorImages *images;
 
-  images = XcursorImagesCreate (1);
-  images->images[0] = XcursorImageCreate (1, 1);
+  images = xcursor_images_create (1);
+  images->images[0] = xcursor_image_create (1, 1);
 
   images->images[0]->xhot = 0;
   images->images[0]->yhot = 0;
@@ -184,9 +186,9 @@ load_cursor_on_client (MetaCursor cursor,
   for (i = 0; i < G_N_ELEMENTS (cursor_names); i++)
     {
       xcursor_images =
-        XcursorLibraryLoadImages (cursor_names[i],
-                                  meta_prefs_get_cursor_theme (),
-                                  meta_prefs_get_cursor_size () * scale);
+        xcursor_library_load_images (cursor_names[i],
+                                     meta_prefs_get_cursor_theme (),
+                                     meta_prefs_get_cursor_size () * scale);
       if (xcursor_images)
         return xcursor_images;
     }
@@ -194,8 +196,8 @@ load_cursor_on_client (MetaCursor cursor,
   g_warning_once ("No cursor theme available, please install a cursor theme");
 
   fallback_size = 24 * scale;
-  xcursor_images = XcursorImagesCreate (1);
-  xcursor_images->images[0] = XcursorImageCreate (fallback_size, fallback_size);
+  xcursor_images = xcursor_images_create (1);
+  xcursor_images->images[0] = xcursor_image_create (fallback_size, fallback_size);
   xcursor_images->images[0]->xhot = 0;
   xcursor_images->images[0]->yhot = 0;
   memset (xcursor_images->images[0]->pixels, 0xc0,
@@ -328,7 +330,7 @@ load_cursor_from_theme (MetaCursorSprite *sprite)
   if (sprite_xcursor->xcursor_images)
     {
       meta_cursor_sprite_clear_texture (sprite);
-      XcursorImagesDestroy (sprite_xcursor->xcursor_images);
+      xcursor_images_destroy (sprite_xcursor->xcursor_images);
     }
 
   sprite_xcursor->current_frame = 0;
@@ -364,14 +366,49 @@ meta_cursor_sprite_xcursor_invalidate (MetaCursorSprite *sprite)
   sprite_xcursor->invalidated = TRUE;
 }
 
+static ClutterColorState *
+ensure_xcursor_color_state (MetaCursorTracker *cursor_tracker)
+{
+  ClutterColorState *color_state;
+  static GOnce quark_once = G_ONCE_INIT;
+
+  g_once (&quark_once, (GThreadFunc) g_quark_from_static_string,
+          (gpointer) "-meta-cursor-sprite-xcursor-color-state");
+
+  color_state = g_object_get_qdata (G_OBJECT (cursor_tracker),
+                                    GPOINTER_TO_INT (quark_once.retval));
+  if (!color_state)
+    {
+      MetaBackend *backend =
+        meta_cursor_tracker_get_backend (cursor_tracker);
+      ClutterContext *clutter_context =
+        meta_backend_get_clutter_context (backend);
+      ClutterColorManager *color_manager =
+        clutter_context_get_color_manager (clutter_context);
+
+      color_state = clutter_color_manager_get_default_color_state (color_manager);
+
+      g_object_set_qdata_full (G_OBJECT (cursor_tracker),
+                               GPOINTER_TO_INT (quark_once.retval),
+                               g_object_ref (color_state),
+                               g_object_unref);
+    }
+
+  return color_state;
+}
+
 MetaCursorSpriteXcursor *
 meta_cursor_sprite_xcursor_new (MetaCursor         cursor,
                                 MetaCursorTracker *cursor_tracker)
 {
   MetaCursorSpriteXcursor *sprite_xcursor;
+  ClutterColorState *color_state;
+
+  color_state = ensure_xcursor_color_state (cursor_tracker);
 
   sprite_xcursor = g_object_new (META_TYPE_CURSOR_SPRITE_XCURSOR,
                                  "cursor-tracker", cursor_tracker,
+                                 "color-state", color_state,
                                  NULL);
   sprite_xcursor->cursor = cursor;
 
@@ -384,7 +421,7 @@ meta_cursor_sprite_xcursor_finalize (GObject *object)
   MetaCursorSpriteXcursor *sprite_xcursor = META_CURSOR_SPRITE_XCURSOR (object);
 
   g_clear_pointer (&sprite_xcursor->xcursor_images,
-                   XcursorImagesDestroy);
+                   xcursor_images_destroy);
 
   G_OBJECT_CLASS (meta_cursor_sprite_xcursor_parent_class)->finalize (object);
 }

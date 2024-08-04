@@ -52,13 +52,14 @@
 #include "backends/meta-monitor.h"
 #include "backends/meta-monitor-config-manager.h"
 #include "backends/meta-monitor-config-store.h"
-#include "backends/meta-orientation-manager.h"
 #include "backends/meta-output.h"
 #include "backends/meta-virtual-monitor.h"
 #include "clutter/clutter.h"
+#include "core/meta-debug-control-private.h"
 #include "core/util-private.h"
 #include "meta/main.h"
 #include "meta/meta-enum-types.h"
+#include "meta/meta-orientation-manager.h"
 
 #include "meta-dbus-display-config.h"
 
@@ -76,7 +77,6 @@ enum
   PROP_PANEL_ORIENTATION_MANAGED,
   PROP_HAS_BUILTIN_PANEL,
   PROP_NIGHT_LIGHT_SUPPORTED,
-  PROP_EXPERIMENTAL_HDR,
 
   PROP_LAST
 };
@@ -118,7 +118,6 @@ typedef struct _MetaMonitorManagerPrivate
 
   gboolean has_builtin_panel;
   gboolean night_light_supported;
-  char *experimental_hdr;
 
   guint reload_monitor_manager_id;
   guint switch_config_handle_id;
@@ -491,18 +490,26 @@ prepare_shutdown (MetaBackend        *backend,
 }
 
 static void
-ensure_hdr_settings (MetaMonitorManager *manager)
+set_color_space_and_hdr_metadata (MetaMonitorManager    *manager,
+                                  gboolean               enable,
+                                  MetaOutputColorspace  *color_space,
+                                  MetaOutputHdrMetadata *hdr_metadata)
 {
-  MetaMonitorManagerPrivate *priv =
-    meta_monitor_manager_get_instance_private (manager);
-  MetaOutputColorspace color_space;
-  MetaOutputHdrMetadata hdr_metadata;
-  GList *l;
+  MetaBackend *backend = meta_monitor_manager_get_backend (manager);
+  ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
+  CoglContext *cogl_context = clutter_backend_get_cogl_context (clutter_backend);
 
-  if (g_strcmp0 (priv->experimental_hdr, "on") == 0)
+  if (enable &&
+      !cogl_context_has_feature (cogl_context, COGL_FEATURE_ID_TEXTURE_HALF_FLOAT))
     {
-      color_space = META_OUTPUT_COLORSPACE_BT2020;
-      hdr_metadata = (MetaOutputHdrMetadata) {
+      g_warning ("Tried to enable HDR without half float rendering support, ignoring");
+      enable = FALSE;
+    }
+
+  if (enable)
+    {
+      *color_space = META_OUTPUT_COLORSPACE_BT2020;
+      *hdr_metadata = (MetaOutputHdrMetadata) {
         .active = TRUE,
         .eotf = META_OUTPUT_HDR_METADATA_EOTF_PQ,
       };
@@ -513,8 +520,8 @@ ensure_hdr_settings (MetaMonitorManager *manager)
     }
   else
     {
-      color_space = META_OUTPUT_COLORSPACE_DEFAULT;
-      hdr_metadata = (MetaOutputHdrMetadata) {
+      *color_space = META_OUTPUT_COLORSPACE_DEFAULT;
+      *hdr_metadata = (MetaOutputHdrMetadata) {
         .active = FALSE,
       };
 
@@ -522,6 +529,22 @@ ensure_hdr_settings (MetaMonitorManager *manager)
                   "MonitorManager: Trying to enable default mode "
                   "(Colorimetry: default, TF: default, HDR Metadata: None):");
     }
+}
+
+static void
+ensure_hdr_settings (MetaMonitorManager *manager)
+{
+  MetaBackend *backend = manager->backend;
+  MetaContext *context = meta_backend_get_context (backend);
+  MetaDebugControl *debug_control = meta_context_get_debug_control (context);
+  MetaOutputColorspace color_space;
+  MetaOutputHdrMetadata hdr_metadata;
+  GList *l;
+
+  set_color_space_and_hdr_metadata (manager,
+                                    meta_debug_control_is_hdr_enabled (debug_control),
+                                    &color_space,
+                                    &hdr_metadata);
 
   for (l = manager->monitors; l; l = l->next)
     {
@@ -1336,25 +1359,27 @@ static void
 on_started (MetaContext        *context,
             MetaMonitorManager *monitor_manager)
 {
-  g_signal_connect (monitor_manager, "notify::experimental-hdr",
-                    G_CALLBACK (meta_monitor_manager_reconfigure),
-                    NULL);
+  MetaDebugControl *debug_control = meta_context_get_debug_control (context);
+
+  g_signal_connect_data (debug_control, "notify::enable-hdr",
+                         G_CALLBACK (meta_monitor_manager_reconfigure),
+                         monitor_manager, NULL,
+                         G_CONNECT_SWAPPED | G_CONNECT_AFTER);
+  g_signal_connect_data (debug_control, "notify::force-linear-blending",
+                         G_CALLBACK (meta_monitor_manager_reconfigure),
+                         monitor_manager, NULL,
+                         G_CONNECT_SWAPPED | G_CONNECT_AFTER);
 }
 
 static void
 meta_monitor_manager_constructed (GObject *object)
 {
   MetaMonitorManager *manager = META_MONITOR_MANAGER (object);
-  MetaMonitorManagerPrivate *priv =
-    meta_monitor_manager_get_instance_private (manager);
   MetaBackend *backend = manager->backend;
   MetaContext *context = meta_backend_get_context (backend);
   MetaSettings *settings = meta_backend_get_settings (backend);
 
   manager->display_config = meta_dbus_display_config_skeleton_new ();
-
-  if (g_strcmp0 (getenv ("MUTTER_DEBUG_ENABLE_HDR"), "1") == 0)
-    priv->experimental_hdr = g_strdup ("on");
 
   g_signal_connect_object (settings,
                            "experimental-features-changed",
@@ -1404,7 +1429,6 @@ meta_monitor_manager_finalize (GObject *object)
   MetaMonitorManagerPrivate *priv =
     meta_monitor_manager_get_instance_private (manager);
 
-  g_clear_pointer (&priv->experimental_hdr, g_free);
   g_list_free_full (manager->logical_monitors, g_object_unref);
 
   g_warn_if_fail (!priv->virtual_monitors);
@@ -1446,17 +1470,11 @@ meta_monitor_manager_set_property (GObject      *object,
                                    GParamSpec   *pspec)
 {
   MetaMonitorManager *manager = META_MONITOR_MANAGER (object);
-  MetaMonitorManagerPrivate *priv =
-    meta_monitor_manager_get_instance_private (manager);
 
   switch (prop_id)
     {
     case PROP_BACKEND:
       manager->backend = g_value_get_object (value);
-      break;
-    case PROP_EXPERIMENTAL_HDR:
-      g_clear_pointer (&priv->experimental_hdr, g_free);
-      priv->experimental_hdr = g_value_dup_string (value);
       break;
     case PROP_PANEL_ORIENTATION_MANAGED:
     case PROP_HAS_BUILTIN_PANEL:
@@ -1489,9 +1507,6 @@ meta_monitor_manager_get_property (GObject    *object,
       break;
     case PROP_NIGHT_LIGHT_SUPPORTED:
       g_value_set_boolean (value, priv->night_light_supported);
-      break;
-    case PROP_EXPERIMENTAL_HDR:
-      g_value_set_string (value, priv->experimental_hdr);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -1587,12 +1602,6 @@ meta_monitor_manager_class_init (MetaMonitorManagerClass *klass)
                           G_PARAM_READABLE |
                           G_PARAM_EXPLICIT_NOTIFY |
                           G_PARAM_STATIC_STRINGS);
-
-  obj_props[PROP_EXPERIMENTAL_HDR] =
-    g_param_spec_string ("experimental-hdr", NULL, NULL,
-                         NULL,
-                         G_PARAM_READWRITE |
-                         G_PARAM_STATIC_STRINGS);
 
   g_object_class_install_properties (object_class, PROP_LAST, obj_props);
 }
@@ -2630,8 +2639,8 @@ derive_logical_monitor_size (MetaMonitorConfig           *monitor_config,
   switch (layout_mode)
     {
     case META_LOGICAL_MONITOR_LAYOUT_MODE_LOGICAL:
-      width = roundf (width / scale);
-      height = roundf (height / scale);
+      width = (int) roundf (width / scale);
+      height = (int) roundf (height / scale);
       break;
     case META_LOGICAL_MONITOR_LAYOUT_MODE_PHYSICAL:
       break;
@@ -2657,7 +2666,7 @@ create_logical_monitor_config_from_variant (MetaMonitorManager          *manager
   gboolean is_primary;
   GVariantIter *monitor_configs_iter;
   GList *monitor_configs = NULL;
-  MetaMonitorConfig *monitor_config;
+  MetaMonitorConfig *first_monitor_config;
 
   g_variant_get (logical_monitor_config_variant, LOGICAL_MONITOR_CONFIG_FORMAT,
                  &x,
@@ -2702,16 +2711,16 @@ create_logical_monitor_config_from_variant (MetaMonitorManager          *manager
       goto err;
     }
 
-  monitor_config = monitor_configs->data;
+  first_monitor_config = monitor_configs->data;
   if (!find_monitor_mode_scale (manager,
                                 layout_mode,
-                                monitor_config,
+                                first_monitor_config,
                                 scale,
                                 &scale,
                                 error))
     goto err;
 
-  if (!derive_logical_monitor_size (monitor_config, &width, &height,
+  if (!derive_logical_monitor_size (first_monitor_config, &width, &height,
                                     scale, transform, layout_mode, error))
     goto err;
 
@@ -3403,7 +3412,7 @@ meta_monitor_manager_get_logical_monitor_at (MetaMonitorManager *manager,
     {
       MetaLogicalMonitor *logical_monitor = l->data;
 
-      if (META_POINT_IN_RECT (x, y, logical_monitor->rect))
+      if (mtk_rectangle_contains_pointf (&logical_monitor->rect, x, y))
         return logical_monitor;
     }
 
@@ -3441,7 +3450,7 @@ meta_monitor_manager_get_logical_monitor_from_rect (MetaMonitorManager *manager,
       MtkRectangle intersection;
       int intersection_area;
 
-      if (META_POINT_IN_RECT (center_x, center_y, logical_monitor->rect))
+      if (mtk_rectangle_contains_point (&logical_monitor->rect, center_x, center_y))
         return logical_monitor;
 
       if (!mtk_rectangle_intersect (&logical_monitor->rect,

@@ -35,7 +35,6 @@
 
 #include "cogl/cogl-attribute-private.h"
 #include "cogl/cogl-framebuffer-driver.h"
-#include "cogl/cogl-gl-header.h"
 
 #define COGL_TYPE_GL_FRAMEBUFFER (cogl_gl_framebuffer_get_type ())
 G_DECLARE_DERIVABLE_TYPE (CoglGlFramebuffer, cogl_gl_framebuffer,
@@ -48,8 +47,6 @@ struct _CoglGlFramebufferClass
 
   void (* bind) (CoglGlFramebuffer *gl_framebuffer,
                  GLenum             target);
-
-  void (* flush_stereo_mode_state) (CoglGlFramebuffer *gl_framebuffer);
 };
 
 void

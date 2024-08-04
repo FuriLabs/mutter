@@ -221,7 +221,7 @@ append_monitor (MetaMonitorManager *manager,
   output_info->serial = g_strdup_printf ("0xC0FFEE-%d", number);
   output_info->width_mm = 222;
   output_info->height_mm = 125;
-  output_info->subpixel_order = COGL_SUBPIXEL_ORDER_UNKNOWN;
+  output_info->subpixel_order = META_SUBPIXEL_ORDER_UNKNOWN;
   output_info->preferred_mode = g_list_last (*modes)->data;
   output_info->n_possible_clones = 0;
   output_info->connector_type = META_CONNECTOR_TYPE_LVDS;
@@ -254,7 +254,7 @@ append_tiled_monitor (MetaMonitorManager *manager,
                       GList             **modes,
                       GList             **crtcs,
                       GList             **outputs,
-                      int                 scale)
+                      float               scale)
 {
   MetaGpu *gpu = get_gpu (manager);
   CrtcModeSpec mode_specs[] = {
@@ -328,7 +328,7 @@ append_tiled_monitor (MetaMonitorManager *manager,
       output_info->suggested_y = -1;
       output_info->width_mm = 222;
       output_info->height_mm = 125;
-      output_info->subpixel_order = COGL_SUBPIXEL_ORDER_UNKNOWN;
+      output_info->subpixel_order = META_SUBPIXEL_ORDER_UNKNOWN;
       output_info->preferred_mode = preferred_mode;
       output_info->n_possible_clones = 0;
       output_info->connector_type = META_CONNECTOR_TYPE_LVDS;
@@ -451,7 +451,7 @@ meta_monitor_manager_dummy_read_current (MetaMonitorManager *manager)
                       "of monitors (defaults to 1).");
       for (i = 0; i < num_monitors && scales_str_list[i]; i++)
         {
-          float scale = g_ascii_strtod (scales_str_list[i], NULL);
+          float scale = (float) g_ascii_strtod (scales_str_list[i], NULL);
 
           monitor_scales[i] = scale;
         }
@@ -626,16 +626,6 @@ meta_monitor_manager_dummy_apply_monitors_config (MetaMonitorManager      *manag
   return TRUE;
 }
 
-static gboolean
-meta_monitor_manager_dummy_is_transform_handled (MetaMonitorManager  *manager,
-                                                 MetaCrtc            *crtc,
-                                                 MetaMonitorTransform transform)
-{
-  MetaMonitorManagerDummy *manager_dummy = META_MONITOR_MANAGER_DUMMY (manager);
-
-  return manager_dummy->is_transform_handled;
-}
-
 static float
 meta_monitor_manager_dummy_calculate_monitor_mode_scale (MetaMonitorManager           *manager,
                                                          MetaLogicalMonitorLayoutMode  layout_mode,
@@ -747,7 +737,6 @@ meta_monitor_manager_dummy_class_init (MetaMonitorManagerDummyClass *klass)
 
   manager_class->ensure_initial_config = meta_monitor_manager_dummy_ensure_initial_config;
   manager_class->apply_monitors_config = meta_monitor_manager_dummy_apply_monitors_config;
-  manager_class->is_transform_handled = meta_monitor_manager_dummy_is_transform_handled;
   manager_class->calculate_monitor_mode_scale = meta_monitor_manager_dummy_calculate_monitor_mode_scale;
   manager_class->calculate_supported_scales = meta_monitor_manager_dummy_calculate_supported_scales;
   manager_class->get_capabilities = meta_monitor_manager_dummy_get_capabilities;

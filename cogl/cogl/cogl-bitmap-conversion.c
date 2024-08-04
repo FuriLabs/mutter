@@ -163,7 +163,7 @@ unpack_flt (uint32_t b)
 #define PACK_10(b) ((uint32_t) ((b) * 1023.5f))
 #define PACK_16(b) ((uint32_t) ((b) * 65535.0f))
 #define PACK_SHORT(b) cogl_float_to_half (b)
-#define PACK_FLOAT(b) pack_flt((b) / 1.0)
+#define PACK_FLOAT(b) pack_flt((b) / 1.0f)
 
 #define component_type float
 #define component_size float
@@ -766,7 +766,7 @@ driver_can_convert (CoglContext *ctx,
   /* Same for red-green textures. If red-green textures aren't
    * supported then the internal format should never be RG_88 but we
    * should still be able to convert from an RG source image */
-  if (!cogl_has_feature (ctx, COGL_FEATURE_ID_TEXTURE_RG) &&
+  if (!cogl_context_has_feature (ctx, COGL_FEATURE_ID_TEXTURE_RG) &&
       src_format == COGL_PIXEL_FORMAT_RG_88)
     return FALSE;
 

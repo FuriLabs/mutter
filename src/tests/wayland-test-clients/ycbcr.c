@@ -25,8 +25,6 @@
 #include "wayland-test-client-utils.h"
 
 static struct wl_surface *surface;
-static struct xdg_surface *xdg_surface;
-static struct xdg_toplevel *xdg_toplevel;
 
 static gboolean waiting_for_configure = FALSE;
 
@@ -102,8 +100,8 @@ draw (WaylandDisplay *display,
           float cb;
           float cr;
 
-          shader (x / (BUFFER_WIDTH - 1.0),
-                  y / (BUFFER_HEIGHT - 1.0),
+          shader (x / (BUFFER_WIDTH - 1.0f),
+                  y / (BUFFER_HEIGHT - 1.0f),
                   &luma,
                   &cb,
                   &cr);
@@ -113,11 +111,11 @@ draw (WaylandDisplay *display,
             case DRM_FORMAT_YUYV:
               /* packed [31:0] Cr0:Y1:Cb0:Y0 8:8:8:8 little endian */
               pixel = planes[0] + (y * strides[0]) + (x * 2);
-              pixel[0] = luma * 255;
+              pixel[0] = (uint8_t) (luma * 255);
               if (x % 2 == 0)
-                pixel[1] = cb * 255;
+                pixel[1] = (uint8_t) (cb * 255);
               else
-                pixel[1] = cr * 255;
+                pixel[1] = (uint8_t) (cr * 255);
               break;
             case DRM_FORMAT_YUV420:
               /*
@@ -127,11 +125,11 @@ draw (WaylandDisplay *display,
                index 2: Cr plane, [7:0] Cr
                2x2 subsampled Cb (1) and Cr (2) planes */
               pixel = planes[0] + (y * strides[0]) + x;
-              pixel[0] = luma * 255;
+              pixel[0] = (uint8_t) (luma * 255);
               pixel = planes[1] + (y / 2 * strides[1]) + x / 2;
-              pixel[0] = cb * 255;
+              pixel[0] = (uint8_t) (cb * 255);
               pixel = planes[2] + (y / 2 * strides[2]) + x / 2;
-              pixel[0] = cr * 255;
+              pixel[0] = (uint8_t) (cr * 255);
               break;
             default:
               g_assert_not_reached ();
@@ -191,6 +189,8 @@ main (int    argc,
       char **argv)
 {
   g_autoptr (WaylandDisplay) display = NULL;
+  struct xdg_surface *xdg_surface;
+  struct xdg_toplevel *xdg_toplevel;
   display = wayland_display_new (WAYLAND_DISPLAY_CAPABILITY_TEST_DRIVER);
 
   surface = wl_compositor_create_surface (display->compositor);

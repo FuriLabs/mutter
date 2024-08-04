@@ -25,10 +25,10 @@
 #include "backends/meta-monitor.h"
 #include "backends/meta-monitor-config-migration.h"
 #include "backends/meta-monitor-config-store.h"
-#include "backends/meta-orientation-manager.h"
 #include "backends/meta-output.h"
 #include "core/window-private.h"
 #include "meta-backend-test.h"
+#include "meta/meta-orientation-manager.h"
 #include "meta-test/meta-context-test.h"
 #include "tests/meta-monitor-manager-test.h"
 #include "tests/meta-monitor-test-utils.h"
@@ -3646,7 +3646,7 @@ meta_test_monitor_non_upright_panel (void)
     .height = 1024,
     .refresh_rate = 60.0,
   };
-  test_case.setup.n_modes = 2;  
+  test_case.setup.n_modes = 2;
   test_case.setup.outputs[0].modes[0] = 1;
   test_case.setup.outputs[0].preferred_mode = 1;
   test_case.setup.outputs[0].panel_orientation_transform =
@@ -4148,14 +4148,15 @@ meta_sensors_proxy_reset (MetaSensorsProxyMock *proxy)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (MetaSensorsProxyAutoResetMock,
                                meta_sensors_proxy_reset)
 
-typedef ClutterInputDevice ClutterAutoRemoveInputDevice;
+typedef ClutterVirtualInputDevice ClutterAutoRemoveInputDevice;
 static void
-input_device_test_remove (ClutterAutoRemoveInputDevice *device)
+input_device_test_remove (ClutterAutoRemoveInputDevice *virtual_device)
 {
   MetaBackend *backend = meta_context_get_backend (test_context);
 
-  meta_backend_test_remove_device (META_BACKEND_TEST (backend), device);
-  g_object_unref (device);
+  meta_backend_test_remove_test_device (META_BACKEND_TEST (backend),
+                                        virtual_device);
+  g_object_unref (virtual_device);
 }
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (ClutterAutoRemoveInputDevice,
                                input_device_test_remove)
@@ -4279,7 +4280,6 @@ meta_test_monitor_orientation_is_managed (void)
   g_assert_false (clutter_seat_get_touch_mode (seat));
   touch_device =
     meta_backend_test_add_test_device (META_BACKEND_TEST (backend),
-                                       "test-touchscreen",
                                        CLUTTER_TOUCHSCREEN_DEVICE, 1);
 
   g_assert_true (clutter_seat_get_touch_mode (seat));
@@ -4339,7 +4339,8 @@ meta_test_monitor_orientation_is_managed (void)
   g_assert_true (
     meta_monitor_manager_get_panel_orientation_managed (monitor_manager));
 
-  meta_backend_test_remove_device (META_BACKEND_TEST (backend), touch_device);
+  meta_backend_test_remove_test_device (META_BACKEND_TEST (backend),
+                                        touch_device);
   g_clear_object (&touch_device);
 
   g_assert_false (clutter_seat_get_touch_mode (seat));
@@ -4348,7 +4349,6 @@ meta_test_monitor_orientation_is_managed (void)
 
   touch_device =
     meta_backend_test_add_test_device (META_BACKEND_TEST (backend),
-                                       "test-touchscreen",
                                        CLUTTER_TOUCHSCREEN_DEVICE, 1);
 
   g_assert_true (clutter_seat_get_touch_mode (seat));
@@ -4451,7 +4451,6 @@ meta_test_monitor_orientation_initial_rotated (void)
   orientation_mock = meta_sensors_proxy_mock_get ();
   touch_device =
     meta_backend_test_add_test_device (META_BACKEND_TEST (backend),
-                                       "test-touchscreen",
                                        CLUTTER_TOUCHSCREEN_DEVICE, 1);
   orientation = META_ORIENTATION_LEFT_UP;
   meta_sensors_proxy_mock_set_orientation (orientation_mock, orientation);
@@ -4675,7 +4674,6 @@ meta_test_monitor_orientation_initial_stored_rotated (void)
   orientation_mock = meta_sensors_proxy_mock_get ();
   touch_device =
     meta_backend_test_add_test_device (META_BACKEND_TEST (backend),
-                                       "test-touchscreen",
                                        CLUTTER_TOUCHSCREEN_DEVICE, 1);
   orientation = META_ORIENTATION_RIGHT_UP;
   meta_sensors_proxy_mock_set_orientation (orientation_mock, orientation);
@@ -4720,7 +4718,9 @@ meta_test_monitor_orientation_initial_stored_rotated (void)
 
   /* When no touch device is available, the orientation change is ignored */
   g_test_message ("Removing touch device");
-  meta_backend_test_remove_device (META_BACKEND_TEST (backend), touch_device);
+  meta_backend_test_remove_test_device (META_BACKEND_TEST (backend),
+                                        touch_device);
+  g_clear_object (&touch_device);
 
   g_test_message ("Rotating to right-up");
   orientation = META_ORIENTATION_RIGHT_UP;
@@ -4959,7 +4959,6 @@ meta_test_monitor_orientation_changes (void)
   orientation_mock = meta_sensors_proxy_mock_get ();
   touch_device =
     meta_backend_test_add_test_device (META_BACKEND_TEST (backend),
-                                       "test-touchscreen",
                                        CLUTTER_TOUCHSCREEN_DEVICE, 1);
   test_setup = meta_create_monitor_test_setup (test_backend,
                                                &test_case.setup,
@@ -5029,7 +5028,9 @@ meta_test_monitor_orientation_changes (void)
 
   /* When no touch device is available, the orientation changes are ignored */
   g_test_message ("Removing touch device");
-  meta_backend_test_remove_device (META_BACKEND_TEST (backend), touch_device);
+  meta_backend_test_remove_test_device (META_BACKEND_TEST (backend),
+                                        touch_device);
+  g_clear_object (&touch_device);
 
   for (i = META_N_ORIENTATIONS - 1; i > META_ORIENTATION_UNDEFINED; i--)
     {
@@ -5159,7 +5160,6 @@ meta_test_monitor_orientation_changes_for_transformed_panel (void)
   orientation_mock = meta_sensors_proxy_mock_get ();
   touch_device =
     meta_backend_test_add_test_device (META_BACKEND_TEST (backend),
-                                       "test-touchscreen",
                                        CLUTTER_TOUCHSCREEN_DEVICE, 1);
   test_setup = meta_create_monitor_test_setup (test_backend,
                                                &test_case.setup,
@@ -5229,7 +5229,9 @@ meta_test_monitor_orientation_changes_for_transformed_panel (void)
 
   /* When no touch device is available, the orientation changes are ignored */
   g_test_message ("Removing touch device");
-  meta_backend_test_remove_device (META_BACKEND_TEST (backend), touch_device);
+  meta_backend_test_remove_test_device (META_BACKEND_TEST (backend),
+                                        touch_device);
+  g_clear_object (&touch_device);
 
   for (i = META_N_ORIENTATIONS - 1; i > META_ORIENTATION_UNDEFINED; i--)
     {
@@ -5261,7 +5263,6 @@ meta_test_monitor_orientation_changes_for_transformed_panel (void)
 
   touch_device =
     meta_backend_test_add_test_device (META_BACKEND_TEST (backend),
-                                       "test-touchscreen",
                                        CLUTTER_TOUCHSCREEN_DEVICE, 1);
   got_monitors_changed = FALSE;
   meta_sensors_proxy_mock_set_orientation (orientation_mock,
@@ -5419,7 +5420,6 @@ meta_test_monitor_orientation_changes_with_hotplugging (void)
   orientation_mock = meta_sensors_proxy_mock_get ();
   touch_device =
     meta_backend_test_add_test_device (META_BACKEND_TEST (backend),
-                                       "test-touchscreen",
                                        CLUTTER_TOUCHSCREEN_DEVICE, 1);
 
   /*
@@ -6481,7 +6481,7 @@ meta_test_monitor_custom_high_precision_fractional_scale_config (void)
           .monitors = { 0 },
           .n_monitors = 1,
           .layout = { .x = 0, .y = 0, .width = 744, .height = 558 },
-          .scale = 1024.0/744.0 /* 1.3763440847396851 */
+          .scale = 1024.0f / 744.0f /* 1.3763440847396851 */
         }
       },
       .n_logical_monitors = 1,
@@ -9423,156 +9423,156 @@ meta_test_monitor_supported_fractional_scales (void)
               .width = 800,
               .height = 600,
               .n_scales = 1,
-              .scales = { 1.000000 },
+              .scales = { 1.000000f },
             },
             {
               .width = 1024,
               .height = 768,
               .n_scales = 2,
-              .scales = { 1.000000, 1.24878049 },
+              .scales = { 1.000000f, 1.24878049f },
             },
             {
               .width = 1280,
               .height = 720,
               .n_scales = 3,
-              .scales = { 1.000000, 1.250000, 1.509434 },
+              .scales = { 1.000000f, 1.250000f, 1.509434f },
             },
             {
               .width = 1280,
               .height = 800,
               .n_scales = 3,
-              .scales = { 1.000000, 1.250000, 1.495327 },
+              .scales = { 1.000000f, 1.250000f, 1.495327f },
             },
             {
               .width = 1280,
               .height = 1024,
               .n_scales = 4,
-              .scales = { 1.000000, 1.248780, 1.497076, 1.753425 },
+              .scales = { 1.000000f, 1.248780f, 1.497076f, 1.753425f },
             },
             {
               .width = 1366,
               .height = 768,
               .n_scales = 1,
-              .scales = { 1.000000 },
+              .scales = { 1.000000f },
             },
             {
               .width = 1440,
               .height = 900,
               .n_scales = 4,
-              .scales = { 1.000000, 1.250000, 1.500000, 1.747573 },
+              .scales = { 1.000000f, 1.250000f, 1.500000f, 1.747573f },
             },
             {
               .width = 1400,
               .height = 1050,
               .n_scales = 4,
-              .scales = { 1.000000, 1.250000, 1.502146, 1.750000 },
+              .scales = { 1.000000f, 1.250000f, 1.502146f, 1.750000f },
             },
             {
               .width = 1600,
               .height = 900,
               .n_scales = 4,
-              .scales = { 1.000000, 1.250000, 1.492537, 1.754386 },
+              .scales = { 1.000000f, 1.250000f, 1.492537f, 1.754386f },
             },
             {
               .width = 1920,
               .height = 1080,
               .n_scales = 6,
-              .scales = { 1.000000, 1.250000, 1.500000, 1.739130, 2.000000,
-                          2.307692 },
+              .scales = { 1.000000f, 1.250000f, 1.500000f, 1.739130f, 2.000000f,
+                          2.307692f },
             },
             {
               .width = 1920,
               .height = 1200,
               .n_scales = 6,
-              .scales = { 1.000000, 1.250000, 1.500000, 1.751825, 2.000000,
-                          2.242991 },
+              .scales = { 1.000000f, 1.250000f, 1.500000f, 1.751825f, 2.000000f,
+                          2.242991f },
             },
             {
               .width = 2650,
               .height = 1440,
               .n_scales = 6,
-              .scales = { 1.000000, 1.250000, 1.428571, 1.666667, 2.000000,
-                          2.500000
+              .scales = { 1.000000f, 1.250000f, 1.428571f, 1.666667f, 2.000000f,
+                          2.500000f
               },
             },
             {
               .width = 2880,
               .height = 1800,
               .n_scales = 11,
-              .scales = { 1.000000, 1.250000, 1.500000, 1.747573, 2.000000,
-                          2.250000, 2.500000, 2.748092, 3.000000, 3.243243,
-                          3.495146
+              .scales = { 1.000000f, 1.250000f, 1.500000f, 1.747573f, 2.000000f,
+                          2.250000f, 2.500000f, 2.748092f, 3.000000f, 3.243243f,
+                          3.495146f
               },
             },
             {
               .width = 3200,
               .height = 1800,
               .n_scales = 12,
-              .scales = { 1.000000, 1.250000, 1.503759, 1.754386, 2.000000,
-                          2.247191, 2.500000, 2.739726, 2.985075, 3.225806,
-                          3.508772, 3.773585
+              .scales = { 1.000000f, 1.250000f, 1.503759f, 1.754386f, 2.000000f,
+                          2.247191f, 2.500000f, 2.739726f, 2.985075f, 3.225806f,
+                          3.508772f, 3.773585f
               },
             },
             {
               .width = 3200,
               .height = 2048,
               .n_scales = 13,
-              .scales = { 1.000000, 1.254902, 1.505882, 1.753425, 2.000000,
-                          2.245614, 2.509804, 2.723404, 2.976744, 3.282051,
-                          3.459460, 3.764706, 4.000000,
+              .scales = { 1.000000f, 1.254902f, 1.505882f, 1.753425f, 2.000000f,
+                          2.245614f, 2.509804f, 2.723404f, 2.976744f, 3.282051f,
+                          3.459460f, 3.764706f, 4.000000f,
               },
             },
             {
               .width = 3840,
               .height = 2160,
               .n_scales = 13,
-              .scales = { 1.000000, 1.250000, 1.500000, 1.751825, 2.000000,
-                          2.201835, 2.500000, 2.758621, 3.000000, 3.243243,
-                          3.478261, 3.750000, 4.000000
+              .scales = { 1.000000f, 1.250000f, 1.500000f, 1.751825f, 2.000000f,
+                          2.201835f, 2.500000f, 2.758621f, 3.000000f, 3.243243f,
+                          3.478261f, 3.750000f, 4.000000f
               },
             },
             {
               .width = 3840,
               .height = 2400,
               .n_scales = 13,
-              .scales = { 1.000000, 1.250000, 1.500000, 1.751825, 2.000000,
-                          2.253521, 2.500000, 2.742857, 3.000000, 3.243243,
-                          3.503650, 3.750000, 4.000000
+              .scales = { 1.000000f, 1.250000f, 1.500000f, 1.751825f, 2.000000f,
+                          2.253521f, 2.500000f, 2.742857f, 3.000000f, 3.243243f,
+                          3.503650f, 3.750000f, 4.000000f
               },
             },
             {
               .width = 4096,
               .height = 2160,
               .n_scales = 8,
-              .scales = { 1.000000, 1.333333, 1.454545, 1.777778, 2.000000,
-                          2.666667, 3.200000, 4.000000
+              .scales = { 1.000000f, 1.333333f, 1.454545f, 1.777778f, 2.000000f,
+                          2.666667f, 3.200000f, 4.000000f
               }
             },
             {
               .width = 4096,
               .height = 3072,
               .n_scales = 13,
-              .scales = { 1.000000, 1.250305, 1.499268, 1.750427, 2.000000,
-                          2.245614, 2.497561, 2.752688, 3.002933, 3.250794,
-                          3.494880, 3.750916, 4.000000
+              .scales = { 1.000000f, 1.250305f, 1.499268f, 1.750427f, 2.000000f,
+                          2.245614f, 2.497561f, 2.752688f, 3.002933f, 3.250794f,
+                          3.494880f, 3.750916f, 4.000000f
               },
             },
             {
               .width = 5120,
               .height = 2880,
               .n_scales = 13,
-              .scales = { 1.000000, 1.250000, 1.495327, 1.748634, 2.000000,
-                          2.253521, 2.500000, 2.758621, 2.990654, 3.265306,
-                          3.516484, 3.764706, 4.000000
+              .scales = { 1.000000f, 1.250000f, 1.495327f, 1.748634f, 2.000000f,
+                          2.253521f, 2.500000f, 2.758621f, 2.990654f, 3.265306f,
+                          3.516484f, 3.764706f, 4.000000f
               },
             },
             {
               .width = 7680,
               .height = 4320,
               .n_scales = 13,
-              .scales = { 1.000000, 1.250000, 1.500000, 1.751825, 2.000000,
-                          2.211982, 2.500000, 2.742857, 3.000000, 3.243243,
-                          3.503650, 3.750000, 4.000000
+              .scales = { 1.000000f, 1.250000f, 1.500000f, 1.751825f, 2.000000f,
+                          2.211982f, 2.500000f, 2.742857f, 3.000000f, 3.243243f,
+                          3.503650f, 3.750000f, 4.000000f
               },
             },
           },
@@ -9735,7 +9735,7 @@ meta_test_monitor_calculate_mode_scale (void)
    * expectations, while ignoring that the actual scaling factors are slightly
    * different, e.g. 1.74863386 instead of 1.75.
    */
-  const float scale_epsilon = 0.2;
+  const float scale_epsilon = 0.2f;
 
   MetaMonitorManager *manager;
   MetaMonitorManagerTest *manager_test;
@@ -10123,7 +10123,7 @@ main (int   argc,
   g_autoptr (MetaContext) context = NULL;
   char *path;
 
-  context = meta_create_test_context (META_CONTEXT_TEST_TYPE_NESTED,
+  context = meta_create_test_context (META_CONTEXT_TEST_TYPE_TEST,
                                       META_CONTEXT_TEST_FLAG_TEST_CLIENT);
   g_assert (meta_context_configure (context, &argc, &argv, NULL));
 

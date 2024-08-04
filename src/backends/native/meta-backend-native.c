@@ -79,7 +79,7 @@ enum
 
 static GParamSpec *obj_props[N_PROPS];
 
-struct _MetaBackendNative
+typedef struct _MetaBackendNativePrivate
 {
   MetaBackend parent;
 
@@ -95,7 +95,7 @@ struct _MetaBackendNative
 #ifdef HAVE_EGL_DEVICE
   MetaRenderDeviceEglStream *render_device_egl_stream;
 #endif
-};
+} MetaBackendNativePrivate;
 
 static GInitableIface *initable_parent_iface;
 
@@ -104,20 +104,23 @@ initable_iface_init (GInitableIface *initable_iface);
 
 G_DEFINE_TYPE_WITH_CODE (MetaBackendNative, meta_backend_native, META_TYPE_BACKEND,
                          G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
-                                                initable_iface_init))
+                                                initable_iface_init)
+                         G_ADD_PRIVATE (MetaBackendNative))
 
 static void
 meta_backend_native_dispose (GObject *object)
 {
   MetaBackendNative *native = META_BACKEND_NATIVE (object);
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (native);
 
   G_OBJECT_CLASS (meta_backend_native_parent_class)->dispose (object);
 
-  g_clear_pointer (&native->startup_render_devices, g_hash_table_unref);
-  g_clear_object (&native->kms);
-  g_clear_object (&native->udev);
-  g_clear_object (&native->device_pool);
-  g_clear_pointer (&native->launcher, meta_launcher_free);
+  g_clear_pointer (&priv->startup_render_devices, g_hash_table_unref);
+  g_clear_object (&priv->kms);
+  g_clear_object (&priv->udev);
+  g_clear_object (&priv->device_pool);
+  g_clear_pointer (&priv->launcher, meta_launcher_free);
 }
 
 static ClutterBackend *
@@ -131,16 +134,19 @@ meta_backend_native_create_default_seat (MetaBackend  *backend,
                                          GError      **error)
 {
   MetaBackendNative *backend_native = META_BACKEND_NATIVE (backend);
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (backend_native);
   const char *seat_id = NULL;
   MetaSeatNativeFlag flags;
 
-  switch (backend_native->mode)
+  switch (priv->mode)
     {
     case META_BACKEND_NATIVE_MODE_DEFAULT:
     case META_BACKEND_NATIVE_MODE_HEADLESS:
+    case META_BACKEND_NATIVE_MODE_TEST_HEADLESS:
       seat_id = meta_backend_native_get_seat_id (backend_native);
       break;
-    case META_BACKEND_NATIVE_MODE_TEST:
+    case META_BACKEND_NATIVE_MODE_TEST_VKMS:
       seat_id = META_BACKEND_TEST_INPUT_SEAT;
       break;
     }
@@ -177,12 +183,18 @@ static void
 meta_backend_native_post_init (MetaBackend *backend)
 {
   MetaBackendNative *backend_native = META_BACKEND_NATIVE (backend);
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (backend_native);
+  MetaMonitorManager *monitor_manager =
+    meta_backend_get_monitor_manager (backend);
 
   META_BACKEND_CLASS (meta_backend_native_parent_class)->post_init (backend);
 
-  g_clear_pointer (&backend_native->startup_render_devices,
+  g_clear_pointer (&priv->startup_render_devices,
                    g_hash_table_unref);
 
+  g_signal_connect_swapped (monitor_manager, "monitors-changed-internal",
+                            G_CALLBACK (update_viewports), backend);
   update_viewports (backend);
 }
 
@@ -197,19 +209,18 @@ meta_backend_native_create_monitor_manager (MetaBackend *backend,
                                             GError     **error)
 {
   MetaBackendNative *backend_native = META_BACKEND_NATIVE (backend);
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (backend_native);
   MetaMonitorManager *manager;
   gboolean needs_outputs;
 
-  needs_outputs = !(backend_native->mode & META_BACKEND_NATIVE_MODE_HEADLESS);
+  needs_outputs = !(priv->mode & META_BACKEND_NATIVE_MODE_HEADLESS);
   manager = g_initable_new (META_TYPE_MONITOR_MANAGER_NATIVE, NULL, error,
                             "backend", backend,
                             "needs-outputs", needs_outputs,
                             NULL);
   if (!manager)
     return NULL;
-
-  g_signal_connect_swapped (manager, "monitors-changed-internal",
-                            G_CALLBACK (update_viewports), backend);
 
   return manager;
 }
@@ -327,12 +338,16 @@ meta_backend_native_lock_layout_group (MetaBackend *backend,
 const char *
 meta_backend_native_get_seat_id (MetaBackendNative *backend_native)
 {
-  switch (backend_native->mode)
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (backend_native);
+
+  switch (priv->mode)
     {
     case META_BACKEND_NATIVE_MODE_DEFAULT:
-    case META_BACKEND_NATIVE_MODE_TEST:
-      return meta_launcher_get_seat_id (backend_native->launcher);
+    case META_BACKEND_NATIVE_MODE_TEST_VKMS:
+      return meta_launcher_get_seat_id (priv->launcher);
     case META_BACKEND_NATIVE_MODE_HEADLESS:
+    case META_BACKEND_NATIVE_MODE_TEST_HEADLESS:
       return "seat0";
     }
   g_assert_not_reached ();
@@ -342,8 +357,11 @@ static gboolean
 meta_backend_native_is_headless (MetaBackend *backend)
 {
   MetaBackendNative *backend_native = META_BACKEND_NATIVE (backend);
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (backend_native);
 
-  return backend_native->mode == META_BACKEND_NATIVE_MODE_HEADLESS;
+  return (priv->mode == META_BACKEND_NATIVE_MODE_HEADLESS ||
+          priv->mode == META_BACKEND_NATIVE_MODE_TEST_HEADLESS);
 }
 
 static void
@@ -403,6 +421,8 @@ create_render_device (MetaBackendNative  *backend_native,
   g_autoptr (MetaRenderDeviceGbm) render_device_gbm = NULL;
   g_autoptr (GError) gbm_error = NULL;
 #ifdef HAVE_EGL_DEVICE
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (backend_native);
   g_autoptr (GError) egl_stream_error = NULL;
 #endif
 
@@ -442,7 +462,7 @@ create_render_device (MetaBackendNative  *backend_native,
 #endif
 
 #ifdef HAVE_EGL_DEVICE
-  if (!backend_native->render_device_egl_stream)
+  if (!priv->render_device_egl_stream)
     {
       MetaRenderDeviceEglStream *device;
 
@@ -452,7 +472,7 @@ create_render_device (MetaBackendNative  *backend_native,
       if (device)
         {
           g_object_add_weak_pointer (G_OBJECT (device),
-                                     (gpointer *) &backend_native->render_device_egl_stream);
+                                     (gpointer *) &priv->render_device_egl_stream);
           return META_RENDER_DEVICE (device);
         }
     }
@@ -490,6 +510,8 @@ add_drm_device (MetaBackendNative  *backend_native,
                 GUdevDevice        *device,
                 GError            **error)
 {
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (backend_native);
   MetaKmsDeviceFlag flags = META_KMS_DEVICE_FLAG_NONE;
   const char *device_path;
   g_autoptr (MetaRenderDevice) render_device = NULL;
@@ -522,12 +544,12 @@ add_drm_device (MetaBackendNative  *backend_native,
     flags |= META_KMS_DEVICE_FLAG_FORCE_LEGACY;
 #endif
 
-  kms_device = meta_kms_create_device (backend_native->kms, device_path, flags,
+  kms_device = meta_kms_create_device (priv->kms, device_path, flags,
                                        error);
   if (!kms_device)
     return FALSE;
 
-  g_hash_table_insert (backend_native->startup_render_devices,
+  g_hash_table_insert (priv->startup_render_devices,
                        g_strdup (device_path),
                        g_steal_pointer (&render_device));
 
@@ -540,12 +562,17 @@ static gboolean
 should_ignore_device (MetaBackendNative *backend_native,
                       GUdevDevice       *device)
 {
-  switch (backend_native->mode)
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (backend_native);
+
+  switch (priv->mode)
     {
     case META_BACKEND_NATIVE_MODE_DEFAULT:
     case META_BACKEND_NATIVE_MODE_HEADLESS:
       return meta_is_udev_device_ignore (device);
-    case META_BACKEND_NATIVE_MODE_TEST:
+    case META_BACKEND_NATIVE_MODE_TEST_HEADLESS:
+      return TRUE;
+    case META_BACKEND_NATIVE_MODE_TEST_VKMS:
       return !meta_is_udev_test_device (device);
     }
   g_assert_not_reached ();
@@ -607,6 +634,8 @@ static gboolean
 init_gpus (MetaBackendNative  *native,
            GError            **error)
 {
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (native);
   MetaBackend *backend = META_BACKEND (native);
   MetaUdev *udev = meta_backend_native_get_udev (native);
   g_autoptr (GError) local_error = NULL;
@@ -614,13 +643,14 @@ init_gpus (MetaBackendNative  *native,
   GList *devices;
   GList *l;
 
-  switch (native->mode)
+  switch (priv->mode)
     {
     case META_BACKEND_NATIVE_MODE_DEFAULT:
-    case META_BACKEND_NATIVE_MODE_TEST:
+    case META_BACKEND_NATIVE_MODE_TEST_VKMS:
       device_type = META_UDEV_DEVICE_TYPE_CARD;
       break;
     case META_BACKEND_NATIVE_MODE_HEADLESS:
+    case META_BACKEND_NATIVE_MODE_TEST_HEADLESS:
       device_type = META_UDEV_DEVICE_TYPE_RENDER_NODE;
       break;
     }
@@ -635,7 +665,7 @@ init_gpus (MetaBackendNative  *native,
   for (l = devices; l; l = l->next)
     {
       GUdevDevice *device = l->data;
-      GError *local_error = NULL;
+      GError *device_error = NULL;
 
       if (should_ignore_device (native, device))
         {
@@ -644,25 +674,28 @@ init_gpus (MetaBackendNative  *native,
           continue;
         }
 
-      if (!add_drm_device (native, device, &local_error))
+      if (!add_drm_device (native, device, &device_error))
         {
           if (meta_backend_is_headless (backend) &&
-              g_error_matches (local_error, G_IO_ERROR,
-                               G_IO_ERROR_PERMISSION_DENIED))
+              (g_error_matches (device_error, G_IO_ERROR,
+                                G_IO_ERROR_PERMISSION_DENIED) ||
+               (g_strcmp0 (g_getenv ("RUNNING_UNDER_RR"), "1") == 0 &&
+                g_error_matches (device_error, G_IO_ERROR,
+                                 G_IO_ERROR_NOT_FOUND))))
             {
               meta_topic (META_DEBUG_BACKEND,
                           "Ignoring unavailable gpu '%s': %s'",
                           g_udev_device_get_device_file (device),
-                          local_error->message);
+                          device_error->message);
             }
           else
             {
               g_warning ("Failed to open gpu '%s': %s",
                          g_udev_device_get_device_file (device),
-                         local_error->message);
+                         device_error->message);
             }
 
-          g_clear_error (&local_error);
+          g_clear_error (&device_error);
           continue;
         }
     }
@@ -677,7 +710,7 @@ init_gpus (MetaBackendNative  *native,
       return FALSE;
     }
 
-  g_signal_connect_object (native->udev, "device-added",
+  g_signal_connect_object (priv->udev, "device-added",
                            G_CALLBACK (on_udev_device_added), native,
                            0);
 
@@ -701,47 +734,51 @@ meta_backend_native_initable_init (GInitable     *initable,
                                    GError       **error)
 {
   MetaBackendNative *native = META_BACKEND_NATIVE (initable);
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (native);
   MetaBackend *backend = META_BACKEND (native);
   MetaKmsFlags kms_flags;
   const char *session_id = NULL;
   const char *seat_id = NULL;
 
-  switch (native->mode)
+  switch (priv->mode)
     {
     case META_BACKEND_NATIVE_MODE_DEFAULT:
       break;
     case META_BACKEND_NATIVE_MODE_HEADLESS:
+    case META_BACKEND_NATIVE_MODE_TEST_HEADLESS:
       break;
-    case META_BACKEND_NATIVE_MODE_TEST:
+    case META_BACKEND_NATIVE_MODE_TEST_VKMS:
       session_id = "dummy";
       seat_id = "seat0";
       break;
     }
 
-  if (native->mode != META_BACKEND_NATIVE_MODE_HEADLESS)
+  if (priv->mode != META_BACKEND_NATIVE_MODE_HEADLESS &&
+      priv->mode != META_BACKEND_NATIVE_MODE_TEST_HEADLESS)
     {
-      native->launcher = meta_launcher_new (backend,
-                                            session_id, seat_id,
-                                            error);
-      if (!native->launcher)
+      priv->launcher = meta_launcher_new (backend,
+                                          session_id, seat_id,
+                                          error);
+      if (!priv->launcher)
         return FALSE;
 
-      if (!meta_launcher_get_seat_id (native->launcher))
+      if (!meta_launcher_get_seat_id (priv->launcher))
         {
-          native->mode = META_BACKEND_NATIVE_MODE_HEADLESS;
+          priv->mode = META_BACKEND_NATIVE_MODE_HEADLESS;
           g_message ("No seat assigned, running headlessly");
         }
     }
 
-  native->device_pool = meta_device_pool_new (native);
-  native->udev = meta_udev_new (native);
+  priv->device_pool = meta_device_pool_new (native);
+  priv->udev = meta_udev_new (native);
 
   kms_flags = META_KMS_FLAG_NONE;
   if (meta_backend_is_headless (backend))
     kms_flags |= META_KMS_FLAG_NO_MODE_SETTING;
 
-  native->kms = meta_kms_new (META_BACKEND (native), kms_flags, error);
-  if (!native->kms)
+  priv->kms = meta_kms_new (META_BACKEND (native), kms_flags, error);
+  if (!priv->kms)
     return FALSE;
 
   if (!init_gpus (native, error))
@@ -762,11 +799,13 @@ meta_backend_native_set_property (GObject      *object,
                                   GParamSpec   *pspec)
 {
   MetaBackendNative *backend_native = META_BACKEND_NATIVE (object);
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (backend_native);
 
   switch (prop_id)
     {
     case PROP_MODE:
-      backend_native->mode = g_value_get_enum (value);
+      priv->mode = g_value_get_enum (value);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -828,33 +867,48 @@ meta_backend_native_class_init (MetaBackendNativeClass *klass)
 static void
 meta_backend_native_init (MetaBackendNative *backend_native)
 {
-  backend_native->startup_render_devices =
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (backend_native);
+
+  priv->startup_render_devices =
     g_hash_table_new_full (g_str_hash, g_str_equal,
                            g_free, g_object_unref);
 }
 
 MetaLauncher *
-meta_backend_native_get_launcher (MetaBackendNative *native)
+meta_backend_native_get_launcher (MetaBackendNative *backend_native)
 {
-  return native->launcher;
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (backend_native);
+
+  return priv->launcher;
 }
 
 MetaDevicePool *
-meta_backend_native_get_device_pool (MetaBackendNative *native)
+meta_backend_native_get_device_pool (MetaBackendNative *backend_native)
 {
-  return native->device_pool;
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (backend_native);
+
+  return priv->device_pool;
 }
 
 MetaUdev *
-meta_backend_native_get_udev (MetaBackendNative *native)
+meta_backend_native_get_udev (MetaBackendNative *backend_native)
 {
-  return native->udev;
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (backend_native);
+
+  return priv->udev;
 }
 
 MetaKms *
-meta_backend_native_get_kms (MetaBackendNative *native)
+meta_backend_native_get_kms (MetaBackendNative *backend_native)
 {
-  return native->kms;
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (backend_native);
+
+  return priv->kms;
 }
 
 gboolean
@@ -862,14 +916,18 @@ meta_backend_native_activate_vt (MetaBackendNative  *backend_native,
                                  int                 vt,
                                  GError            **error)
 {
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (backend_native);
+
   MetaLauncher *launcher = meta_backend_native_get_launcher (backend_native);
 
-  switch (backend_native->mode)
+  switch (priv->mode)
     {
     case META_BACKEND_NATIVE_MODE_DEFAULT:
       return meta_launcher_activate_vt (launcher, vt, error);
     case META_BACKEND_NATIVE_MODE_HEADLESS:
-    case META_BACKEND_NATIVE_MODE_TEST:
+    case META_BACKEND_NATIVE_MODE_TEST_HEADLESS:
+    case META_BACKEND_NATIVE_MODE_TEST_VKMS:
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "Can't switch VT while headless");
       return FALSE;
@@ -879,9 +937,11 @@ meta_backend_native_activate_vt (MetaBackendNative  *backend_native,
 }
 
 void
-meta_backend_native_pause (MetaBackendNative *native)
+meta_backend_native_pause (MetaBackendNative *backend_native)
 {
-  MetaBackend *backend = META_BACKEND (native);
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (backend_native);
+  MetaBackend *backend = META_BACKEND (backend_native);
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (backend);
   MetaMonitorManagerNative *monitor_manager_native =
@@ -896,13 +956,15 @@ meta_backend_native_pause (MetaBackendNative *native)
 
   meta_seat_native_release_devices (seat);
   meta_renderer_pause (renderer);
-  meta_udev_pause (native->udev);
+  meta_udev_pause (priv->udev);
 
   meta_monitor_manager_native_pause (monitor_manager_native);
 }
 
 void meta_backend_native_resume (MetaBackendNative *native)
 {
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (native);
   MetaBackend *backend = META_BACKEND (native);
   ClutterStage *stage = CLUTTER_STAGE (meta_backend_get_stage (backend));
   MetaMonitorManager *monitor_manager =
@@ -920,8 +982,8 @@ void meta_backend_native_resume (MetaBackendNative *native)
                            "Meta::BackendNative::resume()");
 
   meta_monitor_manager_native_resume (monitor_manager_native);
-  meta_udev_resume (native->udev);
-  meta_kms_resume (native->kms);
+  meta_udev_resume (priv->udev);
+  meta_kms_resume (priv->kms);
 
   meta_seat_native_reclaim_devices (seat);
   meta_renderer_resume (renderer);
@@ -953,10 +1015,12 @@ meta_backend_native_take_render_device (MetaBackendNative  *backend_native,
                                         const char         *device_path,
                                         GError            **error)
 {
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (backend_native);
   MetaRenderDevice *render_device;
   g_autofree char *stolen_device_path = NULL;
 
-  if (g_hash_table_steal_extended (backend_native->startup_render_devices,
+  if (g_hash_table_steal_extended (priv->startup_render_devices,
                                    device_path,
                                    (gpointer *) &stolen_device_path,
                                    (gpointer *) &render_device))

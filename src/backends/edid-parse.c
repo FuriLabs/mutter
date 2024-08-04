@@ -244,6 +244,8 @@ decode_edid_info (const uint8_t *edid,
       decode_edid_extensions (extensions[ext_index], info);
     }
 
+  di_info_destroy (edid_info);
+
   return TRUE;
 }
 
@@ -593,7 +595,16 @@ meta_edid_info_new_parse (const uint8_t *edid,
     }
   else
     {
-      g_free (info);
+      meta_edid_info_free (info);
       return NULL;
     }
+}
+
+void
+meta_edid_info_free (MetaEdidInfo *info)
+{
+  g_clear_pointer (&info->manufacturer_code, g_free);
+  g_clear_pointer (&info->dsc_serial_number, g_free);
+  g_clear_pointer (&info->dsc_product_name, g_free);
+  g_free (info);
 }

@@ -60,7 +60,6 @@
 #include "compositor/meta-later-private.h"
 #include "compositor/meta-window-actor-private.h"
 #include "compositor/meta-window-group-private.h"
-#include "core/frame.h"
 #include "core/util-private.h"
 #include "core/window-private.h"
 #include "meta/compositor-mutter.h"
@@ -951,8 +950,8 @@ meta_compositor_real_before_paint (MetaCompositor     *compositor,
 
   stage_rect = (MtkRectangle) {
     0, 0,
-    clutter_actor_get_width (stage),
-    clutter_actor_get_height (stage),
+    (int) clutter_actor_get_width (stage),
+    (int) clutter_actor_get_height (stage),
   };
 
   unobscured_region = mtk_region_create_rectangle (&stage_rect);
@@ -1001,7 +1000,7 @@ meta_compositor_real_after_paint (MetaCompositor     *compositor,
   ClutterStageView *stage_view;
   GList *l;
 
-  status = cogl_get_graphics_reset_status (priv->context);
+  status = cogl_context_get_graphics_reset_status (priv->context);
   switch (status)
     {
     case COGL_GRAPHICS_RESET_STATUS_NO_ERROR:
@@ -1332,7 +1331,7 @@ meta_compositor_flash_display (MetaCompositor *compositor,
   clutter_actor_get_size (stage, &width, &height);
 
   flash = clutter_actor_new ();
-  clutter_actor_set_background_color (flash, &CLUTTER_COLOR_INIT (0, 0, 0, 255));
+  clutter_actor_set_background_color (flash, &COGL_COLOR_INIT (0, 0, 0, 255));
   clutter_actor_set_size (flash, width, height);
   clutter_actor_set_opacity (flash, 0);
   clutter_actor_add_child (stage, flash);
@@ -1371,7 +1370,7 @@ meta_compositor_flash_window (MetaCompositor *compositor,
   ClutterTransition *transition;
 
   flash = clutter_actor_new ();
-  clutter_actor_set_background_color (flash, &CLUTTER_COLOR_INIT (0, 0, 0, 255));
+  clutter_actor_set_background_color (flash, &COGL_COLOR_INIT (0, 0, 0, 255));
   clutter_actor_set_size (flash, window->rect.width, window->rect.height);
   clutter_actor_set_position (flash,
                               window->custom_frame_extents.left,
@@ -1383,15 +1382,21 @@ meta_compositor_flash_window (MetaCompositor *compositor,
   clutter_actor_set_easing_mode (flash, CLUTTER_EASE_IN_QUAD);
   clutter_actor_set_easing_duration (flash, FLASH_TIME_MS);
   clutter_actor_set_opacity (flash, 192);
+  clutter_actor_restore_easing_state (flash);
 
   transition = clutter_actor_get_transition (flash, "opacity");
-  clutter_timeline_set_auto_reverse (CLUTTER_TIMELINE (transition), TRUE);
-  clutter_timeline_set_repeat_count (CLUTTER_TIMELINE (transition), 2);
+  if (transition)
+    {
+      clutter_timeline_set_auto_reverse (CLUTTER_TIMELINE (transition), TRUE);
+      clutter_timeline_set_repeat_count (CLUTTER_TIMELINE (transition), 2);
 
-  g_signal_connect (transition, "stopped",
-                    G_CALLBACK (window_flash_out_completed), flash);
-
-  clutter_actor_restore_easing_state (flash);
+      g_signal_connect (transition, "stopped",
+                        G_CALLBACK (window_flash_out_completed), flash);
+    }
+  else /* implicit transition was skipped, likely because the window is hidden */
+    {
+      clutter_actor_destroy (flash);
+    }
 }
 
 /**

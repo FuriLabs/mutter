@@ -24,6 +24,7 @@
 #include "backends/meta-color-manager-private.h"
 #include "backends/meta-color-profile.h"
 #include "meta-test/meta-context-test.h"
+#include "tests/meta-crtc-test.h"
 #include "tests/meta-monitor-test-utils.h"
 
 static MetaContext *test_context;
@@ -126,7 +127,6 @@ get_colord_mock_proxy (void)
 {
   GDBusProxy *proxy;
   g_autoptr (GError) error = NULL;
-  g_autoptr (GVariant) ret = NULL;
 
   proxy =
     g_dbus_proxy_new_for_bus_sync (G_BUS_TYPE_SYSTEM,
@@ -259,7 +259,6 @@ get_gsd_color_mock_proxy (void)
 {
   GDBusProxy *proxy;
   g_autoptr (GError) error = NULL;
-  g_autoptr (GVariant) ret = NULL;
 
   proxy =
     g_dbus_proxy_new_for_bus_sync (G_BUS_TYPE_SESSION,
@@ -1431,7 +1430,7 @@ main (int argc, char **argv)
   g_autoptr (MetaContext) context = NULL;
   char *path;
 
-  context = meta_create_test_context (META_CONTEXT_TEST_TYPE_NESTED,
+  context = meta_create_test_context (META_CONTEXT_TEST_TYPE_TEST,
                                       META_CONTEXT_TEST_FLAG_NONE);
 
   g_assert (meta_context_configure (context, &argc, &argv, NULL));

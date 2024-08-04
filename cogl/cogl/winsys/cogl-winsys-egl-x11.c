@@ -45,7 +45,6 @@
 #include "cogl/cogl-texture-2d-private.h"
 #include "cogl/driver/gl/cogl-texture-2d-gl-private.h"
 #include "cogl/cogl-texture-2d.h"
-#include "cogl/cogl-poll-private.h"
 #include "cogl/winsys/cogl-onscreen-egl.h"
 #include "cogl/winsys/cogl-onscreen-xlib.h"
 #include "cogl/winsys/cogl-winsys-egl-x11-private.h"
@@ -122,7 +121,7 @@ event_filter_cb (XEvent *xevent, void *data)
 
       if (onscreen)
         {
-          CoglOnscreenDirtyInfo info;
+          MtkRectangle info;
 
           info.x = xevent->xexpose.x;
           info.y = xevent->xexpose.y;
@@ -324,9 +323,9 @@ static gboolean
 _cogl_winsys_egl_context_init (CoglContext *context,
                                GError **error)
 {
-  cogl_xlib_renderer_add_filter (context->display->renderer,
-                                 event_filter_cb,
-                                 context);
+  _cogl_renderer_add_native_filter (context->display->renderer,
+                                    (CoglNativeFilterFunc)event_filter_cb,
+                                    context);
 
   /* We'll manually handle queueing dirty events in response to
    * Expose events from X */
@@ -340,9 +339,9 @@ _cogl_winsys_egl_context_init (CoglContext *context,
 static void
 _cogl_winsys_egl_context_deinit (CoglContext *context)
 {
-  cogl_xlib_renderer_remove_filter (context->display->renderer,
-                                    event_filter_cb,
-                                    context);
+  _cogl_renderer_remove_native_filter (context->display->renderer,
+                                       (CoglNativeFilterFunc)event_filter_cb,
+                                       context);
 }
 
 static gboolean
@@ -491,7 +490,7 @@ _cogl_winsys_texture_pixmap_x11_create (CoglTexturePixmapX11 *tex_pixmap)
                     COGL_PIXEL_FORMAT_RGB_888);
 
   egl_tex_pixmap->texture =
-    cogl_egl_texture_2d_new_from_image (ctx,
+    cogl_texture_2d_new_from_egl_image (ctx,
                                         cogl_texture_get_width (tex),
                                         cogl_texture_get_height (tex),
                                         texture_format,

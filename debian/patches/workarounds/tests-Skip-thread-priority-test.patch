@@ -17,10 +17,10 @@ https://wiki.debian.org/ArchitectureSpecificsMemo
  1 file changed, 6 insertions(+)
 
 diff --git a/src/tests/native-thread.c b/src/tests/native-thread.c
-index abe944b..178379f 100644
+index d3f5669..5cebb25 100644
 --- a/src/tests/native-thread.c
 +++ b/src/tests/native-thread.c
-@@ -1156,6 +1156,12 @@ assert_realtime (MetaThreadImpl  *thread_impl,
+@@ -1155,6 +1155,12 @@ assert_realtime (MetaThreadImpl  *thread_impl,
                                  g_variant_new ("(t)", gettid ()));
  
    g_variant_get (ret, "(u)", &priority);

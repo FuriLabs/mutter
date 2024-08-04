@@ -130,6 +130,10 @@ void
 meta_crtc_unset_config (MetaCrtc *crtc)
 {
   MetaCrtcPrivate *priv = meta_crtc_get_instance_private (crtc);
+  MetaCrtcClass *klass = META_CRTC_GET_CLASS (crtc);
+
+  if (klass->unset_config)
+    klass->unset_config (crtc);
 
   g_clear_pointer (&priv->config, g_free);
 }
@@ -232,9 +236,9 @@ meta_gamma_lut_new_identity (int size)
     {
       double value = (i / (double) (size - 1));
 
-      lut->red[i] = value * UINT16_MAX;
-      lut->green[i] = value * UINT16_MAX;
-      lut->blue[i] = value * UINT16_MAX;
+      lut->red[i] = (uint16_t) (value * UINT16_MAX);
+      lut->green[i] = (uint16_t) (value * UINT16_MAX);
+      lut->blue[i] = (uint16_t) (value * UINT16_MAX);
     }
 
   return lut;
@@ -250,7 +254,7 @@ meta_gamma_lut_is_identity (const MetaGammaLut *lut)
 
   for (i = 0; i < lut->size; i++)
     {
-      uint16_t value = (i / (double) (lut->size - 1)) * UINT16_MAX;
+      uint16_t value = (uint16_t) ((i / (double) (lut->size - 1)) * UINT16_MAX);
 
       if (ABS (lut->red[i] - value) > 1 ||
           ABS (lut->green[i] - value) > 1 ||
@@ -469,4 +473,15 @@ meta_crtc_config_new (graphene_rect_t      *layout,
   config->transform = transform;
 
   return config;
+}
+
+gboolean
+meta_crtc_is_leased (MetaCrtc *crtc)
+{
+  MetaCrtcClass *klass = META_CRTC_GET_CLASS (crtc);
+
+  if (klass->is_leased)
+    return klass->is_leased (crtc);
+  else
+    return FALSE;
 }

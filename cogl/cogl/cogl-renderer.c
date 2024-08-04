@@ -165,8 +165,6 @@ cogl_renderer_dispose (GObject *object)
   g_slist_free_full (renderer->event_filters,
                      (GDestroyNotify) native_filter_closure_free);
 
-  g_array_free (renderer->poll_fds, TRUE);
-
   G_OBJECT_CLASS (cogl_renderer_parent_class)->dispose (object);
 }
 
@@ -194,18 +192,10 @@ cogl_renderer_new (void)
 {
   CoglRenderer *renderer = g_object_new (COGL_TYPE_RENDERER, NULL);
 
-  _cogl_init ();
-
   renderer->connected = FALSE;
   renderer->event_filters = NULL;
 
-  renderer->poll_fds = g_array_new (FALSE, TRUE, sizeof (CoglPollFD));
-
   _cogl_list_init (&renderer->idle_closures);
-
-#ifdef HAVE_X11
-  renderer->xlib_enable_event_retrieval = TRUE;
-#endif
 
   return renderer;
 }
@@ -222,27 +212,6 @@ cogl_xlib_renderer_set_foreign_display (CoglRenderer *renderer,
 
   renderer->foreign_xdpy = xdisplay;
 
-  /* If the application is using a foreign display then we can assume
-     it will also do its own event retrieval */
-  renderer->xlib_enable_event_retrieval = FALSE;
-}
-
-Display *
-cogl_xlib_renderer_get_foreign_display (CoglRenderer *renderer)
-{
-  g_return_val_if_fail (COGL_IS_RENDERER (renderer), NULL);
-
-  return renderer->foreign_xdpy;
-}
-
-void
-cogl_xlib_renderer_request_reset_on_video_memory_purge (CoglRenderer *renderer,
-                                                        gboolean enable)
-{
-  g_return_if_fail (COGL_IS_RENDERER (renderer));
-  g_return_if_fail (!renderer->connected);
-
-  renderer->xlib_want_reset_on_video_memory_purge = enable;
 }
 #endif /* HAVE_X11 */
 
@@ -276,9 +245,6 @@ foreach_driver_description (CoglDriver driver_override,
                             CoglDriverCallback callback,
                             void *user_data)
 {
-#ifdef COGL_DEFAULT_DRIVER
-  const CoglDriverDescription *default_driver = NULL;
-#endif
   int i;
 
   if (driver_override != COGL_DRIVER_ANY)
@@ -296,31 +262,8 @@ foreach_driver_description (CoglDriver driver_override,
       return;
     }
 
-#ifdef COGL_DEFAULT_DRIVER
   for (i = 0; i < G_N_ELEMENTS (_cogl_drivers); i++)
     {
-      const CoglDriverDescription *desc = &_cogl_drivers[i];
-      if (g_ascii_strcasecmp (desc->name, COGL_DEFAULT_DRIVER) == 0)
-        {
-          default_driver = desc;
-          break;
-        }
-    }
-
-  if (default_driver)
-    {
-      if (!callback (default_driver, user_data))
-        return;
-    }
-#endif
-
-  for (i = 0; i < G_N_ELEMENTS (_cogl_drivers); i++)
-    {
-#ifdef COGL_DEFAULT_DRIVER
-      if (&_cogl_drivers[i] == default_driver)
-        continue;
-#endif
-
       if (!callback (&_cogl_drivers[i], user_data))
         return;
     }
@@ -414,7 +357,6 @@ _cogl_renderer_choose_driver (CoglRenderer *renderer,
   if (driver_override != COGL_DRIVER_ANY)
     {
       gboolean found = FALSE;
-      int i;
 
       for (i = 0; i < G_N_ELEMENTS (_cogl_drivers); i++)
         {
@@ -529,7 +471,6 @@ cogl_renderer_connect (CoglRenderer *renderer, GError **error)
 {
   int i;
   g_autoptr (GString) error_message = NULL;
-  gboolean constraints_failed = FALSE;
 
   if (renderer->connected)
     return TRUE;
@@ -548,36 +489,6 @@ cogl_renderer_connect (CoglRenderer *renderer, GError **error)
     {
       const CoglWinsysVtable *winsys = _cogl_winsys_vtable_getters[i]();
       GError *tmp_error = NULL;
-      GList *l;
-      gboolean skip_due_to_constraints = FALSE;
-
-      if (renderer->winsys_id_override != COGL_WINSYS_ID_ANY)
-        {
-          if (renderer->winsys_id_override != winsys->id)
-            continue;
-        }
-      else
-        {
-          char *user_choice = getenv ("COGL_RENDERER");
-          if (user_choice &&
-              g_ascii_strcasecmp (winsys->name, user_choice) != 0)
-            continue;
-        }
-
-      for (l = renderer->constraints; l; l = l->next)
-        {
-          CoglRendererConstraint constraint = GPOINTER_TO_UINT (l->data);
-          if (!(winsys->constraints & constraint))
-            {
-              skip_due_to_constraints = TRUE;
-              break;
-            }
-        }
-      if (skip_due_to_constraints)
-        {
-          constraints_failed |= TRUE;
-          continue;
-        }
 
       /* At least temporarily we will associate this winsys with
        * the renderer in-case ->renderer_connect calls API that
@@ -599,14 +510,6 @@ cogl_renderer_connect (CoglRenderer *renderer, GError **error)
 
   if (!renderer->connected)
     {
-      if (constraints_failed)
-        {
-          g_set_error (error, COGL_RENDERER_ERROR,
-                       COGL_RENDERER_ERROR_BAD_CONSTRAINT,
-                       "Failed to connected to any renderer due to constraints");
-          return FALSE;
-        }
-
       renderer->winsys_vtable = NULL;
       g_set_error (error, COGL_WINSYS_ERROR, COGL_WINSYS_ERROR_INIT,
                    "Failed to connected to any renderer: %s",
@@ -618,8 +521,8 @@ cogl_renderer_connect (CoglRenderer *renderer, GError **error)
 }
 
 CoglFilterReturn
-_cogl_renderer_handle_native_event (CoglRenderer *renderer,
-                                    void *event)
+cogl_renderer_handle_event (CoglRenderer *renderer,
+                            void         *event)
 {
   GSList *l, *next;
 
@@ -680,15 +583,6 @@ _cogl_renderer_remove_native_filter (CoglRenderer *renderer,
     }
 }
 
-void
-cogl_renderer_set_winsys_id (CoglRenderer *renderer,
-                             CoglWinsysID winsys_id)
-{
-  g_return_if_fail (!renderer->connected);
-
-  renderer->winsys_id_override = winsys_id;
-}
-
 CoglWinsysID
 cogl_renderer_get_winsys_id (CoglRenderer *renderer)
 {
@@ -698,30 +592,12 @@ cogl_renderer_get_winsys_id (CoglRenderer *renderer)
 }
 
 void *
-_cogl_renderer_get_proc_address (CoglRenderer *renderer,
+cogl_renderer_get_proc_address (CoglRenderer *renderer,
                                  const char   *name)
 {
   const CoglWinsysVtable *winsys = _cogl_renderer_get_winsys (renderer);
 
   return winsys->renderer_get_proc_address (renderer, name);
-}
-
-void
-cogl_renderer_add_constraint (CoglRenderer *renderer,
-                              CoglRendererConstraint constraint)
-{
-  g_return_if_fail (!renderer->connected);
-  renderer->constraints = g_list_prepend (renderer->constraints,
-                                          GUINT_TO_POINTER (constraint));
-}
-
-void
-cogl_renderer_remove_constraint (CoglRenderer *renderer,
-                                 CoglRendererConstraint constraint)
-{
-  g_return_if_fail (!renderer->connected);
-  renderer->constraints = g_list_remove (renderer->constraints,
-                                         GUINT_TO_POINTER (constraint));
 }
 
 void
@@ -738,20 +614,6 @@ cogl_renderer_get_driver (CoglRenderer *renderer)
   g_return_val_if_fail (renderer->connected, 0);
 
   return renderer->driver;
-}
-
-void
-cogl_renderer_foreach_output (CoglRenderer *renderer,
-                              CoglOutputCallback callback,
-                              void *user_data)
-{
-  GList *l;
-
-  g_return_if_fail (renderer->connected);
-  g_return_if_fail (callback != NULL);
-
-  for (l = renderer->outputs; l; l = l->next)
-    callback (l->data, user_data);
 }
 
 CoglDmaBufHandle *

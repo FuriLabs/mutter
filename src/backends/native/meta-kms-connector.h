@@ -49,7 +49,7 @@ typedef struct _MetaKmsConnectorState
   gboolean non_desktop;
   MetaPrivacyScreenState privacy_screen_state;
 
-  CoglSubpixelOrder subpixel_order;
+  MetaSubpixelOrder subpixel_order;
 
   int suggested_x;
   int suggested_y;
@@ -101,3 +101,5 @@ MetaKmsMode * meta_kms_connector_get_preferred_mode (MetaKmsConnector *connector
 
 META_EXPORT_TEST
 const MetaKmsConnectorState * meta_kms_connector_get_current_state (MetaKmsConnector *connector);
+
+gboolean meta_kms_connector_is_for_lease (MetaKmsConnector *connector);

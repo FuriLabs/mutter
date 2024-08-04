@@ -24,8 +24,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: mutter\n"
 "Report-Msgid-Bugs-To: https://gitlab.gnome.org/GNOME/mutter/issues/\n"
-"POT-Creation-Date: 2024-05-03 15:32+0000\n"
-"PO-Revision-Date: 2024-05-14 20:32-0300\n"
+"POT-Creation-Date: 2024-03-02 12:22+0000\n"
+"PO-Revision-Date: 2024-04-04 18:40-0300\n"
 "Last-Translator: Leônidas Araújo <leorusvellt@hotmail.com>\n"
 "Language-Team: Brazilian Portuguese <https://br.gnome.org/traducao>\n"
 "Language: pt_BR\n"
@@ -427,21 +427,21 @@ msgid ""
 "and DRM driver. Configurable in Settings. Requires a restart."
 msgstr ""
 "Para habilitar recursos experimentais, adicione a palavra-chave do recurso à "
-"lista. A reinicialização do compositor vai depender do recurso fornecido. "
-"Qualquer recurso experimental não precisa ainda estar disponível ou "
-"configurável. Não espere que adicionar nada nesta configuração seja uma "
+"lista. Dependendo do recurso fornecido, será necessário reiniciar o "
+"compositor. Qualquer recurso experimental não precisa ainda estar disponível "
+"ou configurável. Não espere que adicionar nada nesta configuração seja uma "
 "prova futura. Palavras-chave atualmente possíveis: • “scale-monitor-"
 "framebuffer” — torna o mutter padrão para o layout de monitores lógicos em "
 "um espaço lógico de coordenadas de pixel, enquanto dimensiona os "
 "framebuffers do monitor em vez do conteúdo da janela, para gerenciar "
 "monitores HiDPI. Não requer reinicialização. • “kms-modifiers” — faz com que "
-"o mutter sempre aloque buffers de varredura com modificadores explícitos, se "
+"o mutter sempre aloque buffers de scanout com modificadores explícitos, se "
 "suportado pelo driver. Requer uma reinicialização. • “autoclose-xwayland” – "
 "encerra automaticamente o Xwayland se todos os clientes X11 relevantes "
 "tiverem desaparecido. Requer uma reinicialização. • “variable-refresh-rate” "
 "— faz com que o mutter ajuste dinamicamente a taxa de atualização do monitor "
-"quando aplicável, se suportado pelo monitor, GPU e driver DRM. Pode ser "
-"ajustado em Configurações. Requer uma reinicialização."
+"quando aplicável, se suportado pelo monitor, GPU e driver DRM. Configurável "
+"em Configurações. Requer uma reinicialização."
 
 #: data/org.gnome.mutter.gschema.xml.in:144
 msgid "Modifier to use to locate the pointer"
@@ -727,7 +727,7 @@ msgstr "Perfila o desempenho usando instrumentação de rastreamento"
 
 #: src/core/meta-context-main.c:699
 msgid "Enable debug control D-Bus interface"
-msgstr "Habilitar controle de depuração da interface D-Bus"
+msgstr "Habilitar interface D-Bus do controle de depuração"
 
 #. TRANSLATORS: This string refers to a button that switches between
 #. * different modes.
@@ -800,7 +800,7 @@ msgstr "A tela %d na exibição “%s” é inválida"
 
 #. This probably means that a non-WM compositor like xcompmgr is running;
 #. * we have no way to get it to exit
-#: src/x11/meta-x11-display.c:2547
+#: src/x11/meta-x11-display.c:2538
 #, c-format
 msgid ""
 "Another compositing manager is already running on screen %i on display “%s”."

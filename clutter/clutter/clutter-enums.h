@@ -133,8 +133,8 @@ typedef enum /*< prefix=CLUTTER_REQUEST >*/
  * @CLUTTER_ANIMATION_LAST: last animation mode, used as a guard for
  *   registered global alpha functions
  *
- * The animation modes used by [iface@Animatable]. 
- * 
+ * The animation modes used by [iface@Animatable].
+ *
  * This enumeration can be expanded in later versions of Clutter.
  *
  * <figure id="easing-modes">
@@ -1002,7 +1002,7 @@ typedef enum
 
 /**
  * ClutterColorspace:
- * @CLUTTER_COLORSPACE_UNKNOWN: Unknown colorspace
+ * @CLUTTER_COLORSPACE_DEFAULT: Unknown colorspace
  * @CLUTTER_COLORSPACE_SRGB: Default sRGB colorspace
  * @CLUTTER_COLORSPACE_BT2020: BT2020 colorspace
  *
@@ -1010,10 +1010,42 @@ typedef enum
  */
 typedef enum
 {
-  CLUTTER_COLORSPACE_UNKNOWN,
+  CLUTTER_COLORSPACE_DEFAULT,
   CLUTTER_COLORSPACE_SRGB,
   CLUTTER_COLORSPACE_BT2020,
 } ClutterColorspace;
+
+/**
+ * ClutterTransferFunction:
+ * @CLUTTER_TRANSFER_FUNCTION_DEFAULT: Unknown transfer function
+ * @CLUTTER_TRANSFER_FUNCTION_SRGB: The sRGB gamma transfer function
+ * @CLUTTER_TRANSFER_FUNCTION_PQ: Perceptual quantizer (PQ)
+ * @CLUTTER_TRANSFER_FUNCTION_LINEAR: Linear transfer function
+ *
+ * Colorspace information.
+ */
+typedef enum
+{
+  CLUTTER_TRANSFER_FUNCTION_DEFAULT,
+  CLUTTER_TRANSFER_FUNCTION_SRGB,
+  CLUTTER_TRANSFER_FUNCTION_PQ,
+  CLUTTER_TRANSFER_FUNCTION_LINEAR,
+} ClutterTransferFunction;
+
+/**
+ * ClutterEncodingRequiredFormat:
+ * @CLUTTER_ENCODING_REQUIRED_FORMAT_UINT8: 8bpc uint
+ * @CLUTTER_ENCODING_REQUIRED_FORMAT_UINT10: 10bpc uint
+ * @CLUTTER_ENCODING_REQUIRED_FORMAT_FP16: 16bpc floating point
+ *
+ * The texture format required to store a specific encoding.
+ */
+typedef enum
+{
+  CLUTTER_ENCODING_REQUIRED_FORMAT_UINT8 = 0,
+  CLUTTER_ENCODING_REQUIRED_FORMAT_UINT10 = 1,
+  CLUTTER_ENCODING_REQUIRED_FORMAT_FP16 = 2,
+} ClutterEncodingRequiredFormat;
 
 /**
  * ClutterStepMode:
@@ -1065,9 +1097,9 @@ typedef enum
  * @CLUTTER_TOUCHPAD_GESTURE_PHASE_CANCEL: The gesture was cancelled, all
  *   changes should be undone.
  *
- * The phase of a touchpad gesture event. 
- * 
- * All gestures are guaranteed to begin with an event of type 
+ * The phase of a touchpad gesture event.
+ *
+ * All gestures are guaranteed to begin with an event of type
  * %CLUTTER_TOUCHPAD_GESTURE_PHASE_BEGIN, followed by a number
  * of %CLUTTER_TOUCHPAD_GESTURE_PHASE_UPDATE (possibly 0).
  *
@@ -1103,8 +1135,8 @@ typedef enum
  * @CLUTTER_SCROLL_SOURCE_CONTINUOUS: The scroll event is originated by the
  *   motion of some device (eg. a scroll button is set).
  *
- * The scroll source determines the source of the scroll event. 
- * 
+ * The scroll source determines the source of the scroll event.
+ *
  * Keep in mind that the source device #ClutterInputDeviceType is not enough
  * to infer the scroll source.6
  */
@@ -1123,7 +1155,7 @@ typedef enum
  * @CLUTTER_SCROLL_FINISHED_VERTICAL: The vertical axis stopped.
  *
  * Flags used to notify the axes that were stopped in a #ClutterScrollEvent.
- * 
+ *
  * These can be used to trigger post-scroll effects like kinetic scrolling.6
  */
 typedef enum

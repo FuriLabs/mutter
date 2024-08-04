@@ -256,9 +256,9 @@ meta_window_actor_wayland_rebuild_surface_tree (MetaWindowActor *actor)
 
       if (!g_list_find (surface_actors, child_actor))
         {
-          MetaSurfaceActor *surface_actor = META_SURFACE_ACTOR (child_actor);
+          MetaSurfaceActor *child_surface_actor = META_SURFACE_ACTOR (child_actor);
 
-          meta_window_actor_remove_surface_actor (actor, surface_actor);
+          meta_window_actor_remove_surface_actor (actor, child_surface_actor);
           clutter_actor_remove_child (CLUTTER_ACTOR (self->surface_container),
                                       child_actor);
         }
@@ -287,8 +287,8 @@ calculate_background_cull_region (MetaWindowActorWayland *self)
   rect = (MtkRectangle) {
     .x = 0,
     .y = 0,
-    .width = clutter_actor_get_width (self->background) * geometry_scale,
-    .height = clutter_actor_get_height (self->background) * geometry_scale,
+    .width = (int) (clutter_actor_get_width (self->background) * geometry_scale),
+    .height = (int) (clutter_actor_get_height (self->background) * geometry_scale),
   };
 
   return mtk_region_create_rectangle (&rect);
@@ -615,7 +615,7 @@ do_sync_geometry (MetaWindowActorWayland *self)
         {
           self->background = clutter_actor_new ();
           clutter_actor_set_background_color (self->background,
-                                               &CLUTTER_COLOR_INIT (0, 0, 0, 255));
+                                              &COGL_COLOR_INIT (0, 0, 0, 255));
           clutter_actor_set_reactive (self->background, TRUE);
           clutter_actor_insert_child_below (CLUTTER_ACTOR (self),
                                             self->background,

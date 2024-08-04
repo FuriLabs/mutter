@@ -676,10 +676,10 @@ meta_input_settings_native_set_tablet_area (MetaInputSettings  *settings,
   gfloat offset_x;
   gfloat offset_y;
 
-  scale_x = 1. / (1. - (padding_left + padding_right));
-  scale_y = 1. / (1. - (padding_top + padding_bottom));
-  offset_x = -padding_left * scale_x;
-  offset_y = -padding_top * scale_y;
+  scale_x = (float) (1.0 / (1.0 - (padding_left + padding_right)));
+  scale_y = (float) (1.0 / (1.0 - (padding_top + padding_bottom)));
+  offset_x = (float) (-padding_left * scale_x);
+  offset_y = (float) (-padding_top * scale_y);
 
   gfloat matrix[6] = { scale_x, 0., offset_x,
                        0., scale_y, offset_y };
@@ -696,35 +696,21 @@ static void
 meta_input_settings_native_set_stylus_pressure (MetaInputSettings      *settings,
                                                 ClutterInputDevice     *device,
                                                 ClutterInputDeviceTool *tool,
-                                                const gint              curve[4])
+                                                const gint              curve[4],
+                                                const gdouble           range[2])
 {
   gdouble pressure_curve[4];
+  gdouble pressure_range[2];
 
   pressure_curve[0] = (gdouble) curve[0] / 100;
   pressure_curve[1] = (gdouble) curve[1] / 100;
   pressure_curve[2] = (gdouble) curve[2] / 100;
   pressure_curve[3] = (gdouble) curve[3] / 100;
 
-  meta_input_device_tool_native_set_pressure_curve_in_impl (tool, pressure_curve);
-}
+  pressure_range[0] = (gdouble) range[0];
+  pressure_range[1] = (gdouble) range[1];
 
-static guint
-action_to_evcode (GDesktopStylusButtonAction action)
-{
-  switch (action)
-    {
-    case G_DESKTOP_STYLUS_BUTTON_ACTION_MIDDLE:
-      return BTN_STYLUS;
-    case G_DESKTOP_STYLUS_BUTTON_ACTION_RIGHT:
-      return BTN_STYLUS2;
-    case G_DESKTOP_STYLUS_BUTTON_ACTION_BACK:
-      return BTN_BACK;
-    case G_DESKTOP_STYLUS_BUTTON_ACTION_FORWARD:
-      return BTN_FORWARD;
-    case G_DESKTOP_STYLUS_BUTTON_ACTION_DEFAULT:
-    default:
-      return 0;
-    }
+  meta_input_device_tool_native_set_pressure_curve_in_impl (tool, pressure_curve, pressure_range);
 }
 
 static void
@@ -735,12 +721,9 @@ meta_input_settings_native_set_stylus_button_map (MetaInputSettings          *se
                                                   GDesktopStylusButtonAction  secondary,
                                                   GDesktopStylusButtonAction  tertiary)
 {
-  meta_input_device_tool_native_set_button_code_in_impl (tool, CLUTTER_BUTTON_MIDDLE,
-                                                         action_to_evcode (primary));
-  meta_input_device_tool_native_set_button_code_in_impl (tool, CLUTTER_BUTTON_SECONDARY,
-                                                         action_to_evcode (secondary));
-  meta_input_device_tool_native_set_button_code_in_impl (tool, 8, /* Back */
-                                                         action_to_evcode (tertiary));
+  meta_input_device_tool_native_set_button_code_in_impl (tool, CLUTTER_BUTTON_MIDDLE, primary);
+  meta_input_device_tool_native_set_button_code_in_impl (tool, CLUTTER_BUTTON_SECONDARY, secondary);
+  meta_input_device_tool_native_set_button_code_in_impl (tool, 8, tertiary);
 }
 
 static void

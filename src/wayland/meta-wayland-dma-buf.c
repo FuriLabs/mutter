@@ -48,7 +48,6 @@
 #include "backends/meta-backend-private.h"
 #include "backends/meta-egl-ext.h"
 #include "backends/meta-egl.h"
-#include "cogl/cogl-egl.h"
 #include "cogl/cogl.h"
 #include "common/meta-cogl-drm-formats.h"
 #include "common/meta-drm-format-helpers.h"
@@ -174,7 +173,7 @@ should_send_modifiers (MetaBackend *backend)
   ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
   CoglContext *cogl_context =
     clutter_backend_get_cogl_context (clutter_backend);
-  EGLDisplay egl_display = cogl_egl_context_get_egl_display (cogl_context);
+  EGLDisplay egl_display = cogl_context_get_egl_display (cogl_context);
 
 #ifdef HAVE_NATIVE_BACKEND
   if (META_IS_BACKEND_NATIVE (backend))
@@ -366,7 +365,7 @@ meta_wayland_dma_buf_realize_texture (MetaWaylandBuffer  *buffer,
   MetaEgl *egl = meta_backend_get_egl (backend);
   ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
   CoglContext *cogl_context = clutter_backend_get_cogl_context (clutter_backend);
-  EGLDisplay egl_display = cogl_egl_context_get_egl_display (cogl_context);
+  EGLDisplay egl_display = cogl_context_get_egl_display (cogl_context);
   MetaWaylandDmaBufBuffer *dma_buf = buffer->dma_buf.dma_buf;
   MetaMultiTextureFormat multi_format;
   CoglPixelFormat cogl_format;
@@ -427,7 +426,7 @@ meta_wayland_dma_buf_realize_texture (MetaWaylandBuffer  *buffer,
         return FALSE;
 
       flags = COGL_EGL_IMAGE_FLAG_NO_GET_DATA;
-      cogl_texture = cogl_egl_texture_2d_new_from_image (cogl_context,
+      cogl_texture = cogl_texture_2d_new_from_egl_image (cogl_context,
                                                          dma_buf->width,
                                                          dma_buf->height,
                                                          cogl_format,
@@ -462,15 +461,15 @@ meta_wayland_dma_buf_realize_texture (MetaWaylandBuffer  *buffer,
           CoglEglImageFlags flags;
           CoglTexture *cogl_texture;
           uint32_t drm_format = 0;
-          const MetaFormatInfo *format_info;
+          const MetaFormatInfo *plane_format_info;
           int plane_index = mt_format_info->plane_indices[i];
           CoglPixelFormat subformat = mt_format_info->subformats[i];
           int horizontal_factor = mt_format_info->hsub[i];
           int vertical_factor = mt_format_info->vsub[i];
 
-          format_info = meta_format_info_from_cogl_format (subformat);
-          g_return_val_if_fail (format_info != NULL, FALSE);
-          drm_format = format_info->drm_format;
+          plane_format_info = meta_format_info_from_cogl_format (subformat);
+          g_return_val_if_fail (plane_format_info != NULL, FALSE);
+          drm_format = plane_format_info->drm_format;
 
           egl_image = meta_egl_create_dmabuf_image (egl,
                                                     egl_display,
@@ -489,7 +488,7 @@ meta_wayland_dma_buf_realize_texture (MetaWaylandBuffer  *buffer,
             return FALSE;
 
           flags = COGL_EGL_IMAGE_FLAG_NO_GET_DATA;
-          cogl_texture = cogl_egl_texture_2d_new_from_image (cogl_context,
+          cogl_texture = cogl_texture_2d_new_from_egl_image (cogl_context,
                                                              dma_buf->width,
                                                              dma_buf->height,
                                                              subformat,
@@ -1820,7 +1819,7 @@ meta_wayland_dma_buf_manager_new (MetaWaylandCompositor  *compositor,
   MetaEgl *egl = meta_backend_get_egl (backend);
   ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
   CoglContext *cogl_context = clutter_backend_get_cogl_context (clutter_backend);
-  EGLDisplay egl_display = cogl_egl_context_get_egl_display (cogl_context);
+  EGLDisplay egl_display = cogl_context_get_egl_display (cogl_context);
   dev_t device_id = 0;
   int protocol_version;
   EGLDeviceEXT egl_device;

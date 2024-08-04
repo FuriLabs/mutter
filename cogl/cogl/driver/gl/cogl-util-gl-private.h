@@ -34,7 +34,6 @@
 
 #include "cogl/cogl-types.h"
 #include "cogl/cogl-context.h"
-#include "cogl/cogl-gl-header.h"
 #include "cogl/cogl-texture.h"
 
 /* In OpenGL ES context, GL_CONTEXT_LOST has a _KHR prefix */
@@ -42,7 +41,7 @@
 #define GL_CONTEXT_LOST GL_CONTEXT_LOST_KHR
 #endif
 
-#ifdef COGL_GL_DEBUG
+#ifdef COGL_ENABLE_DEBUG
 
 const char *
 _cogl_gl_error_to_string (GLenum error_code);
@@ -69,12 +68,12 @@ _cogl_gl_error_to_string (GLenum error_code);
                  _cogl_gl_error_to_string (__err));     \
     }                                   } G_STMT_END
 
-#else /* !COGL_GL_DEBUG */
+#else /* !COGL_ENABLE_DEBUG */
 
 #define GE(ctx, x) ((ctx)->x)
 #define GE_RET(ret, ctx, x) (ret = ((ctx)->x))
 
-#endif /* COGL_GL_DEBUG */
+#endif /* COGL_ENABLE_DEBUG */
 
 typedef struct _CoglGLContext {
   GArray           *texture_units;
@@ -131,6 +130,9 @@ _cogl_context_get_gl_extensions (CoglContext *context);
 
 const char *
 _cogl_context_get_gl_version (CoglContext *context);
+
+const char *
+_cogl_context_get_gl_vendor (CoglContext *context);
 
 /* Parses a GL version number stored in a string. @version_string must
  * point to the beginning of the version number (ie, it can't point to

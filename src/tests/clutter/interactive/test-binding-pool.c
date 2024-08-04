@@ -182,7 +182,7 @@ key_group_paint (ClutterActor        *actor,
           box.x2 += 2;
           box.y2 += 2;
 
-          cogl_color_init_from_4f (&color, 1.0, 1.0, 0.0, 224.0 / 255.0);
+          cogl_color_init_from_4f (&color, 1.0f, 1.0f, 0.0f, 224.0f / 255.0f);
           cogl_pipeline_set_color (pipeline, &color);
 
           cogl_framebuffer_draw_rectangle (framebuffer, pipeline,
@@ -273,7 +273,7 @@ test_binding_pool_main (int argc, char *argv[])
   /* add three rectangles to the key group */
   clutter_actor_add_child (key_group,
                            g_object_new (CLUTTER_TYPE_ACTOR,
-                                         "background-color", &CLUTTER_COLOR_INIT (255, 0, 0, 255),
+                                         "background-color", &COGL_COLOR_INIT (255, 0, 0, 255),
                                          "name", "Red Rectangle",
                                          "width", 100.0,
                                          "height", 100.0,
@@ -282,7 +282,7 @@ test_binding_pool_main (int argc, char *argv[])
                                          NULL));
   clutter_actor_add_child (key_group,
                            g_object_new (CLUTTER_TYPE_ACTOR,
-                                         "background-color", &CLUTTER_COLOR_INIT (0, 255, 0, 255),
+                                         "background-color", &COGL_COLOR_INIT (0, 255, 0, 255),
                                          "name", "Green Rectangle",
                                          "width", 100.0,
                                          "height", 100.0,
@@ -291,7 +291,7 @@ test_binding_pool_main (int argc, char *argv[])
                                          NULL));
   clutter_actor_add_child (key_group,
                            g_object_new (CLUTTER_TYPE_ACTOR,
-                                         "background-color", &CLUTTER_COLOR_INIT (0, 0, 255, 255),
+                                         "background-color", &COGL_COLOR_INIT (0, 0, 255, 255),
                                          "name", "Blue Rectangle",
                                          "width", 100.0,
                                          "height", 100.0,
@@ -304,11 +304,11 @@ test_binding_pool_main (int argc, char *argv[])
                     NULL);
 
   group_x =
-    (clutter_actor_get_width (stage) - clutter_actor_get_width (key_group))
-    / 2;
+    (int) ((clutter_actor_get_width (stage) - clutter_actor_get_width (key_group)) /
+           2);
   group_y =
-    (clutter_actor_get_height (stage) - clutter_actor_get_height (key_group))
-    / 2;
+    (int) ((clutter_actor_get_height (stage) - clutter_actor_get_height (key_group)) /
+           2);
 
   clutter_actor_set_position (key_group, group_x, group_y);
   clutter_actor_set_reactive (key_group, TRUE);

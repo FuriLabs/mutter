@@ -495,7 +495,7 @@ init_surface_actor (MetaWindowActor *self)
   MetaWindow *window = priv->window;
   MetaSurfaceActor *surface_actor = NULL;
 
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_X11
   if (!meta_is_wayland_compositor ())
     {
       surface_actor = meta_surface_actor_x11_new (window);
@@ -953,7 +953,7 @@ meta_window_actor_sync_actor_geometry (MetaWindowActor *self,
 
   /* When running as a Wayland compositor we catch size changes when new
    * buffers are attached */
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_X11
   if (META_IS_SURFACE_ACTOR_X11 (priv->surface))
     meta_surface_actor_x11_set_size (META_SURFACE_ACTOR_X11 (priv->surface),
                                      actor_rect.width, actor_rect.height);
@@ -1240,8 +1240,8 @@ meta_window_actor_get_buffer_bounds (MetaScreenCastWindow *screen_cast_window,
 
   stex = meta_surface_actor_get_texture (priv->surface);
   *bounds = (MtkRectangle) {
-    .width = floorf (meta_shaped_texture_get_unscaled_width (stex)),
-    .height = floorf (meta_shaped_texture_get_unscaled_height (stex)),
+    .width = (int) floorf (meta_shaped_texture_get_unscaled_width (stex)),
+    .height = (int) floorf (meta_shaped_texture_get_unscaled_height (stex)),
   };
 }
 
@@ -1481,7 +1481,8 @@ meta_window_actor_blit_to_framebuffer (MetaScreenCastWindow *screen_cast_window,
 
   paint_context =
     clutter_paint_context_new_for_framebuffer (framebuffer, NULL,
-                                               CLUTTER_PAINT_FLAG_NONE);
+                                               CLUTTER_PAINT_FLAG_NONE,
+                                               clutter_actor_get_color_state (actor));
   clutter_actor_paint (actor, paint_context);
   clutter_paint_context_destroy (paint_context);
 
@@ -1588,12 +1589,12 @@ create_framebuffer_from_window_actor (MetaWindowActor  *self,
   resource_scale = clutter_actor_get_resource_scale (actor);
 
   texture = cogl_texture_2d_new_with_size (cogl_context,
-                                           clip->width * resource_scale,
-                                           clip->height * resource_scale);
+                                           (int) (clip->width * resource_scale),
+                                           (int) (clip->height * resource_scale));
   if (!texture)
     return NULL;
 
-  cogl_primitive_texture_set_auto_mipmap (texture, FALSE);
+  cogl_texture_set_auto_mipmap (texture, FALSE);
 
   offscreen = cogl_offscreen_new_with_texture (texture);
   framebuffer = COGL_FRAMEBUFFER (offscreen);
@@ -1614,7 +1615,8 @@ create_framebuffer_from_window_actor (MetaWindowActor  *self,
 
   paint_context =
     clutter_paint_context_new_for_framebuffer (framebuffer, NULL,
-                                               CLUTTER_PAINT_FLAG_NONE);
+                                               CLUTTER_PAINT_FLAG_NONE,
+                                               clutter_actor_get_color_state (actor));
   clutter_actor_paint (actor, paint_context);
   clutter_paint_context_destroy (paint_context);
 
@@ -1689,10 +1691,10 @@ meta_window_actor_get_image (MetaWindowActor *self,
     goto out;
 
   framebuffer_clip = (MtkRectangle) {
-    .x = floorf (x),
-    .y = floorf (y),
-    .width = ceilf (width),
-    .height = ceilf (height),
+    .x = (int) floorf (x),
+    .y = (int) floorf (y),
+    .width = (int) ceilf (width),
+    .height = (int) ceilf (height),
   };
 
   if (clip)
@@ -1701,8 +1703,8 @@ meta_window_actor_get_image (MetaWindowActor *self,
       MtkRectangle intersected_clip;
 
       tmp_clip = *clip;
-      tmp_clip.x += floorf (x);
-      tmp_clip.y += floorf (y);
+      tmp_clip.x += (int) floorf (x);
+      tmp_clip.y += (int) floorf (y);
       if (!mtk_rectangle_intersect (&framebuffer_clip,
                                     &tmp_clip,
                                     &intersected_clip))
@@ -1719,14 +1721,14 @@ meta_window_actor_get_image (MetaWindowActor *self,
 
   resource_scale = clutter_actor_get_resource_scale (actor);
   surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32,
-                                        framebuffer_clip.width *
-                                        resource_scale,
-                                        framebuffer_clip.height *
-                                        resource_scale);
+                                        (int) (framebuffer_clip.width *
+                                               resource_scale),
+                                        (int) (framebuffer_clip.height *
+                                               resource_scale));
   cogl_framebuffer_read_pixels (framebuffer,
                                 0, 0,
-                                framebuffer_clip.width * resource_scale,
-                                framebuffer_clip.height * resource_scale,
+                                (int) (framebuffer_clip.width * resource_scale),
+                                (int) (framebuffer_clip.height * resource_scale),
                                 COGL_PIXEL_FORMAT_CAIRO_ARGB32_COMPAT,
                                 cairo_image_surface_get_data (surface));
 
@@ -1775,10 +1777,10 @@ meta_window_actor_paint_to_content (MetaWindowActor  *self,
     goto out;
 
   framebuffer_clip = (MtkRectangle) {
-    .x = floorf (x),
-    .y = floorf (y),
-    .width = ceilf (width),
-    .height = ceilf (height),
+    .x = (int) floorf (x),
+    .y = (int) floorf (y),
+    .width = (int) ceilf (width),
+    .height = (int) ceilf (height),
   };
 
   if (clip)

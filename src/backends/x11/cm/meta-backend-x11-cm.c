@@ -408,7 +408,6 @@ meta_backend_x11_cm_handle_host_xevent (MetaBackendX11 *x11,
     {
       MetaCompositor *compositor = display->compositor;
       MetaCompositorX11 *compositor_x11 = META_COMPOSITOR_X11 (compositor);
-      Display *xdisplay = meta_backend_x11_get_xdisplay (x11);
 
       if (meta_dnd_handle_xdnd_event (backend, compositor_x11,
                                       xdisplay, event))
@@ -508,15 +507,9 @@ static void
 meta_backend_x11_cm_constructed (GObject *object)
 {
   MetaBackendX11Cm *x11_cm = META_BACKEND_X11_CM (object);
-  const char *display_name;
 
   if (x11_cm->display_name)
-    display_name = (const char *) x11_cm->display_name;
-  else
-    display_name = g_getenv ("MUTTER_DISPLAY");
-
-  if (display_name)
-    g_setenv ("DISPLAY", display_name, TRUE);
+    g_setenv ("DISPLAY", x11_cm->display_name, TRUE);
 
   G_OBJECT_CLASS (meta_backend_x11_cm_parent_class)->constructed (object);
 }

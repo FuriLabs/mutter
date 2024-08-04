@@ -429,14 +429,14 @@ _cogl_driver_update_features (CoglContext *ctx,
      functions because we need to use them to determine what functions
      we can expect */
   ctx->glGetString =
-    (void *) _cogl_renderer_get_proc_address (ctx->display->renderer,
-                                              "glGetString");
+    (void *) cogl_renderer_get_proc_address (ctx->display->renderer,
+                                             "glGetString");
   ctx->glGetStringi =
-    (void *) _cogl_renderer_get_proc_address (ctx->display->renderer,
-                                              "glGetStringi");
+    (void *) cogl_renderer_get_proc_address (ctx->display->renderer,
+                                             "glGetStringi");
   ctx->glGetIntegerv =
-    (void *) _cogl_renderer_get_proc_address (ctx->display->renderer,
-                                              "glGetIntegerv");
+    (void *) cogl_renderer_get_proc_address (ctx->display->renderer,
+                                             "glGetIntegerv");
 
   gl_extensions = _cogl_context_get_gl_extensions (ctx);
 
@@ -465,7 +465,7 @@ _cogl_driver_update_features (CoglContext *ctx,
 
   ctx->glsl_major = 1;
   ctx->glsl_minor = 2;
-  ctx->glsl_version_to_use = 120;
+  ctx->glsl_version_to_use = 140;
 
   glsl_version = (char *)ctx->glGetString (GL_SHADING_LANGUAGE_VERSION);
   _cogl_gl_util_parse_gl_version (glsl_version,
@@ -563,6 +563,7 @@ _cogl_driver_gl =
   {
     _cogl_driver_gl_real_context_init,
     _cogl_driver_gl_context_deinit,
+    _cogl_context_get_gl_vendor,
     _cogl_driver_gl_is_hardware_accelerated,
     _cogl_gl_get_graphics_reset_status,
     _cogl_driver_pixel_format_to_gl,

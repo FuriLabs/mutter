@@ -39,13 +39,14 @@
 #include "core/meta-workspace-manager-private.h"
 #include "core/window-private.h"
 #include "core/workspace-private.h"
-#include "meta/group.h"
 #include "meta/meta-backend.h"
 #include "meta/meta-context.h"
 #include "mtk/mtk-x11.h"
 #include "x11/meta-startup-notification-x11.h"
 #include "x11/meta-x11-display-private.h"
 #include "x11/meta-x11-event-source.h"
+#include "x11/meta-x11-frame.h"
+#include "x11/meta-x11-group-private.h"
 #include "x11/meta-x11-selection-private.h"
 #include "x11/meta-x11-selection-input-stream-private.h"
 #include "x11/meta-x11-selection-output-stream-private.h"
@@ -803,15 +804,18 @@ handle_window_focus_event (MetaX11Display *x11_display,
   MetaWindow *focus_window;
 #ifdef WITH_VERBOSE_MODE
   const char *window_type;
+  MetaFrame *frame;
 
   /* Note the event can be on either the window or the frame,
    * we focus the frame for output-only windows
    */
   if (window)
     {
+      frame = meta_window_x11_get_frame (window);
+
       if (event->event == meta_window_x11_get_xwindow (window))
         window_type = "client window";
-      else if (window->frame && event->event == window->frame->xwindow)
+      else if (frame && event->event == frame->xwindow)
         window_type = "frame window";
       else
         window_type = "unknown client window";
@@ -972,8 +976,8 @@ handle_input_xevent (MetaX11Display *x11_display,
           meta_display_handle_window_enter (display,
                                             window,
                                             enter_event->time,
-                                            enter_event->root_x,
-                                            enter_event->root_y);
+                                            (int) enter_event->root_x,
+                                            (int) enter_event->root_y);
         }
       break;
     case XI_Leave:
@@ -1248,12 +1252,16 @@ notify_bell (MetaX11Display *x11_display,
   MetaDisplay *display = x11_display->display;
   XkbBellNotifyEvent *xkb_bell_event = (XkbBellNotifyEvent*) xkb_ev;
   MetaWindow *window;
+  MetaFrame *frame;
 
   window = meta_x11_display_lookup_x_window (x11_display,
                                              xkb_bell_event->window);
-  if (!window && display->focus_window && display->focus_window->frame)
-    window = display->focus_window;
-
+  if (!window && display->focus_window)
+    {
+      frame = meta_window_x11_get_frame (display->focus_window);
+      if (frame)
+        window = display->focus_window;
+    }
   x11_display->last_bell_time = xkb_ev->time;
   if (!meta_bell_notify (display, window) &&
       meta_prefs_bell_is_audible ())
@@ -1277,10 +1285,13 @@ handle_other_xevent (MetaX11Display *x11_display,
   MetaWindow *window;
   MetaWindow *property_for_window;
   gboolean frame_was_receiver;
+  MetaFrame *frame = NULL;
 
   modified = event_get_modified_window (x11_display, event);
   window = modified != None ? meta_x11_display_lookup_x_window (x11_display, modified) : NULL;
-  frame_was_receiver = (window && window->frame && modified == window->frame->xwindow);
+  if (window)
+    frame = meta_window_x11_get_frame (window);
+  frame_was_receiver = frame && modified == frame->xwindow;
 
   /* We only want to respond to _NET_WM_USER_TIME property notify
    * events on _NET_WM_USER_TIME_WINDOW windows; in particular,
@@ -1387,7 +1398,7 @@ handle_other_xevent (MetaX11Display *x11_display,
           if (frame_was_receiver)
             {
               mtk_x11_error_trap_push (x11_display->xdisplay);
-              meta_window_destroy_frame (window->frame->window);
+              meta_window_destroy_frame (frame->window);
               mtk_x11_error_trap_pop (x11_display->xdisplay);
             }
           else
@@ -1482,7 +1493,7 @@ handle_other_xevent (MetaX11Display *x11_display,
               window = meta_x11_display_lookup_x_window (x11_display,
                                                          client_window);
 
-              if (window != NULL && window->decorated && !window->frame)
+              if (window != NULL && window->decorated && !meta_window_x11_is_ssd (window))
                 {
                   meta_window_x11_set_frame_xwindow (window,
                                                      event->xmaprequest.window);
@@ -1569,9 +1580,9 @@ handle_other_xevent (MetaX11Display *x11_display,
         {
           meta_window_x11_configure_request (window, event);
         }
-      else if (frame_was_receiver && window->frame)
+      else if (frame_was_receiver && frame)
         {
-          meta_frame_handle_xevent (window->frame, event);
+          meta_frame_handle_xevent (frame, event);
         }
       break;
     case GravityNotify:
@@ -1591,7 +1602,7 @@ handle_other_xevent (MetaX11Display *x11_display,
         else if (property_for_window && !frame_was_receiver)
           meta_window_x11_property_notify (property_for_window, event);
         else if (frame_was_receiver)
-          meta_frame_handle_xevent (window->frame, event);
+          meta_frame_handle_xevent (frame, event);
 
         group = meta_x11_display_lookup_group (x11_display,
                                                event->xproperty.window);
@@ -1780,10 +1791,13 @@ static gboolean
 window_has_xwindow (MetaWindow *window,
                     Window      xwindow)
 {
+  MetaFrame *frame;
+
   if (meta_window_x11_get_xwindow (window) == xwindow)
     return TRUE;
 
-  if (window->frame && window->frame->xwindow == xwindow)
+  frame = meta_window_x11_get_frame (window);
+  if (frame && frame->xwindow == xwindow)
     return TRUE;
 
   return FALSE;
@@ -1836,11 +1850,12 @@ meta_x11_display_handle_xevent (MetaX11Display *x11_display,
 {
   MetaDisplay *display = x11_display->display;
   MetaContext *context = meta_display_get_context (display);
-  MetaBackend *backend = meta_context_get_backend (context);
-  Window modified;
-  gboolean bypass_compositor = FALSE;
-  XIEvent *input_event;
+#ifdef HAVE_X11
   MetaCursorTracker *cursor_tracker;
+  MetaBackend *backend = meta_context_get_backend (context);
+#endif
+  gboolean bypass_compositor G_GNUC_UNUSED = FALSE;
+  XIEvent *input_event;
 #ifdef HAVE_XWAYLAND
   MetaWaylandCompositor *wayland_compositor;
 #endif
@@ -1883,8 +1898,10 @@ meta_x11_display_handle_xevent (MetaX11Display *x11_display,
 
   display->current_time = event_get_time (x11_display, event);
 
+#ifdef HAVE_X11
   if (META_IS_BACKEND_X11 (backend))
     meta_backend_x11_reset_cached_logical_monitor (META_BACKEND_X11 (backend));
+#endif
 
   if (x11_display->focused_by_us &&
       event->xany.serial > x11_display->focus_serial &&
@@ -1901,6 +1918,7 @@ meta_x11_display_handle_xevent (MetaX11Display *x11_display,
       x11_display->is_server_focus = FALSE;
     }
 
+#ifdef HAVE_X11
   if (event->xany.window == x11_display->xroot)
     {
       cursor_tracker = meta_backend_get_cursor_tracker (backend);
@@ -1916,8 +1934,7 @@ meta_x11_display_handle_xevent (MetaX11Display *x11_display,
             }
         }
     }
-
-  modified = event_get_modified_window (x11_display, event);
+#endif
 
   input_event = get_input_event (x11_display, event);
 
@@ -1936,11 +1953,15 @@ meta_x11_display_handle_xevent (MetaX11Display *x11_display,
     }
 
  out:
+#ifdef HAVE_X11
   if (!bypass_compositor && META_IS_COMPOSITOR_X11 (display->compositor))
     {
       MetaCompositorX11 *compositor_x11 =
         META_COMPOSITOR_X11 (display->compositor);
       MetaWindow *window;
+      Window modified;
+
+      modified = event_get_modified_window (x11_display, event);
 
       if (modified != None)
         window = meta_x11_display_lookup_x_window (x11_display, modified);
@@ -1949,6 +1970,7 @@ meta_x11_display_handle_xevent (MetaX11Display *x11_display,
 
       meta_compositor_x11_process_xevent (compositor_x11, event, window);
     }
+#endif /* HAVE_X11 */
 
   display->current_time = META_CURRENT_TIME;
 

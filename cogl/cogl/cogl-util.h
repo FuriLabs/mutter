@@ -71,59 +71,12 @@ _cogl_util_one_at_a_time_hash (unsigned int hash,
   return hash;
 }
 
-unsigned int
-_cogl_util_one_at_a_time_mix (unsigned int hash);
-
-
-#define _cogl_util_ffsl __builtin_ffsl
-
 static inline unsigned int
-_cogl_util_fls (unsigned int n)
+_cogl_util_one_at_a_time_mix (unsigned int hash)
 {
-   return n == 0 ? 0 : sizeof (unsigned int) * 8 - __builtin_clz (n);
-}
+    hash += ( hash << 3 );
+    hash ^= ( hash >> 11 );
+    hash += ( hash << 15 );
 
-#define _cogl_util_popcountl __builtin_popcountl
-
-/* Match a CoglPixelFormat according to channel masks, color depth,
- * bits per pixel and byte order. These information are provided by
- * the Visual and XImage structures.
- *
- * If no specific pixel format could be found, COGL_PIXEL_FORMAT_ANY
- * is returned.
- */
-CoglPixelFormat
-_cogl_util_pixel_format_from_masks (unsigned long r_mask,
-                                    unsigned long g_mask,
-                                    unsigned long b_mask,
-                                    int depth, int bpp,
-                                    int byte_order);
-
-/* _COGL_STATIC_ASSERT:
- * @expression: An expression to assert evaluates to true at compile
- *              time.
- * @message: A message to print to the console if the assertion fails
- *           at compile time.
- *
- * Allows you to assert that an expression evaluates to true at
- * compile time and aborts compilation if not. If possible message
- * will also be printed if the assertion fails.
- */
-#define _COGL_STATIC_ASSERT(EXPRESSION, MESSAGE) \
-  _Static_assert (EXPRESSION, MESSAGE);
-
-static inline void
-_cogl_util_scissor_intersect (int rect_x0,
-                              int rect_y0,
-                              int rect_x1,
-                              int rect_y1,
-                              int *scissor_x0,
-                              int *scissor_y0,
-                              int *scissor_x1,
-                              int *scissor_y1)
-{
-  *scissor_x0 = MAX (*scissor_x0, rect_x0);
-  *scissor_y0 = MAX (*scissor_y0, rect_y0);
-  *scissor_x1 = MIN (*scissor_x1, rect_x1);
-  *scissor_y1 = MIN (*scissor_y1, rect_y1);
+    return hash;
 }

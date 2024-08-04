@@ -262,8 +262,7 @@ workspace_free_all_struts (MetaWorkspace *workspace)
   if (workspace->all_struts == NULL)
     return;
 
-  g_slist_free_full (workspace->all_struts, g_free);
-  workspace->all_struts = NULL;
+  g_clear_slist (&workspace->all_struts, g_free);
 }
 
 /**
@@ -278,8 +277,7 @@ workspace_free_builtin_struts (MetaWorkspace *workspace)
   if (workspace->builtin_struts == NULL)
     return;
 
-  g_slist_free_full (workspace->builtin_struts, g_free);
-  workspace->builtin_struts = NULL;
+  g_clear_slist (&workspace->all_struts, g_free);
 }
 
 /* Ensure that the workspace is empty by making sure that
@@ -1123,6 +1121,12 @@ meta_workspace_set_builtin_struts (MetaWorkspace *workspace,
   meta_workspace_invalidate_work_area (workspace);
 }
 
+GSList *
+meta_workspace_get_builtin_struts (MetaWorkspace *workspace)
+{
+  return copy_strut_list (workspace->builtin_struts);
+}
+
 void
 meta_workspace_get_work_area_for_logical_monitor (MetaWorkspace      *workspace,
                                                   MetaLogicalMonitor *logical_monitor,
@@ -1452,7 +1456,7 @@ window_contains_point (MetaWindow *window,
 
   meta_window_get_frame_rect (window, &rect);
 
-  return META_POINT_IN_RECT (root_x, root_y, rect);
+  return mtk_rectangle_contains_point (&rect, root_x, root_y);
 }
 
 MetaWindow *
@@ -1543,7 +1547,8 @@ get_pointer_window (MetaWorkspace *workspace,
 
   return meta_workspace_get_default_focus_window_at_point (workspace,
                                                            not_this_one,
-                                                           point.x, point.y);
+                                                           (int) point.x,
+                                                           (int) point.y);
 }
 
 static gboolean

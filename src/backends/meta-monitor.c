@@ -30,11 +30,11 @@
 #include "core/boxes-private.h"
 
 #define SCALE_FACTORS_PER_INTEGER 4
-#define SCALE_FACTORS_STEPS (1.0 / (float) SCALE_FACTORS_PER_INTEGER)
+#define SCALE_FACTORS_STEPS (1.0f / (float) SCALE_FACTORS_PER_INTEGER)
 #define MINIMUM_SCALE_FACTOR 1.0f
 #define MAXIMUM_SCALE_FACTOR 4.0f
 #define MINIMUM_LOGICAL_AREA (800 * 480)
-#define MAXIMUM_REFRESH_RATE_DIFF 0.001
+#define MAXIMUM_REFRESH_RATE_DIFF 0.001f
 
 typedef struct _MetaMonitorMode
 {
@@ -65,17 +65,6 @@ typedef struct _MetaMonitorPrivate
   MetaMonitorSpec *spec;
 
   MetaLogicalMonitor *logical_monitor;
-
-  /*
-   * The primary or first output for this monitor, 0 if we can't figure out.
-   * It can be matched to a winsys_id of a MetaOutput.
-   *
-   * This is used as an opaque token on reconfiguration when switching from
-   * clone to extended, to decide on what output the windows should go next
-   * (it's an attempt to keep windows on the same monitor, and preferably on
-   * the primary one).
-   */
-  uint64_t winsys_id;
 
   char *display_name;
 } MetaMonitorPrivate;
@@ -424,20 +413,23 @@ meta_monitor_is_same_as (MetaMonitor *monitor,
 {
   const MetaMonitorSpec *spec = meta_monitor_get_spec (monitor);
   const MetaMonitorSpec *other_spec = meta_monitor_get_spec (other_monitor);
+  gboolean spec_is_unknown;
+  gboolean other_spec_is_unknown;
 
-  if ((g_strcmp0 (spec->vendor, "unknown") == 0 ||
-       g_strcmp0 (spec->product, "unknown") == 0 ||
-       g_strcmp0 (spec->serial, "unknown") == 0) &&
-      (g_strcmp0 (other_spec->vendor, "unknown") == 0 ||
-       g_strcmp0 (other_spec->product, "unknown") == 0 ||
-       g_strcmp0 (other_spec->serial, "unknown") == 0))
-    {
-      MetaMonitorPrivate *priv = meta_monitor_get_instance_private (monitor);
-      MetaMonitorPrivate *other_priv =
-        meta_monitor_get_instance_private (other_monitor);
+  spec_is_unknown =
+    g_strcmp0 (spec->vendor, "unknown") == 0 ||
+    g_strcmp0 (spec->product, "unknown") == 0 ||
+    g_strcmp0 (spec->serial, "unknown") == 0;
+  other_spec_is_unknown =
+    g_strcmp0 (other_spec->vendor, "unknown") == 0 ||
+    g_strcmp0 (other_spec->product, "unknown") == 0 ||
+    g_strcmp0 (other_spec->serial, "unknown") == 0;
 
-      return priv->winsys_id == other_priv->winsys_id;
-    }
+  if (spec_is_unknown && other_spec_is_unknown)
+    return g_strcmp0 (spec->connector, other_spec->connector) == 0;
+
+  if (spec_is_unknown || other_spec_is_unknown)
+    return FALSE;
 
   if (g_strcmp0 (spec->vendor, other_spec->vendor) != 0)
     return FALSE;
@@ -481,7 +473,7 @@ meta_monitor_get_physical_dimensions (MetaMonitor *monitor,
   *height_mm = output_info->height_mm;
 }
 
-CoglSubpixelOrder
+MetaSubpixelOrder
 meta_monitor_get_subpixel_order (MetaMonitor *monitor)
 {
   const MetaOutputInfo *output_info =
@@ -840,7 +832,6 @@ meta_monitor_normal_new (MetaMonitorManager *monitor_manager,
   monitor_priv->outputs = g_list_append (NULL, g_object_ref (output));
   meta_output_set_monitor (output, monitor);
 
-  monitor_priv->winsys_id = meta_output_get_id (output);
   meta_monitor_generate_spec (monitor);
 
   meta_monitor_normal_generate_modes (monitor_normal);
@@ -1553,7 +1544,6 @@ meta_monitor_tiled_new (MetaMonitorManager *monitor_manager,
   monitor_priv->backend = meta_monitor_manager_get_backend (monitor_manager);
 
   monitor_tiled->tile_group_id = output_info->tile_info.group_id;
-  monitor_priv->winsys_id = meta_output_get_id (output);
 
   monitor_tiled->origin_output = output;
   add_tiled_monitor_outputs (meta_output_get_gpu (output), monitor_tiled);
@@ -1617,10 +1607,10 @@ meta_monitor_tiled_derive_layout (MetaMonitor  *monitor,
     }
 
   *layout = (MtkRectangle) {
-    .x = roundf (min_x),
-    .y = roundf (min_y),
-    .width = roundf (max_x - min_x),
-    .height = roundf (max_y - min_y)
+    .x = (int) roundf (min_x),
+    .y = (int) roundf (min_y),
+    .width = (int) roundf (max_x - min_x),
+    .height = (int) roundf (max_y - min_y)
   };
 }
 
@@ -1721,12 +1711,12 @@ gboolean
 meta_monitor_mode_spec_has_similar_size (MetaMonitorModeSpec *monitor_mode_spec,
                                          MetaMonitorModeSpec *other_monitor_mode_spec)
 {
-  const float target_ratio = 1.0;
+  const float target_ratio = 1.0f;
   /* The a size difference of 15% means e.g. 4K modes matches other 4K modes,
    * FHD (2K) modes other FHD modes, and HD modes other HD modes, but not each
    * other.
    */
-  const float epsilon = 0.15;
+  const float epsilon = 0.15f;
 
   return G_APPROX_VALUE (((float) monitor_mode_spec->width /
                           other_monitor_mode_spec->width) *
@@ -1887,7 +1877,7 @@ calculate_scale (MetaMonitor                *monitor,
   int n_scales;
   float best_scale, best_dpi;
   int target_dpi;
-  const float scale_epsilon = 0.2;
+  const float scale_epsilon = 0.2f;
 
   /*
    * Somebody encoded the aspect ratio (16/9 or 16/10) instead of the physical
@@ -1900,7 +1890,7 @@ calculate_scale (MetaMonitor                *monitor,
   meta_monitor_get_physical_dimensions (monitor, &width_mm, &height_mm);
   if (width_mm == 0 || height_mm == 0)
     return 1.0;
-  diag_inches = sqrtf (width_mm * width_mm + height_mm * height_mm) / 25.4;
+  diag_inches = sqrtf (width_mm * width_mm + height_mm * height_mm) / 25.4f;
 
   /* Pick the appropriate target DPI based on screen size */
   if (diag_inches < UI_SCALE_LARGE_MIN_SIZE_INCHES)
@@ -1947,7 +1937,7 @@ calculate_scale (MetaMonitor                *monitor,
   if (constraints & META_MONITOR_SCALES_CONSTRAINT_NO_FRAC)
     {
       best_scale = floorf (MIN (scales[n_scales - 1],
-                                best_scale + 0.25 + scale_epsilon));
+                                best_scale + 0.25f + scale_epsilon));
     }
 
   return best_scale;
@@ -1984,8 +1974,8 @@ is_scale_valid_for_size (float width,
   if (scale < MINIMUM_SCALE_FACTOR || scale > MAXIMUM_SCALE_FACTOR)
     return FALSE;
 
-  return is_logical_size_large_enough (floorf (width / scale),
-                                       floorf (height / scale));
+  return is_logical_size_large_enough ((int) floorf (width / scale),
+                                       (int) floorf (height / scale));
 }
 
 gboolean
@@ -2027,7 +2017,7 @@ get_closest_scale_factor_for_resolution (float width,
 
   i = 0;
   found_one = FALSE;
-  base_scaled_w = floorf (width / scale);
+  base_scaled_w = (int) floorf (width / scale);
 
   do
     {
@@ -2381,8 +2371,8 @@ meta_parse_monitor_mode (const char *string,
     return FALSE;
   ptr++;
 
-  refresh_rate = g_ascii_strtod (ptr, &ptr);
-  if (refresh_rate == 0.0)
+  refresh_rate = (float) g_ascii_strtod (ptr, &ptr);
+  if (G_APPROX_VALUE (refresh_rate, 0.0f, FLT_EPSILON))
     return FALSE;
 
   if (ptr[0] != '\0')

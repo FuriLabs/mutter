@@ -45,7 +45,6 @@
 
 #include "cogl/cogl-macros.h"
 
-#include "cogl/cogl1-context.h"
 #include "cogl/cogl-bitmap.h"
 #include "cogl/cogl-color.h"
 #include "cogl/cogl-dma-buf-handle.h"
@@ -62,9 +61,7 @@
 #include "cogl/cogl-mutter.h"
 #endif
 
-#include "cogl/cogl-swap-chain.h"
 #include "cogl/cogl-renderer.h"
-#include "cogl/cogl-output.h"
 #include "cogl/cogl-display.h"
 #include "cogl/cogl-context.h"
 #include "cogl/cogl-buffer.h"
@@ -72,9 +69,9 @@
 #include "cogl/cogl-texture-2d.h"
 #include "cogl/cogl-texture-2d-sliced.h"
 #include "cogl/cogl-sub-texture.h"
+#include "cogl/cogl-atlas.h"
 #include "cogl/cogl-atlas-texture.h"
 #include "cogl/cogl-meta-texture.h"
-#include "cogl/cogl-primitive-texture.h"
 #include "cogl/cogl-enum-types.h"
 #include "cogl/cogl-index-buffer.h"
 #include "cogl/cogl-attribute-buffer.h"
@@ -89,15 +86,10 @@
 #include "cogl/cogl-framebuffer.h"
 #include "cogl/cogl-onscreen.h"
 #include "cogl/cogl-frame-info.h"
-#include "cogl/cogl-poll.h"
-#include "cogl/cogl-fence.h"
 #include "cogl/cogl-glib-source.h"
 #include "cogl/cogl-trace.h"
 #include "cogl/cogl-scanout.h"
 #include "cogl/cogl-graphene.h"
-/* XXX: This will definitely go away once all the Clutter winsys
- * code has been migrated down into Cogl! */
-#include "cogl/deprecated/cogl-clutter.h"
 
 /* The gobject introspection scanner seems to parse public headers in
  * isolation which means we need to be extra careful about how we

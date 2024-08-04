@@ -79,7 +79,7 @@ _cogl_texture_driver_gen (CoglContext *ctx,
 
   GE (ctx, glGenTextures (1, &tex));
 
-  _cogl_bind_gl_texture_transient (gl_target, tex);
+  _cogl_bind_gl_texture_transient (ctx, gl_target, tex);
 
   switch (gl_target)
     {
@@ -267,7 +267,7 @@ _cogl_texture_driver_upload_subregion_to_gl (CoglContext *ctx,
       return FALSE;
     }
 
-  _cogl_bind_gl_texture_transient (gl_target, gl_handle);
+  _cogl_bind_gl_texture_transient (ctx, gl_target, gl_handle);
 
   /* Clear any GL errors */
   _cogl_gl_util_clear_gl_errors (ctx);
@@ -369,7 +369,7 @@ _cogl_texture_driver_upload_to_gl (CoglContext *ctx,
   /* Setup gl alignment to match rowstride and top-left corner */
   _cogl_texture_driver_prep_gl_for_pixels_upload (ctx, rowstride, bpp);
 
-  _cogl_bind_gl_texture_transient (gl_target, gl_handle);
+  _cogl_bind_gl_texture_transient (ctx, gl_target, gl_handle);
 
   data = _cogl_bitmap_gl_bind (bmp,
                                COGL_BUFFER_ACCESS_READ,
@@ -465,7 +465,7 @@ _cogl_texture_driver_upload_supported (CoglContext *ctx,
     case COGL_PIXEL_FORMAT_ARGB_2101010:
     case COGL_PIXEL_FORMAT_ARGB_2101010_PRE:
 #if G_BYTE_ORDER == G_LITTLE_ENDIAN
-      if (cogl_has_feature (ctx,  COGL_FEATURE_ID_TEXTURE_RGBA1010102))
+      if (cogl_context_has_feature (ctx,  COGL_FEATURE_ID_TEXTURE_RGBA1010102))
         return TRUE;
       else
         return FALSE;
@@ -502,7 +502,7 @@ _cogl_texture_driver_upload_supported (CoglContext *ctx,
     case COGL_PIXEL_FORMAT_RGBA_FP_16161616_PRE:
     case COGL_PIXEL_FORMAT_RGBA_FP_32323232:
     case COGL_PIXEL_FORMAT_RGBA_FP_32323232_PRE:
-      if (cogl_has_feature (ctx, COGL_FEATURE_ID_TEXTURE_HALF_FLOAT))
+      if (cogl_context_has_feature (ctx, COGL_FEATURE_ID_TEXTURE_HALF_FLOAT))
         return TRUE;
       else
         return FALSE;
@@ -510,7 +510,7 @@ _cogl_texture_driver_upload_supported (CoglContext *ctx,
     case COGL_PIXEL_FORMAT_RG_1616:
     case COGL_PIXEL_FORMAT_RGBA_16161616:
     case COGL_PIXEL_FORMAT_RGBA_16161616_PRE:
-      if (cogl_has_feature (ctx, COGL_FEATURE_ID_TEXTURE_NORM16))
+      if (cogl_context_has_feature (ctx, COGL_FEATURE_ID_TEXTURE_NORM16))
         return TRUE;
       else
         return FALSE;

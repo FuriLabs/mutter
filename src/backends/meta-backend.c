@@ -123,6 +123,11 @@ static guint signals[N_SIGNALS];
 #define BTN_LEFT 0x110
 #define BTN_RIGHT 0x111
 #define BTN_MIDDLE 0x112
+#define BTN_STYLUS3 0x149
+#define BTN_TOUCH 0x14a
+#define BTN_STYLUS 0x14b
+#define BTN_STYLUS2 0x14c
+#define BTN_JOYSTICK 0x120
 #endif
 
 struct _MetaBackendPrivate
@@ -289,8 +294,8 @@ init_pointer_position (MetaBackend *backend)
   /* Move the pointer out of the way to avoid hovering over reactive
    * elements (e.g. users list at login) causing undesired behaviour. */
   clutter_seat_init_pointer_position (seat,
-                                      primary->rect.x + primary->rect.width * 0.9,
-                                      primary->rect.y + primary->rect.height * 0.9);
+                                      primary->rect.x + primary->rect.width * 0.9f,
+                                      primary->rect.y + primary->rect.height * 0.9f);
 
   cursor_renderer = meta_backend_get_cursor_renderer (backend);
   meta_cursor_renderer_update_position (cursor_renderer);
@@ -1367,7 +1372,9 @@ meta_backend_get_color_manager (MetaBackend *backend)
 }
 
 /**
- * meta_backend_get_orientation_manager: (skip)
+ * meta_backend_get_orientation_manager:
+ *
+ * Returns: (transfer none): A #MetaOrientationManager
  */
 MetaOrientationManager *
 meta_backend_get_orientation_manager (MetaBackend *backend)
@@ -1650,6 +1657,14 @@ meta_backend_set_client_pointer_constraint (MetaBackend           *backend,
   g_set_object (&priv->client_pointer_constraint, constraint);
 }
 
+ClutterContext *
+meta_backend_get_clutter_context (MetaBackend *backend)
+{
+  MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
+
+  return priv->clutter_context;
+}
+
 ClutterBackend *
 meta_backend_get_clutter_backend (MetaBackend *backend)
 {
@@ -1843,6 +1858,50 @@ meta_clutter_button_to_evdev (uint32_t clutter_button)
     }
 
   return (clutter_button + (BTN_LEFT - 1)) - 4;
+}
+
+uint32_t
+meta_clutter_tool_button_to_evdev (uint32_t clutter_button)
+{
+  switch (clutter_button)
+    {
+    case CLUTTER_BUTTON_PRIMARY:
+      return BTN_TOUCH;
+    case CLUTTER_BUTTON_MIDDLE:
+      return BTN_STYLUS;
+    case CLUTTER_BUTTON_SECONDARY:
+      return BTN_STYLUS2;
+    case 8:
+      return BTN_STYLUS3;
+    }
+
+  return (clutter_button + (BTN_LEFT - 1)) - 5;
+}
+
+uint32_t
+meta_evdev_tool_button_to_clutter (uint32_t evdev_button)
+{
+  switch (evdev_button)
+    {
+    case BTN_TOUCH:
+    case BTN_LEFT:
+      return CLUTTER_BUTTON_PRIMARY;
+    case BTN_STYLUS:
+    case BTN_MIDDLE:
+      return CLUTTER_BUTTON_MIDDLE;
+    case BTN_STYLUS2:
+    case BTN_RIGHT:
+      return CLUTTER_BUTTON_SECONDARY;
+    case BTN_STYLUS3:
+      return 8;
+    }
+
+  g_return_val_if_fail (evdev_button > BTN_LEFT, 0);
+  g_return_val_if_fail (evdev_button < BTN_JOYSTICK, 0);
+
+  /* For compatibility reasons, all additional buttons (i.e. BTN_SIDE and
+   * higher) go after the old 4-7 scroll ones and 8 for BTN_STYLUS3 */
+  return (evdev_button - (BTN_LEFT - 1)) + 5;
 }
 
 uint32_t

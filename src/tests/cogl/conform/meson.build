@@ -3,7 +3,7 @@ cogl_tests = [
   [ 'test-blend-strings', [] ],
   [ 'test-blend', [] ],
   [ 'test-depth-test', [] ],
-  [ 'test-color-hsl', [] ],
+  [ 'test-color', [] ],
   [ 'test-backface-culling', [] ],
   [ 'test-just-vertex-shader', [] ],
   [ 'test-pipeline-user-matrix', [] ],
@@ -36,10 +36,8 @@ cogl_tests = [
   [ 'test-primitive-and-journal', [] ],
   [ 'test-copy-replace-texture', [] ],
   [ 'test-pipeline-cache-unrefs-texture', [] ],
-  [ 'test-texture-no-allocate', [] ],
   [ 'test-pipeline-shader-state', [] ],
   [ 'test-texture-rg', [] ],
-  [ 'test-fence', [] ],
 ]
 
 #unported = [
@@ -90,12 +88,22 @@ foreach cogl_test: cogl_tests
   foreach variant: cogl_test_variants
     variant_test_env = test_env
     variant_test_env.set('COGL_DRIVER', variant)
+    variant_test_env.set('COGL_DEBUG', 'winsys')
 
     test(test_name + '-' + variant, test_executable,
+      args: variant in known_failures ? ['-m', 'no-undefined'] : [],
       suite: ['cogl', 'cogl/conform'],
       env: variant_test_env,
       is_parallel: false,
-      should_fail: variant in known_failures,
     )
+
+    if variant in known_failures
+      test('-'.join([test_name, 'should-fail', variant]), test_executable,
+        suite: ['cogl', 'cogl/conform', 'failing'],
+        env: variant_test_env,
+        is_parallel: false,
+        should_fail: true,
+      )
+    endif
   endforeach
 endforeach

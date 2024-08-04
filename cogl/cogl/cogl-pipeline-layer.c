@@ -54,7 +54,7 @@ cogl_pipeline_layer_dispose (GObject *object)
 {
   CoglPipelineLayer *layer = COGL_PIPELINE_LAYER (object);
 
-  _cogl_pipeline_node_unparent_real (COGL_NODE (layer));
+  _cogl_pipeline_node_unparent (COGL_NODE (layer));
 
   if (layer->differences & COGL_PIPELINE_LAYER_STATE_TEXTURE_DATA &&
       layer->texture != NULL)
@@ -141,7 +141,7 @@ _cogl_pipeline_layer_has_alpha (CoglPipelineLayer *layer)
     _cogl_pipeline_layer_get_authority (layer,
                                         COGL_PIPELINE_LAYER_STATE_TEXTURE_DATA);
   if (tex_authority->texture &&
-      _cogl_texture_get_format (tex_authority->texture) & COGL_A_BIT)
+      cogl_texture_get_format (tex_authority->texture) & COGL_A_BIT)
     {
       return TRUE;
     }
@@ -469,9 +469,9 @@ _cogl_pipeline_layer_set_parent (CoglPipelineLayer *layer,
                                  CoglPipelineLayer *parent)
 {
   /* Chain up */
-  _cogl_pipeline_node_set_parent_real (COGL_NODE (layer),
-                                       COGL_NODE (parent),
-                                       TRUE);
+  _cogl_pipeline_node_set_parent (COGL_NODE (layer),
+                                  COGL_NODE (parent),
+                                  TRUE);
 }
 
 CoglPipelineLayer *
@@ -895,5 +895,3 @@ _cogl_pipeline_layer_needs_combine_separate
 
   return FALSE;
 }
-
-

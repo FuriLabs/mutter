@@ -24,9 +24,10 @@
 
 #include "cally/cally.h"
 #include "clutter/clutter-backend-private.h"
+#include "clutter/clutter-color-manager.h"
 #include "clutter/clutter-debug.h"
-#include "clutter/clutter-graphene.h"
 #include "clutter/clutter-main.h"
+#include "clutter/clutter-private.h"
 #include "clutter/clutter-paint-node-private.h"
 #include "clutter/clutter-settings-private.h"
 
@@ -79,6 +80,9 @@ static const GDebugKey clutter_paint_debug_keys[] = {
 typedef struct _ClutterContextPrivate
 {
   ClutterTextDirection text_direction;
+
+  ClutterColorManager *color_manager;
+  ClutterPipelineCache *pipeline_cache;
 } ClutterContextPrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (ClutterContext, clutter_context, G_TYPE_OBJECT)
@@ -87,7 +91,10 @@ static void
 clutter_context_dispose (GObject *object)
 {
   ClutterContext *context = CLUTTER_CONTEXT (object);
+  ClutterContextPrivate *priv = clutter_context_get_instance_private (context);
 
+  g_clear_object (&priv->pipeline_cache);
+  g_clear_object (&priv->color_manager);
   g_clear_pointer (&context->events_queue, g_async_queue_unref);
   g_clear_pointer (&context->backend, clutter_backend_destroy);
 
@@ -101,7 +108,7 @@ clutter_context_class_init (ClutterContextClass *klass)
 
   object_class->dispose = clutter_context_dispose;
 
-  clutter_graphene_init ();
+  clutter_interval_register_progress_funcs ();
 }
 
 static void
@@ -252,8 +259,10 @@ clutter_context_new (ClutterContextFlags         flags,
                      GError                    **error)
 {
   ClutterContext *context;
+  ClutterContextPrivate *priv;
 
   context = g_object_new (CLUTTER_TYPE_CONTEXT, NULL);
+  priv = clutter_context_get_instance_private (context);
 
   init_clutter_debug (context);
   context->show_fps = clutter_show_fps;
@@ -267,6 +276,11 @@ clutter_context_new (ClutterContextFlags         flags,
   context->events_queue =
     g_async_queue_new_full ((GDestroyNotify) clutter_event_free);
   context->last_repaint_id = 1;
+
+  priv->color_manager = g_object_new (CLUTTER_TYPE_COLOR_MANAGER,
+                                      "context", context,
+                                      NULL);
+  priv->pipeline_cache = g_object_new (CLUTTER_TYPE_PIPELINE_CACHE, NULL);
 
   if (!clutter_context_init_real (context, flags, error))
     return NULL;
@@ -293,11 +307,15 @@ clutter_context_get_pango_fontmap (ClutterContext *context)
   CoglPangoFontMap *font_map;
   gdouble resolution;
   gboolean use_mipmapping;
+  ClutterBackend *backend;
+  CoglContext *cogl_context;
 
   if (G_LIKELY (context->font_map != NULL))
     return context->font_map;
 
-  font_map = COGL_PANGO_FONT_MAP (cogl_pango_font_map_new ());
+  backend = clutter_context_get_backend (context);
+  cogl_context = clutter_backend_get_cogl_context (backend);
+  font_map = COGL_PANGO_FONT_MAP (cogl_pango_font_map_new (cogl_context));
 
   resolution = clutter_backend_get_resolution (context->backend);
   cogl_pango_font_map_set_resolution (font_map, resolution);
@@ -316,4 +334,23 @@ clutter_context_get_text_direction (ClutterContext *context)
   ClutterContextPrivate *priv = clutter_context_get_instance_private (context);
 
   return priv->text_direction;
+}
+
+/**
+ * clutter_context_get_pipeline_cache: (skip)
+ */
+ClutterPipelineCache *
+clutter_context_get_pipeline_cache (ClutterContext *context)
+{
+  ClutterContextPrivate *priv = clutter_context_get_instance_private (context);
+
+  return priv->pipeline_cache;
+}
+
+ClutterColorManager *
+clutter_context_get_color_manager (ClutterContext *context)
+{
+  ClutterContextPrivate *priv = clutter_context_get_instance_private (context);
+
+  return priv->color_manager;
 }

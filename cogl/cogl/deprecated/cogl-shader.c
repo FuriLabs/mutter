@@ -45,10 +45,10 @@ static void
 cogl_shader_dispose (GObject *object)
 {
   CoglShader *shader = COGL_SHADER (object);
+  CoglContext *ctx = shader->compilation_pipeline->context;
 
   /* Frees shader resources but its handle is not
      released! Do that separately before this! */
-  _COGL_GET_CONTEXT (ctx, NO_RETVAL);
 
   if (shader->gl_handle)
     GE (ctx, glDeleteShader (shader->gl_handle));
@@ -70,11 +70,9 @@ cogl_shader_class_init (CoglShaderClass *class)
 }
 
 CoglShader*
-cogl_create_shader (CoglShaderType type)
+cogl_shader_new (CoglShaderType type)
 {
   CoglShader *shader;
-
-  _COGL_GET_CONTEXT (ctx, NULL);
 
   switch (type)
     {
@@ -83,7 +81,7 @@ cogl_create_shader (CoglShaderType type)
       break;
     default:
       g_warning ("Unexpected shader type (0x%08lX) given to "
-                 "cogl_create_shader", (unsigned long) type);
+                 "cogl_shader_new", (unsigned long) type);
       return NULL;
     }
 
@@ -101,8 +99,6 @@ cogl_shader_source (CoglShader *self,
 {
   g_return_if_fail (COGL_IS_SHADER (self));
 
-  _COGL_GET_CONTEXT (ctx, NO_RETVAL);
-
   self->source = g_strdup (source);
 }
 
@@ -110,8 +106,6 @@ CoglShaderType
 cogl_shader_get_shader_type (CoglShader *self)
 {
   g_return_val_if_fail (COGL_IS_SHADER (self), COGL_SHADER_TYPE_VERTEX);
-
-  _COGL_GET_CONTEXT (ctx, COGL_SHADER_TYPE_VERTEX);
 
   return self->type;
 }

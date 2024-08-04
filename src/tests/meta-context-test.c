@@ -26,6 +26,7 @@
 #include <gio/gsettingsbackend.h>
 
 #include "core/meta-context-private.h"
+#include "meta/meta-x11-display.h"
 #include "tests/meta-backend-test.h"
 #include "tests/meta-test-shell.h"
 #include "tests/meta-test-utils-private.h"
@@ -65,6 +66,9 @@ ensure_gsettings_memory_backend (void)
 {
   g_autoptr (GSettingsBackend) memory_backend = NULL;
   GSettingsBackend *default_backend;
+
+  g_assert_cmpstr (getenv ("GSETTINGS_BACKEND"), ==, "memory");
+  g_assert_cmpstr (getenv ("XDG_CURRENT_DESKTOP"), ==, "");
 
   memory_backend = g_memory_settings_backend_new ();
   default_backend = g_settings_backend_get_default ();
@@ -152,16 +156,6 @@ meta_context_test_setup (MetaContext  *context,
   return TRUE;
 }
 
-static MetaBackend *
-create_nested_backend (MetaContext  *context,
-                       GError      **error)
-{
-  return g_initable_new (META_TYPE_BACKEND_TEST,
-                         NULL, error,
-                         "context", context,
-                         NULL);
-}
-
 #ifdef HAVE_NATIVE_BACKEND
 static MetaBackend *
 create_headless_backend (MetaContext  *context,
@@ -175,13 +169,24 @@ create_headless_backend (MetaContext  *context,
 }
 
 static MetaBackend *
-create_native_backend (MetaContext  *context,
-                       GError      **error)
+create_test_vkms_backend (MetaContext  *context,
+                          GError      **error)
 {
   return g_initable_new (META_TYPE_BACKEND_NATIVE,
                          NULL, error,
                          "context", context,
-                         "mode", META_BACKEND_NATIVE_MODE_TEST,
+                         "mode", META_BACKEND_NATIVE_MODE_TEST_VKMS,
+                         NULL);
+}
+
+static MetaBackend *
+create_test_headless_backend (MetaContext  *context,
+                              GError      **error)
+{
+  return g_initable_new (META_TYPE_BACKEND_TEST,
+                         NULL, error,
+                         "context", context,
+                         "mode", META_BACKEND_NATIVE_MODE_TEST_HEADLESS,
                          NULL);
 }
 #endif /* HAVE_NATIVE_BACKEND */
@@ -196,13 +201,13 @@ meta_context_test_create_backend (MetaContext  *context,
 
   switch (priv->type)
     {
-    case META_CONTEXT_TEST_TYPE_NESTED:
-      return create_nested_backend (context, error);
 #ifdef HAVE_NATIVE_BACKEND
     case META_CONTEXT_TEST_TYPE_HEADLESS:
       return create_headless_backend (context, error);
     case META_CONTEXT_TEST_TYPE_VKMS:
-      return create_native_backend (context, error);
+      return create_test_vkms_backend (context, error);
+    case META_CONTEXT_TEST_TYPE_TEST:
+      return create_test_headless_backend (context, error);
 #endif /* HAVE_NATIVE_BACKEND */
     }
 

@@ -42,48 +42,16 @@ G_BEGIN_DECLS
 
 /**
  * cogl_glib_source_new:
- * @context: A #CoglContext
- * @priority: The priority of the #GSource
- *
- * Creates a #GSource which handles Cogl's internal system event
- * processing. This can be used as a convenience instead of
- * cogl_poll_renderer_get_info() and cogl_poll_renderer_dispatch() in
- * applications that are already using the GLib main loop. After this
- * is called the #GSource should be attached to the main loop using
- * g_source_attach().
- *
- * Applications that manually connect to a #CoglRenderer before they
- * create a #CoglContext should instead use
- * cogl_glib_renderer_source_new() so that events may be dispatched
- * before a context has been created. In that case you don't need to
- * use this api in addition later, it is simply enough to use
- * cogl_glib_renderer_source_new() instead.
- *
- * This api is actually just a thin convenience wrapper around
- * cogl_glib_renderer_source_new()
- *
- * Return value: a new #GSource
- */
-COGL_EXPORT GSource *
-cogl_glib_source_new (CoglContext *context,
-                      int priority);
-
-/**
- * cogl_glib_renderer_source_new:
  * @renderer: A #CoglRenderer
  * @priority: The priority of the #GSource
  *
  * Creates a #GSource which handles Cogl's internal system event
- * processing. This can be used as a convenience instead of
- * cogl_poll_renderer_get_info() and cogl_poll_renderer_dispatch() in
- * applications that are already using the GLib main loop. After this
- * is called the #GSource should be attached to the main loop using
- * g_source_attach().
+ * processing.
  *
  * Return value: a new #GSource
  */
 COGL_EXPORT GSource *
-cogl_glib_renderer_source_new (CoglRenderer *renderer,
-                               int priority);
+cogl_glib_source_new (CoglRenderer *renderer,
+                      int           priority);
 
 G_END_DECLS

@@ -117,7 +117,8 @@ meta_input_device_tool_native_new (struct libinput_tablet_tool *tool,
 
 void
 meta_input_device_tool_native_set_pressure_curve_in_impl (ClutterInputDeviceTool *tool,
-                                                          double                  curve[4])
+                                                          double                  curve[4],
+                                                          double                  range[2])
 {
   MetaInputDeviceToolNative *evdev_tool;
   graphene_point_t p1, p2;
@@ -128,10 +129,10 @@ meta_input_device_tool_native_set_pressure_curve_in_impl (ClutterInputDeviceTool
                     curve[2] >= 0 && curve[2] <= 1 &&
                     curve[3] >= 0 && curve[3] <= 1);
 
-  p1.x = curve[0];
-  p1.y = curve[1];
-  p2.x = curve[2];
-  p2.y = curve[3];
+  p1.x = (float) curve[0];
+  p1.y = (float) curve[1];
+  p2.x = (float) curve[2];
+  p2.y = (float) curve[3];
   evdev_tool = META_INPUT_DEVICE_TOOL_NATIVE (tool);
 
   if (!graphene_point_equal (&p1, &evdev_tool->pressure_curve[0]) ||
@@ -141,12 +142,14 @@ meta_input_device_tool_native_set_pressure_curve_in_impl (ClutterInputDeviceTool
       evdev_tool->pressure_curve[1] = p2;
       init_pressurecurve (evdev_tool);
     }
+
+  libinput_tablet_tool_config_pressure_range_set (evdev_tool->tool, range[0], range[1]);
 }
 
 void
-meta_input_device_tool_native_set_button_code_in_impl (ClutterInputDeviceTool *tool,
-                                                       uint32_t                button,
-                                                       uint32_t                evcode)
+meta_input_device_tool_native_set_button_code_in_impl (ClutterInputDeviceTool     *tool,
+                                                       uint32_t                    button,
+                                                       GDesktopStylusButtonAction  action)
 {
   MetaInputDeviceToolNative *evdev_tool;
 
@@ -154,14 +157,14 @@ meta_input_device_tool_native_set_button_code_in_impl (ClutterInputDeviceTool *t
 
   evdev_tool = META_INPUT_DEVICE_TOOL_NATIVE (tool);
 
-  if (evcode == 0)
+  if (action == G_DESKTOP_STYLUS_BUTTON_ACTION_DEFAULT)
     {
       g_hash_table_remove (evdev_tool->button_map, GUINT_TO_POINTER (button));
     }
   else
     {
       g_hash_table_insert (evdev_tool->button_map, GUINT_TO_POINTER (button),
-                           GUINT_TO_POINTER (evcode));
+                           GUINT_TO_POINTER (action));
     }
 }
 
@@ -182,7 +185,7 @@ meta_input_device_tool_native_translate_pressure_in_impl (ClutterInputDeviceTool
   return pressure * factor;
 }
 
-uint32_t
+GDesktopStylusButtonAction
 meta_input_device_tool_native_get_button_code_in_impl (ClutterInputDeviceTool *tool,
                                                        uint32_t                button)
 {

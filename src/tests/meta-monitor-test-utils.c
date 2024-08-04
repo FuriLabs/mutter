@@ -28,7 +28,8 @@
 #include "backends/meta-logical-monitor.h"
 #include "backends/meta-monitor-config-manager.h"
 #include "backends/meta-monitor-config-store.h"
-#include "backends/meta-output.h"
+#include "tests/meta-crtc-test.h"
+#include "tests/meta-output-test.h"
 #include "tests/meta-test-utils.h"
 #include "meta-backend-test.h"
 
@@ -543,10 +544,10 @@ meta_check_monitor_configuration (MetaContext           *context,
   all_crtcs = NULL;
   for (l = meta_backend_get_gpus (backend); l; l = l->next)
     {
-      MetaGpu *gpu = l->data;
+      MetaGpu *current_gpu = l->data;
 
       all_crtcs = g_list_concat (all_crtcs,
-                                 g_list_copy (meta_gpu_get_crtcs (gpu)));
+                                 g_list_copy (meta_gpu_get_crtcs (current_gpu)));
     }
 
   for (i = 0; i < expect->n_logical_monitors; i++)
@@ -740,7 +741,7 @@ meta_create_monitor_test_setup (MetaBackend          *backend,
                                                possible_crtc_index);
         }
 
-      scale = setup->outputs[i].scale;
+      scale = (int) setup->outputs[i].scale;
       if (scale < 1 && scale != -1)
         scale = 1;
 
@@ -772,7 +773,7 @@ meta_create_monitor_test_setup (MetaBackend          *backend,
         }
       output_info->width_mm = setup->outputs[i].width_mm;
       output_info->height_mm = setup->outputs[i].height_mm;
-      output_info->subpixel_order = COGL_SUBPIXEL_ORDER_UNKNOWN;
+      output_info->subpixel_order = META_SUBPIXEL_ORDER_UNKNOWN;
       output_info->preferred_mode = preferred_mode;
       output_info->n_modes = n_modes;
       output_info->modes = modes;

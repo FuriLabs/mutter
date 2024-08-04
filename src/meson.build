@@ -97,7 +97,7 @@ if have_introspection
   ]
 endif
 
-if have_x11
+if have_x11_client
   mutter_pkg_deps += [
     xfixes_dep,
     xi_dep,
@@ -108,18 +108,21 @@ if have_x11
     xrandr_dep,
     xinerama_dep,
     xext_dep,
-    ice_dep,
     xcomposite_dep,
     xcursor_dep,
     xdamage_dep,
-    xkbfile_dep,
-    xkeyboard_config_dep,
-    xkbcommon_x11_dep,
-    xrender_dep,
     x11_xcb_dep,
-    xcb_randr_dep,
     xcb_res_dep,
     xau_dep,
+  ]
+endif
+
+if have_x11
+  mutter_pkg_private_deps += [
+    ice_dep,
+    xcb_randr_dep,
+    xkbfile_dep,
+    xkbcommon_x11_dep,
     xtst_dep,
   ]
 
@@ -259,7 +262,6 @@ mutter_sources = [
   'backends/meta-monitor-transform.c',
   'backends/meta-monitor-transform.h',
   'backends/meta-orientation-manager.c',
-  'backends/meta-orientation-manager.h',
   'backends/meta-output.c',
   'backends/meta-output.h',
   'backends/meta-pointer-constraint.c',
@@ -344,8 +346,6 @@ mutter_sources = [
   'core/display-private.h',
   'core/events.c',
   'core/events.h',
-  'core/frame.c',
-  'core/frame.h',
   'core/keybindings.c',
   'core/keybindings-private.h',
   'core/meta-accel-parse.c',
@@ -362,7 +362,7 @@ mutter_sources = [
   'core/meta-context-private.h',
   'core/meta-context.c',
   'core/meta-debug-control.c',
-  'core/meta-debug-control.h',
+  'core/meta-debug-control-private.h',
   'core/meta-fraction.c',
   'core/meta-fraction.h',
   'core/meta-gesture-tracker.c',
@@ -377,6 +377,8 @@ mutter_sources = [
   'core/meta-selection-source.c',
   'core/meta-selection-source-memory.c',
   'core/meta-sound-player.c',
+  'core/meta-tablet-action-mapper.c',
+  'core/meta-tool-action-mapper.c',
   'core/meta-workspace-manager.c',
   'core/meta-workspace-manager-private.h',
   'core/place.c',
@@ -454,24 +456,22 @@ if have_x11
     'backends/x11/nested/meta-stage-x11-nested.h',
     'backends/x11/nested/meta-renderer-x11-nested.c',
     'backends/x11/nested/meta-renderer-x11-nested.h',
-  ]
-endif
-
-if have_x11_client
-  mutter_sources += [
     'compositor/meta-compositor-x11.c',
     'compositor/meta-compositor-x11.h',
     'compositor/meta-surface-actor-x11.c',
     'compositor/meta-surface-actor-x11.h',
     'compositor/meta-sync-ring.c',
     'compositor/meta-sync-ring.h',
+  ]
+endif
+
+if have_x11_client
+  mutter_sources += [
     'compositor/meta-window-actor-x11.c',
     'compositor/meta-window-actor-x11.h',
     'x11/atomnames.h',
     'x11/events.c',
     'x11/events.h',
-    'x11/group.c',
-    'x11/group-private.h',
     'x11/group-props.c',
     'x11/group-props.h',
     'x11/meta-selection-source-x11.c',
@@ -483,6 +483,12 @@ if have_x11_client
     'x11/meta-x11-display.c',
     'x11/meta-x11-display-private.h',
     'x11/meta-x11-event-source.c',
+    'x11/meta-x11-frame.c',
+    'x11/meta-x11-frame.h',
+    'x11/meta-x11-group.c',
+    'x11/meta-x11-group-private.h',
+    'x11/meta-x11-keybindings-private.h',
+    'x11/meta-x11-keybindings.c',
     'x11/meta-x11-selection.c',
     'x11/meta-x11-selection-private.h',
     'x11/meta-x11-selection-input-stream.c',
@@ -703,6 +709,8 @@ if have_wayland
     'wayland/meta-wayland-xdg-foreign-private.h',
     'wayland/meta-wayland-xdg-shell.c',
     'wayland/meta-wayland-xdg-shell.h',
+    'wayland/meta-wayland-xdg-dialog.c',
+    'wayland/meta-wayland-xdg-dialog.h',
     'wayland/meta-window-wayland.c',
     'wayland/meta-window-wayland.h',
   ]
@@ -722,6 +730,13 @@ if have_wayland
       'wayland/meta-xwayland-dnd-private.h',
       'wayland/meta-xwayland-surface.c',
       'wayland/meta-xwayland-surface.h',
+    ]
+  endif
+
+  if have_native_backend
+    mutter_sources += [
+      'wayland/meta-wayland-drm-lease.c',
+      'wayland/meta-wayland-drm-lease.h',
     ]
   endif
 endif
@@ -807,6 +822,8 @@ if have_native_backend
     'backends/native/meta-kms-impl-device.h',
     'backends/native/meta-kms-impl.c',
     'backends/native/meta-kms-impl.h',
+    'backends/native/meta-drm-lease.c',
+    'backends/native/meta-drm-lease.h',
     'backends/native/meta-kms-mode.c',
     'backends/native/meta-kms-mode.h',
     'backends/native/meta-kms-page-flip.c',
@@ -1063,6 +1080,7 @@ if have_wayland
   #  - protocol stability ('private', 'stable' or 'unstable')
   #  - protocol version (if stability is 'unstable')
   wayland_protocols = [
+    ['drm-lease', 'staging', 'v1', ],
     ['fractional-scale', 'staging', 'v1', ],
     ['gtk-shell', 'private', ],
     ['idle-inhibit', 'unstable', 'v1', ],
@@ -1078,6 +1096,7 @@ if have_wayland
     ['text-input', 'unstable', 'v3', ],
     ['viewporter', 'stable', ],
     ['xdg-activation', 'staging', 'v1', ],
+    ['xdg-dialog', 'staging', 'v1', ],
     ['xdg-foreign', 'unstable', 'v1', ],
     ['xdg-foreign', 'unstable', 'v2', ],
     ['xdg-output', 'unstable', 'v1', ],
@@ -1188,6 +1207,8 @@ foreach built_source : mutter_built_sources
   endif
 endforeach
 
+subdir('third_party')
+
 libmutter = shared_library(libmutter_name,
   mutter_sources,
   mutter_built_sources,
@@ -1262,6 +1283,21 @@ if have_introspection
     endif
   endforeach
 
+  libmutter_gir_includes = [
+    'Gio-2.0',
+    'GObject-2.0',
+    'GDesktopEnums-3.0',
+    libmutter_cogl_gir[0],
+    libmutter_cogl_pango_gir[0],
+    libmutter_clutter_gir[0],
+    libmutter_mtk_gir[0],
+  ]
+  if have_x11_client
+    libmutter_gir_includes += [
+      'xlib-2.0',
+      'xfixes-4.0',
+    ]
+  endif
   libmutter_gir = gnome.generate_gir(libmutter,
     sources: [
       mutter_enum_types[1],
@@ -1271,17 +1307,7 @@ if have_introspection
     nsversion: libmutter_api_version,
     namespace: 'Meta',
     symbol_prefix: 'meta',
-    includes: [
-      'Gio-2.0',
-      'GObject-2.0',
-      'GDesktopEnums-3.0',
-      'xlib-2.0',
-      'xfixes-4.0',
-      libmutter_cogl_gir[0],
-      libmutter_cogl_pango_gir[0],
-      libmutter_clutter_gir[0],
-      libmutter_mtk_gir[0],
-    ],
+    includes: libmutter_gir_includes,
     dependencies: [
       libmutter_dep,
       mutter_deps,
@@ -1303,6 +1329,9 @@ pkg.generate(libmutter,
     'apiversion=' + libmutter_api_version,
     'girdir=${libdir}/mutter-' + libmutter_api_version,
     'typelibdir=${libdir}/mutter-' + libmutter_api_version,
+    'have_x11=@0@'.format(have_x11),
+    'have_x11_client=@0@'.format(have_x11_client),
+    'have_wayland=@0@'.format(have_wayland),
   ],
   install_dir: pcdir,
 )
@@ -1312,6 +1341,6 @@ if have_x11_client
   subdir('frames')
 endif
 
-if have_core_tests
+if have_tests
   subdir('tests')
 endif

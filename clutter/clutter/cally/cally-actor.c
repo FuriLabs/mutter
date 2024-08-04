@@ -78,31 +78,6 @@
 #include "cally/cally-actor.h"
 #include "cally/cally-actor-private.h"
 
-typedef struct _CallyActorActionInfo CallyActorActionInfo;
-
-/*< private >
- * CallyActorActionInfo:
- * @name: name of the action
- * @description: description of the action
- * @keybinding: keybinding related to the action
- * @do_action_func: callback
- * @user_data: data to be passed to @do_action_func
- * @notify: function to be called when removing the action
- *
- * Utility structure to maintain the different actions added to the
- * #CallyActor
- */
-struct _CallyActorActionInfo
-{
-  gchar *name;
-  gchar *description;
-  gchar *keybinding;
-
-  CallyActionCallback do_action_func;
-  gpointer user_data;
-  GDestroyNotify notify;
-};
-
 static void cally_actor_initialize (AtkObject *obj,
                                    gpointer   data);
 static void cally_actor_finalize   (GObject *obj);
@@ -117,18 +92,12 @@ static AtkObject*            cally_actor_ref_child           (AtkObject *obj,
 static AtkAttributeSet *     cally_actor_get_attributes      (AtkObject *obj);
 
 /* ClutterContainer */
-static gint cally_actor_add_actor          (ClutterActor *container,
-                                           ClutterActor *actor,
-                                           gpointer      data);
-static gint cally_actor_remove_actor      (ClutterActor *container,
-                                          ClutterActor *actor,
-                                          gpointer      data);
-static gint cally_actor_real_add_actor    (ClutterActor *container,
-                                          ClutterActor *actor,
-                                          gpointer      data);
-static gint cally_actor_real_remove_actor (ClutterActor *container,
-                                          ClutterActor *actor,
-                                          gpointer      data);
+static gint cally_actor_add_actor    (ClutterActor *container,
+                                      ClutterActor *actor,
+                                      gpointer      data);
+static gint cally_actor_remove_actor (ClutterActor *container,
+                                      ClutterActor *actor,
+                                      gpointer      data);
 
 /* AtkComponent.h */
 static void     cally_actor_component_interface_init (AtkComponentIface *iface);
@@ -141,27 +110,6 @@ static void     cally_actor_get_extents              (AtkComponent *component,
 static gint     cally_actor_get_mdi_zorder           (AtkComponent *component);
 static gboolean cally_actor_grab_focus               (AtkComponent *component);
 
-/* AtkAction.h */
-static void                  cally_actor_action_interface_init  (AtkActionIface *iface);
-static gboolean              cally_actor_action_do_action       (AtkAction *action,
-                                                                gint       i);
-static gboolean              idle_do_action                    (gpointer data);
-static gint                  cally_actor_action_get_n_actions   (AtkAction *action);
-static const gchar*          cally_actor_action_get_description (AtkAction *action,
-                                                                gint       i);
-static const gchar*          cally_actor_action_get_keybinding  (AtkAction *action,
-                                                                gint       i);
-static const gchar*          cally_actor_action_get_name        (AtkAction *action,
-                                                                gint       i);
-static gboolean              cally_actor_action_set_description (AtkAction   *action,
-                                                                gint         i,
-                                                                const gchar *desc);
-static void                  _cally_actor_destroy_action_info   (gpointer      action_info,
-                                                                gpointer      user_data);
-static void                  _cally_actor_clean_action_list     (CallyActor *cally_actor);
-
-static CallyActorActionInfo*  _cally_actor_get_action_info       (CallyActor *cally_actor,
-                                                                gint       index);
 /* Misc functions */
 static void cally_actor_notify_clutter          (GObject    *obj,
                                                 GParamSpec *pspec);
@@ -170,10 +118,6 @@ static void cally_actor_real_notify_clutter     (GObject    *obj,
 
 struct _CallyActorPrivate
 {
-  GQueue *action_queue;
-  guint   action_idle_handler;
-  GList  *action_list;
-
   GList *children;
 };
 
@@ -182,9 +126,7 @@ G_DEFINE_TYPE_WITH_CODE (CallyActor,
                          ATK_TYPE_GOBJECT_ACCESSIBLE,
                          G_ADD_PRIVATE (CallyActor)
                          G_IMPLEMENT_INTERFACE (ATK_TYPE_COMPONENT,
-                                                cally_actor_component_interface_init)
-                         G_IMPLEMENT_INTERFACE (ATK_TYPE_ACTION,
-                                                cally_actor_action_interface_init));
+                                                cally_actor_component_interface_init));
 
 /**
  * cally_actor_new:
@@ -263,8 +205,6 @@ cally_actor_class_init (CallyActorClass *klass)
   GObjectClass   *gobject_class = G_OBJECT_CLASS (klass);
 
   klass->notify_clutter = cally_actor_real_notify_clutter;
-  klass->add_actor      = cally_actor_real_add_actor;
-  klass->remove_actor   = cally_actor_real_remove_actor;
 
   /* GObject */
   gobject_class->finalize = cally_actor_finalize;
@@ -283,12 +223,6 @@ static void
 cally_actor_init (CallyActor *cally_actor)
 {
   CallyActorPrivate *priv = cally_actor_get_instance_private (cally_actor);
-
-  priv->action_queue = NULL;
-  priv->action_idle_handler = 0;
-
-  priv->action_list = NULL;
-
   priv->children = NULL;
 }
 
@@ -300,15 +234,6 @@ cally_actor_finalize (GObject *obj)
 
   cally_actor = CALLY_ACTOR (obj);
   priv = cally_actor_get_instance_private (cally_actor);
-
-  _cally_actor_clean_action_list (cally_actor);
-
-  g_clear_handle_id (&priv->action_idle_handler, g_source_remove);
-
-  if (priv->action_queue)
-    {
-      g_queue_free (priv->action_queue);
-    }
 
   if (priv->children)
     {
@@ -520,47 +445,13 @@ cally_actor_get_attributes (AtkObject *obj)
 /* ClutterContainer */
 static gint
 cally_actor_add_actor (ClutterActor *container,
-                      ClutterActor *actor,
-                      gpointer      data)
+                       ClutterActor *actor,
+                       gpointer      data)
 {
-  CallyActor *cally_actor = CALLY_ACTOR (data);
-  CallyActorClass *klass = NULL;
-
-  klass = CALLY_ACTOR_GET_CLASS (cally_actor);
-
-  if (klass->add_actor)
-    return klass->add_actor (container, actor, data);
-  else
-    return 1;
-}
-
-static gint
-cally_actor_remove_actor (ClutterActor *container,
-                         ClutterActor *actor,
-                         gpointer      data)
-{
-  CallyActor      *cally_actor = CALLY_ACTOR (data);
-  CallyActorClass *klass      = NULL;
-
-  klass = CALLY_ACTOR_GET_CLASS (cally_actor);
-
-  if (klass->remove_actor)
-    return klass->remove_actor (container, actor, data);
-  else
-    return 1;
-}
-
-
-static gint
-cally_actor_real_add_actor (ClutterActor *container,
-                            ClutterActor *actor,
-                            gpointer      data)
-{
-  AtkObject        *atk_parent = ATK_OBJECT (data);
-  AtkObject        *atk_child  = clutter_actor_get_accessible (actor);
-  CallyActor        *cally_actor = CALLY_ACTOR (atk_parent);
-  CallyActorPrivate *priv = cally_actor_get_instance_private (cally_actor);
-  gint              index;
+  AtkObject *atk_parent = clutter_actor_get_accessible (container);
+  AtkObject *atk_child  = clutter_actor_get_accessible (actor);
+  CallyActorPrivate *priv = cally_actor_get_instance_private (CALLY_ACTOR (atk_parent));
+  gint index;
 
   g_return_val_if_fail (CLUTTER_IS_ACTOR (container), 0);
   g_return_val_if_fail (CLUTTER_IS_ACTOR (actor), 0);
@@ -579,34 +470,35 @@ cally_actor_real_add_actor (ClutterActor *container,
 }
 
 static gint
-cally_actor_real_remove_actor (ClutterActor *container,
-                               ClutterActor *actor,
-                               gpointer      data)
+cally_actor_remove_actor (ClutterActor *container,
+                          ClutterActor *actor,
+                          gpointer      data)
 {
-  AtkPropertyValues  values      = { NULL };
-  AtkObject*         atk_parent  = NULL;
-  AtkObject         *atk_child   = NULL;
-  CallyActorPrivate  *priv        = NULL;
-  gint               index;
+  g_autoptr (AtkObject) atk_child = NULL;
+  AtkPropertyValues values = { NULL };
+  AtkObject *atk_parent = NULL;
+  CallyActorPrivate *priv = NULL;
+  gint index;
 
   g_return_val_if_fail (CLUTTER_IS_ACTOR (container), 0);
   g_return_val_if_fail (CLUTTER_IS_ACTOR (actor), 0);
 
-  atk_parent = ATK_OBJECT (data);
+  atk_parent = clutter_actor_get_accessible (container);
 
   if (clutter_actor_has_accessible (actor))
     {
       atk_child = clutter_actor_get_accessible (actor);
+
+      g_assert (ATK_IS_OBJECT (atk_child));
+      g_object_ref (atk_child);
 
       g_value_init (&values.old_value, G_TYPE_POINTER);
       g_value_set_pointer (&values.old_value, atk_parent);
 
       values.property_name = "accessible-parent";
 
-      g_object_ref (atk_child);
       g_signal_emit_by_name (atk_child,
                              "property_change::accessible-parent", &values, NULL);
-      g_object_unref (atk_child);
     }
 
   priv = cally_actor_get_instance_private (CALLY_ACTOR (atk_parent));
@@ -666,10 +558,10 @@ cally_actor_get_extents (AtkComponent *component,
   clutter_actor_get_abs_allocation_vertices (actor, verts);
   clutter_actor_get_transformed_size (actor, &f_width, &f_height);
 
-  *x = verts[0].x;
-  *y = verts[0].y;
-  *width = ceilf (f_width);
-  *height = ceilf (f_height);
+  *x = (int) verts[0].x;
+  *y = (int) verts[0].y;
+  *width = (int) ceilf (f_width);
+  *height = (int) ceilf (f_height);
 }
 
 static gint
@@ -683,7 +575,7 @@ cally_actor_get_mdi_zorder (AtkComponent *component)
   cally_actor = CALLY_ACTOR(component);
   actor = CALLY_GET_CLUTTER_ACTOR (cally_actor);
 
-  return clutter_actor_get_z_position (actor);
+  return (int) clutter_actor_get_z_position (actor);
 }
 
 static gboolean
@@ -704,179 +596,6 @@ cally_actor_grab_focus (AtkComponent    *component)
                                actor);
 
   return TRUE;
-}
-
-/* AtkAction implementation */
-static void
-cally_actor_action_interface_init (AtkActionIface *iface)
-{
-  g_return_if_fail (iface != NULL);
-
-  iface->do_action       = cally_actor_action_do_action;
-  iface->get_n_actions   = cally_actor_action_get_n_actions;
-  iface->get_description = cally_actor_action_get_description;
-  iface->get_keybinding  = cally_actor_action_get_keybinding;
-  iface->get_name        = cally_actor_action_get_name;
-  iface->set_description = cally_actor_action_set_description;
-}
-
-static gboolean
-cally_actor_action_do_action (AtkAction *action,
-                             gint       index)
-{
-  CallyActor *cally_actor = NULL;
-  AtkStateSet *set = NULL;
-  CallyActorPrivate *priv = NULL;
-  CallyActorActionInfo *info = NULL;
-  gboolean did_action = FALSE;
-
-  cally_actor = CALLY_ACTOR (action);
-  priv = cally_actor_get_instance_private (cally_actor);
-
-  set = atk_object_ref_state_set (ATK_OBJECT (cally_actor));
-
-  if (atk_state_set_contains_state (set, ATK_STATE_DEFUNCT))
-    goto out;
-
-  if (!atk_state_set_contains_state (set, ATK_STATE_SENSITIVE) ||
-      !atk_state_set_contains_state (set, ATK_STATE_SHOWING))
-    goto out;
-
-  info = _cally_actor_get_action_info (cally_actor, index);
-
-  if (info == NULL)
-    goto out;
-
-  if (info->do_action_func == NULL)
-    goto out;
-
-  if (!priv->action_queue)
-    priv->action_queue = g_queue_new ();
-
-  g_queue_push_head (priv->action_queue, info);
-
-  if (!priv->action_idle_handler)
-    priv->action_idle_handler = g_idle_add (idle_do_action, cally_actor);
-
-  did_action = TRUE;
-
-out:
-  g_clear_object (&set);
-
-  return did_action;
-}
-
-static gboolean
-idle_do_action (gpointer data)
-{
-  CallyActor        *cally_actor = NULL;
-  CallyActorPrivate *priv       = NULL;
-  ClutterActor     *actor      = NULL;
-
-  cally_actor = CALLY_ACTOR (data);
-  priv = cally_actor_get_instance_private (cally_actor);
-  actor = CALLY_GET_CLUTTER_ACTOR (cally_actor);
-  priv->action_idle_handler = 0;
-
-  if (actor == NULL) /* state is defunct*/
-    return FALSE;
-
-  while (!g_queue_is_empty (priv->action_queue))
-    {
-      CallyActorActionInfo *info = NULL;
-
-      info = (CallyActorActionInfo *) g_queue_pop_head (priv->action_queue);
-
-      info->do_action_func (cally_actor, info->user_data);
-    }
-
-  return FALSE;
-}
-
-static gint
-cally_actor_action_get_n_actions (AtkAction *action)
-{
-  CallyActor        *cally_actor = NULL;
-  CallyActorPrivate *priv       = NULL;
-
-  g_return_val_if_fail (CALLY_IS_ACTOR (action), 0);
-
-  cally_actor = CALLY_ACTOR (action);
-  priv = cally_actor_get_instance_private (cally_actor);
-
-  return g_list_length (priv->action_list);
-}
-
-static const gchar*
-cally_actor_action_get_name (AtkAction *action,
-                            gint       i)
-{
-  CallyActor           *cally_actor = NULL;
-  CallyActorActionInfo *info       = NULL;
-
-  g_return_val_if_fail (CALLY_IS_ACTOR (action), NULL);
-  cally_actor = CALLY_ACTOR (action);
-  info = _cally_actor_get_action_info (cally_actor, i);
-
-  if (info == NULL)
-    return NULL;
-
-  return info->name;
-}
-
-static const gchar*
-cally_actor_action_get_description (AtkAction *action,
-                                   gint       i)
-{
-  CallyActor           *cally_actor = NULL;
-  CallyActorActionInfo *info       = NULL;
-
-  g_return_val_if_fail (CALLY_IS_ACTOR (action), NULL);
-  cally_actor = CALLY_ACTOR (action);
-  info = _cally_actor_get_action_info (cally_actor, i);
-
-  if (info == NULL)
-    return NULL;
-
-  return info->description;
-}
-
-static gboolean
-cally_actor_action_set_description (AtkAction   *action,
-                                   gint         i,
-                                   const gchar *desc)
-{
-  CallyActor           *cally_actor = NULL;
-  CallyActorActionInfo *info       = NULL;
-
-  g_return_val_if_fail (CALLY_IS_ACTOR (action), FALSE);
-  cally_actor = CALLY_ACTOR (action);
-  info = _cally_actor_get_action_info (cally_actor, i);
-
-  if (info == NULL)
-      return FALSE;
-
-  g_free (info->description);
-  info->description = g_strdup (desc);
-
-  return TRUE;
-}
-
-static const gchar*
-cally_actor_action_get_keybinding (AtkAction *action,
-                                  gint       i)
-{
-  CallyActor           *cally_actor = NULL;
-  CallyActorActionInfo *info       = NULL;
-
-  g_return_val_if_fail (CALLY_IS_ACTOR (action), NULL);
-  cally_actor = CALLY_ACTOR (action);
-  info = _cally_actor_get_action_info (cally_actor, i);
-
-  if (info == NULL)
-    return NULL;
-
-  return info->keybinding;
 }
 
 /* Misc functions */
@@ -944,203 +663,4 @@ cally_actor_real_notify_clutter (GObject    *obj,
     return;
 
   atk_object_notify_state_change (atk_obj, state, value);
-}
-
-static void
-_cally_actor_clean_action_list (CallyActor *cally_actor)
-{
-  CallyActorPrivate *priv = NULL;
-
-  priv = cally_actor_get_instance_private (cally_actor);
-
-  if (priv->action_list)
-    {
-      g_list_free_full (priv->action_list,
-                        (GDestroyNotify) _cally_actor_destroy_action_info);
-      priv->action_list = NULL;
-    }
-}
-
-static CallyActorActionInfo *
-_cally_actor_get_action_info (CallyActor *cally_actor,
-                             gint       index)
-{
-  CallyActorPrivate *priv = NULL;
-  GList            *node = NULL;
-
-  g_return_val_if_fail (CALLY_IS_ACTOR (cally_actor), NULL);
-
-  priv = cally_actor_get_instance_private (cally_actor);
-
-  if (priv->action_list == NULL)
-    return NULL;
-
-  node = g_list_nth (priv->action_list, index);
-
-  if (node == NULL)
-    return NULL;
-
-  return (CallyActorActionInfo *)(node->data);
-}
-
-/**
- * cally_actor_add_action: (skip)
- * @cally_actor: a #CallyActor
- * @action_name: the action name
- * @action_description: the action description
- * @action_keybinding: the action keybinding
- * @action_func: the callback of the action, to be executed with do_action
- *
- * Adds a new action to be accessed with the #AtkAction interface.
- *
- * Return value: added action id, or -1 if failure
- */
-guint
-cally_actor_add_action (CallyActor      *cally_actor,
-                        const gchar     *action_name,
-                        const gchar     *action_description,
-                        const gchar     *action_keybinding,
-                        CallyActionFunc  action_func)
-{
-  return cally_actor_add_action_full (cally_actor,
-                                      action_name,
-                                      action_description,
-                                      action_keybinding,
-                                      (CallyActionCallback) action_func,
-                                      NULL, NULL);
-}
-
-/**
- * cally_actor_add_action_full: (rename-to cally_actor_add_action)
- * @cally_actor: a #CallyActor
- * @action_name: the action name
- * @action_description: the action description
- * @action_keybinding: the action keybinding
- * @callback: (scope notified): the callback of the action
- * @user_data: (closure): data to be passed to @callback
- * @notify: function to be called when removing the action
- *
- * Adds a new action to be accessed with the #AtkAction interface.
- *
- * Return value: added action id, or -1 if failure
- */
-guint
-cally_actor_add_action_full (CallyActor          *cally_actor,
-                             const gchar         *action_name,
-                             const gchar         *action_description,
-                             const gchar         *action_keybinding,
-                             CallyActionCallback  callback,
-                             gpointer             user_data,
-                             GDestroyNotify       notify)
-{
-  CallyActorActionInfo *info = NULL;
-  CallyActorPrivate *priv = NULL;
-
-  g_return_val_if_fail (CALLY_IS_ACTOR (cally_actor), -1);
-  g_return_val_if_fail (callback != NULL, -1);
-
-  priv = cally_actor_get_instance_private (cally_actor);
-
-  info = g_new0 (CallyActorActionInfo, 1);
-  info->name = g_strdup (action_name);
-  info->description = g_strdup (action_description);
-  info->keybinding = g_strdup (action_keybinding);
-  info->do_action_func = callback;
-  info->user_data = user_data;
-  info->notify = notify;
-
-  priv->action_list = g_list_append (priv->action_list, info);
-
-  return g_list_length (priv->action_list);
-}
-
-/**
- * cally_actor_remove_action:
- * @cally_actor: a #CallyActor
- * @action_id: the action id
- *
- * Removes a action, using the @action_id returned by [method@Actor.add_action]
- *
- * Return value: %TRUE if the operation was successful, %FALSE otherwise
- */
-gboolean
-cally_actor_remove_action (CallyActor *cally_actor,
-                           gint        action_id)
-{
-  GList            *list_node = NULL;
-  CallyActorPrivate *priv      = NULL;
-
-  g_return_val_if_fail (CALLY_IS_ACTOR (cally_actor), FALSE);
-  priv = cally_actor_get_instance_private (cally_actor);
-
-  list_node = g_list_nth (priv->action_list, action_id - 1);
-
-  if (!list_node)
-    return FALSE;
-
-  _cally_actor_destroy_action_info (list_node->data, NULL);
-
-  priv->action_list = g_list_remove_link (priv->action_list, list_node);
-
-  return TRUE;
-}
-
-/**
- * cally_actor_remove_action_by_name:
- * @cally_actor: a #CallyActor
- * @action_name: the name of the action to remove
- *
- * Removes an action, using the @action_name used when the action was added
- * with [method@Actor.add_action]
- *
- * Return value: %TRUE if the operation was successful, %FALSE otherwise
- */
-gboolean
-cally_actor_remove_action_by_name (CallyActor  *cally_actor,
-                                   const gchar *action_name)
-{
-  GList            *node         = NULL;
-  gboolean          action_found = FALSE;
-  CallyActorPrivate *priv         = NULL;
-
-  g_return_val_if_fail (CALLY_IS_ACTOR (cally_actor), FALSE);
-  priv = cally_actor_get_instance_private (cally_actor);
-
-  for (node = priv->action_list; node && !action_found;
-       node = node->next)
-    {
-      CallyActorActionInfo *ainfo = node->data;
-
-      if (!g_ascii_strcasecmp (ainfo->name, action_name))
-	{
-	  action_found = TRUE;
-	  break;
-	}
-    }
-  if (!action_found)
-    return FALSE;
-
-  _cally_actor_destroy_action_info (node->data, NULL);
-  priv->action_list = g_list_remove_link (priv->action_list, node);
-
-  return TRUE;
-}
-
-
-static void
-_cally_actor_destroy_action_info (gpointer action_info,
-                                  gpointer user_data)
-{
-  CallyActorActionInfo *info = action_info;
-
-  g_assert (info != NULL);
-
-  g_free (info->name);
-  g_free (info->description);
-  g_free (info->keybinding);
-
-  if (info->notify)
-    info->notify (info->user_data);
-
-  g_free (info);
 }

@@ -46,7 +46,7 @@ struct _CoglOnscreenGlx
 
   Window xwin;
   int x, y;
-  CoglOutput *output;
+  float refresh_rate;
 
   GLXDrawable glxwin;
   uint32_t last_swap_vsync_counter;
@@ -192,7 +192,7 @@ cogl_onscreen_glx_allocate (CoglFramebuffer  *framebuffer,
     }
 
 #ifdef GLX_INTEL_swap_event
-  if (_cogl_winsys_has_feature (COGL_WINSYS_FEATURE_SYNC_AND_COMPLETE_EVENT))
+  if (cogl_context_has_winsys_feature (context, COGL_WINSYS_FEATURE_SYNC_AND_COMPLETE_EVENT))
     {
       GLXDrawable drawable =
         onscreen_glx->glxwin ? onscreen_glx->glxwin : onscreen_glx->xwin;
@@ -223,8 +223,6 @@ cogl_onscreen_glx_dispose (GObject *object)
   GLXDrawable drawable;
 
   G_OBJECT_CLASS (cogl_onscreen_glx_parent_class)->dispose (object);
-
-  g_clear_object (&onscreen_glx->output);
 
   if (onscreen_glx->glxwin != None ||
       onscreen_glx->xwin != None)
@@ -532,7 +530,7 @@ cogl_onscreen_glx_get_buffer_age (CoglOnscreen *onscreen)
   GLXDrawable drawable;
   unsigned int age = 0;
 
-  if (!_cogl_winsys_has_feature (COGL_WINSYS_FEATURE_BUFFER_AGE))
+  if (!cogl_context_has_winsys_feature (context, COGL_WINSYS_FEATURE_BUFFER_AGE))
     return 0;
 
   cogl_onscreen_bind (onscreen);
@@ -543,20 +541,6 @@ cogl_onscreen_glx_get_buffer_age (CoglOnscreen *onscreen)
   mtk_x11_error_trap_pop (xlib_renderer->xdpy);
 
   return age;
-}
-
-static void
-set_frame_info_output (CoglOnscreen *onscreen,
-                       CoglOutput   *output)
-{
-  CoglFrameInfo *info = cogl_onscreen_peek_tail_frame_info (onscreen);
-
-  if (output)
-    {
-      float refresh_rate = cogl_output_get_refresh_rate (output);
-      if (refresh_rate != 0.0)
-        info->refresh_rate = refresh_rate;
-    }
 }
 
 static void
@@ -634,10 +618,10 @@ set_sync_pending (CoglOnscreen *onscreen)
   if (!glx_renderer->flush_notifications_idle)
     {
       glx_renderer->flush_notifications_idle =
-        _cogl_poll_renderer_add_idle (renderer,
-                                      flush_pending_notifications_idle,
-                                      context,
-                                      NULL);
+        _cogl_closure_list_add (&renderer->idle_closures,
+                                flush_pending_notifications_idle,
+                                context,
+                                NULL);
     }
 
   onscreen_glx->pending_sync_notify++;
@@ -658,10 +642,10 @@ set_complete_pending (CoglOnscreen *onscreen)
   if (!glx_renderer->flush_notifications_idle)
     {
       glx_renderer->flush_notifications_idle =
-        _cogl_poll_renderer_add_idle (renderer,
-                                      flush_pending_notifications_idle,
-                                      context,
-                                      NULL);
+        _cogl_closure_list_add (&renderer->idle_closures,
+                                flush_pending_notifications_idle,
+                                context,
+                                NULL);
     }
 
   onscreen_glx->pending_complete_notify++;
@@ -693,7 +677,7 @@ cogl_onscreen_glx_swap_region (CoglOnscreen  *onscreen,
    * we only need it to throttle redraws.
    */
   gboolean blit_sub_buffer_is_synchronized =
-    _cogl_winsys_has_feature (COGL_WINSYS_FEATURE_SWAP_REGION_SYNCHRONIZED);
+    cogl_context_has_winsys_feature (context, COGL_WINSYS_FEATURE_SWAP_REGION_SYNCHRONIZED);
 
   int framebuffer_width = cogl_framebuffer_get_width (framebuffer);
   int framebuffer_height = cogl_framebuffer_get_height (framebuffer);
@@ -784,7 +768,6 @@ cogl_onscreen_glx_swap_region (CoglOnscreen  *onscreen,
 
       drawable =
         onscreen_glx->glxwin ? onscreen_glx->glxwin : onscreen_glx->xwin;
-      int i;
       for (i = 0; i < n_rectangles; i++)
         {
           int *rect = &rectangles[4 * i];
@@ -794,7 +777,6 @@ cogl_onscreen_glx_swap_region (CoglOnscreen  *onscreen,
     }
   else if (context->glBlitFramebuffer)
     {
-      int i;
       /* XXX: checkout how this state interacts with the code to use
        * glBlitFramebuffer in Neil's texture atlasing branch */
 
@@ -839,21 +821,22 @@ cogl_onscreen_glx_swap_region (CoglOnscreen  *onscreen,
     onscreen_glx->last_swap_vsync_counter = end_frame_vsync_counter;
 
   {
-    CoglOutput *output;
+    float refresh_rate;
 
     x_min = CLAMP (x_min, 0, framebuffer_width);
     x_max = CLAMP (x_max, 0, framebuffer_width);
     y_min = CLAMP (y_min, 0, framebuffer_height);
     y_max = CLAMP (y_max, 0, framebuffer_height);
 
-    output =
-      _cogl_xlib_renderer_output_for_rectangle (context->display->renderer,
-                                                onscreen_glx->x + x_min,
-                                                onscreen_glx->y + y_min,
-                                                x_max - x_min,
-                                                y_max - y_min);
+    refresh_rate =
+      _cogl_xlib_renderer_refresh_rate_for_rectangle (context->display->renderer,
+                                                      onscreen_glx->x + x_min,
+                                                      onscreen_glx->y + y_min,
+                                                      x_max - x_min,
+                                                      y_max - y_min);
 
-    set_frame_info_output (onscreen, output);
+    if (refresh_rate != 0.0)
+      info->refresh_rate = refresh_rate;
   }
 
   /* XXX: we don't get SwapComplete events based on how we implement
@@ -861,7 +844,7 @@ cogl_onscreen_glx_swap_region (CoglOnscreen  *onscreen,
    * handling _SYNC and _COMPLETE events in the winsys then we need to
    * send fake events in this case.
    */
-  if (_cogl_winsys_has_feature (COGL_WINSYS_FEATURE_SYNC_AND_COMPLETE_EVENT))
+  if (cogl_context_has_winsys_feature (context, COGL_WINSYS_FEATURE_SYNC_AND_COMPLETE_EVENT))
     {
       set_sync_pending (onscreen);
       set_complete_pending (onscreen);
@@ -944,7 +927,8 @@ cogl_onscreen_glx_swap_buffers_with_damage (CoglOnscreen  *onscreen,
     onscreen_glx->last_swap_vsync_counter =
       _cogl_winsys_get_vsync_counter (context);
 
-  set_frame_info_output (onscreen, onscreen_glx->output);
+  if (onscreen_glx->refresh_rate != 0.0)
+    info->refresh_rate = onscreen_glx->refresh_rate;
 }
 
 static Window
@@ -998,25 +982,16 @@ cogl_onscreen_glx_update_output (CoglOnscreen *onscreen)
   CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
   CoglContext *context = cogl_framebuffer_get_context (framebuffer);
   CoglDisplay *display = context->display;
-  CoglOutput *output;
   int width, height;
 
   width = cogl_framebuffer_get_width (framebuffer);
   height = cogl_framebuffer_get_height (framebuffer);
-  output = _cogl_xlib_renderer_output_for_rectangle (display->renderer,
-                                                     onscreen_glx->x,
-                                                     onscreen_glx->y,
-                                                     width, height);
-  if (onscreen_glx->output != output)
-    {
-      if (onscreen_glx->output)
-        g_object_unref (onscreen_glx->output);
 
-      onscreen_glx->output = output;
-
-      if (output)
-        g_object_ref (onscreen_glx->output);
-    }
+  onscreen_glx->refresh_rate =
+    _cogl_xlib_renderer_refresh_rate_for_rectangle (display->renderer,
+                                                    onscreen_glx->x,
+                                                    onscreen_glx->y,
+                                                    width, height);
 }
 
 void
@@ -1041,10 +1016,10 @@ cogl_onscreen_glx_resize (CoglOnscreen    *onscreen,
   if (!glx_renderer->flush_notifications_idle)
     {
       glx_renderer->flush_notifications_idle =
-        _cogl_poll_renderer_add_idle (renderer,
-                                      flush_pending_notifications_idle,
-                                      context,
-                                      NULL);
+        _cogl_closure_list_add (&renderer->idle_closures,
+                                flush_pending_notifications_idle,
+                                context,
+                                NULL);
     }
 
   if (configure_event->send_event)

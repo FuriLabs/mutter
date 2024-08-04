@@ -45,11 +45,7 @@ struct _CoglIndices
 
   CoglIndicesType type;
 
-  int immutable_ref;
 };
 
-CoglIndices *
-_cogl_indices_immutable_ref (CoglIndices *indices);
-
-void
-_cogl_indices_immutable_unref (CoglIndices *indices);
+size_t
+cogl_indices_type_get_size (CoglIndicesType type);

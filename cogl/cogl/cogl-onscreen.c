@@ -38,15 +38,12 @@
 #include "cogl/cogl-framebuffer-private.h"
 #include "cogl/cogl-onscreen-template-private.h"
 #include "cogl/cogl-context-private.h"
-#include "cogl/cogl1-context.h"
 #include "cogl/cogl-closure-list-private.h"
-#include "cogl/cogl-poll-private.h"
+#include "cogl/cogl-renderer-private.h"
 
 typedef struct _CoglOnscreenPrivate
 {
   CoglList frame_closures;
-
-  CoglList dirty_closures;
 
   int64_t frame_counter;
   int64_t swap_frame_counter; /* frame counter at last all to
@@ -73,11 +70,6 @@ cogl_dummy_free (gpointer data)
 
 G_DEFINE_BOXED_TYPE (CoglFrameClosure,
                      cogl_frame_closure,
-                     cogl_dummy_copy,
-                     cogl_dummy_free)
-
-G_DEFINE_BOXED_TYPE (CoglOnscreenDirtyClosure,
-                     cogl_onscreen_dirty_closure,
                      cogl_dummy_copy,
                      cogl_dummy_free)
 
@@ -114,7 +106,6 @@ cogl_onscreen_init_from_template (CoglOnscreen *onscreen,
   CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
 
   _cogl_list_init (&priv->frame_closures);
-  _cogl_list_init (&priv->dirty_closures);
 
   cogl_framebuffer_init_config (framebuffer, &onscreen_template->config);
 }
@@ -141,7 +132,6 @@ cogl_onscreen_dispose (GObject *object)
   CoglFrameInfo *frame_info;
 
   _cogl_closure_list_disconnect_all (&priv->frame_closures);
-  _cogl_closure_list_disconnect_all (&priv->dirty_closures);
 
   while ((frame_info = g_queue_pop_tail (&priv->pending_frame_infos)))
     g_object_unref (frame_info);
@@ -216,16 +206,8 @@ _cogl_dispatch_onscreen_cb (CoglContext *context)
         _cogl_container_of (context->onscreen_dirty_queue.next,
                             CoglOnscreenQueuedDirty,
                             link);
-      CoglOnscreen *onscreen = qe->onscreen;
-      CoglOnscreenPrivate *priv = cogl_onscreen_get_instance_private (onscreen);
 
       _cogl_list_remove (&qe->link);
-
-      _cogl_closure_list_invoke (&priv->dirty_closures,
-                                 CoglOnscreenDirtyCallback,
-                                 qe->onscreen,
-                                 &qe->info);
-
       g_object_unref (qe->onscreen);
 
       g_free (qe);
@@ -241,17 +223,16 @@ _cogl_onscreen_queue_dispatch_idle (CoglOnscreen *onscreen)
   if (!ctx->onscreen_dispatch_idle)
     {
       ctx->onscreen_dispatch_idle =
-        _cogl_poll_renderer_add_idle (ctx->display->renderer,
-                                      (CoglIdleCallback)
-                                      _cogl_dispatch_onscreen_cb,
-                                      ctx,
-                                      NULL);
+        _cogl_closure_list_add (&ctx->display->renderer->idle_closures,
+                                _cogl_dispatch_onscreen_cb,
+                                ctx,
+                                NULL);
     }
 }
 
 void
-_cogl_onscreen_queue_dirty (CoglOnscreen *onscreen,
-                            const CoglOnscreenDirtyInfo *info)
+_cogl_onscreen_queue_dirty (CoglOnscreen       *onscreen,
+                            const MtkRectangle *info)
 {
   CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
   CoglContext *ctx = cogl_framebuffer_get_context (framebuffer);
@@ -268,7 +249,7 @@ void
 _cogl_onscreen_queue_full_dirty (CoglOnscreen *onscreen)
 {
   CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
-  CoglOnscreenDirtyInfo info;
+  MtkRectangle info;
 
   info.x = 0;
   info.y = 0;
@@ -351,18 +332,16 @@ cogl_onscreen_swap_buffers_with_damage (CoglOnscreen *onscreen,
                                    info,
                                    user_data);
 
-  if (!_cogl_winsys_has_feature (COGL_WINSYS_FEATURE_SYNC_AND_COMPLETE_EVENT))
+  if (!cogl_context_has_winsys_feature (context, COGL_WINSYS_FEATURE_SYNC_AND_COMPLETE_EVENT))
     {
-      CoglFrameInfo *info;
+      g_autoptr (CoglFrameInfo) pending_info = NULL;
 
       g_warn_if_fail (priv->pending_frame_infos.length == 1);
 
-      info = g_queue_pop_tail (&priv->pending_frame_infos);
+      pending_info = g_queue_pop_tail (&priv->pending_frame_infos);
 
-      _cogl_onscreen_queue_event (onscreen, COGL_FRAME_EVENT_SYNC, info);
-      _cogl_onscreen_queue_event (onscreen, COGL_FRAME_EVENT_COMPLETE, info);
-
-      g_object_unref (info);
+      _cogl_onscreen_queue_event (onscreen, COGL_FRAME_EVENT_SYNC, pending_info);
+      _cogl_onscreen_queue_event (onscreen, COGL_FRAME_EVENT_COMPLETE, pending_info);
     }
 
   priv->frame_counter++;
@@ -386,6 +365,7 @@ cogl_onscreen_swap_region (CoglOnscreen *onscreen,
   CoglOnscreenPrivate *priv = cogl_onscreen_get_instance_private (onscreen);
   CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
   CoglOnscreenClass *klass = COGL_ONSCREEN_GET_CLASS (onscreen);
+  CoglContext *context = cogl_framebuffer_get_context (framebuffer);
 
   g_return_if_fail  (COGL_IS_ONSCREEN (framebuffer));
 
@@ -411,18 +391,16 @@ cogl_onscreen_swap_region (CoglOnscreen *onscreen,
                       info,
                       user_data);
 
-  if (!_cogl_winsys_has_feature (COGL_WINSYS_FEATURE_SYNC_AND_COMPLETE_EVENT))
+  if (!cogl_context_has_winsys_feature (context, COGL_WINSYS_FEATURE_SYNC_AND_COMPLETE_EVENT))
     {
-      CoglFrameInfo *info;
+      g_autoptr (CoglFrameInfo) pending_info = NULL;
 
       g_warn_if_fail (priv->pending_frame_infos.length == 1);
 
-      info = g_queue_pop_tail (&priv->pending_frame_infos);
+      pending_info = g_queue_pop_tail (&priv->pending_frame_infos);
 
-      _cogl_onscreen_queue_event (onscreen, COGL_FRAME_EVENT_SYNC, info);
-      _cogl_onscreen_queue_event (onscreen, COGL_FRAME_EVENT_COMPLETE, info);
-
-      g_object_unref (info);
+      _cogl_onscreen_queue_event (onscreen, COGL_FRAME_EVENT_SYNC, pending_info);
+      _cogl_onscreen_queue_event (onscreen, COGL_FRAME_EVENT_COMPLETE, pending_info);
     }
 
   priv->frame_counter++;
@@ -452,9 +430,10 @@ cogl_onscreen_direct_scanout (CoglOnscreen   *onscreen,
   CoglOnscreenPrivate *priv = cogl_onscreen_get_instance_private (onscreen);
   CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
   CoglOnscreenClass *klass = COGL_ONSCREEN_GET_CLASS (onscreen);
+  CoglContext *context = cogl_framebuffer_get_context (framebuffer);
 
   g_warn_if_fail (COGL_IS_ONSCREEN (framebuffer));
-  g_warn_if_fail (_cogl_winsys_has_feature (COGL_WINSYS_FEATURE_SYNC_AND_COMPLETE_EVENT));
+  g_warn_if_fail (cogl_context_has_winsys_feature (context, COGL_WINSYS_FEATURE_SYNC_AND_COMPLETE_EVENT));
 
   if (!klass->direct_scanout)
     {
@@ -563,29 +542,6 @@ _cogl_framebuffer_winsys_update_size (CoglFramebuffer *framebuffer,
   if (!_cogl_has_private_feature (cogl_framebuffer_get_context (framebuffer),
                                   COGL_PRIVATE_FEATURE_DIRTY_EVENTS))
     _cogl_onscreen_queue_full_dirty (COGL_ONSCREEN (framebuffer));
-}
-
-CoglOnscreenDirtyClosure *
-cogl_onscreen_add_dirty_callback (CoglOnscreen *onscreen,
-                                  CoglOnscreenDirtyCallback callback,
-                                  void *user_data,
-                                  GDestroyNotify destroy)
-{
-  CoglOnscreenPrivate *priv = cogl_onscreen_get_instance_private (onscreen);
-
-  return _cogl_closure_list_add (&priv->dirty_closures,
-                                 callback,
-                                 user_data,
-                                 destroy);
-}
-
-void
-cogl_onscreen_remove_dirty_callback (CoglOnscreen *onscreen,
-                                     CoglOnscreenDirtyClosure *closure)
-{
-  g_return_if_fail (closure);
-
-  _cogl_closure_disconnect (closure);
 }
 
 int64_t
