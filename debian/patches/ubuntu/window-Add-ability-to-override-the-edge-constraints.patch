@@ -49,10 +49,10 @@ index 0000000..ee5b2f4
 +                                  MetaWindowConstraint  right,
 +                                  MetaWindowConstraint  bottom);
 diff --git a/src/core/window-private.h b/src/core/window-private.h
-index ee1225a..d0a8020 100644
+index 05ef468..a41f1c2 100644
 --- a/src/core/window-private.h
 +++ b/src/core/window-private.h
-@@ -261,6 +261,13 @@ struct _MetaWindow
+@@ -267,6 +267,13 @@ struct _MetaWindow
      MetaEdgeConstraint left;
    } edge_constraints;
  
@@ -65,20 +65,20 @@ index ee1225a..d0a8020 100644
 +
    double tile_hfraction;
  
-   uint64_t preferred_output_winsys_id;
+   MetaLogicalMonitorId *preferred_logical_monitor;
 diff --git a/src/core/window.c b/src/core/window.c
-index 71f0220..5e8b20a 100644
+index 1ccd94a..17a052d 100644
 --- a/src/core/window.c
 +++ b/src/core/window.c
-@@ -73,6 +73,7 @@
+@@ -72,6 +72,7 @@
+ #include "core/boxes-private.h"
  #include "core/constraints.h"
- #include "core/frame.h"
  #include "core/keybindings-private.h"
 +#include "core/meta-private-introspected.h"
  #include "core/meta-workspace-manager-private.h"
  #include "core/place.h"
  #include "core/stack.h"
-@@ -2948,6 +2949,38 @@ meta_window_update_tile_fraction (MetaWindow *window,
+@@ -2963,6 +2964,38 @@ meta_window_update_tile_fraction (MetaWindow *window,
      meta_window_tile (tile_match, tile_match->tile_mode);
  }
  
@@ -117,7 +117,7 @@ index 71f0220..5e8b20a 100644
  static void
  update_edge_constraints (MetaWindow *window)
  {
-@@ -3003,6 +3036,18 @@ update_edge_constraints (MetaWindow *window)
+@@ -3018,6 +3051,18 @@ update_edge_constraints (MetaWindow *window)
        window->edge_constraints.right = META_EDGE_CONSTRAINT_MONITOR;
        window->edge_constraints.left = META_EDGE_CONSTRAINT_MONITOR;
      }
@@ -137,10 +137,10 @@ index 71f0220..5e8b20a 100644
  
  void
 diff --git a/src/meson.build b/src/meson.build
-index 05df3bf..a84cd79 100644
+index 1b9f9dd..10c33ed 100644
 --- a/src/meson.build
 +++ b/src/meson.build
-@@ -1266,7 +1266,8 @@ if have_introspection
+@@ -1302,7 +1302,8 @@ if have_introspection
      sources: [
        mutter_enum_types[1],
        mutter_introspected_sources,
