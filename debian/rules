@@ -52,15 +52,24 @@ TEST_COMMAND_BASE=env \
 TEST_COMMAND=$(TEST_COMMAND_BASE) --no-suite flaky
 TEST_COMMAND_FLAKY=env DEB_ALLOW_FLAKY_TESTS=1 $(TEST_COMMAND_BASE) --suite flaky
 
-# Don't run the tests on mips etc. since they either time out or fail too
-# much, blocking migration to testing.
+# Ignore test failures on official architectures
+# because it is believed that significant debian-installer/tasksel issues
+# occur if task-gnome-desktop is not installable.
+#
+# We suspect that GNOME Shell might not work on mips64el and s390x.
+# See gnome-settings-daemon where a simple mutter session fails there.
+#
+# But GNOME Shell is apparently usable on Ubuntu's riscv64:
+# https://discourse.ubuntu.com/t/33807
+#
 # Please keep this list in sync with debian/tests/installed-tests
 override_dh_auto_test:
-ifeq ($(filter nocheck,$(DEB_BUILD_OPTIONS)),)
-ifeq (,$(filter mips mips64el mipsel riscv64 s390x alpha hppa powerpc sparc64 x32,$(DEB_HOST_ARCH)))
+ifeq (,$(filter mips64el riscv64 s390x,$(DEB_HOST_ARCH)))
 	$(TEST_COMMAND)
 	-$(TEST_COMMAND_FLAKY) --logbase flaky-tests
-endif
+else
+	-$(TEST_COMMAND)
+	-$(TEST_COMMAND_FLAKY) --logbase flaky-tests
 endif
 
 # debhelper >= 13.4 makes all of /usr/libexec executable, which is not

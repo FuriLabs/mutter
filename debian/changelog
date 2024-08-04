@@ -1,3 +1,28 @@
+mutter (46.4-1) unstable; urgency=medium
+
+  * New upstream release
+  * debian/libmutter-14-0.symbols: Update
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Sun, 04 Aug 2024 12:37:19 -0400
+
+mutter (46.3.1-7) unstable; urgency=medium
+
+  [ Daniel van Vugt ]
+  * Delete patches that aren't needed for LP#2073009
+
+  [ Jeremy Bícha ]
+  * Stop ignoring build test failures on Debian ports.
+    The test failures make it appear that GNOME Shell/Mutter is broken there.
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Thu, 01 Aug 2024 14:08:54 -0400
+
+mutter (46.3.1-6) unstable; urgency=medium
+
+  * Run dh_auto_test everywhere even if results are skipped on some
+    architectures
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Sat, 27 Jul 2024 11:45:53 -0400
+
 mutter (46.3.1-4ubuntu1) oracular; urgency=medium
 
   * Merge with Debian (LP: #2063147, LP: #2066080). Remaining changes:

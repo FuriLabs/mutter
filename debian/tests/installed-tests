@@ -25,7 +25,7 @@ if [ "$e" -ne 0 ]; then
     arch="$(dpkg --print-architecture)"
     case "$arch" in
         # Please keep this list in sync with debian/rules
-        (armhf|mips|mips64el|mipsel|ppc64el|riscv64|s390x|alpha|hppa|powerpc|sparc64|x32)
+        (mips64el|riscv64|s390x)
             echo "# Ignoring test failure on $arch"
             exit 77
             ;;

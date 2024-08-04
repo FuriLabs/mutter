@@ -136,10 +136,10 @@ void clutter_stage_add_to_redraw_clip (ClutterStage       *self,
                                        ClutterPaintVolume *clip);
 
 CLUTTER_EXPORT
-ClutterGrab * clutter_stage_grab_input_only (ClutterStage        *self,
-                                             ClutterEventHandler  handler,
-                                             gpointer             user_data,
-                                             GDestroyNotify       user_data_destroy);
+ClutterGrab * clutter_stage_grab_input_only_inactive (ClutterStage        *self,
+                                                      ClutterEventHandler  handler,
+                                                      gpointer             user_data,
+                                                      GDestroyNotify       user_data_destroy);
 
 void clutter_stage_invalidate_devices (ClutterStage *stage);
 
@@ -150,5 +150,12 @@ ClutterActor * clutter_stage_update_device_for_event (ClutterStage *stage,
 
 void clutter_stage_update_devices_in_view (ClutterStage     *stage,
                                            ClutterStageView *view);
+
+CLUTTER_EXPORT
+ClutterGrab * clutter_stage_grab_inactive (ClutterStage *stage,
+                                           ClutterActor *actor);
+
+CLUTTER_EXPORT
+void clutter_grab_activate (ClutterGrab *grab);
 
 G_END_DECLS

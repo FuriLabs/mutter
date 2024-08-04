@@ -72,7 +72,7 @@ index 7d259f6..e732c1d 100644
    now_us = g_get_monotonic_time ();
  
 diff --git a/src/tests/clutter/conform/grab.c b/src/tests/clutter/conform/grab.c
-index c62eea6..4ba11f4 100644
+index 26125a2..af6b79d 100644
 --- a/src/tests/clutter/conform/grab.c
 +++ b/src/tests/clutter/conform/grab.c
 @@ -620,6 +620,12 @@ grab_input_only (void)

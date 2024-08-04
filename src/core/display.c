@@ -908,9 +908,9 @@ meta_display_init_x11 (MetaDisplay         *display,
 }
 
 static void
-on_x11_initialized (MetaDisplay  *display,
-                    GAsyncResult *result,
-                    gpointer      user_data)
+on_mandatory_x11_initialized (MetaDisplay  *display,
+                              GAsyncResult *result,
+                              gpointer      user_data)
 {
   g_autoptr (GError) error = NULL;
 
@@ -941,9 +941,6 @@ meta_display_new (MetaContext  *context,
   MetaDisplay *display;
   MetaDisplayPrivate *priv;
   guint32 timestamp;
-#ifdef HAVE_X11_CLIENT
-  Window old_active_xwindow = None;
-#endif
   MetaMonitorManager *monitor_manager;
   MetaSettings *settings;
   MetaInputCapture *input_capture;
@@ -1032,7 +1029,7 @@ meta_display_new (MetaContext  *context,
       if (x11_display_policy == META_X11_DISPLAY_POLICY_MANDATORY)
         {
           meta_display_init_x11 (display, NULL,
-                                 (GAsyncReadyCallback) on_x11_initialized,
+                                 (GAsyncReadyCallback) on_mandatory_x11_initialized,
                                  NULL);
         }
 #endif /* HAVE_XWAYLAND */
@@ -1059,14 +1056,6 @@ meta_display_new (MetaContext  *context,
   display->last_focus_time = timestamp;
   display->last_user_time = timestamp;
 
-#ifdef HAVE_X11
-  if (!meta_is_wayland_compositor ())
-    meta_prop_get_window (display->x11_display,
-                          display->x11_display->xroot,
-                          display->x11_display->atom__NET_ACTIVE_WINDOW,
-                          &old_active_xwindow);
-#endif
-
   if (!meta_compositor_manage (display->compositor, error))
     {
       g_object_unref (display);
@@ -1087,30 +1076,7 @@ meta_display_new (MetaContext  *context,
   g_signal_connect (display->gesture_tracker, "state-changed",
                     G_CALLBACK (gesture_tracker_state_changed), display);
 
-  /* We know that if mutter is running as a Wayland compositor,
-   * we start out with no windows.
-   */
-#ifdef HAVE_X11_CLIENT
-  if (!meta_is_wayland_compositor ())
-    meta_display_manage_all_xwindows (display);
-
-  if (old_active_xwindow != None)
-    {
-      MetaWindow *old_active_window;
-      old_active_window = meta_x11_display_lookup_x_window (display->x11_display,
-                                                            old_active_xwindow);
-      if (old_active_window)
-        meta_window_focus (old_active_window, timestamp);
-      else
-        meta_display_unset_input_focus (display, timestamp);
-    }
-  else
-    {
-      meta_display_unset_input_focus (display, timestamp);
-    }
-#else
   meta_display_unset_input_focus (display, timestamp);
-#endif
 
   g_signal_connect (stage, "notify::is-grabbed",
                     G_CALLBACK (on_is_grabbed_changed), display);
