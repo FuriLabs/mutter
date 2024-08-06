@@ -1487,17 +1487,17 @@ libmutter-clutter-15.so.0 libmutter-15-0 #MINVER#
  clutter_frame_clock_uninhibit@Base 43.0
  clutter_frame_get_count@Base 44~beta
  clutter_frame_get_frame_deadline@Base 46~beta
- (optional=triplebuffer)clutter_frame_get_hints@Base 43.0
+ clutter_frame_get_hints@Base 43.0
  clutter_frame_get_result@Base 46~beta
  clutter_frame_get_target_presentation_time@Base 44~beta
  clutter_frame_get_type@Base 44~beta
  clutter_frame_has_result@Base 43.0
- (optional=triplebuffer)clutter_frame_hint_get_type@Base 43.0
+ clutter_frame_hint_get_type@Base 43.0
  clutter_frame_info_flag_get_type@Base 43.0
  clutter_frame_new@Base 44~beta
  clutter_frame_ref@Base 44~beta
  clutter_frame_result_get_type@Base 43.0
- (optional=triplebuffer)clutter_frame_set_hint@Base 43.0
+ clutter_frame_set_hint@Base 43.0
  clutter_frame_set_result@Base 43.0
  clutter_frame_unref@Base 44~beta
  clutter_gesture_action_cancel@Base 43.0
@@ -2374,7 +2374,6 @@ libmutter-cogl-15.so.0 libmutter-15-0 #MINVER#
  cogl_offscreen_new_with_texture@Base 43.0
  cogl_onscreen_add_frame_callback@Base 43.0
  cogl_onscreen_add_frame_info@Base 43.0
- (optional=triplebuffer)cogl_onscreen_count_pending_frames@Base 43.0
  cogl_onscreen_direct_scanout@Base 43.0
  cogl_onscreen_egl_get_egl_surface@Base 43.0
  cogl_onscreen_egl_get_type@Base 43.0
@@ -2382,6 +2381,7 @@ libmutter-cogl-15.so.0 libmutter-15-0 #MINVER#
  cogl_onscreen_egl_set_egl_surface@Base 43.0
  cogl_onscreen_get_buffer_age@Base 43.0
  cogl_onscreen_get_frame_counter@Base 43.0
+ cogl_onscreen_get_pending_frame_count@Base 47~beta
  cogl_onscreen_get_type@Base 43.0
  cogl_onscreen_glx_new@Base 43.0
  cogl_onscreen_peek_head_frame_info@Base 43.0

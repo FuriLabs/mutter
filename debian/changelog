@@ -1,4 +1,4 @@
-mutter (47~beta-1ubuntu1) UNRELEASED; urgency=medium
+mutter (47~beta-3ubuntu1) UNRELEASED; urgency=medium
 
   * Merge with Debian. Remaining changes:
     - Add x11-Add-support-for-fractional-scaling-using-Randr.patch
@@ -8,6 +8,18 @@ mutter (47~beta-1ubuntu1) UNRELEASED; urgency=medium
   * Drop log spam patch applied in new release
 
  -- Jeremy Bícha <jbicha@ubuntu.com>  Sun, 04 Aug 2024 16:43:04 -0400
+
+mutter (47~beta-3) experimental; urgency=medium
+
+  * debian/libmutter-15-0.symbols: Update to include new symbols
+
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Tue, 06 Aug 2024 00:53:56 -0600
+
+mutter (47~beta-2) experimental; urgency=medium
+
+  * debian/patches: Update triple buffering patch for GNOME 47.beta
+
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Tue, 06 Aug 2024 00:37:48 -0600
 
 mutter (47~beta-1) experimental; urgency=medium
 
