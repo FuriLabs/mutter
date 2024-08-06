@@ -67,7 +67,7 @@ index 05ef468..a41f1c2 100644
  
    MetaLogicalMonitorId *preferred_logical_monitor;
 diff --git a/src/core/window.c b/src/core/window.c
-index 1ccd94a..17a052d 100644
+index 7a4ec86..7f4f58f 100644
 --- a/src/core/window.c
 +++ b/src/core/window.c
 @@ -72,6 +72,7 @@
@@ -78,7 +78,7 @@ index 1ccd94a..17a052d 100644
  #include "core/meta-workspace-manager-private.h"
  #include "core/place.h"
  #include "core/stack.h"
-@@ -2963,6 +2964,38 @@ meta_window_update_tile_fraction (MetaWindow *window,
+@@ -2982,6 +2983,38 @@ meta_window_update_tile_fraction (MetaWindow *window,
      meta_window_tile (tile_match, tile_match->tile_mode);
  }
  
@@ -117,7 +117,7 @@ index 1ccd94a..17a052d 100644
  static void
  update_edge_constraints (MetaWindow *window)
  {
-@@ -3018,6 +3051,18 @@ update_edge_constraints (MetaWindow *window)
+@@ -3037,6 +3070,18 @@ update_edge_constraints (MetaWindow *window)
        window->edge_constraints.right = META_EDGE_CONSTRAINT_MONITOR;
        window->edge_constraints.left = META_EDGE_CONSTRAINT_MONITOR;
      }
