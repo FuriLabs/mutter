@@ -9,3 +9,5 @@ workarounds/kms-crtc-Increase-default-deadline-evasion-to-1000-micros.patch
 workarounds/place-Always-center-initial-setup.patch
 ubuntu/x11-Add-support-for-fractional-scaling-using-Randr.patch
 ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
+cogl-color-Ensure-Cogl.Color.equal-is-introspectable.patch
+cogl-color-Do-not-make-cogl_color_free-introspectable.patch

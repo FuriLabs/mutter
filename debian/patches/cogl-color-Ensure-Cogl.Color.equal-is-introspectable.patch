@@ -1,0 +1,26 @@
+From: =?utf-8?b?Ik1hcmNvIFRyZXZpc2FuIChUcmV2acOxbyki?= <mail@3v1n0.net>
+Date: Tue, 6 Aug 2024 01:22:53 -0600
+Subject: cogl/color: Ensure Cogl.Color.equal() is introspectable
+
+We need to explicitly define the type, being a generic const pointer.
+
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3925>
+---
+ cogl/cogl/cogl-color.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/cogl/cogl/cogl-color.h b/cogl/cogl/cogl-color.h
+index 33ffc89..0fea15b 100644
+--- a/cogl/cogl/cogl-color.h
++++ b/cogl/cogl/cogl-color.h
+@@ -243,8 +243,8 @@ cogl_color_premultiply (CoglColor *color);
+ 
+ /**
+  * cogl_color_equal:
+- * @v1: a #CoglColor
+- * @v2: a #CoglColor
++ * @v1: (type Cogl.Color): a #CoglColor
++ * @v2: (type Cogl.Color): a #CoglColor
+  *
+  * Compares two `CoglColor`s and checks if they are the same.
+  *
