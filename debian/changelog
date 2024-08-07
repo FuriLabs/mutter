@@ -1,5 +1,6 @@
-mutter (47~beta-3ubuntu1) UNRELEASED; urgency=medium
+mutter (47~beta-3ubuntu1) oracular; urgency=medium
 
+  [ Jeremy Bícha ]
   * Merge with Debian. Remaining changes:
     - Add x11-Add-support-for-fractional-scaling-using-Randr.patch
     - Add window-Add-ability-to-override-the-edge-constraints.patch
@@ -7,7 +8,10 @@ mutter (47~beta-3ubuntu1) UNRELEASED; urgency=medium
         window constraints
   * Drop log spam patch applied in new release
 
- -- Jeremy Bícha <jbicha@ubuntu.com>  Sun, 04 Aug 2024 16:43:04 -0400
+  [ Marco Trevisan (Treviño) ]
+  * d/p: Cherry-pick fixes for Cogl.Color introspection
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Wed, 07 Aug 2024 11:03:27 -0400
 
 mutter (47~beta-3) experimental; urgency=medium
 
