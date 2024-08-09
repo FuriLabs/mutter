@@ -5,7 +5,7 @@ debian/Support-Dynamic-triple-double-buffering.patch
 workarounds/tests-skip-monitor-width-size-check-as-it-may-lead-to-une.patch
 workarounds/tests-Skip-thread-priority-test.patch
 workarounds/Mark-several-additional-tests-as-flaky.patch
-workarounds/kms-crtc-Increase-default-deadline-evasion-to-1000-micros.patch
+workarounds/kms-crtc-Increase-default-deadline-evasion-to-2000-micros.patch
 workarounds/place-Always-center-initial-setup.patch
 build-Compile-schemas-locally-for-use-in-build-tests.patch
 screen-cast-stream-src-Do-not-try-to-create-a-0-sized-tex.patch
