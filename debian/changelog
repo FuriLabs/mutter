@@ -1,3 +1,16 @@
+mutter (42.9-0ubuntu9) UNRELEASED; urgency=medium
+
+  [ Daniel van Vugt ]
+  * Add backend-native-Don-t-warn-on-EACCES-if-headless.patch.
+    To avoid test failures in environments that have a GPU but also
+    insufficient permission to open it. (LP: #2068119)
+
+  [ Marco Trevisan (Treviño) ]
+  * debian/patches: Fix screen recording crash with scaling and a custom cursor
+    (LP: #2077746)
+
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Fri, 23 Aug 2024 12:43:22 -0400
+
 mutter (42.9-0ubuntu8) jammy; urgency=medium
 
   [ Daniel van Vugt ]
