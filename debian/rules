@@ -26,7 +26,8 @@ CONFFLAGS = \
 	-Dwayland_eglstream=true
 export deb_udevdir = $(shell pkg-config --variable=udevdir udev | sed s,^/,,)
 
-ifneq ($(filter i386,$(DEB_HOST_ARCH)),)
+# Update the cogl_trace architectures in the symbols file to match this list:
+ifeq (,$(filter amd64 arm64 armel armhf mips64el ppc64el riscv64 s390x,$(DEB_HOST_ARCH)))
 CONFFLAGS +=-Dprofiler=false
 endif
 

@@ -5,8 +5,9 @@ workarounds/tests-skip-monitor-width-size-check-as-it-may-lead-to-une.patch
 workarounds/tests-Skip-thread-priority-test.patch
 workarounds/tests-skip-unreliable-focus-test.patch
 workarounds/Mark-several-additional-tests-as-flaky.patch
-workarounds/kms-crtc-Increase-default-deadline-evasion-to-1000-micros.patch
+workarounds/kms-crtc-Increase-default-deadline-evasion-to-2000-micros.patch
 workarounds/place-Always-center-initial-setup.patch
+workarounds/cogl-Adjust-generated-shaders-to-GLSL-1.40.patch
 ubuntu/x11-Add-support-for-fractional-scaling-using-Randr.patch
 ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
 cogl-color-Ensure-Cogl.Color.equal-is-introspectable.patch
