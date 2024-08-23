@@ -1,4 +1,4 @@
-mutter (42.9-0ubuntu9) UNRELEASED; urgency=medium
+mutter (42.9-0ubuntu9) jammy; urgency=medium
 
   [ Daniel van Vugt ]
   * Add backend-native-Don-t-warn-on-EACCES-if-headless.patch.
@@ -9,7 +9,7 @@ mutter (42.9-0ubuntu9) UNRELEASED; urgency=medium
   * debian/patches: Fix screen recording crash with scaling and a custom cursor
     (LP: #2077746)
 
- -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Fri, 23 Aug 2024 12:43:22 -0400
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Fri, 23 Aug 2024 12:45:48 -0400
 
 mutter (42.9-0ubuntu8) jammy; urgency=medium
 
