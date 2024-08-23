@@ -1,0 +1,32 @@
+From: =?utf-8?b?Ik1hcmNvIFRyZXZpc2FuIChUcmV2acOxbyki?= <mail@3v1n0.net>
+Date: Fri, 23 Aug 2024 12:16:52 -0400
+Subject: screen-cast-stream-src: Do not try to create a 0-sized texture when
+ scaled
+
+When the screen is scaled and we are recording/sharing the screen we may
+end up crash as per trying to create a 0-sized texture due to missing
+ceiling of the texture size.
+
+This is similar to what was fixed in commit 4d4e8e586233 and the same
+fix was included in commit 422ee4515, but hidden under a compilation fix
+
+Origin: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3978.patch
+---
+ src/backends/meta-screen-cast-stream-src.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/backends/meta-screen-cast-stream-src.c b/src/backends/meta-screen-cast-stream-src.c
+index 9fc872e..81cf4c9 100644
+--- a/src/backends/meta-screen-cast-stream-src.c
++++ b/src/backends/meta-screen-cast-stream-src.c
+@@ -391,8 +391,8 @@ meta_screen_cast_stream_src_draw_cursor_into (MetaScreenCastStreamSrc  *src,
+ 
+   texture_width = cogl_texture_get_width (cursor_texture);
+   texture_height = cogl_texture_get_height (cursor_texture);
+-  width = texture_width * scale;
+-  height = texture_height * scale;
++  width = ceilf (texture_width * scale);
++  height = ceilf (texture_height * scale);
+ 
+   if (texture_width == width &&
+       texture_height == height &&
