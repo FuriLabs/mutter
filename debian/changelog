@@ -1,3 +1,17 @@
+mutter (47~beta-3ubuntu2) oracular; urgency=medium
+
+  [ Jeremy Bícha ]
+  * debian: Only enable sysprof on architectures where sysprof is available
+
+  [ Daniel van Vugt ]
+  * Update the KMS deadline evasion patch to 2000us instead of 1000us.
+    More laptops need higher numbers than 1000us to avoid cursor stutter
+    (LP: #2076318)
+  * Add cogl-Adjust-generated-shaders-to-GLSL-1.40.patch to restore support
+    for the Nvidia driver (LP: #2077530)
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Fri, 23 Aug 2024 14:24:38 +0800
+
 mutter (47~beta-3ubuntu1) oracular; urgency=medium
 
   [ Jeremy Bícha ]
