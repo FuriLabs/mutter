@@ -1,3 +1,11 @@
+mutter (47~beta-3ubuntu3) oracular; urgency=medium
+
+  * Add tests-Temporarily-disable-mutter-x11-tests-for-Ubuntu.patch to
+    work around the temporary issue with Zink (Mesa) on Oracular crashing
+    some test cases.
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Fri, 23 Aug 2024 16:08:51 +0800
+
 mutter (47~beta-3ubuntu2) oracular; urgency=medium
 
   [ Jeremy Bícha ]
