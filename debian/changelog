@@ -1,3 +1,13 @@
+mutter (47~beta-3ubuntu4) oracular; urgency=medium
+
+  * Expand tests-Temporarily-disable-mutter-x11-tests-for-Ubuntu.patch to
+    include the tools suite below it which is failing with the same
+    root cause. Again, this is not a failure of the test case but a
+    temporary problem with Mesa that Glib apps are incorrectly turning into
+    a bigger issue than it is.
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Fri, 23 Aug 2024 16:51:14 +0800
+
 mutter (47~beta-3ubuntu3) oracular; urgency=medium
 
   * Add tests-Temporarily-disable-mutter-x11-tests-for-Ubuntu.patch to
