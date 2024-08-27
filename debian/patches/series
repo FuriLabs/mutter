@@ -14,3 +14,4 @@ ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
 ubuntu/wayland-Disable-linux-drm-syncobj-v1.patch
 ubuntu/backends-Handle-null-views-instead-of-creating-dummy-view.patch
 ubuntu/backends-Restore-support-for-X11-cursor-themes.patch
+ubuntu/backends-native-Avoid-duplicating-or-losing-KMS-property-.patch
