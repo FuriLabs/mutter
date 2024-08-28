@@ -1,3 +1,19 @@
+mutter (46.2-1ubuntu0.24.04.2) UNRELEASED; urgency=medium
+
+  [ Marco Trevisan (Treviño) ]
+  * debian/patches: Fix screen recording crash with scaling and a custom cursor
+    (LP: #2077746)
+
+  [ Daniel van Vugt ]
+  * Add backends-native-Avoid-duplicating-or-losing-KMS-property-.patch
+    to avoid duplicating or losing colour profile, night light, HDR, or
+    privacy screen updates (LP: #2025006)
+  * Update the KMS deadline evasion patch to 2000us instead of 1000us.
+    Some laptops need higher numbers than 1000us to avoid cursor stutter
+    (LP: #2076318)
+
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Wed, 28 Aug 2024 15:53:50 +0200
+
 mutter (46.2-1ubuntu0.24.04.1) noble; urgency=medium
 
   [ Daniel van Vugt ]
