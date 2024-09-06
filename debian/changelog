@@ -1,3 +1,16 @@
+mutter (47~rc-1ubuntu1) UNRELEASED; urgency=medium
+
+  * Merge with Debian. Remaining changes:
+    - Add x11-Add-support-for-fractional-scaling-using-Randr.patch
+    - Add window-Add-ability-to-override-the-edge-constraints.patch
+      + Make possible for extensions (such as Tiling Assistant) to override
+        window constraints
+    - Remove debian/salsa-ci.yml: Not helpful for us currently
+  * Remove the cogl color patches: applied in new release
+  * Remove the mesa workaround patch: shouldn't be needed any more
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Fri, 06 Sep 2024 09:04:45 -0400
+
 mutter (47~rc-1) experimental; urgency=medium
 
   [ Jeremy Bícha ]
