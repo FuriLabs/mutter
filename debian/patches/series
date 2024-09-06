@@ -7,4 +7,3 @@ workarounds/Mark-several-additional-tests-as-flaky.patch
 workarounds/place-Always-center-initial-setup.patch
 ubuntu/x11-Add-support-for-fractional-scaling-using-Randr.patch
 ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
-workarounds/tests-Temporarily-disable-mutter-x11-tests-for-Ubuntu.patch
