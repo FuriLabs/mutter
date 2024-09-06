@@ -124,12 +124,12 @@ _cogl_driver_pixel_format_to_gl (CoglContext     *context,
       break;
 
     case COGL_PIXEL_FORMAT_RGB_888:
-      glintformat = GL_RGBA8;
+      glintformat = GL_RGB8;
       glformat = GL_RGB;
       gltype = GL_UNSIGNED_BYTE;
       break;
     case COGL_PIXEL_FORMAT_BGR_888:
-      glintformat = GL_RGBA8;
+      glintformat = GL_RGB8;
       glformat = GL_BGR;
       gltype = GL_UNSIGNED_BYTE;
       break;
@@ -374,8 +374,8 @@ _cogl_driver_get_read_pixels_format (CoglContext     *context,
 
 static gboolean
 _cogl_get_gl_version (CoglContext *ctx,
-                      int *major_out,
-                      int *minor_out)
+                      int         *major_out,
+                      int         *minor_out)
 {
   const char *version_string;
 
@@ -387,9 +387,8 @@ _cogl_get_gl_version (CoglContext *ctx,
 }
 
 static gboolean
-check_gl_version (CoglContext *ctx,
-                  char **gl_extensions,
-                  GError **error)
+check_gl_version (CoglContext  *ctx,
+                  GError      **error)
 {
   int major, minor;
 
@@ -415,13 +414,51 @@ check_gl_version (CoglContext *ctx,
 }
 
 static gboolean
-_cogl_driver_update_features (CoglContext *ctx,
-                              GError **error)
+_cogl_get_glsl_version (CoglContext *ctx,
+                        int         *major_out,
+                        int         *minor_out)
+{
+  const char *version_string;
+
+  version_string = (char *)ctx->glGetString (GL_SHADING_LANGUAGE_VERSION);
+  return _cogl_gl_util_parse_gl_version (version_string, major_out, minor_out);
+}
+
+static gboolean
+check_glsl_version (CoglContext  *ctx,
+                    GError      **error)
+{
+  int major, minor;
+
+  if (!_cogl_get_glsl_version (ctx, &major, &minor))
+    {
+      g_set_error (error,
+                   COGL_DRIVER_ERROR,
+                   COGL_DRIVER_ERROR_UNKNOWN_VERSION,
+                   "The supported GLSL version could not be determined");
+      return FALSE;
+    }
+
+  if (!COGL_CHECK_GL_VERSION (major, minor, ctx->glsl_major, ctx->glsl_minor))
+    {
+      g_set_error (error,
+                   COGL_DRIVER_ERROR,
+                   COGL_DRIVER_ERROR_INVALID_VERSION,
+                   "GLSL %d%d0 or better is required",
+                   ctx->glsl_major, ctx->glsl_minor);
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
+static gboolean
+_cogl_driver_update_features (CoglContext  *ctx,
+                              GError      **error)
 {
   unsigned long private_features
     [COGL_FLAGS_N_LONGS_FOR_SIZE (COGL_N_PRIVATE_FEATURES)] = { 0 };
-  char **gl_extensions;
-  const char *glsl_version;
+  g_auto (GStrv) gl_extensions = 0;
   int gl_major = 0, gl_minor = 0;
   int i;
 
@@ -440,12 +477,19 @@ _cogl_driver_update_features (CoglContext *ctx,
 
   gl_extensions = _cogl_context_get_gl_extensions (ctx);
 
-  if (!check_gl_version (ctx, gl_extensions, error))
+  if (!check_gl_version (ctx, error))
+    return FALSE;
+
+  ctx->glsl_major = 1;
+  ctx->glsl_minor = 40;
+  ctx->glsl_es = FALSE;
+
+  if (!check_glsl_version (ctx, error))
     return FALSE;
 
   if (G_UNLIKELY (COGL_DEBUG_ENABLED (COGL_DEBUG_WINSYS)))
     {
-      char *all_extensions = g_strjoinv (" ", gl_extensions);
+      g_autofree char *all_extensions = g_strjoinv (" ", gl_extensions);
 
       COGL_NOTE (WINSYS,
                  "Checking features\n"
@@ -457,20 +501,9 @@ _cogl_driver_update_features (CoglContext *ctx,
                  ctx->glGetString (GL_RENDERER),
                  _cogl_context_get_gl_version (ctx),
                  all_extensions);
-
-      g_free (all_extensions);
     }
 
   _cogl_get_gl_version (ctx, &gl_major, &gl_minor);
-
-  ctx->glsl_major = 1;
-  ctx->glsl_minor = 2;
-  ctx->glsl_version_to_use = 140;
-
-  glsl_version = (char *)ctx->glGetString (GL_SHADING_LANGUAGE_VERSION);
-  _cogl_gl_util_parse_gl_version (glsl_version,
-                                  &ctx->glsl_major,
-                                  &ctx->glsl_minor);
 
   COGL_FLAGS_SET (ctx->features,
                   COGL_FEATURE_ID_UNSIGNED_INT_INDICES, TRUE);
@@ -542,8 +575,6 @@ _cogl_driver_update_features (CoglContext *ctx,
   /* Cache features */
   for (i = 0; i < G_N_ELEMENTS (private_features); i++)
     ctx->private_features[i] |= private_features[i];
-
-  g_strfreev (gl_extensions);
 
   if (!COGL_FLAGS_GET (private_features, COGL_PRIVATE_FEATURE_TEXTURE_SWIZZLE))
     {

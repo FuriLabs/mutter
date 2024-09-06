@@ -4,6 +4,7 @@ clutter_clutter_includedir = clutter_includedir / 'clutter'
 clutter_headers = [
   'clutter.h',
   'clutter-action.h',
+  'clutter-actor-accessible.h',
   'clutter-actor-meta.h',
   'clutter-actor.h',
   'clutter-align-constraint.h',
@@ -62,7 +63,6 @@ clutter_headers = [
   'clutter-pipeline-cache.h',
   'clutter-property-transition.h',
   'clutter-rotate-action.h',
-  'clutter-scroll-actor.h',
   'clutter-seat.h',
   'clutter-settings.h',
   'clutter-shader-effect.h',
@@ -70,7 +70,6 @@ clutter_headers = [
   'clutter-swipe-action.h',
   'clutter-snap-constraint.h',
   'clutter-stage.h',
-  'clutter-stage-manager.h',
   'clutter-stage-view.h',
   'clutter-tap-action.h',
   'clutter-text.h',
@@ -85,8 +84,10 @@ clutter_headers = [
 ]
 
 clutter_sources = [
+  'clutter-accessibility.c',
   'clutter-action.c',
   'clutter-actor-box.c',
+  'clutter-actor-accessible.c',
   'clutter-actor-meta.c',
   'clutter-actor.c',
   'clutter-align-constraint.c',
@@ -150,18 +151,20 @@ clutter_sources = [
   'clutter-pipeline-cache.c',
   'clutter-property-transition.c',
   'clutter-rotate-action.c',
-  'clutter-scroll-actor.c',
   'clutter-seat.c',
   'clutter-settings.c',
   'clutter-shader-effect.c',
   'clutter-shader-types.c',
   'clutter-swipe-action.c',
   'clutter-snap-constraint.c',
+  'clutter-stage-accessible.c',
   'clutter-stage.c',
+  'clutter-stage-manager-accessible.c',
   'clutter-stage-manager.c',
   'clutter-stage-view.c',
   'clutter-stage-window.c',
   'clutter-tap-action.c',
+  'clutter-text-accessible.c',
   'clutter-text.c',
   'clutter-text-buffer.c',
   'clutter-texture-content.c',
@@ -174,6 +177,7 @@ clutter_sources = [
 ]
 
 clutter_private_headers = [
+  'clutter-accessibility-private.h',
   'clutter-actor-meta-private.h',
   'clutter-actor-private.h',
   'clutter-backend-private.h',
@@ -200,10 +204,13 @@ clutter_private_headers = [
   'clutter-paint-volume-private.h',
   'clutter-private.h',
   'clutter-settings-private.h',
+  'clutter-stage-accessible-private.h',
+  'clutter-stage-manager-accessible-private.h',
   'clutter-stage-manager-private.h',
   'clutter-stage-private.h',
   'clutter-stage-view-private.h',
   'clutter-stage-window.h',
+  'clutter-text-accessible-private.h',
   'clutter-timeline-private.h',
 ]
 
@@ -212,32 +219,6 @@ clutter_nonintrospected_sources = [
 ]
 
 clutter_backend_private_headers = []
-
-cally_headers = [
-    'cally/cally-actor.h',
-    'cally/cally-clone.h',
-    'cally/cally-factory.h',
-    'cally/cally.h',
-    'cally/cally-main.h',
-    'cally/cally-root.h',
-    'cally/cally-stage.h',
-    'cally/cally-text.h',
-    'cally/cally-util.h',
-]
-
-cally_sources = [
-    'cally/cally-actor.c',
-    'cally/cally.c',
-    'cally/cally-clone.c',
-    'cally/cally-root.c',
-    'cally/cally-stage.c',
-    'cally/cally-text.c',
-    'cally/cally-util.c',
-]
-
-cally_private_headers = [
-  'cally/cally-actor-private.h',
-]
 
 clutter_built_sources = []
 clutter_built_headers = []
@@ -272,9 +253,6 @@ libmutter_clutter = shared_library(libmutter_clutter_name,
     clutter_nonintrospected_sources,
     clutter_built_sources,
     clutter_built_headers,
-    cally_sources,
-    cally_headers,
-    cally_private_headers,
   ],
   version: '0.0.0',
   soversion: 0,
@@ -327,33 +305,10 @@ if have_introspection
     extra_args: clutter_introspection_args + ['--c-include=clutter/clutter.h'],
     kwargs: introspection_common,
   )
-
-  libmutter_cally_gir = gnome.generate_gir(libmutter_clutter,
-    sources: [
-      cally_sources,
-      cally_headers,
-    ],
-    nsversion: libmutter_api_version,
-    header: 'cally/cally.h',
-    namespace: 'Cally',
-    export_packages: [libmutter_clutter_name],
-    includes: [
-      libmutter_mtk_gir[0],
-      libmutter_cogl_gir[0],
-      libmutter_cogl_pango_gir[0],
-      libmutter_clutter_gir[0],
-    ],
-    dependencies: [cogl_deps],
-    extra_args: clutter_introspection_args,
-    kwargs: introspection_common,
-  )
 endif
 
 install_headers(clutter_headers,
   subdir: clutter_clutter_includesubdir)
-
-install_headers(cally_headers,
-  subdir: clutter_includesubdir / 'cally')
 
 pkg.generate(libmutter_clutter,
   name: 'Mutters Clutter',

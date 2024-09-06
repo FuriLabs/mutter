@@ -84,6 +84,7 @@ Build-Depends: debhelper-compat (= 13),
                libxrender-dev,
                libxt-dev,
                meson (>= 1.3.0),
+               pipewire <!nocheck>,
                pkgconf,
                python3-dbus <!nocheck>,
                python3-dbusmock,
@@ -189,7 +190,7 @@ Depends: adwaita-icon-theme,
          mutter-common-bin (= ${binary:Version}),
          ${misc:Depends},
          ${shlibs:Depends}
-Breaks: gnome-shell (<< 47~beta),
+Breaks: gnome-shell (<< 47~rc),
         xwayland (<< 2:23.1.0),
 Description: window manager library from the Mutter window manager
  Mutter is a Wayland display server and X11 window manager and

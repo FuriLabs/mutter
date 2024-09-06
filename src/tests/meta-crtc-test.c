@@ -71,8 +71,8 @@ meta_crtc_test_set_gamma_lut (MetaCrtc           *crtc,
 }
 
 static gboolean
-meta_crtc_test_is_transform_handled (MetaCrtcNative       *crtc_native,
-                                     MetaMonitorTransform  monitor_transform)
+meta_crtc_test_is_transform_handled (MetaCrtcNative      *crtc_native,
+                                     MtkMonitorTransform  monitor_transform)
 {
   MetaCrtcTest *crtc_test = META_CRTC_TEST (crtc_native);
 
@@ -83,6 +83,12 @@ static gboolean
 meta_crtc_test_is_hw_cursor_supported (MetaCrtcNative *crtc_native)
 {
   return FALSE;
+}
+
+static int64_t
+meta_crtc_test_get_deadline_evasion (MetaCrtcNative *crtc_native)
+{
+  return 0;
 }
 
 static void
@@ -114,6 +120,8 @@ meta_crtc_test_class_init (MetaCrtcTestClass *klass)
     meta_crtc_test_is_transform_handled;
   crtc_native_class->is_hw_cursor_supported =
     meta_crtc_test_is_hw_cursor_supported;
+  crtc_native_class->get_deadline_evasion =
+    meta_crtc_test_get_deadline_evasion;
 }
 
 static void

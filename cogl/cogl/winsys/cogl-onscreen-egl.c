@@ -54,14 +54,12 @@ cogl_onscreen_egl_choose_config (CoglOnscreenEgl  *onscreen_egl,
   CoglDisplay *display = context->display;
   CoglRenderer *renderer = display->renderer;
   CoglRendererEGL *egl_renderer = renderer->winsys;
-  const CoglFramebufferConfig *config;
   EGLint attributes[MAX_EGL_CONFIG_ATTRIBS];
   EGLConfig egl_config;
   EGLint config_count = 0;
   EGLBoolean status;
 
-  config = cogl_framebuffer_get_config (framebuffer);
-  cogl_display_egl_determine_attributes (display, config, attributes);
+  cogl_display_egl_determine_attributes (display, attributes);
 
   status = eglChooseConfig (egl_renderer->edpy,
                             attributes,
@@ -73,16 +71,6 @@ cogl_onscreen_egl_choose_config (CoglOnscreenEgl  *onscreen_egl,
                    COGL_WINSYS_ERROR_CREATE_ONSCREEN,
                    "Failed to find a suitable EGL configuration");
       return FALSE;
-    }
-
-  if (config->samples_per_pixel)
-    {
-      EGLint samples;
-      status = eglGetConfigAttrib (egl_renderer->edpy,
-                                   egl_config,
-                                   EGL_SAMPLES, &samples);
-      g_return_val_if_fail (status == EGL_TRUE, TRUE);
-      cogl_framebuffer_update_samples_per_pixel (framebuffer, samples);
     }
 
   *out_egl_config = egl_config;

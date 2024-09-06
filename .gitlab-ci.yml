@@ -3,7 +3,7 @@ include:
   - remote: 'https://gitlab.freedesktop.org/freedesktop/ci-templates/-/raw/34f4ade99434043f88e164933f570301fd18b125/templates/ci-fairy.yml'
   - project: 'Infrastructure/openshift-images/gnome-release-service'
     file: '/ci-templates/release-module.yml'
-  - component: gitlab.gnome.org/GNOME/citemplates/gnomeos-build-sysext@1.0.0-alpha
+  - component: gitlab.gnome.org/GNOME/citemplates/gnomeos-build-sysext@1.0.0-alpha.1
     inputs:
       meson-options:
         -Dxwayland_initfd=enabled
@@ -96,14 +96,14 @@ variables:
     - .skip-git-clone
   variables:
     FDO_DISTRIBUTION_VERSION: 40
-    BASE_TAG: '2024-07-16.0'
+    BASE_TAG: '2024-08-29.2'
     MUTTER_USER: 'meta-user'
     FDO_DISTRIBUTION_PACKAGES:
-      asciidoc
       clang
       gcovr
       gdm
       gnome-shell
+      python3-docutils
       sassc
       uncrustify
       xorg-x11-server-Xvfb
@@ -113,8 +113,7 @@ variables:
       busybox
       zenity
       python3-dbusmock
-      "pkgconfig(libgcrypt)"
-      "pkgconfig(libdisplay-info)"
+      gnome-desktop-testing
 
     FDO_DISTRIBUTION_EXEC: |
       set -e
@@ -132,6 +131,16 @@ variables:
       dnf builddep -y kernel --setopt=install_weak_deps=False
       dnf builddep -y gi-docgen --setopt=install_weak_deps=False
       dnf builddep -y wayland --setopt=install_weak_deps=False
+
+      # FIXME: we downgrade xlib to 1.8.7 because somewhere on the way to
+      # version 1.8.10, a bug was introdcued
+      # https://gitlab.freedesktop.org/xorg/lib/libx11/-/merge_requests/264
+      # Remove when we have a fixed version!
+      dnf install -y libX11-common-1.8.7
+
+      ./.gitlab-ci/install-meson-project.sh \
+        https://gitlab.gnome.org/GNOME/glib.git \
+        2.81.1
 
       ./.gitlab-ci/install-meson-project.sh \
         https://gitlab.gnome.org/jadahl/catch.git \
@@ -538,8 +547,6 @@ build-wayland-only@x86_64:
     - glib-compile-schemas $GSETTINGS_SCHEMA_DIR
     - mkdir -m 1777 /tmp/.X11-unix
     - ./src/tests/meta-dbus-runner.py
-        --launch=pipewire
-        --launch=wireplumber
         --
         meson test
           -C build
@@ -708,8 +715,6 @@ dist-mutter:
     - glib-compile-schemas $GSETTINGS_SCHEMA_DIR
     - mkdir -m 1777 /tmp/.X11-unix
     - ./src/tests/meta-dbus-runner.py
-        --launch=pipewire
-        --launch=wireplumber
         --
         meson dist -C build
   artifacts:
@@ -718,6 +723,39 @@ dist-mutter:
     when: always
     paths:
       - build/meson-private/dist-build/meson-logs
+  rules:
+    - if: '$CI_PIPELINE_SOURCE != "merge_request_event"'
+      when: manual
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "**/meson.build"
+        - meson/*
+      when: on_success
+    - if: '$GITLAB_USER_LOGIN == "marge-bot"'
+      when: on_success
+    - if: '$CI_MERGE_REQUEST_ASSIGNEES == "marge-bot"'
+      when: on_success
+
+installed-tests-mutter@x86_64:
+  extends:
+    - .fdo.distribution-image@fedora
+    - .mutter.fedora@x86_64
+    - .build-mutter-base
+    - .test-setup
+  stage: deploy
+  needs:
+    - build-mutter@x86_64
+  script:
+    - meson install -C build --no-rebuild
+    - mkdir -m 1777 /tmp/.X11-unix
+    - mkdir installed-tests-logs
+    - gnome-desktop-testing-runner -L installed-tests-logs mutter
+  artifacts:
+    expire_in: 7 day
+    name: "mutter-${CI_JOB_NAME}-${CI_COMMIT_REF_NAME}"
+    when: always
+    paths:
+      - installed-tests-logs
   rules:
     - if: '$CI_PIPELINE_SOURCE != "merge_request_event"'
       when: manual
@@ -762,7 +800,7 @@ reference:
   script:
     - mkdir references
     - cp -r doc/website/* ./references
-    - mv build/doc/reference/{cally/cally,clutter/clutter,cogl/cogl,cogl-pango/cogl-pango,meta/meta,mtk/mtk} references/
+    - mv build/doc/reference/{clutter/clutter,cogl/cogl,cogl-pango/cogl-pango,meta/meta,mtk/mtk} references/
   artifacts:
     expire_in: 1 week
     expose_as: 'Documentation'

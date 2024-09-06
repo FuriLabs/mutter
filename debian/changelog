@@ -1,3 +1,25 @@
+mutter (47~rc-1) experimental; urgency=medium
+
+  [ Jeremy Bícha ]
+  * New upstream release (LP: #2077216, LP: #2025006, LP: #2074253,
+    LP: #2076318)
+    - Fix screen freeze when using EGL Stream (Nvidia-470) (LP: #2074254)
+    - Only warn once about cursor sizes (LP: #2076211)
+  * debian/libmutter-15-0.symbols: Update
+  * Mark as breaking gnome-shell << 47~rc
+  * Only enable sysprof on architectures where sysprof is available
+  * Refresh patches
+  * Remove the kms deadline evasion patch: alternative fix is in new release
+  * Remove 2 other patches applied in new release
+
+  [ Daniel van Vugt ]
+  * Update triple buffering patch
+
+  [ Alessandro Astone ]
+  * Add build dependency on pipewire for build tests
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Fri, 06 Sep 2024 08:53:15 -0400
+
 mutter (47~beta-3ubuntu4) oracular; urgency=medium
 
   * Expand tests-Temporarily-disable-mutter-x11-tests-for-Ubuntu.patch to

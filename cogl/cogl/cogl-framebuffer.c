@@ -40,7 +40,6 @@
 #include "cogl/cogl-util.h"
 #include "cogl/cogl-texture-private.h"
 #include "cogl/cogl-framebuffer-private.h"
-#include "cogl/cogl-onscreen-template-private.h"
 #include "cogl/cogl-clip-stack.h"
 #include "cogl/cogl-journal-private.h"
 #include "cogl/cogl-pipeline-state-private.h"
@@ -81,9 +80,6 @@ static GQuark wire_pipeline_key = 0;
 typedef struct _CoglFramebufferPrivate
 {
   CoglContext *context;
-
-  /* The user configuration before allocation... */
-  CoglFramebufferConfig config;
 
   CoglFramebufferDriverConfig driver_config;
   CoglFramebufferDriver *driver;
@@ -133,8 +129,6 @@ typedef struct _CoglFramebufferPrivate
   int clear_clip_x1;
   int clear_clip_y1;
   gboolean clear_clip_dirty;
-
-  int samples_per_pixel;
 
   /* Whether the depth buffer was enabled for this framebuffer,
  * usually means it needs to be cleared before being reused next.
@@ -235,8 +229,6 @@ cogl_framebuffer_constructed (GObject *object)
   priv->modelview_stack = cogl_matrix_stack_new (priv->context);
   priv->projection_stack = cogl_matrix_stack_new (priv->context);
 
-  priv->samples_per_pixel = 0;
-
   priv->clip_stack = NULL;
 
   priv->journal = _cogl_journal_new (framebuffer);
@@ -295,25 +287,6 @@ cogl_framebuffer_get_internal_format (CoglFramebuffer *framebuffer)
     cogl_framebuffer_get_instance_private (framebuffer);
 
   return priv->internal_format;
-}
-
-const CoglFramebufferConfig *
-cogl_framebuffer_get_config (CoglFramebuffer *framebuffer)
-{
-  CoglFramebufferPrivate *priv =
-    cogl_framebuffer_get_instance_private (framebuffer);
-
-  return &priv->config;
-}
-
-void
-cogl_framebuffer_init_config (CoglFramebuffer             *framebuffer,
-                              const CoglFramebufferConfig *config)
-{
-  CoglFramebufferPrivate *priv =
-    cogl_framebuffer_get_instance_private (framebuffer);
-
-  priv->config = *config;
 }
 
 static void
@@ -1191,15 +1164,6 @@ cogl_framebuffer_set_dither_enabled (CoglFramebuffer *framebuffer,
   priv->dither_enabled = dither_enabled;
 }
 
-void
-cogl_framebuffer_update_samples_per_pixel (CoglFramebuffer *framebuffer,
-                                           int              samples_per_pixel)
-{
-  CoglFramebufferPrivate *priv =
-    cogl_framebuffer_get_instance_private (framebuffer);
-
-  priv->samples_per_pixel = samples_per_pixel;
-}
 
 CoglContext *
 cogl_framebuffer_get_context (CoglFramebuffer *framebuffer)

@@ -25,7 +25,7 @@
 #include <string.h>
 
 #include "backends/meta-monitor-config-manager.h"
-#include "backends/meta-monitor-config-migration.h"
+#include "backends/meta-monitor-config-utils.h"
 
 #define MONITORS_CONFIG_XML_FORMAT_VERSION 2
 
@@ -126,24 +126,13 @@ struct _MetaMonitorConfigStore
   MetaMonitorConfigPolicy policy;
 };
 
-#define META_MONITOR_CONFIG_STORE_ERROR (meta_monitor_config_store_error_quark ())
-static GQuark meta_monitor_config_store_error_quark (void);
-
-enum
-{
-  META_MONITOR_CONFIG_STORE_ERROR_NEEDS_MIGRATION
-};
-
-G_DEFINE_QUARK (meta-monitor-config-store-error-quark,
-                meta_monitor_config_store_error)
-
 typedef enum
 {
   STATE_INITIAL,
   STATE_UNKNOWN,
   STATE_MONITORS,
   STATE_CONFIGURATION,
-  STATE_MIGRATED,
+  STATE_LAYOUT_MODE,
   STATE_LOGICAL_MONITOR,
   STATE_LOGICAL_MONITOR_X,
   STATE_LOGICAL_MONITOR_Y,
@@ -185,11 +174,12 @@ typedef struct
 
   ParserState monitor_spec_parent_state;
 
-  gboolean current_was_migrated;
+  gboolean is_current_layout_mode_valid;
+  MetaLogicalMonitorLayoutMode current_layout_mode;
   GList *current_logical_monitor_configs;
   MetaMonitorSpec *current_monitor_spec;
   gboolean current_transform_flipped;
-  MetaMonitorTransform current_transform;
+  MtkMonitorTransform current_transform;
   MetaMonitorModeSpec *current_monitor_mode_spec;
   MetaMonitorConfig *current_monitor_config;
   MetaLogicalMonitorConfig *current_logical_monitor_config;
@@ -207,6 +197,7 @@ typedef struct
   int unknown_level;
 
   MetaMonitorsConfigFlag extra_config_flags;
+  gboolean should_update_file;
 } ConfigParser;
 
 G_DEFINE_TYPE (MetaMonitorConfigStore, meta_monitor_config_store,
@@ -277,15 +268,6 @@ handle_start_element (GMarkupParseContext  *context,
                          "Missing config file format version");
           }
 
-        if (g_str_equal (version, "1"))
-          {
-            g_set_error_literal (error,
-                                 META_MONITOR_CONFIG_STORE_ERROR,
-                                 META_MONITOR_CONFIG_STORE_ERROR_NEEDS_MIGRATION,
-                                 "monitors.xml has the old format");
-            return;
-          }
-
         if (!g_str_equal (version, QUOTE (MONITORS_CONFIG_XML_FORMAT_VERSION)))
           {
             g_set_error (error, G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
@@ -302,7 +284,7 @@ handle_start_element (GMarkupParseContext  *context,
         if (g_str_equal (element_name, "configuration"))
           {
             parser->state = STATE_CONFIGURATION;
-            parser->current_was_migrated = FALSE;
+            parser->is_current_layout_mode_valid = FALSE;
           }
         else if (g_str_equal (element_name, "policy"))
           {
@@ -343,11 +325,9 @@ handle_start_element (GMarkupParseContext  *context,
 
             parser->state = STATE_LOGICAL_MONITOR;
           }
-        else if (g_str_equal (element_name, "migrated"))
+        else if (g_str_equal (element_name, "layoutmode"))
           {
-            parser->current_was_migrated = TRUE;
-
-            parser->state = STATE_MIGRATED;
+            parser->state = STATE_LAYOUT_MODE;
           }
         else if (g_str_equal (element_name, "disabled"))
           {
@@ -362,7 +342,7 @@ handle_start_element (GMarkupParseContext  *context,
         return;
       }
 
-    case STATE_MIGRATED:
+    case STATE_LAYOUT_MODE:
       {
         g_set_error (error, G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
                      "Unexpected element '%s'", element_name);
@@ -673,69 +653,6 @@ handle_start_element (GMarkupParseContext  *context,
     }
 }
 
-static gboolean
-derive_logical_monitor_layout (MetaLogicalMonitorConfig    *logical_monitor_config,
-                               MetaLogicalMonitorLayoutMode layout_mode,
-                               GError                     **error)
-{
-  MetaMonitorConfig *monitor_config;
-  int mode_width, mode_height;
-  int width = 0, height = 0;
-  float scale;
-  GList *l;
-
-  monitor_config = logical_monitor_config->monitor_configs->data;
-  mode_width = monitor_config->mode_spec->width;
-  mode_height = monitor_config->mode_spec->height;
-
-  for (l = logical_monitor_config->monitor_configs->next; l; l = l->next)
-    {
-      monitor_config = l->data;
-
-      if (monitor_config->mode_spec->width != mode_width ||
-          monitor_config->mode_spec->height != mode_height)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Monitors in logical monitor incompatible");
-          return FALSE;
-        }
-    }
-
-  if (meta_monitor_transform_is_rotated (logical_monitor_config->transform))
-    {
-      width = mode_height;
-      height = mode_width;
-    }
-  else
-    {
-      width = mode_width;
-      height = mode_height;
-    }
-
-  scale = logical_monitor_config->scale;
-
-  switch (layout_mode)
-    {
-    case META_LOGICAL_MONITOR_LAYOUT_MODE_LOGICAL:
-      width = (int) roundf (width / scale);
-      height = (int) roundf (height / scale);
-      break;
-    case META_LOGICAL_MONITOR_LAYOUT_MODE_PHYSICAL:
-      if (!G_APPROX_VALUE (scale, roundf (scale), FLT_EPSILON))
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "A fractional scale with physical layout mode not allowed");
-          return FALSE;
-        }
-      break;
-    }
-
-  logical_monitor_config->layout.width = width;
-  logical_monitor_config->layout.height = height;
-
-  return TRUE;
-}
-
 static void
 finish_monitor_spec (ConfigParser *parser)
 {
@@ -762,6 +679,592 @@ finish_monitor_spec (ConfigParser *parser)
     default:
       g_assert_not_reached ();
     }
+}
+
+static void
+get_monitor_size_with_rotation (MetaLogicalMonitorConfig *logical_monitor_config,
+                                unsigned int             *width_out,
+                                unsigned int             *height_out)
+{
+  MetaMonitorConfig *monitor_config =
+    logical_monitor_config->monitor_configs->data;
+
+  if (mtk_monitor_transform_is_rotated (logical_monitor_config->transform))
+    {
+      *width_out = monitor_config->mode_spec->height;
+      *height_out = monitor_config->mode_spec->width;
+    }
+  else
+    {
+      *width_out = monitor_config->mode_spec->width;
+      *height_out = monitor_config->mode_spec->height;
+    }
+}
+
+static void
+derive_logical_monitor_layouts (GList                       *logical_monitor_configs,
+                                MetaLogicalMonitorLayoutMode layout_mode)
+{
+  GList *l;
+
+  for (l = logical_monitor_configs; l; l = l->next)
+    {
+      MetaLogicalMonitorConfig *logical_monitor_config = l->data;
+      unsigned int width, height;
+
+      get_monitor_size_with_rotation (logical_monitor_config, &width, &height);
+
+      if (layout_mode == META_LOGICAL_MONITOR_LAYOUT_MODE_LOGICAL)
+        {
+          width = (int) roundf (width / logical_monitor_config->scale);
+          height = (int) roundf (height / logical_monitor_config->scale);
+        }
+
+      logical_monitor_config->layout.width = width;
+      logical_monitor_config->layout.height = height;
+    }
+}
+
+static gboolean
+detect_layout_mode_configs (MetaMonitorManager      *monitor_manager,
+                            GList                   *logical_monitor_configs,
+                            GList                   *disabled_monitor_specs,
+                            MetaMonitorsConfigFlag   config_flags,
+                            MetaMonitorsConfig     **physical_layout_mode_config,
+                            MetaMonitorsConfig     **logical_layout_mode_config,
+                            GError                 **error)
+{
+  GList *logical_monitor_configs_copy, *disabled_monitor_specs_copy;
+  MetaMonitorsConfig *physical_config, *logical_config;
+  g_autoptr (GError) local_error_physical = NULL;
+  g_autoptr (GError) local_error_logical = NULL;
+
+  logical_monitor_configs_copy =
+    meta_clone_logical_monitor_config_list (logical_monitor_configs);
+  disabled_monitor_specs_copy =
+    g_list_copy_deep (disabled_monitor_specs, (GCopyFunc) meta_monitor_spec_clone, NULL);
+
+  derive_logical_monitor_layouts (logical_monitor_configs,
+                                  META_LOGICAL_MONITOR_LAYOUT_MODE_PHYSICAL);
+  physical_config =
+    meta_monitors_config_new_full (g_steal_pointer (&logical_monitor_configs),
+                                   g_steal_pointer (&disabled_monitor_specs),
+                                   META_LOGICAL_MONITOR_LAYOUT_MODE_PHYSICAL,
+                                   config_flags);
+
+  if (!meta_verify_monitors_config (physical_config, monitor_manager,
+                                    &local_error_physical))
+    g_clear_object (&physical_config);
+
+  derive_logical_monitor_layouts (logical_monitor_configs_copy,
+                                  META_LOGICAL_MONITOR_LAYOUT_MODE_LOGICAL);
+  logical_config =
+    meta_monitors_config_new_full (g_steal_pointer (&logical_monitor_configs_copy),
+                                   g_steal_pointer (&disabled_monitor_specs_copy),
+                                   META_LOGICAL_MONITOR_LAYOUT_MODE_LOGICAL,
+                                   config_flags);
+
+  if (!meta_verify_monitors_config (logical_config, monitor_manager,
+                                    &local_error_logical))
+    g_clear_object (&logical_config);
+
+  if (!physical_config && !logical_config)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Detected neither physical (%s) nor logical (%s) layout mode",
+                   local_error_physical->message, local_error_logical->message);
+      return  FALSE;
+    }
+
+  *physical_layout_mode_config = physical_config;
+  *logical_layout_mode_config = logical_config;
+
+  return TRUE;
+}
+
+static void
+maybe_convert_scales (GList *logical_monitor_configs)
+{
+  GList *l;
+
+  for (l = logical_monitor_configs; l; l = l->next)
+    {
+      MetaLogicalMonitorConfig *logical_monitor_config = l->data;
+      unsigned int width, height;
+      float existing_scale = logical_monitor_config->scale;
+      float existing_scaled_width, existing_scaled_height;
+      float new_scale = 0.0f;
+
+      get_monitor_size_with_rotation (logical_monitor_config, &width, &height);
+
+      existing_scaled_width = width / existing_scale;
+      existing_scaled_height = height / existing_scale;
+
+      if (floorf (existing_scaled_width) == existing_scaled_width &&
+          floorf (existing_scaled_height) == existing_scaled_height)
+        continue;
+
+      new_scale =
+        meta_get_closest_monitor_scale_factor_for_resolution (width,
+                                                              height,
+                                                              existing_scale,
+                                                              0.1f);
+      if (new_scale == 0.0f)
+        new_scale = 1.0f;
+
+      logical_monitor_config->scale = new_scale;
+    }
+}
+
+static gboolean
+try_convert_1_dimensional_line (GList    *logical_monitor_configs,
+                                gboolean  horizontal)
+{
+  int i;
+  unsigned int n_monitors = g_list_length (logical_monitor_configs);
+  unsigned int n_monitors_found;
+  unsigned int looking_for;
+  unsigned int accumulated;
+  MetaLogicalMonitorConfig *prev_logical_monitor_config;
+
+  /* Before we change any values, make sure monitors are actually aligned on a
+   * straight line.
+   */
+  looking_for = 0;
+  n_monitors_found = 0;
+  for (i = 0; i < n_monitors; i++)
+    {
+      GList *l;
+
+      for (l = logical_monitor_configs; l; l = l->next)
+        {
+          MetaLogicalMonitorConfig *logical_monitor_config = l->data;
+          unsigned int width, height;
+
+          if ((horizontal && logical_monitor_config->layout.x != looking_for) ||
+              (!horizontal && logical_monitor_config->layout.y != looking_for))
+            continue;
+
+          get_monitor_size_with_rotation (logical_monitor_config, &width, &height);
+
+          looking_for += horizontal ? width : height;
+
+          n_monitors_found++;
+        }
+    }
+
+  if (n_monitors_found != n_monitors)
+    {
+      /* If we haven't found all the monitors on our straight line, we can't
+       * run the algorithm.
+       */
+      return FALSE;
+    }
+
+  looking_for = 0;
+  accumulated = 0;
+  prev_logical_monitor_config = NULL;
+  for (i = 0; i < n_monitors; i++)
+    {
+      GList *l;
+
+      for (l = logical_monitor_configs; l; l = l->next)
+        {
+          MetaLogicalMonitorConfig *logical_monitor_config = l->data;
+          unsigned int width, height;
+          float scale = logical_monitor_config->scale;
+
+          if ((horizontal && logical_monitor_config->layout.x != looking_for) ||
+              (!horizontal && logical_monitor_config->layout.y != looking_for))
+            continue;
+
+          get_monitor_size_with_rotation (logical_monitor_config, &width, &height);
+
+          if (horizontal)
+            {
+              logical_monitor_config->layout.x = accumulated;
+
+              /* In the other dimension, always center in relation to the previous
+               * monitor.
+               */
+              if (prev_logical_monitor_config)
+                {
+                  unsigned int prev_width, prev_height;
+                  float centerline;
+
+                  get_monitor_size_with_rotation (prev_logical_monitor_config,
+                                                  &prev_width, &prev_height);
+
+                  centerline = prev_logical_monitor_config->layout.y +
+                    (int) roundf ((prev_height / prev_logical_monitor_config->scale) / 2.0f);
+
+                  logical_monitor_config->layout.y =
+                    (int) (centerline - roundf ((height / scale) / 2.0f));
+                }
+            }
+          else
+            {
+              logical_monitor_config->layout.y = accumulated;
+
+              /* See comment above */
+              if (prev_logical_monitor_config)
+                {
+                  unsigned int prev_width, prev_height;
+                  float centerline;
+
+                  get_monitor_size_with_rotation (prev_logical_monitor_config,
+                                                  &prev_width, &prev_height);
+
+                  centerline = prev_logical_monitor_config->layout.x +
+                    roundf ((prev_width / prev_logical_monitor_config->scale) / 2.0f);
+
+                  logical_monitor_config->layout.x =
+                    (int) (centerline - roundf ((width / scale) / 2.0f));
+                }
+            }
+
+          looking_for += horizontal ? width : height;
+          accumulated += (int) roundf ((horizontal ? width : height) / scale);
+
+          prev_logical_monitor_config = logical_monitor_config;
+          break;
+        }
+    }
+
+  return TRUE;
+}
+
+static gboolean
+try_convert_2d_with_baseline (GList    *logical_monitor_configs,
+                              gboolean  horizontal)
+{
+  /* Look for a shared baseline which every monitor is aligned to,
+   * then calculate the new layout keeping that baseline.
+   *
+   * This one consists of a lot of steps, to make explanations easier,
+   * we'll assume a horizontal baseline for all explanations in comments.
+   */
+
+  int i;
+  unsigned int n_monitors = g_list_length (logical_monitor_configs);
+  MetaLogicalMonitorConfig *first_logical_monitor_config =
+    logical_monitor_configs->data;
+  unsigned int width, height;
+  unsigned int looking_for_1, looking_for_2;
+  gboolean baseline_is_1, baseline_is_2;
+  GList *l;
+  unsigned int baseline;
+  unsigned int cur_side_1, cur_side_2;
+
+  get_monitor_size_with_rotation (first_logical_monitor_config,
+                                  &width, &height);
+
+  /* Step 1: We don't know whether the first monitor is above or below the
+   * baseline, so there are two possible baselines: Top or bottom edge of
+   * the first monitor.
+   *
+   * Find out which one the actual baseline is, top or bottom edge!
+   */
+
+  looking_for_1 = horizontal
+    ? first_logical_monitor_config->layout.y
+    : first_logical_monitor_config->layout.x;
+  looking_for_2 = horizontal
+    ? first_logical_monitor_config->layout.y + height
+    : first_logical_monitor_config->layout.x + width;
+
+  baseline_is_1 = baseline_is_2 = TRUE;
+
+  for (l = logical_monitor_configs; l; l = l->next)
+    {
+      MetaLogicalMonitorConfig *logical_monitor_config = l->data;
+
+      get_monitor_size_with_rotation (logical_monitor_config,
+                                      &width, &height);
+
+      if ((horizontal &&
+           logical_monitor_config->layout.y != looking_for_1 &&
+           logical_monitor_config->layout.y + height != looking_for_1) ||
+          (!horizontal &&
+           logical_monitor_config->layout.x != looking_for_1 &&
+           logical_monitor_config->layout.x + width != looking_for_1))
+        baseline_is_1 = FALSE;
+
+      if ((horizontal &&
+           logical_monitor_config->layout.y != looking_for_2 &&
+           logical_monitor_config->layout.y + height != looking_for_2) ||
+          (!horizontal &&
+           logical_monitor_config->layout.x != looking_for_2 &&
+           logical_monitor_config->layout.x + width != looking_for_2))
+        baseline_is_2 = FALSE;
+    }
+
+  if (!baseline_is_1 && !baseline_is_2)
+    {
+      /* We couldn't find a clear baseline which all monitors are aligned with,
+       * this conversion won't work!
+       */
+      return FALSE;
+    }
+
+  baseline = baseline_is_1 ? looking_for_1 : looking_for_2;
+
+  /* Step 2: Now that we have a baseline, go through the monitors
+   * above the baseline which need to be scaled, and move their top
+   * edge so that their bottom edge is still aligned with the baseline.
+   *
+   * For the monitors below the baseline there's no such need, because
+   * even with scale, their top edge will remain aligned with the
+   * baseline.
+   */
+
+  for (l = logical_monitor_configs; l; l = l->next)
+    {
+      MetaLogicalMonitorConfig *logical_monitor_config = l->data;
+
+      if (logical_monitor_config->scale == 1.0f)
+        continue;
+
+      /* Filter out all the monitors below the baseline */
+      if ((horizontal && logical_monitor_config->layout.y == baseline) ||
+          (!horizontal && logical_monitor_config->layout.x == baseline))
+        continue;
+
+      get_monitor_size_with_rotation (logical_monitor_config,
+                                      &width, &height);
+
+      if (horizontal)
+        {
+          logical_monitor_config->layout.y =
+            baseline - (int) roundf (height / logical_monitor_config->scale);
+        }
+      else
+        {
+          logical_monitor_config->layout.x =
+            baseline - (int) roundf (width / logical_monitor_config->scale);
+        }
+    }
+
+  /* Step 3: Still not done... Now we're done aligning monitors with the
+   * baseline, but the scaling might also have opened holes in the horizontal
+   * direction.
+   *
+   * We need to "walk along" the monitor strips above and below the baseline
+   * and make sure everything is adjacent on both sides of the baseline.
+   */
+
+  cur_side_1 = 0;
+  cur_side_2 = 0;
+
+  for (i = 0; i < n_monitors; i++)
+    {
+      unsigned int min_side_1 = G_MAXUINT;
+      unsigned int min_side_2 = G_MAXUINT;
+      MetaLogicalMonitorConfig *lowest_mon_side_1 = NULL;
+      MetaLogicalMonitorConfig *lowest_mon_side_2 = NULL;
+
+      for (l = logical_monitor_configs; l; l = l->next)
+        {
+          MetaLogicalMonitorConfig *logical_monitor_config = l->data;
+
+          if ((horizontal && logical_monitor_config->layout.y != baseline) ||
+              (!horizontal && logical_monitor_config->layout.x != baseline))
+            {
+              /* above the baseline */
+
+              if (horizontal)
+                {
+                  if (logical_monitor_config->layout.x >= cur_side_1 &&
+                      logical_monitor_config->layout.x < min_side_1)
+                    {
+                      min_side_1 = logical_monitor_config->layout.x;
+                      lowest_mon_side_1 = logical_monitor_config;
+                    }
+                }
+              else
+                {
+                  if (logical_monitor_config->layout.y >= cur_side_1 &&
+                      logical_monitor_config->layout.y < min_side_1)
+                    {
+                      min_side_1 = logical_monitor_config->layout.y;
+                      lowest_mon_side_1 = logical_monitor_config;
+                    }
+                }
+            }
+          else
+            {
+              /* below the baseline */
+
+              if (horizontal)
+                {
+                  if (logical_monitor_config->layout.x >= cur_side_2 &&
+                      logical_monitor_config->layout.x < min_side_2)
+                    {
+                      min_side_2 = logical_monitor_config->layout.x;
+                      lowest_mon_side_2 = logical_monitor_config;
+                    }
+                }
+              else
+                {
+                  if (logical_monitor_config->layout.y >= cur_side_2 &&
+                      logical_monitor_config->layout.y < min_side_2)
+                    {
+                      min_side_2 = logical_monitor_config->layout.y;
+                      lowest_mon_side_2 = logical_monitor_config;
+                    }
+                }
+            }
+        }
+
+      if (lowest_mon_side_1)
+        {
+          get_monitor_size_with_rotation (lowest_mon_side_1, &width, &height);
+
+          if (horizontal)
+            {
+              lowest_mon_side_1->layout.x = cur_side_1;
+              cur_side_1 += (int) roundf (width / lowest_mon_side_1->scale);
+            }
+          else
+            {
+              lowest_mon_side_1->layout.y = cur_side_1;
+              cur_side_1 += (int) roundf (height / lowest_mon_side_1->scale);
+            }
+        }
+
+      if (lowest_mon_side_2)
+        {
+          get_monitor_size_with_rotation (lowest_mon_side_2, &width, &height);
+
+          if (horizontal)
+            {
+              lowest_mon_side_2->layout.x = cur_side_2;
+              cur_side_2 += (int) roundf (width / lowest_mon_side_2->scale);
+            }
+          else
+            {
+              lowest_mon_side_2->layout.y = cur_side_2;
+              cur_side_2 += (int) roundf (height / lowest_mon_side_2->scale);
+            }
+        }
+    }
+
+  return TRUE;
+}
+
+static void
+convert_align_on_horizontal_line (GList *logical_monitor_configs)
+{
+  GList *l;
+  unsigned int accumulated_x = 0;
+
+  for (l = logical_monitor_configs; l; l = l->next)
+    {
+      MetaLogicalMonitorConfig *logical_monitor_config = l->data;
+      unsigned int width, height;
+
+      get_monitor_size_with_rotation (logical_monitor_config, &width, &height);
+
+      logical_monitor_config->layout.x = accumulated_x;
+      logical_monitor_config->layout.y = 0;
+
+      accumulated_x += (int) roundf (width / logical_monitor_config->scale);
+    }
+}
+
+static void
+adjust_for_offset (GList *logical_monitor_configs)
+{
+  GList *l;
+  int offset_x, offset_y;
+
+  offset_x = offset_y = G_MAXINT;
+
+  for (l = logical_monitor_configs; l; l = l->next)
+    {
+      MetaLogicalMonitorConfig *logical_monitor_config = l->data;
+
+      offset_x = MIN (offset_x, logical_monitor_config->layout.x);
+      offset_y = MIN (offset_y, logical_monitor_config->layout.y);
+    }
+
+  if (offset_x == G_MAXINT && offset_y == G_MAXINT)
+    return;
+
+  for (l = logical_monitor_configs; l; l = l->next)
+    {
+      MetaLogicalMonitorConfig *logical_monitor_config = l->data;
+
+      if (offset_x != G_MAXINT)
+        logical_monitor_config->layout.x -= offset_x;
+
+      if (offset_y != G_MAXINT)
+        logical_monitor_config->layout.y -= offset_y;
+    }
+}
+
+static MetaMonitorsConfig *
+attempt_layout_mode_conversion (MetaMonitorManager     *monitor_manager,
+                                GList                  *logical_monitor_configs,
+                                GList                  *disabled_monitor_specs,
+                                MetaMonitorsConfigFlag  config_flags)
+{
+  GList *logical_monitor_configs_copy;
+  g_autoptr (MetaMonitorsConfig) new_logical_config = NULL;
+  g_autoptr (GError) local_error = NULL;
+
+  logical_monitor_configs_copy =
+    meta_clone_logical_monitor_config_list (logical_monitor_configs);
+
+  maybe_convert_scales (logical_monitor_configs_copy);
+  derive_logical_monitor_layouts (logical_monitor_configs_copy,
+                                  META_LOGICAL_MONITOR_LAYOUT_MODE_LOGICAL);
+
+  if (meta_verify_logical_monitor_config_list (logical_monitor_configs,
+                                               META_LOGICAL_MONITOR_LAYOUT_MODE_LOGICAL,
+                                               monitor_manager,
+                                               &local_error))
+    {
+      /* Great, it was enough to convert the scales and the config is now already
+       * valid in LOGICAL mode, can skip the fallible conversion paths.
+       */
+      goto create_full_config;
+    }
+
+  if (!try_convert_1_dimensional_line (logical_monitor_configs_copy, TRUE) &&
+      !try_convert_1_dimensional_line (logical_monitor_configs_copy, FALSE) &&
+      !try_convert_2d_with_baseline (logical_monitor_configs_copy, TRUE) &&
+      !try_convert_2d_with_baseline (logical_monitor_configs_copy, FALSE))
+    {
+      /* All algorithms we have to convert failed, this is expected for complex
+       * layouts, so fall back to the simple method and align all monitors on
+       * a horizontal line.
+       */
+      convert_align_on_horizontal_line (logical_monitor_configs_copy);
+    }
+
+  adjust_for_offset (logical_monitor_configs_copy);
+
+create_full_config:
+  new_logical_config =
+    meta_monitors_config_new_full (g_steal_pointer (&logical_monitor_configs_copy),
+                                   g_list_copy_deep (disabled_monitor_specs,
+                                                     (GCopyFunc) meta_monitor_spec_clone,
+                                                     NULL),
+                                   META_LOGICAL_MONITOR_LAYOUT_MODE_LOGICAL,
+                                   config_flags);
+
+  if (!meta_verify_monitors_config (new_logical_config, monitor_manager, &local_error))
+    {
+      /* Verification of the converted config failed, this should not happen as the
+       * conversion functions should give up in case conversion is not possible.
+       */
+      g_warning ("Verification of converted monitor config failed: %s",
+                 local_error->message);
+      return NULL;
+    }
+
+  return g_steal_pointer (&new_logical_config);
 }
 
 static void
@@ -793,10 +1296,10 @@ handle_end_element (GMarkupParseContext  *context,
         if (parser->current_transform_flipped)
           {
             parser->current_logical_monitor_config->transform +=
-              META_MONITOR_TRANSFORM_FLIPPED;
+              MTK_MONITOR_TRANSFORM_FLIPPED;
           }
 
-        parser->current_transform = META_MONITOR_TRANSFORM_NORMAL;
+        parser->current_transform = MTK_MONITOR_TRANSFORM_NORMAL;
         parser->current_transform_flipped = FALSE;
 
         parser->state = STATE_LOGICAL_MONITOR;
@@ -909,9 +1412,7 @@ handle_end_element (GMarkupParseContext  *context,
 
         g_assert (g_str_equal (element_name, "logicalmonitor"));
 
-        if (parser->current_was_migrated)
-          logical_monitor_config->scale = -1;
-        else if (logical_monitor_config->scale == 0)
+        if (logical_monitor_config->scale == 0)
           logical_monitor_config->scale = 1;
 
         parser->current_logical_monitor_configs =
@@ -923,10 +1424,8 @@ handle_end_element (GMarkupParseContext  *context,
         return;
       }
 
-    case STATE_MIGRATED:
+    case STATE_LAYOUT_MODE:
       {
-        g_assert (g_str_equal (element_name, "migrated"));
-
         parser->state = STATE_CONFIGURATION;
         return;
       }
@@ -942,58 +1441,87 @@ handle_end_element (GMarkupParseContext  *context,
     case STATE_CONFIGURATION:
       {
         MetaMonitorConfigStore *store = parser->config_store;
-        MetaMonitorsConfig *config;
-        GList *l;
-        MetaLogicalMonitorLayoutMode layout_mode;
+        g_autoptr (MetaMonitorsConfig) config = NULL;
+        MetaMonitorsConfigKey *config_key;
+        MetaLogicalMonitorLayoutMode layout_mode = parser->current_layout_mode;
         MetaMonitorsConfigFlag config_flags = META_MONITORS_CONFIG_FLAG_NONE;
 
         g_assert (g_str_equal (element_name, "configuration"));
 
-        if (parser->current_was_migrated)
-          layout_mode = META_LOGICAL_MONITOR_LAYOUT_MODE_PHYSICAL;
-        else
-          layout_mode =
-            meta_monitor_manager_get_default_layout_mode (store->monitor_manager);
-
-        for (l = parser->current_logical_monitor_configs; l; l = l->next)
-          {
-            MetaLogicalMonitorConfig *logical_monitor_config = l->data;
-
-            if (!derive_logical_monitor_layout (logical_monitor_config,
-                                                layout_mode,
-                                                error))
-              return;
-
-            if (!meta_verify_logical_monitor_config (logical_monitor_config,
-                                                     layout_mode,
-                                                     store->monitor_manager,
-                                                     error))
-              return;
-          }
-
-        if (parser->current_was_migrated)
-          config_flags |= META_MONITORS_CONFIG_FLAG_MIGRATED;
-
         config_flags |= parser->extra_config_flags;
 
-        config =
-          meta_monitors_config_new_full (parser->current_logical_monitor_configs,
-                                         parser->current_disabled_monitor_specs,
-                                         layout_mode,
-                                         config_flags);
-
-        parser->current_logical_monitor_configs = NULL;
-        parser->current_disabled_monitor_specs = NULL;
-
-        if (!meta_verify_monitors_config (config, store->monitor_manager,
-                                          error))
+        if (!parser->is_current_layout_mode_valid)
           {
-            g_object_unref (config);
-            return;
-          }
+            MetaMonitorsConfig *physical_layout_mode_config;
+            MetaMonitorsConfig *logical_layout_mode_config;
 
-        g_hash_table_replace (parser->pending_configs,
-                              config->key, config);
+            if (!detect_layout_mode_configs (store->monitor_manager,
+                                             parser->current_logical_monitor_configs,
+                                             parser->current_disabled_monitor_specs,
+                                             config_flags,
+                                             &physical_layout_mode_config,
+                                             &logical_layout_mode_config,
+                                             error))
+              {
+                parser->current_logical_monitor_configs = NULL;
+                parser->current_disabled_monitor_specs = NULL;
+                return;
+              }
+
+            parser->current_logical_monitor_configs = NULL;
+            parser->current_disabled_monitor_specs = NULL;
+
+            if (physical_layout_mode_config)
+              {
+                g_hash_table_replace (parser->pending_configs,
+                                      physical_layout_mode_config->key,
+                                      physical_layout_mode_config);
+
+                /* If the config only works with PHYSICAL layout mode, we'll attempt to
+                 * convert the PHYSICAL config to LOGICAL. This will fail for
+                 * more complex configurations though.
+                 */
+                if (!logical_layout_mode_config)
+                  {
+                    logical_layout_mode_config =
+                      attempt_layout_mode_conversion (store->monitor_manager,
+                                                      physical_layout_mode_config->logical_monitor_configs,
+                                                      physical_layout_mode_config->disabled_monitor_specs,
+                                                      config_flags);
+                  }
+              }
+
+            if (logical_layout_mode_config)
+              {
+                g_hash_table_replace (parser->pending_configs,
+                                      logical_layout_mode_config->key,
+                                      logical_layout_mode_config);
+              }
+
+            parser->should_update_file = TRUE;
+          }
+        else
+          {
+            derive_logical_monitor_layouts (parser->current_logical_monitor_configs,
+                                            layout_mode);
+
+            config =
+              meta_monitors_config_new_full (parser->current_logical_monitor_configs,
+                                             parser->current_disabled_monitor_specs,
+                                             layout_mode,
+                                             config_flags);
+
+            parser->current_logical_monitor_configs = NULL;
+            parser->current_disabled_monitor_specs = NULL;
+
+            if (!meta_verify_monitors_config (config, store->monitor_manager,
+                                              error))
+              return;
+
+            config_key = config->key;
+            g_hash_table_replace (parser->pending_configs,
+                                  config_key, g_steal_pointer (&config));
+          }
 
         parser->state = STATE_MONITORS;
         return;
@@ -1213,7 +1741,6 @@ handle_text (GMarkupParseContext *context,
     case STATE_INITIAL:
     case STATE_MONITORS:
     case STATE_CONFIGURATION:
-    case STATE_MIGRATED:
     case STATE_LOGICAL_MONITOR:
     case STATE_MONITOR:
     case STATE_MONITOR_SPEC:
@@ -1226,6 +1753,27 @@ handle_text (GMarkupParseContext *context,
         if (!is_all_whitespace (text, text_len))
           g_set_error (error, G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
                        "Unexpected content at this point");
+        return;
+      }
+
+    case STATE_LAYOUT_MODE:
+      {
+        if (text_equals (text, text_len, "logical"))
+          {
+            parser->current_layout_mode = META_LOGICAL_MONITOR_LAYOUT_MODE_LOGICAL;
+            parser->is_current_layout_mode_valid = TRUE;
+          }
+        else if (text_equals (text, text_len, "physical"))
+          {
+            parser->current_layout_mode = META_LOGICAL_MONITOR_LAYOUT_MODE_PHYSICAL;
+            parser->is_current_layout_mode_valid = TRUE;
+          }
+        else
+          {
+            g_set_error (error, G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+                         "Invalid layout mode %.*s", (int)text_len, text);
+          }
+
         return;
       }
 
@@ -1303,13 +1851,13 @@ handle_text (GMarkupParseContext *context,
     case STATE_TRANSFORM_ROTATION:
       {
         if (text_equals (text, text_len, "normal"))
-          parser->current_transform = META_MONITOR_TRANSFORM_NORMAL;
+          parser->current_transform = MTK_MONITOR_TRANSFORM_NORMAL;
         else if (text_equals (text, text_len, "left"))
-          parser->current_transform = META_MONITOR_TRANSFORM_90;
+          parser->current_transform = MTK_MONITOR_TRANSFORM_90;
         else if (text_equals (text, text_len, "upside_down"))
-          parser->current_transform = META_MONITOR_TRANSFORM_180;
+          parser->current_transform = MTK_MONITOR_TRANSFORM_180;
         else if (text_equals (text, text_len, "right"))
-          parser->current_transform = META_MONITOR_TRANSFORM_270;
+          parser->current_transform = MTK_MONITOR_TRANSFORM_270;
         else
           g_set_error (error, G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
                        "Invalid rotation type %.*s", (int)text_len, text);
@@ -1484,6 +2032,7 @@ read_config_file (MetaMonitorConfigStore  *config_store,
                   GFile                   *file,
                   MetaMonitorsConfigFlag   extra_config_flags,
                   GHashTable             **out_configs,
+                  gboolean                *should_update_file,
                   GError                 **error)
 {
   char *buffer;
@@ -1505,6 +2054,7 @@ read_config_file (MetaMonitorConfigStore  *config_store,
     .extra_config_flags = extra_config_flags,
     .unknown_state_root = -1,
     .pending_store = -1,
+    .should_update_file = FALSE
   };
 
   parse_context = g_markup_parse_context_new (&config_parser,
@@ -1528,6 +2078,7 @@ read_config_file (MetaMonitorConfigStore  *config_store,
     }
 
   *out_configs = g_steal_pointer (&parser.pending_configs);
+  *should_update_file = parser.should_update_file;
 
   g_markup_parse_context_free (parse_context);
   g_free (buffer);
@@ -1653,37 +2204,37 @@ bool_to_string (gboolean value)
 
 static void
 append_transform (GString             *buffer,
-                  MetaMonitorTransform transform)
+                  MtkMonitorTransform  transform)
 {
   const char *rotation = NULL;
   gboolean flipped = FALSE;
 
   switch (transform)
     {
-    case META_MONITOR_TRANSFORM_NORMAL:
+    case MTK_MONITOR_TRANSFORM_NORMAL:
       return;
-    case META_MONITOR_TRANSFORM_90:
+    case MTK_MONITOR_TRANSFORM_90:
       rotation = "left";
       break;
-    case META_MONITOR_TRANSFORM_180:
+    case MTK_MONITOR_TRANSFORM_180:
       rotation = "upside_down";
       break;
-    case META_MONITOR_TRANSFORM_270:
+    case MTK_MONITOR_TRANSFORM_270:
       rotation = "right";
       break;
-    case META_MONITOR_TRANSFORM_FLIPPED:
+    case MTK_MONITOR_TRANSFORM_FLIPPED:
       rotation = "normal";
       flipped = TRUE;
       break;
-    case META_MONITOR_TRANSFORM_FLIPPED_90:
+    case MTK_MONITOR_TRANSFORM_FLIPPED_90:
       rotation = "left";
       flipped = TRUE;
       break;
-    case META_MONITOR_TRANSFORM_FLIPPED_180:
+    case MTK_MONITOR_TRANSFORM_FLIPPED_180:
       rotation = "upside_down";
       flipped = TRUE;
       break;
-    case META_MONITOR_TRANSFORM_FLIPPED_270:
+    case MTK_MONITOR_TRANSFORM_FLIPPED_270:
       rotation = "right";
       flipped = TRUE;
       break;
@@ -1711,9 +2262,8 @@ append_logical_monitor_xml (GString                  *buffer,
                           logical_monitor_config->layout.y);
   g_ascii_dtostr (scale_str, G_ASCII_DTOSTR_BUF_SIZE,
                   logical_monitor_config->scale);
-  if ((config->flags & META_MONITORS_CONFIG_FLAG_MIGRATED) == 0)
-    g_string_append_printf (buffer, "      <scale>%s</scale>\n",
-                            scale_str);
+  g_string_append_printf (buffer, "      <scale>%s</scale>\n",
+                          scale_str);
   if (logical_monitor_config->is_primary)
     g_string_append (buffer, "      <primary>yes</primary>\n");
   if (logical_monitor_config->is_presentation)
@@ -1744,8 +2294,15 @@ generate_config_xml (MetaMonitorConfigStore *config_store)
 
       g_string_append (buffer, "  <configuration>\n");
 
-      if (config->flags & META_MONITORS_CONFIG_FLAG_MIGRATED)
-        g_string_append (buffer, "    <migrated/>\n");
+      switch (config->layout_mode)
+        {
+        case META_LOGICAL_MONITOR_LAYOUT_MODE_LOGICAL:
+          g_string_append (buffer, "    <layoutmode>logical</layoutmode>\n");
+          break;
+        case META_LOGICAL_MONITOR_LAYOUT_MODE_PHYSICAL:
+          g_string_append (buffer, "    <layoutmode>physical</layoutmode>\n");
+          break;
+        }
 
       for (l = config->logical_monitor_configs; l; l = l->next)
         {
@@ -1933,6 +2490,7 @@ meta_monitor_config_store_set_custom (MetaMonitorConfigStore  *config_store,
                                       GError                 **error)
 {
   GHashTable *new_configs = NULL;
+  gboolean should_save_configs = FALSE;
 
   g_clear_object (&config_store->custom_read_file);
   g_clear_object (&config_store->custom_write_file);
@@ -1950,11 +2508,16 @@ meta_monitor_config_store_set_custom (MetaMonitorConfigStore  *config_store,
                          config_store->custom_read_file,
                          config_flags,
                          &new_configs,
+                         &should_save_configs,
                          error))
     return FALSE;
 
   g_clear_pointer (&config_store->configs, g_hash_table_unref);
   config_store->configs = g_steal_pointer (&new_configs);
+
+  if (should_save_configs)
+    maybe_save_configs (config_store);
+
   return TRUE;
 }
 
@@ -2109,6 +2672,7 @@ meta_monitor_config_store_reset (MetaMonitorConfigStore *config_store)
   const char * const *system_dirs;
   char *user_file_path;
   GError *error = NULL;
+  gboolean should_save_configs = FALSE;
 
   g_clear_object (&config_store->user_file);
   g_clear_object (&config_store->custom_read_file);
@@ -2131,19 +2695,21 @@ meta_monitor_config_store_reset (MetaMonitorConfigStore *config_store)
                                  system_file,
                                  META_MONITORS_CONFIG_FLAG_SYSTEM_CONFIG,
                                  &system_configs,
+                                 &should_save_configs,
                                  &error))
             {
-              if (g_error_matches (error,
-                                   META_MONITOR_CONFIG_STORE_ERROR,
-                                   META_MONITOR_CONFIG_STORE_ERROR_NEEDS_MIGRATION))
-                g_warning ("System monitor configuration file (%s) is "
-                           "incompatible; ask your administrator to migrate "
-                           "the system monitor configuration.",
-                           system_file_path);
-              else
-                g_warning ("Failed to read monitors config file '%s': %s",
-                           system_file_path, error->message);
+              g_warning ("Failed to read monitors config file '%s': %s",
+                         system_file_path, error->message);
               g_clear_error (&error);
+            }
+
+          if (should_save_configs)
+            {
+              g_warning ("System monitor configuration file (%s) needs "
+                         "updating; ask your administrator to migrate "
+                         "the system monitor configuration.",
+                         system_file_path);
+              should_save_configs = FALSE;
             }
         }
     }
@@ -2159,25 +2725,12 @@ meta_monitor_config_store_reset (MetaMonitorConfigStore *config_store)
                              config_store->user_file,
                              META_MONITORS_CONFIG_FLAG_NONE,
                              &user_configs,
+                             &should_save_configs,
                              &error))
         {
-          if (error->domain == META_MONITOR_CONFIG_STORE_ERROR &&
-              error->code == META_MONITOR_CONFIG_STORE_ERROR_NEEDS_MIGRATION)
-            {
-              g_clear_error (&error);
-              if (!meta_migrate_old_user_monitors_config (config_store, &error))
-                {
-                  g_warning ("Failed to migrate old monitors config file: %s",
-                             error->message);
-                  g_error_free (error);
-                }
-            }
-          else
-            {
-              g_warning ("Failed to read monitors config file '%s': %s",
-                         user_file_path, error->message);
-              g_error_free (error);
-            }
+          g_warning ("Failed to read monitors config file '%s': %s",
+                     user_file_path, error->message);
+          g_error_free (error);
         }
     }
 
@@ -2209,6 +2762,8 @@ meta_monitor_config_store_reset (MetaMonitorConfigStore *config_store)
         replace_configs (config_store, user_configs);
     }
 
+  if (should_save_configs)
+    maybe_save_configs (config_store);
 
   g_free (user_file_path);
 }

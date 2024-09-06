@@ -64,6 +64,7 @@ struct _ClutterActor
 
   /*< public >*/
   guint32 flags;
+  AtkRole accessible_role;
 
   /*< private >*/
   guint32 private_flags;
@@ -136,6 +137,8 @@ struct _ClutterActor
  * @key_focus_out: signal class closure for [signal@Clutter.Actor::key-focus-out]
  * @queue_relayout: class handler for [signal@Clutter.Actor::queue-relayout]
  * @get_accessible: virtual function, returns the accessible object that
+ *   describes the actor to an assistive technology.
+ * @get_accessible_type: returns the type of the accessible object that
  *   describes the actor to an assistive technology.
  * @get_paint_volume: virtual function, for sub-classes to define their
  *   #ClutterPaintVolume
@@ -215,6 +218,7 @@ struct _ClutterActorClass
 
   /* accessibility support */
   AtkObject * (* get_accessible)    (ClutterActor         *self);
+  GType    (* get_accessible_type) (void);
 
   gboolean (* get_paint_volume)     (ClutterActor         *actor,
                                      ClutterPaintVolume   *volume);
@@ -227,7 +231,6 @@ struct _ClutterActorClass
 
   gboolean (* touch_event)          (ClutterActor         *self,
                                      ClutterEvent         *event);
-  gboolean (* has_accessible)       (ClutterActor         *self);
   void     (* resource_scale_changed) (ClutterActor *self);
   float    (* calculate_resource_scale) (ClutterActor *self,
                                          int           phase);
@@ -264,14 +267,6 @@ GType clutter_actor_get_type (void) G_GNUC_CONST;
 CLUTTER_EXPORT
 ClutterActor *                  clutter_actor_new                               (void);
 
-CLUTTER_EXPORT
-void                            clutter_actor_set_flags                         (ClutterActor                *self,
-                                                                                 ClutterActorFlags            flags);
-CLUTTER_EXPORT
-void                            clutter_actor_unset_flags                       (ClutterActor                *self,
-                                                                                 ClutterActorFlags            flags);
-CLUTTER_EXPORT
-ClutterActorFlags               clutter_actor_get_flags                         (ClutterActor                *self);
 CLUTTER_EXPORT
 void                            clutter_actor_show                              (ClutterActor                *self);
 CLUTTER_EXPORT
@@ -314,10 +309,20 @@ void                            clutter_actor_set_name                          
 CLUTTER_EXPORT
 const gchar *                   clutter_actor_get_name                          (ClutterActor                *self);
 CLUTTER_EXPORT
+void                            clutter_actor_set_accessible_role               (ClutterActor                *self,
+                                                                                 AtkRole                      role);
+CLUTTER_EXPORT
+AtkRole                         clutter_actor_get_accessible_role               (ClutterActor                *self);
+CLUTTER_EXPORT
+void                            clutter_actor_set_accessible_name               (ClutterActor                *self,
+                                                                                 const gchar                 *name);
+CLUTTER_EXPORT
+const gchar *                   clutter_actor_get_accessible_name               (ClutterActor                *self);
+CLUTTER_EXPORT
 AtkObject *                     clutter_actor_get_accessible                    (ClutterActor                *self);
 CLUTTER_EXPORT
-gboolean                        clutter_actor_has_accessible                    (ClutterActor                *self);
-
+void                            clutter_actor_set_accessible                    (ClutterActor                *self,
+                                                                                 AtkObject                   *accessible);
 CLUTTER_EXPORT
 gboolean                        clutter_actor_is_visible                        (ClutterActor                *self);
 CLUTTER_EXPORT
@@ -326,6 +331,11 @@ CLUTTER_EXPORT
 gboolean                        clutter_actor_is_realized                       (ClutterActor                *self);
 
 /* Size negotiation */
+CLUTTER_EXPORT
+void                            clutter_actor_set_no_layout                     (ClutterActor               *actor,
+                                                                                 gboolean                    no_layout);
+CLUTTER_EXPORT
+gboolean                        clutter_actor_is_no_layout                      (ClutterActor               *actor);
 CLUTTER_EXPORT
 void                            clutter_actor_set_request_mode                  (ClutterActor                *self,
                                                                                  ClutterRequestMode           mode);

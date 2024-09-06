@@ -59,7 +59,9 @@
 
 enum
 {
-  DEVICE_UPDATED,
+  DEVICE_CALIBRATION_CHANGED,
+  DEVICE_COLOR_STATE_CHANGED,
+  READY,
 
   N_SIGNALS
 };
@@ -108,9 +110,6 @@ on_device_ready (MetaColorDevice  *color_device,
                  gboolean          success,
                  MetaColorManager *color_manager)
 {
-  MetaColorManagerPrivate *priv =
-    meta_color_manager_get_instance_private (color_manager);
-
   if (!success)
     {
       meta_topic (META_DEBUG_COLOR, "Color device '%s' failed to become ready",
@@ -118,24 +117,23 @@ on_device_ready (MetaColorDevice  *color_device,
       return;
     }
 
-  meta_color_device_update (color_device, priv->temperature);
+  meta_color_device_update (color_device);
 }
 
 static void
-on_device_changed (MetaColorDevice  *color_device,
-                   MetaColorManager *color_manager)
+on_device_calibration_changed (MetaColorDevice  *color_device,
+                               MetaColorManager *color_manager)
 {
-  MetaColorManagerPrivate *priv =
-    meta_color_manager_get_instance_private (color_manager);
-
-  meta_color_device_update (color_device, priv->temperature);
+  g_signal_emit (color_manager, signals[DEVICE_CALIBRATION_CHANGED], 0,
+                 color_device);
 }
 
 static void
-on_device_updated (MetaColorDevice  *color_device,
-                   MetaColorManager *color_manager)
+on_color_state_changed (MetaColorDevice  *color_device,
+                        MetaColorManager *color_manager)
 {
-  g_signal_emit (color_manager, signals[DEVICE_UPDATED], 0, color_device);
+  g_signal_emit (color_manager, signals[DEVICE_COLOR_STATE_CHANGED],
+                 0, color_device);
 }
 
 static char *
@@ -177,16 +175,14 @@ update_devices (MetaColorManager *color_manager)
   devices = g_hash_table_new_full (g_str_hash,
                                    g_str_equal,
                                    g_free,
-                                   (GDestroyNotify) meta_color_device_destroy);
+                                   (GDestroyNotify) g_object_unref);
+
   for (l = meta_monitor_manager_get_monitors (monitor_manager); l; l = l->next)
     {
       MetaMonitor *monitor = META_MONITOR (l->data);
       g_autofree char *monitor_id = NULL;
       g_autofree char *stolen_monitor_id = NULL;
       MetaColorDevice *color_device;
-
-      if (meta_monitor_is_virtual (monitor))
-        continue;
 
       monitor_id = generate_monitor_id (monitor);
 
@@ -218,11 +214,11 @@ update_devices (MetaColorManager *color_manager)
           g_signal_connect_object (color_device, "ready",
                                    G_CALLBACK (on_device_ready),
                                    color_manager, 0);
-          g_signal_connect_object (color_device, "changed",
-                                   G_CALLBACK (on_device_changed),
+          g_signal_connect_object (color_device, "calibration-changed",
+                                   G_CALLBACK (on_device_calibration_changed),
                                    color_manager, 0);
-          g_signal_connect_object (color_device, "updated",
-                                   G_CALLBACK (on_device_updated),
+          g_signal_connect_object (color_device, "color-state-changed",
+                                   G_CALLBACK (on_color_state_changed),
                                    color_manager, 0);
         }
     }
@@ -240,7 +236,7 @@ update_devices (MetaColorManager *color_manager)
 }
 
 static void
-update_all_gamma (MetaColorManager *color_manager)
+update_device_properties (MetaColorManager *color_manager)
 {
   MetaColorManagerPrivate *priv =
     meta_color_manager_get_instance_private (color_manager);
@@ -258,19 +254,15 @@ update_all_gamma (MetaColorManager *color_manager)
       if (!color_device)
         continue;
 
-      if (!meta_color_device_is_ready (color_device))
-          continue;
-
-      meta_color_device_update (color_device, priv->temperature);
+      meta_color_device_update (color_device);
     }
 }
 
-static void
-on_monitors_changed (MetaMonitorManager *monitor_manager,
-                     MetaColorManager   *color_manager)
+void
+meta_color_manager_monitors_changed (MetaColorManager *color_manager)
 {
   update_devices (color_manager);
-  update_all_gamma (color_manager);
+  update_device_properties (color_manager);
 }
 
 static void
@@ -282,8 +274,6 @@ cd_client_connect_cb (GObject      *source_object,
   MetaColorManager *color_manager = META_COLOR_MANAGER (user_data);
   MetaColorManagerPrivate *priv =
     meta_color_manager_get_instance_private (color_manager);
-  MetaMonitorManager *monitor_manager =
-    meta_backend_get_monitor_manager (priv->backend);
   g_autoptr (GError) error = NULL;
 
   if (!cd_client_connect_finish (client, res, &error))
@@ -302,11 +292,9 @@ cd_client_connect_cb (GObject      *source_object,
   priv->color_store = meta_color_store_new (color_manager);
 
   update_devices (color_manager);
-  g_signal_connect (monitor_manager, "monitors-changed-internal",
-                    G_CALLBACK (on_monitors_changed),
-                    color_manager);
 
   priv->is_ready = TRUE;
+  g_signal_emit (color_manager, signals[READY], 0);
 }
 
 static void
@@ -328,7 +316,7 @@ update_temperature (MetaColorManager *color_manager)
 
   priv->temperature = temperature;
 
-  update_all_gamma (color_manager);
+  update_device_properties (color_manager);
 }
 
 static void
@@ -399,7 +387,7 @@ on_gsd_power_screen_ready (GObject      *source_object,
               "Connection to org.gnome.SettingsDaemon.PowerScreen established");
   priv->gsd_power_screen = gsd_power_screen;
 
-  update_all_gamma (color_manager);
+  update_device_properties (color_manager);
 }
 
 static void
@@ -437,11 +425,11 @@ meta_color_manager_constructed (GObject *object)
     color_manager);
 
   update_devices (color_manager);
-  update_all_gamma (color_manager);
+  update_device_properties (color_manager);
 }
 
 static void
-meta_color_manager_finalize (GObject *object)
+meta_color_manager_dispose (GObject *object)
 {
   MetaColorManager *color_manager = META_COLOR_MANAGER (object);
   MetaColorManagerPrivate *priv =
@@ -455,7 +443,7 @@ meta_color_manager_finalize (GObject *object)
   g_clear_object (&priv->color_store);
   g_clear_pointer (&priv->lcms_context, cmsDeleteContext);
 
-  G_OBJECT_CLASS (meta_color_manager_parent_class)->finalize (object);
+  G_OBJECT_CLASS (meta_color_manager_parent_class)->dispose (object);
 }
 
 static void
@@ -506,7 +494,7 @@ meta_color_manager_class_init (MetaColorManagerClass *klass)
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
   object_class->constructed = meta_color_manager_constructed;
-  object_class->finalize = meta_color_manager_finalize;
+  object_class->dispose = meta_color_manager_dispose;
   object_class->set_property = meta_color_manager_set_property;
   object_class->get_property = meta_color_manager_get_property;
 
@@ -518,13 +506,27 @@ meta_color_manager_class_init (MetaColorManagerClass *klass)
                          G_PARAM_STATIC_STRINGS);
   g_object_class_install_properties (object_class, N_PROPS, obj_props);
 
-  signals[DEVICE_UPDATED] =
-    g_signal_new ("device-updated",
+  signals[DEVICE_CALIBRATION_CHANGED] =
+    g_signal_new ("device-calibration-changed",
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_LAST, 0,
                   NULL, NULL, NULL,
                   G_TYPE_NONE, 1,
                   META_TYPE_COLOR_DEVICE);
+
+  signals[DEVICE_COLOR_STATE_CHANGED] =
+    g_signal_new ("device-color-state-changed",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_LAST, 0,
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE, 1,
+                  META_TYPE_COLOR_DEVICE);
+  signals[READY] =
+    g_signal_new ("ready",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_LAST, 0,
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE, 0);
 }
 
 static void
@@ -596,6 +598,15 @@ meta_color_manager_get_lcms_context (MetaColorManager *color_manager)
     meta_color_manager_get_instance_private (color_manager);
 
   return priv->lcms_context;
+}
+
+unsigned int
+meta_color_manager_get_temperature (MetaColorManager *color_manager)
+{
+  MetaColorManagerPrivate *priv =
+    meta_color_manager_get_instance_private (color_manager);
+
+  return priv->temperature;
 }
 
 void

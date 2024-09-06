@@ -168,7 +168,12 @@ meta_debug_control_init (MetaDebugControl *debug_control)
 {
   MetaDBusDebugControl *dbus_debug_control =
     META_DBUS_DEBUG_CONTROL (debug_control);
-  gboolean enable_hdr, force_linear_blending;
+  gboolean enable_hdr, force_linear_blending, color_management_protocol;
+
+  color_management_protocol =
+    g_strcmp0 (getenv ("MUTTER_DEBUG_COLOR_MANAGEMENT_PROTOCOL"), "1") == 0;
+  meta_dbus_debug_control_set_color_management_protocol (dbus_debug_control,
+                                                         color_management_protocol);
 
   enable_hdr = g_strcmp0 (getenv ("MUTTER_DEBUG_ENABLE_HDR"), "1") == 0;
   meta_dbus_debug_control_set_enable_hdr (dbus_debug_control, enable_hdr);
@@ -177,6 +182,17 @@ meta_debug_control_init (MetaDebugControl *debug_control)
     g_strcmp0 (getenv ("MUTTER_DEBUG_FORCE_LINEAR_BLENDING"), "1") == 0;
   meta_dbus_debug_control_set_force_linear_blending (dbus_debug_control,
                                                      force_linear_blending);
+
+  meta_dbus_debug_control_set_luminance_percentage (dbus_debug_control, 100);
+}
+
+gboolean
+meta_debug_control_is_color_management_protocol_enabled (MetaDebugControl *debug_control)
+{
+  MetaDBusDebugControl *dbus_debug_control =
+    META_DBUS_DEBUG_CONTROL (debug_control);
+
+  return meta_dbus_debug_control_get_color_management_protocol (dbus_debug_control);
 }
 
 gboolean
@@ -195,6 +211,15 @@ meta_debug_control_is_hdr_enabled (MetaDebugControl *debug_control)
     META_DBUS_DEBUG_CONTROL (debug_control);
 
   return meta_dbus_debug_control_get_enable_hdr (dbus_debug_control);
+}
+
+unsigned int
+meta_debug_control_get_luminance_percentage (MetaDebugControl *debug_control)
+{
+  MetaDBusDebugControl *dbus_debug_control =
+    META_DBUS_DEBUG_CONTROL (debug_control);
+
+  return meta_dbus_debug_control_get_luminance_percentage (dbus_debug_control);
 }
 
 void

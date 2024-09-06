@@ -58,9 +58,6 @@ struct _ClutterStageClass
 
   /*< public >*/
   /* signals */
-  void (* activate)     (ClutterStage *stage);
-  void (* deactivate)   (ClutterStage *stage);
-
   void (* before_paint) (ClutterStage     *stage,
                          ClutterStageView *view,
                          ClutterFrame     *frame);
@@ -138,11 +135,6 @@ GType clutter_perspective_get_type (void) G_GNUC_CONST;
 CLUTTER_EXPORT
 void            clutter_stage_get_perspective                   (ClutterStage          *stage,
 			                                         ClutterPerspective    *perspective);
-CLUTTER_EXPORT
-void            clutter_stage_set_title                         (ClutterStage          *stage,
-                                                                 const gchar           *title);
-CLUTTER_EXPORT
-const gchar *   clutter_stage_get_title                         (ClutterStage          *stage);
 
 CLUTTER_EXPORT
 void            clutter_stage_set_minimum_size                  (ClutterStage          *stage,
@@ -252,5 +244,12 @@ CLUTTER_EXPORT
 gboolean clutter_stage_pointing_input_foreach (ClutterStage                 *self,
                                                ClutterStageInputForeachFunc  func,
                                                gpointer                      user_data);
+
+CLUTTER_EXPORT
+gboolean clutter_stage_is_active (ClutterStage *stage);
+
+CLUTTER_EXPORT
+void clutter_stage_set_active (ClutterStage *stage,
+                               gboolean      is_active);
 
 G_END_DECLS

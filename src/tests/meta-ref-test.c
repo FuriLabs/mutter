@@ -221,13 +221,12 @@ assert_software_rendered (ClutterStageView *stage_view)
 
 static void
 capture_view_into (ClutterStageView *view,
+                   CoglContext      *context,
                    MtkRectangle     *rect,
                    uint8_t          *buffer,
                    int               stride)
 {
   CoglFramebuffer *framebuffer;
-  ClutterBackend *backend;
-  CoglContext *context;
   CoglBitmap *bitmap;
   MtkRectangle view_layout;
   float view_scale;
@@ -241,8 +240,6 @@ capture_view_into (ClutterStageView *view,
   texture_width = roundf (rect->width * view_scale);
   texture_height = roundf (rect->height * view_scale);
 
-  backend = clutter_get_default_backend ();
-  context = clutter_backend_get_cogl_context (backend);
   bitmap = cogl_bitmap_new_for_data (context,
                                      (int) texture_width,
                                      (int) texture_height,
@@ -284,6 +281,10 @@ on_after_paint (MetaStage        *stage,
   cairo_surface_t *image;
   uint8_t *buffer;
   int stride;
+  ClutterContext *context =
+    clutter_actor_get_context (CLUTTER_ACTOR (stage));
+  ClutterBackend *backend = clutter_context_get_backend (context);
+  CoglContext *cogl_context = clutter_backend_get_cogl_context (backend);
 
   meta_stage_remove_watch (stage, data->watch);
   data->watch = NULL;
@@ -299,7 +300,7 @@ on_after_paint (MetaStage        *stage,
   buffer = cairo_image_surface_get_data (image);
   stride = cairo_image_surface_get_stride (image);
 
-  capture_view_into (view, &rect, buffer, stride);
+  capture_view_into (view, cogl_context, &rect, buffer, stride);
 
   data->out_image = image;
 
@@ -527,30 +528,37 @@ meta_ref_test_verify_view (ClutterStageView *view,
                            &diff_stat))
         {
           cairo_surface_t *diff_image;
-          const char *build_dir;
+          const char *ref_test_result_dir;
           g_autofree char *ref_image_copy_path = NULL;
           g_autofree char *result_image_path = NULL;
           g_autofree char *diff_image_path = NULL;
+          int ret;
 
           diff_image = visualize_difference (ref_image, view_image,
                                              &gl_fuzz);
 
-          build_dir = g_test_get_dir (G_TEST_BUILT);
+          ref_test_result_dir = g_getenv ("MUTTER_REF_TEST_RESULT_DIR");
+          g_assert_nonnull (ref_test_result_dir);
           ref_image_copy_path =
-            g_strdup_printf ("%s/meson-logs/tests/ref-tests/%s_%d.ref.png",
-                             build_dir,
+            g_strdup_printf ("%s/%s_%d.ref.png",
+                             ref_test_result_dir,
                              test_name, test_seq_no);
           result_image_path =
-            g_strdup_printf ("%s/meson-logs/tests/ref-tests/%s_%d.result.png",
-                             build_dir,
+            g_strdup_printf ("%s/%s_%d.result.png",
+                             ref_test_result_dir,
                              test_name, test_seq_no);
           diff_image_path =
-            g_strdup_printf ("%s/meson-logs/tests/ref-tests/%s_%d.diff.png",
-                             build_dir,
+            g_strdup_printf ("%s/%s_%d.diff.png",
+                             ref_test_result_dir,
                              test_name, test_seq_no);
 
-          g_mkdir_with_parents (g_path_get_dirname (ref_image_copy_path),
-                                0755);
+          ret = g_mkdir_with_parents (ref_test_result_dir, 0755);
+          if (ret == -1)
+            {
+              g_error ("Failed to create directory %s: %s",
+                       ref_test_result_dir,
+                       g_strerror (errno));
+            }
 
           g_assert_cmpint (cairo_surface_write_to_png (ref_image,
                                                        ref_image_copy_path),

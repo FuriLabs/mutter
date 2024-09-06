@@ -79,20 +79,10 @@ meta_stage_impl_unrealize (ClutterStageWindow *stage_window)
 static gboolean
 meta_stage_impl_realize (ClutterStageWindow *stage_window)
 {
-  ClutterBackend *backend;
-
   meta_topic (META_DEBUG_BACKEND,
               "Realizing stage '%s' [%p]",
               G_OBJECT_TYPE_NAME (stage_window),
               stage_window);
-
-  backend = clutter_get_default_backend ();
-
-  if (backend->cogl_context == NULL)
-    {
-      g_warning ("Failed to realize stage: missing Cogl context");
-      return FALSE;
-    }
 
   return TRUE;
 }
@@ -243,11 +233,11 @@ queue_damage_region (ClutterStageWindow *stage_window,
 
       rect = mtk_region_get_rectangle (damage_region, i);
 
-      clutter_stage_view_transform_rect_to_onscreen (stage_view,
-                                                     &rect,
-                                                     fb_width,
-                                                     fb_height,
-                                                     &rect);
+      mtk_rectangle_transform (&rect,
+                               clutter_stage_view_get_transform (stage_view),
+                               fb_width,
+                               fb_height,
+                               &rect);
 
       damage[i * 4] = rect.x;
       /* y coordinate needs to be flipped for OpenGL */
@@ -450,11 +440,11 @@ transform_swap_region_to_onscreen (ClutterStageView *stage_view,
   for (i = 0; i < n_rects; i++)
     {
       rects[i] = mtk_region_get_rectangle (swap_region, i);
-      clutter_stage_view_transform_rect_to_onscreen (stage_view,
-                                                     &rects[i],
-                                                     width,
-                                                     height,
-                                                     &rects[i]);
+      mtk_rectangle_transform (&rects[i],
+                               clutter_stage_view_get_transform (stage_view),
+                               width,
+                               height,
+                               &rects[i]);
     }
   transformed_region = mtk_region_create_rectangles (rects, n_rects);
 
@@ -530,6 +520,9 @@ meta_stage_impl_redraw_view_primary (MetaStageImpl    *stage_impl,
 
   COGL_TRACE_BEGIN_SCOPED (RedrawViewPrimary,
                            "Meta::StageImpl::redraw_view_primary()");
+  COGL_TRACE_DEFINE_COUNTER_INT (RedrawViewPrimaryDamageArea,
+                                 "RedrawDamageArea",
+                                 "the damaged area of the redraw");
 
   clutter_stage_view_get_layout (stage_view, &view_rect);
   fb_scale = clutter_stage_view_get_scale (stage_view);
@@ -688,6 +681,35 @@ meta_stage_impl_redraw_view_primary (MetaStageImpl    *stage_impl,
 
       paint_stage (stage_impl, stage_view, redraw_clip, frame);
     }
+
+#ifdef HAVE_PROFILER
+  if (G_UNLIKELY (cogl_is_tracing_enabled ()))
+    {
+      g_autoptr (GString) rects_str = NULL;
+      g_autofree char *area_str = NULL;
+      int n_rectangles, i;
+      int area = 0;
+
+      rects_str = g_string_new ("");
+      n_rectangles = mtk_region_num_rectangles (redraw_clip);
+
+      for (i = 0; i < n_rectangles; i++)
+        {
+          MtkRectangle rect = mtk_region_get_rectangle (redraw_clip, i);
+
+          area += mtk_rectangle_area (&rect);
+
+          g_string_append_printf (rects_str, " %d,%d,%d,%d",
+                                  rect.x, rect.y, rect.width, rect.height);
+        }
+
+      area_str = g_strdup_printf ("%d", area);
+      g_string_prepend (rects_str, area_str);
+
+      COGL_TRACE_DESCRIBE (RedrawViewPrimary, rects_str->str);
+      COGL_TRACE_SET_COUNTER_INT (RedrawViewPrimaryDamageArea, area);
+    }
+#endif
 
   g_clear_pointer (&redraw_clip, mtk_region_unref);
   g_clear_pointer (&fb_clip_region, mtk_region_unref);

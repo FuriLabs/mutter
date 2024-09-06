@@ -37,7 +37,6 @@
 #include "cogl/cogl-context-private.h"
 #include "cogl/cogl-framebuffer.h"
 #include "cogl/cogl-renderer-private.h"
-#include "cogl/cogl-onscreen-template-private.h"
 #include "cogl/cogl-private.h"
 #include "cogl/cogl-texture-2d-private.h"
 #include "cogl/cogl-frame-info-private.h"
@@ -494,11 +493,9 @@ update_winsys_features (CoglContext *context, GError **error)
 }
 
 static void
-glx_attributes_from_framebuffer_config (CoglDisplay                 *display,
-                                        const CoglFramebufferConfig *config,
-                                        int                         *attributes)
+glx_attributes_from_framebuffer_config (CoglDisplay *display,
+                                        int         *attributes)
 {
-  CoglGLXRenderer *glx_renderer = display->renderer->winsys;
   int i = 0;
 
   attributes[i++] = GLX_DRAWABLE_TYPE;
@@ -521,21 +518,7 @@ glx_attributes_from_framebuffer_config (CoglDisplay                 *display,
   attributes[i++] = GLX_DEPTH_SIZE;
   attributes[i++] = 1;
   attributes[i++] = GLX_STENCIL_SIZE;
-  attributes[i++] = config->need_stencil ? 2 : 0;
-  if (config->stereo_enabled)
-    {
-      attributes[i++] = GLX_STEREO;
-      attributes[i++] = TRUE;
-    }
-
-  if (glx_renderer->glx_major == 1 && glx_renderer->glx_minor >= 4 &&
-      config->samples_per_pixel)
-    {
-      attributes[i++] = GLX_SAMPLE_BUFFERS;
-      attributes[i++] = 1;
-      attributes[i++] = GLX_SAMPLES;
-      attributes[i++] = config->samples_per_pixel;
-    }
+  attributes[i++] = 2;
 
   attributes[i++] = None;
 
@@ -546,10 +529,9 @@ glx_attributes_from_framebuffer_config (CoglDisplay                 *display,
  * we could overload as an indication of error, so we have to return
  * an explicit boolean status. */
 gboolean
-cogl_display_glx_find_fbconfig (CoglDisplay                  *display,
-                                const CoglFramebufferConfig  *config,
-                                GLXFBConfig                  *config_ret,
-                                GError                      **error)
+cogl_display_glx_find_fbconfig (CoglDisplay  *display,
+                                GLXFBConfig  *config_ret,
+                                GError      **error)
 {
   CoglXlibRenderer *xlib_renderer =
     _cogl_xlib_renderer_get_data (display->renderer);
@@ -560,7 +542,7 @@ cogl_display_glx_find_fbconfig (CoglDisplay                  *display,
   gboolean ret = TRUE;
   int xscreen_num = DefaultScreen (xlib_renderer->xdpy);
 
-  glx_attributes_from_framebuffer_config (display, config, attributes);
+  glx_attributes_from_framebuffer_config (display, attributes);
 
   configs = glx_renderer->glXChooseFBConfig (xlib_renderer->xdpy,
                                              xscreen_num,
@@ -667,7 +649,6 @@ create_context (CoglDisplay *display, GError **error)
 
   glx_display->found_fbconfig =
     cogl_display_glx_find_fbconfig (display,
-                                    &display->onscreen_template->config,
                                     &config,
                                     &fbconfig_error);
   if (!glx_display->found_fbconfig)

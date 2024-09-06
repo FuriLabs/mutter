@@ -23,6 +23,7 @@
 #include "config.h"
 
 #include <glib-object.h>
+#include <glib.h>
 
 #include "backends/meta-backend-private.h"
 #include "backends/meta-renderer.h"
@@ -64,78 +65,6 @@ static const gchar *atom_names[] = {
 };
 
 #define N_ATOM_NAMES G_N_ELEMENTS (atom_names)
-
-/* various flags corresponding to pre init setup calls */
-static gboolean clutter_enable_stereo = FALSE;
-
-static gboolean
-check_onscreen_template (CoglRenderer         *renderer,
-                         CoglOnscreenTemplate *onscreen_template,
-                         gboolean              enable_stereo,
-                         GError              **error)
-{
-  GError *internal_error = NULL;
-
-  cogl_onscreen_template_set_stereo_enabled (onscreen_template,
-					     clutter_enable_stereo);
-
-  /* cogl_renderer_check_onscreen_template() is actually just a
-   * shorthand for creating a CoglDisplay, and calling
-   * cogl_display_setup() on it, then throwing the display away. If we
-   * could just return that display, then it would be more efficient
-   * not to use cogl_renderer_check_onscreen_template(). However, the
-   * backend API requires that we return an CoglDisplay that has not
-   * yet been setup, so one way or the other we'll have to discard the
-   * first display and make a new fresh one.
-   */
-  if (cogl_renderer_check_onscreen_template (renderer, onscreen_template, &internal_error))
-    {
-      clutter_enable_stereo = enable_stereo;
-
-      return TRUE;
-    }
-  else
-    {
-      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           internal_error != NULL
-                           ? internal_error->message
-                           : "Creation of a CoglDisplay failed");
-
-      g_clear_error (&internal_error);
-
-      return FALSE;
-    }
-}
-
-static CoglDisplay *
-meta_clutter_backend_x11_get_display (ClutterBackend  *clutter_backend,
-                                      CoglRenderer    *renderer,
-                                      GError         **error)
-{
-  CoglOnscreenTemplate *onscreen_template;
-  CoglDisplay *display = NULL;
-  gboolean res = FALSE;
-
-  onscreen_template = cogl_onscreen_template_new ();
-
-  /* It's possible that the current renderer doesn't support transparency
-   * or doesn't support stereo, so we try the different combinations.
-   */
-  if (clutter_enable_stereo)
-    res = check_onscreen_template (renderer, onscreen_template,
-                                   TRUE, error);
-
-  if (!res)
-    res = check_onscreen_template (renderer, onscreen_template,
-                                   FALSE, error);
-
-  if (res)
-    display = cogl_display_new (renderer, onscreen_template);
-
-  g_object_unref (onscreen_template);
-
-  return display;
-}
 
 static CoglRenderer *
 meta_clutter_backend_x11_get_renderer (ClutterBackend  *clutter_backend,
@@ -201,7 +130,6 @@ meta_clutter_backend_x11_class_init (MetaClutterBackendX11Class *klass)
 {
   ClutterBackendClass *clutter_backend_class = CLUTTER_BACKEND_CLASS (klass);
 
-  clutter_backend_class->get_display = meta_clutter_backend_x11_get_display;
   clutter_backend_class->get_renderer = meta_clutter_backend_x11_get_renderer;
   clutter_backend_class->create_stage = meta_clutter_backend_x11_create_stage;
   clutter_backend_class->get_default_seat = meta_clutter_backend_x11_get_default_seat;
@@ -209,14 +137,17 @@ meta_clutter_backend_x11_class_init (MetaClutterBackendX11Class *klass)
 }
 
 MetaClutterBackendX11 *
-meta_clutter_backend_x11_new (MetaBackend *backend)
+meta_clutter_backend_x11_new (MetaBackend    *backend,
+                              ClutterContext *context)
 {
   MetaBackendX11 *backend_x11 = META_BACKEND_X11 (backend);
   Atom atoms[N_ATOM_NAMES];
   MetaClutterBackendX11 *clutter_backend_x11;
   MetaClutterBackendX11Private *priv;
 
-  clutter_backend_x11 = g_object_new (META_TYPE_CLUTTER_BACKEND_X11, NULL);
+  clutter_backend_x11 = g_object_new (META_TYPE_CLUTTER_BACKEND_X11,
+                                      "context", context,
+                                      NULL);
   priv = meta_clutter_backend_x11_get_instance_private (clutter_backend_x11);
   priv->backend = backend;
 
@@ -238,26 +169,4 @@ meta_clutter_backend_x11_new (MetaBackend *backend)
   clutter_backend_x11->atom_UTF8_STRING = atoms[9];
 
   return clutter_backend_x11;
-}
-
-void
-meta_clutter_x11_set_use_stereo_stage (gboolean use_stereo)
-{
-  if (_clutter_context_is_initialized ())
-    {
-      g_warning ("%s() can only be used before calling clutter_init()",
-                 G_STRFUNC);
-      return;
-    }
-
-  g_debug ("STEREO stages are %s",
-           use_stereo ? "enabled" : "disabled");
-
-  clutter_enable_stereo = use_stereo;
-}
-
-gboolean
-meta_clutter_x11_get_use_stereo_stage (void)
-{
-  return clutter_enable_stereo;
 }

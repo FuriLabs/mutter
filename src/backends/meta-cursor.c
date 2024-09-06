@@ -55,7 +55,7 @@ typedef struct _MetaCursorSpritePrivate
 
   CoglTexture2D *texture;
   float texture_scale;
-  MetaMonitorTransform texture_transform;
+  MtkMonitorTransform texture_transform;
   int hot_x, hot_y;
 
   ClutterColorState *color_state;
@@ -137,8 +137,8 @@ meta_cursor_sprite_set_texture_scale (MetaCursorSprite *sprite,
 }
 
 void
-meta_cursor_sprite_set_texture_transform (MetaCursorSprite     *sprite,
-                                          MetaMonitorTransform  transform)
+meta_cursor_sprite_set_texture_transform (MetaCursorSprite    *sprite,
+                                          MtkMonitorTransform  transform)
 {
   MetaCursorSpritePrivate *priv =
     meta_cursor_sprite_get_instance_private (sprite);
@@ -197,7 +197,7 @@ meta_cursor_sprite_get_texture_scale (MetaCursorSprite *sprite)
   return priv->texture_scale;
 }
 
-MetaMonitorTransform
+MtkMonitorTransform
 meta_cursor_sprite_get_texture_transform (MetaCursorSprite *sprite)
 {
   MetaCursorSpritePrivate *priv =
@@ -253,7 +253,7 @@ meta_cursor_sprite_init (MetaCursorSprite *sprite)
     meta_cursor_sprite_get_instance_private (sprite);
 
   priv->texture_scale = 1.0f;
-  priv->texture_transform = META_MONITOR_TRANSFORM_NORMAL;
+  priv->texture_transform = MTK_MONITOR_TRANSFORM_NORMAL;
 }
 
 static void
@@ -289,10 +289,10 @@ meta_cursor_sprite_finalize (GObject *object)
 }
 
 static void
-meta_cursor_tracker_set_property (GObject      *object,
-                                  guint         prop_id,
-                                  const GValue *value,
-                                  GParamSpec   *pspec)
+meta_cursor_sprite_set_property (GObject      *object,
+                                 guint         prop_id,
+                                 const GValue *value,
+                                 GParamSpec   *pspec)
 {
   MetaCursorSprite *sprite = META_CURSOR_SPRITE (object);
   MetaCursorSpritePrivate *priv =
@@ -319,7 +319,7 @@ meta_cursor_sprite_class_init (MetaCursorSpriteClass *klass)
 
   object_class->constructed = meta_cursor_sprite_constructed;
   object_class->finalize = meta_cursor_sprite_finalize;
-  object_class->set_property = meta_cursor_tracker_set_property;
+  object_class->set_property = meta_cursor_sprite_set_property;
 
   obj_props[PROP_CURSOR_TRACKER] =
     g_param_spec_object ("cursor-tracker", NULL, NULL,

@@ -221,22 +221,22 @@ static void
 set_panel_orientation (MetaKmsConnectorState *state,
                        MetaKmsProp           *panel_orientation)
 {
-  MetaMonitorTransform transform;
+  MtkMonitorTransform transform;
   MetaKmsConnectorPanelOrientation orientation = panel_orientation->value;
 
   switch (orientation)
     {
     case META_KMS_CONNECTOR_PANEL_ORIENTATION_UPSIDE_DOWN:
-      transform = META_MONITOR_TRANSFORM_180;
+      transform = MTK_MONITOR_TRANSFORM_180;
       break;
     case META_KMS_CONNECTOR_PANEL_ORIENTATION_LEFT_SIDE_UP:
-      transform = META_MONITOR_TRANSFORM_90;
+      transform = MTK_MONITOR_TRANSFORM_90;
       break;
     case META_KMS_CONNECTOR_PANEL_ORIENTATION_RIGHT_SIDE_UP:
-      transform = META_MONITOR_TRANSFORM_270;
+      transform = MTK_MONITOR_TRANSFORM_270;
       break;
     default:
-      transform = META_MONITOR_TRANSFORM_NORMAL;
+      transform = MTK_MONITOR_TRANSFORM_NORMAL;
       break;
     }
 
@@ -900,70 +900,6 @@ kms_modes_equal (GList *modes,
   return TRUE;
 }
 
-static gboolean
-hdr_primaries_equal (double x1, double x2)
-{
-  return fabs (x1 - x2) < (0.00002 - DBL_EPSILON);
-}
-
-static gboolean
-hdr_nits_equal (double x1, double x2)
-{
-  return fabs (x1 - x2) < (1.0 - DBL_EPSILON);
-}
-
-static gboolean
-hdr_min_luminance_equal (double x1, double x2)
-{
-  return fabs (x1 - x2) < (0.0001 - DBL_EPSILON);
-}
-
-gboolean
-hdr_metadata_equal (MetaOutputHdrMetadata *metadata,
-                    MetaOutputHdrMetadata *other_metadata)
-{
-  if (!metadata->active && !other_metadata->active)
-    return TRUE;
-
-  if (metadata->active != other_metadata->active)
-    return FALSE;
-
-  if (metadata->eotf != other_metadata->eotf)
-      return FALSE;
-
-  if (!hdr_primaries_equal (metadata->mastering_display_primaries[0].x,
-                            other_metadata->mastering_display_primaries[0].x) ||
-      !hdr_primaries_equal (metadata->mastering_display_primaries[0].y,
-                            other_metadata->mastering_display_primaries[0].y) ||
-      !hdr_primaries_equal (metadata->mastering_display_primaries[1].x,
-                            other_metadata->mastering_display_primaries[1].x) ||
-      !hdr_primaries_equal (metadata->mastering_display_primaries[1].y,
-                            other_metadata->mastering_display_primaries[1].y) ||
-      !hdr_primaries_equal (metadata->mastering_display_primaries[2].x,
-                            other_metadata->mastering_display_primaries[2].x) ||
-      !hdr_primaries_equal (metadata->mastering_display_primaries[2].y,
-                            other_metadata->mastering_display_primaries[2].y) ||
-      !hdr_primaries_equal (metadata->mastering_display_white_point.x,
-                            other_metadata->mastering_display_white_point.x) ||
-      !hdr_primaries_equal (metadata->mastering_display_white_point.y,
-                            other_metadata->mastering_display_white_point.y))
-    return FALSE;
-
-  if (!hdr_nits_equal (metadata->mastering_display_max_luminance,
-                       other_metadata->mastering_display_max_luminance))
-    return FALSE;
-
-  if (!hdr_min_luminance_equal (metadata->mastering_display_min_luminance,
-                                other_metadata->mastering_display_min_luminance))
-    return FALSE;
-
-  if (!hdr_nits_equal (metadata->max_cll, other_metadata->max_cll) ||
-      !hdr_nits_equal (metadata->max_fall, other_metadata->max_fall))
-    return FALSE;
-
-  return TRUE;
-}
-
 static MetaKmsResourceChanges
 meta_kms_connector_state_changes (MetaKmsConnectorState *state,
                                   MetaKmsConnectorState *new_state)
@@ -1030,7 +966,7 @@ meta_kms_connector_state_changes (MetaKmsConnectorState *state,
 
   if (state->hdr.supported != new_state->hdr.supported ||
       state->hdr.unknown != new_state->hdr.unknown ||
-      !hdr_metadata_equal (&state->hdr.value, &new_state->hdr.value))
+      !meta_output_hdr_metadata_equal (&state->hdr.value, &new_state->hdr.value))
     return META_KMS_RESOURCE_CHANGE_FULL;
 
   if (state->broadcast_rgb.value != new_state->broadcast_rgb.value ||

@@ -144,7 +144,7 @@ typedef struct _MetaOutputInfo
   MetaSubpixelOrder subpixel_order;
 
   MetaConnectorType connector_type;
-  MetaMonitorTransform panel_orientation_transform;
+  MtkMonitorTransform panel_orientation_transform;
 
   MetaCrtcMode *preferred_mode;
   MetaCrtcMode **modes;
@@ -184,9 +184,12 @@ typedef struct _MetaOutputInfo
   gboolean supports_vrr;
 } MetaOutputInfo;
 
-gboolean
-meta_tile_info_equal (MetaTileInfo *a,
-                      MetaTileInfo *b);
+gboolean meta_tile_info_equal (MetaTileInfo *a,
+                               MetaTileInfo *b);
+
+META_EXPORT_TEST
+gboolean meta_output_hdr_metadata_equal (MetaOutputHdrMetadata *metadata,
+                                         MetaOutputHdrMetadata *other_metadata);
 
 const char * meta_output_colorspace_get_name (MetaOutputColorspace color_space);
 
@@ -255,9 +258,11 @@ META_EXPORT_TEST
 gboolean meta_output_get_max_bpc (MetaOutput   *output,
                                   unsigned int *max_bpc);
 
+META_EXPORT_TEST
 void meta_output_set_backlight (MetaOutput *output,
                                 int         backlight);
 
+META_EXPORT_TEST
 int meta_output_get_backlight (MetaOutput *output);
 
 MetaPrivacyScreenState meta_output_get_privacy_screen_state (MetaOutput *output);
@@ -300,11 +305,11 @@ void meta_output_unassign_crtc (MetaOutput *output);
 META_EXPORT_TEST
 MetaCrtc * meta_output_get_assigned_crtc (MetaOutput *output);
 
-MetaMonitorTransform meta_output_logical_to_crtc_transform (MetaOutput           *output,
-                                                            MetaMonitorTransform  transform);
+MtkMonitorTransform meta_output_logical_to_crtc_transform (MetaOutput          *output,
+                                                           MtkMonitorTransform  transform);
 
-MetaMonitorTransform meta_output_crtc_to_logical_transform (MetaOutput           *output,
-                                                            MetaMonitorTransform  transform);
+MtkMonitorTransform meta_output_crtc_to_logical_transform (MetaOutput          *output,
+                                                           MtkMonitorTransform  transform);
 
 void meta_output_update_modes (MetaOutput    *output,
                                MetaCrtcMode  *preferred_mode,

@@ -48,3 +48,7 @@ META_EXPORT_TEST
 gboolean meta_xwayland_signal (MetaXWaylandManager  *manager,
                                int                   signum,
                                GError              **error);
+
+int meta_xwayland_get_effective_scale (MetaXWaylandManager *manager);
+
+int meta_xwayland_get_x11_ui_scaling_factor (MetaXWaylandManager *manager);

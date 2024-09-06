@@ -80,9 +80,8 @@ typedef struct _CoglWinsysEGLVtable
   (* context_deinit) (CoglContext *context);
 
   int
-  (* add_config_attributes) (CoglDisplay                 *display,
-                             const CoglFramebufferConfig *config,
-                             EGLint                      *attributes);
+  (* add_config_attributes) (CoglDisplay *display,
+                             EGLint      *attributes);
   gboolean
   (* choose_config) (CoglDisplay *display,
                      EGLint *attributes,
@@ -200,6 +199,5 @@ _cogl_winsys_egl_renderer_connect_common (CoglRenderer *renderer,
                                           GError **error);
 
 COGL_EXPORT void
-cogl_display_egl_determine_attributes (CoglDisplay                 *display,
-                                       const CoglFramebufferConfig *config,
-                                       EGLint                      *attributes);
+cogl_display_egl_determine_attributes (CoglDisplay *display,
+                                       EGLint      *attributes);

@@ -406,30 +406,6 @@ typedef enum {
 } ClutterPointerA11yTimeoutType;
 
 /**
- * ClutterActorFlags:
- * @CLUTTER_ACTOR_MAPPED: the actor will be painted (is visible, and inside
- *   a toplevel, and all parents visible)
- * @CLUTTER_ACTOR_REALIZED: the resources associated to the actor have been
- *   allocated
- * @CLUTTER_ACTOR_REACTIVE: the actor 'reacts' to mouse events emitting event
- *   signals
- * @CLUTTER_ACTOR_VISIBLE: the actor has been shown by the application program
- * @CLUTTER_ACTOR_NO_LAYOUT: the actor provides an explicit layout management
- *   policy for its children; this flag will prevent Clutter from automatic
- *   queueing of relayout and will defer all layouting to the actor itself
- *
- * Flags used to signal the state of an actor.
- */
-typedef enum /*< prefix=CLUTTER_ACTOR >*/
-{
-  CLUTTER_ACTOR_MAPPED    = 1 << 1,
-  CLUTTER_ACTOR_REALIZED  = 1 << 2,
-  CLUTTER_ACTOR_REACTIVE  = 1 << 3,
-  CLUTTER_ACTOR_VISIBLE   = 1 << 4,
-  CLUTTER_ACTOR_NO_LAYOUT = 1 << 5
-} ClutterActorFlags;
-
-/**
  * ClutterOffscreenRedirect:
  * @CLUTTER_OFFSCREEN_REDIRECT_AUTOMATIC_FOR_OPACITY: Only redirect
  *   the actor if it is semi-transparent and its has_overlaps()
@@ -946,25 +922,6 @@ typedef enum
   CLUTTER_ORIENTATION_HORIZONTAL,
   CLUTTER_ORIENTATION_VERTICAL
 } ClutterOrientation;
-
-/**
- * ClutterScrollMode:
- * @CLUTTER_SCROLL_NONE: Ignore scrolling
- * @CLUTTER_SCROLL_HORIZONTALLY: Scroll only horizontally
- * @CLUTTER_SCROLL_VERTICALLY: Scroll only vertically
- * @CLUTTER_SCROLL_BOTH: Scroll in both directions
- *
- * Scroll modes.
- */
-typedef enum /*< prefix=CLUTTER_SCROLL >*/
-{
-  CLUTTER_SCROLL_NONE         = 0,
-
-  CLUTTER_SCROLL_HORIZONTALLY = 1 << 0,
-  CLUTTER_SCROLL_VERTICALLY   = 1 << 1,
-
-  CLUTTER_SCROLL_BOTH         = CLUTTER_SCROLL_HORIZONTALLY | CLUTTER_SCROLL_VERTICALLY
-} ClutterScrollMode;
 
 /**
  * ClutterGridPosition:

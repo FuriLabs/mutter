@@ -39,7 +39,6 @@
 #include "cogl/cogl-framebuffer.h"
 #include "cogl/cogl-onscreen-private.h"
 #include "cogl/cogl-renderer-private.h"
-#include "cogl/cogl-onscreen-template-private.h"
 #include "cogl/cogl-private.h"
 #include "cogl/cogl-trace.h"
 #include "cogl/winsys/cogl-winsys-egl-private.h"
@@ -190,9 +189,8 @@ _cogl_winsys_renderer_connect (CoglRenderer *renderer,
 }
 
 void
-cogl_display_egl_determine_attributes (CoglDisplay                 *display,
-                                       const CoglFramebufferConfig *config,
-                                       EGLint                      *attributes)
+cogl_display_egl_determine_attributes (CoglDisplay *display,
+                                       EGLint      *attributes)
 {
   CoglRenderer *renderer = display->renderer;
   CoglRendererEGL *egl_renderer = renderer->winsys;
@@ -201,14 +199,10 @@ cogl_display_egl_determine_attributes (CoglDisplay                 *display,
   /* Let the platform add attributes first, including setting the
    * EGL_SURFACE_TYPE */
   i = egl_renderer->platform_vtable->add_config_attributes (display,
-                                                            config,
                                                             attributes);
 
-  if (config->need_stencil)
-    {
-      attributes[i++] = EGL_STENCIL_SIZE;
-      attributes[i++] = 2;
-    }
+  attributes[i++] = EGL_STENCIL_SIZE;
+  attributes[i++] = 2;
 
   attributes[i++] = EGL_RED_SIZE;
   attributes[i++] = 1;
@@ -230,14 +224,6 @@ cogl_display_egl_determine_attributes (CoglDisplay                 *display,
   attributes[i++] = (renderer->driver == COGL_DRIVER_GL3 ?
                      EGL_OPENGL_BIT :
                      EGL_OPENGL_ES2_BIT);
-
-  if (config->samples_per_pixel)
-    {
-       attributes[i++] = EGL_SAMPLE_BUFFERS;
-       attributes[i++] = 1;
-       attributes[i++] = EGL_SAMPLES;
-       attributes[i++] = config->samples_per_pixel;
-    }
 
   attributes[i++] = EGL_NONE;
 
@@ -323,7 +309,6 @@ try_create_context (CoglDisplay *display,
   cogl_renderer_bind_api (renderer);
 
   cogl_display_egl_determine_attributes (display,
-                                         &display->onscreen_template->config,
                                          cfg_attribs);
 
   edpy = egl_renderer->edpy;

@@ -89,6 +89,15 @@
 #ifndef GL_RGBA16
 #define GL_RGBA16 0x805B
 #endif
+#ifndef GL_BGRA
+#define GL_BGRA 0x80E1
+#endif
+#ifndef GL_BGRA8
+#define GL_BGRA8 0x93A1
+#endif
+#ifndef GL_RG8
+#define GL_RG8 0x822B
+#endif
 
 static CoglPixelFormat
 _cogl_driver_pixel_format_to_gl (CoglContext     *context,
@@ -141,6 +150,20 @@ _cogl_driver_pixel_format_to_gl (CoglContext     *context,
    *      RGB8, RGBA8, RGBA4, RGB5_A1, RGB565
    */
 
+  /* For GLES 2 (not GLES 3) the glintformat and glformat have to match:
+   *
+   * internalformat must match format. No conversion between formats is
+   * supported during texture image processing.
+   *
+   *  GL_INVALID_OPERATION is generated if format does not match internalformat.
+   *
+   * This means for e.g. COGL_PIXEL_FORMAT_RGBX_8888 we cannot use
+   * glintformat=GL_RGB8 with glformat=GL_RGBA. Using glintformat=GL_RGBA8 with
+   * glformat=GL_RGBA means the alpha channel won't be ignored and using
+   * glintformat=GL_RGB8 with glformat=GL_RGB means the uploading is only
+   * expecting 3 channels and not 4.
+   */
+
   /* We try to use the exact matching GL format but if that's not possible
    * because the driver doesn't support it, we fall back to the next best match
    * by calling this function again. This works for all formats which are
@@ -165,7 +188,7 @@ _cogl_driver_pixel_format_to_gl (CoglContext     *context,
     case COGL_PIXEL_FORMAT_RG_88:
       if (cogl_context_has_feature (context, COGL_FEATURE_ID_TEXTURE_RG))
         {
-          glintformat = GL_RG8_EXT;
+          glintformat = GL_RG8;
           glformat = GL_RG;
           gltype = GL_UNSIGNED_BYTE;
         }
@@ -245,8 +268,13 @@ _cogl_driver_pixel_format_to_gl (CoglContext     *context,
       if (_cogl_has_private_feature
           (context, COGL_PRIVATE_FEATURE_TEXTURE_FORMAT_BGRA8888))
         {
-          glintformat = GL_BGRA_EXT;
-          glformat = GL_BGRA_EXT;
+          /* Using the sized internal format GL_BGRA8 only become possible on
+           * 23/06/2024 (https://registry.khronos.org/OpenGL/extensions/EXT/EXT_texture_format_BGRA8888.txt).
+           * When support has propagated to more drivers, we should start
+           * using GL_BGRA8 again.
+           */
+          glintformat = GL_BGRA;
+          glformat = GL_BGRA;
           gltype = GL_UNSIGNED_BYTE;
         }
       else
@@ -349,7 +377,6 @@ _cogl_driver_pixel_format_to_gl (CoglContext     *context,
                                          &gltype);
       break;
 
-    case COGL_PIXEL_FORMAT_RGBX_FP_16161616:
     case COGL_PIXEL_FORMAT_RGBA_FP_16161616:
     case COGL_PIXEL_FORMAT_RGBA_FP_16161616_PRE:
       if (cogl_context_has_feature (context, COGL_FEATURE_ID_TEXTURE_HALF_FLOAT))
@@ -364,14 +391,23 @@ _cogl_driver_pixel_format_to_gl (CoglContext     *context,
         }
       break;
 
+    case COGL_PIXEL_FORMAT_RGBX_FP_16161616:
     case COGL_PIXEL_FORMAT_BGRX_FP_16161616:
-    case COGL_PIXEL_FORMAT_BGRA_FP_16161616:
     case COGL_PIXEL_FORMAT_XRGB_FP_16161616:
-    case COGL_PIXEL_FORMAT_ARGB_FP_16161616:
     case COGL_PIXEL_FORMAT_XBGR_FP_16161616:
-    case COGL_PIXEL_FORMAT_ABGR_FP_16161616:
+      required_format =
+        _cogl_driver_pixel_format_to_gl (context,
+                                         COGL_PIXEL_FORMAT_RGBA_FP_16161616_PRE,
+                                         &glintformat,
+                                         &glformat,
+                                         &gltype);
+      break;
+
+    case COGL_PIXEL_FORMAT_BGRA_FP_16161616:
     case COGL_PIXEL_FORMAT_BGRA_FP_16161616_PRE:
+    case COGL_PIXEL_FORMAT_ARGB_FP_16161616:
     case COGL_PIXEL_FORMAT_ARGB_FP_16161616_PRE:
+    case COGL_PIXEL_FORMAT_ABGR_FP_16161616:
     case COGL_PIXEL_FORMAT_ABGR_FP_16161616_PRE:
       required_format =
         _cogl_driver_pixel_format_to_gl (context,
@@ -565,12 +601,84 @@ _cogl_get_gl_version (CoglContext *ctx,
 }
 
 static gboolean
-_cogl_driver_update_features (CoglContext *context,
-                              GError **error)
+check_gl_version (CoglContext  *ctx,
+                  GError      **error)
+{
+  int major, minor;
+
+  if (!_cogl_get_gl_version (ctx, &major, &minor))
+    {
+      g_set_error (error,
+                   COGL_DRIVER_ERROR,
+                   COGL_DRIVER_ERROR_UNKNOWN_VERSION,
+                   "The GLES version could not be determined");
+      return FALSE;
+    }
+
+  if (!COGL_CHECK_GL_VERSION (major, minor, 2, 0))
+    {
+      g_set_error (error,
+                   COGL_DRIVER_ERROR,
+                   COGL_DRIVER_ERROR_INVALID_VERSION,
+                   "OpenGL ES 2.0 or better is required");
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
+static gboolean
+_cogl_get_glsl_version (CoglContext *ctx,
+                        int         *major_out,
+                        int         *minor_out)
+{
+  const char *version_string;
+
+  version_string = (char *)ctx->glGetString (GL_SHADING_LANGUAGE_VERSION);
+
+  if (!g_str_has_prefix (version_string, "OpenGL ES GLSL ES "))
+    return FALSE;
+
+  return _cogl_gl_util_parse_gl_version (version_string + 18,
+                                         major_out,
+                                         minor_out);
+}
+
+static gboolean
+check_glsl_version (CoglContext  *ctx,
+                    GError      **error)
+{
+  int major, minor;
+
+  if (!_cogl_get_glsl_version (ctx, &major, &minor))
+    {
+      g_set_error (error,
+                   COGL_DRIVER_ERROR,
+                   COGL_DRIVER_ERROR_UNKNOWN_VERSION,
+                   "The supported GLSL version could not be determined");
+      return FALSE;
+    }
+
+  if (!COGL_CHECK_GL_VERSION (major, minor, ctx->glsl_major, ctx->glsl_minor))
+    {
+      g_set_error (error,
+                   COGL_DRIVER_ERROR,
+                   COGL_DRIVER_ERROR_INVALID_VERSION,
+                   "GLSL ES %d%d0 or better is required",
+                   ctx->glsl_major, ctx->glsl_minor);
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
+static gboolean
+_cogl_driver_update_features (CoglContext  *context,
+                              GError      **error)
 {
   unsigned long private_features
     [COGL_FLAGS_N_LONGS_FOR_SIZE (COGL_N_PRIVATE_FEATURES)] = { 0 };
-  char **gl_extensions;
+  g_auto (GStrv) gl_extensions = 0;
   int gl_major, gl_minor;
   int i;
 
@@ -586,9 +694,19 @@ _cogl_driver_update_features (CoglContext *context,
 
   gl_extensions = _cogl_context_get_gl_extensions (context);
 
+  if (!check_gl_version (context, error))
+    return FALSE;
+
+  context->glsl_major = 1;
+  context->glsl_minor = 0;
+  context->glsl_es = TRUE;
+
+  if (!check_glsl_version (context, error))
+    return FALSE;
+
   if (G_UNLIKELY (COGL_DEBUG_ENABLED (COGL_DEBUG_WINSYS)))
     {
-      char *all_extensions = g_strjoinv (" ", gl_extensions);
+      g_autofree char *all_extensions = g_strjoinv (" ", gl_extensions);
 
       COGL_NOTE (WINSYS,
                  "Checking features\n"
@@ -600,29 +718,9 @@ _cogl_driver_update_features (CoglContext *context,
                  context->glGetString (GL_RENDERER),
                  _cogl_context_get_gl_version (context),
                  all_extensions);
-
-      g_free (all_extensions);
     }
 
-  context->glsl_major = 1;
-  context->glsl_minor = 0;
-  context->glsl_version_to_use = 100;
-
-  if (!_cogl_get_gl_version (context, &gl_major, &gl_minor))
-    {
-      gl_major = 1;
-      gl_minor = 1;
-    }
-
-  if (!COGL_CHECK_GL_VERSION (gl_major, gl_minor, 2, 0))
-    {
-      g_set_error (error,
-                   COGL_DRIVER_ERROR,
-                   COGL_DRIVER_ERROR_INVALID_VERSION,
-                   "OpenGL ES 2.0 or better is required");
-      g_strfreev (gl_extensions);
-      return FALSE;
-    }
+  _cogl_get_gl_version (context, &gl_major, &gl_minor);
 
   _cogl_feature_check_ext_functions (context,
                                      gl_major,
@@ -636,7 +734,6 @@ _cogl_driver_update_features (CoglContext *context,
                    COGL_DRIVER_ERROR,
                    COGL_DRIVER_ERROR_INVALID_VERSION,
                    "GL_OES_rgb8_rgba8 is required for GLES 2");
-      g_strfreev (gl_extensions);
       return FALSE;
     }
 
@@ -751,8 +848,6 @@ _cogl_driver_update_features (CoglContext *context,
   /* Cache features */
   for (i = 0; i < G_N_ELEMENTS (private_features); i++)
     context->private_features[i] |= private_features[i];
-
-  g_strfreev (gl_extensions);
 
   return TRUE;
 }

@@ -48,13 +48,10 @@ G_DEFINE_TYPE (MetaSurfaceActorWayland,
                META_TYPE_SURFACE_ACTOR)
 
 static void
-meta_surface_actor_wayland_process_damage (MetaSurfaceActor *actor,
-                                           int               x,
-                                           int               y,
-                                           int               width,
-                                           int               height)
+meta_surface_actor_wayland_process_damage (MetaSurfaceActor   *actor,
+                                           const MtkRectangle *area)
 {
-  meta_surface_actor_update_area (actor, x, y, width, height);
+  meta_surface_actor_update_area (actor, area);
 }
 
 static gboolean
@@ -316,7 +313,9 @@ meta_surface_actor_wayland_init (MetaSurfaceActorWayland *self)
 MetaSurfaceActor *
 meta_surface_actor_wayland_new (MetaWaylandSurface *surface)
 {
-  MetaSurfaceActorWayland *self = g_object_new (META_TYPE_SURFACE_ACTOR_WAYLAND, NULL);
+  MetaSurfaceActorWayland *self = g_object_new (META_TYPE_SURFACE_ACTOR_WAYLAND,
+                                                "accessible-name", "Wayland surface",
+                                                NULL);
 
   g_assert (meta_is_wayland_compositor ());
 

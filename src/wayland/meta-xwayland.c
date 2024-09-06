@@ -1050,6 +1050,29 @@ meta_xwayland_shutdown (MetaWaylandCompositor *compositor)
     }
 }
 
+static void
+update_highest_monitor_scale (MetaXWaylandManager *manager)
+{
+  MetaWaylandCompositor *compositor = manager->compositor;
+  MetaContext *context = meta_wayland_compositor_get_context (compositor);
+  MetaBackend *backend = meta_context_get_backend (context);
+  MetaMonitorManager *monitor_manager =
+    meta_backend_get_monitor_manager (backend);
+  GList *logical_monitors;
+  GList *l;
+  double scale = 1.0;
+
+  logical_monitors = meta_monitor_manager_get_logical_monitors (monitor_manager);
+  for (l = logical_monitors; l; l = l->next)
+    {
+      MetaLogicalMonitor *logical_monitor = l->data;
+
+      scale = MAX (scale, meta_logical_monitor_get_scale (logical_monitor));
+    }
+
+  manager->highest_monitor_scale = scale;
+}
+
 gboolean
 meta_xwayland_init (MetaXWaylandManager    *manager,
                     MetaWaylandCompositor  *compositor,
@@ -1057,6 +1080,9 @@ meta_xwayland_init (MetaXWaylandManager    *manager,
                     GError                **error)
 {
   MetaContext *context = compositor->context;
+  MetaBackend *backend = meta_context_get_backend (context);
+  MetaMonitorManager *monitor_manager =
+    meta_backend_get_monitor_manager (backend);
   MetaX11DisplayPolicy policy;
   int display = 0;
 
@@ -1114,11 +1140,15 @@ meta_xwayland_init (MetaXWaylandManager    *manager,
 
   if (policy != META_X11_DISPLAY_POLICY_DISABLED)
     manager->prepare_shutdown_id = g_signal_connect (compositor, "prepare-shutdown",
-                                                     G_CALLBACK (meta_xwayland_shutdown), 
+                                                     G_CALLBACK (meta_xwayland_shutdown),
                                                      NULL);
 
   /* Xwayland specific protocol, needs to be filtered out for all other clients */
   meta_xwayland_grab_keyboard_init (compositor);
+
+  g_signal_connect_swapped (monitor_manager, "monitors-changed-internal",
+                            G_CALLBACK (update_highest_monitor_scale), manager);
+  update_highest_monitor_scale (manager);
 
   return TRUE;
 }
@@ -1216,14 +1246,18 @@ meta_xwayland_set_primary_output (MetaX11Display *x11_display)
   MetaMonitorManager *monitor_manager =
     monitor_manager_from_x11_display (x11_display);
   XRRScreenResources *resources;
-  MetaLogicalMonitor *primary_monitor;
+  MetaLogicalMonitor *primary_logical_monitor;
+  GList *monitors;
+  MetaMonitor *primary_monitor;
   int i;
 
-  primary_monitor =
+  primary_logical_monitor =
     meta_monitor_manager_get_primary_logical_monitor (monitor_manager);
-
-  if (!primary_monitor)
+  if (!primary_logical_monitor)
     return;
+
+  monitors = meta_logical_monitor_get_monitors (primary_logical_monitor);
+  primary_monitor = g_list_first (monitors)->data;
 
   resources = XRRGetScreenResourcesCurrent (xdisplay,
                                             DefaultRootWindow (xdisplay));
@@ -1235,34 +1269,21 @@ meta_xwayland_set_primary_output (MetaX11Display *x11_display)
     {
       RROutput output_id = resources->outputs[i];
       XRROutputInfo *xrandr_output;
-      XRRCrtcInfo *crtc_info = NULL;
-      MtkRectangle crtc_geometry;
 
       xrandr_output = XRRGetOutputInfo (xdisplay, resources, output_id);
       if (!xrandr_output)
         continue;
 
-      if (xrandr_output->crtc)
-        crtc_info = XRRGetCrtcInfo (xdisplay, resources, xrandr_output->crtc);
-
-      XRRFreeOutputInfo (xrandr_output);
-
-      if (!crtc_info)
-        continue;
-
-      crtc_geometry.x = crtc_info->x;
-      crtc_geometry.y = crtc_info->y;
-      crtc_geometry.width = crtc_info->width;
-      crtc_geometry.height = crtc_info->height;
-
-      XRRFreeCrtcInfo (crtc_info);
-
-      if (mtk_rectangle_equal (&crtc_geometry, &primary_monitor->rect))
+      if (g_strcmp0 (xrandr_output->name,
+                     meta_monitor_get_connector (primary_monitor)) == 0)
         {
           XRRSetOutputPrimary (xdisplay, DefaultRootWindow (xdisplay),
                                output_id);
+          XRRFreeOutputInfo (xrandr_output);
           break;
         }
+
+      XRRFreeOutputInfo (xrandr_output);
     }
   mtk_x11_error_trap_pop (x11_display->xdisplay);
 
@@ -1311,4 +1332,51 @@ meta_xwayland_set_should_enable_ei_portal (MetaXWaylandManager  *manager,
                                            gboolean              should_enable_ei_portal)
 {
   manager->should_enable_ei_portal = should_enable_ei_portal;
+}
+
+int
+meta_xwayland_get_effective_scale (MetaXWaylandManager *manager)
+{
+  MetaWaylandCompositor *compositor = manager->compositor;
+  MetaContext *context = meta_wayland_compositor_get_context (compositor);
+  MetaBackend *backend = meta_context_get_backend (context);
+  MetaMonitorManager *monitor_manager =
+    meta_backend_get_monitor_manager (backend);
+  MetaSettings *settings = meta_backend_get_settings (backend);
+
+  switch (meta_monitor_manager_get_layout_mode (monitor_manager))
+    {
+    case META_LOGICAL_MONITOR_LAYOUT_MODE_PHYSICAL:
+      break;
+
+    case META_LOGICAL_MONITOR_LAYOUT_MODE_LOGICAL:
+      if (meta_settings_is_experimental_feature_enabled (settings,
+                                                         META_EXPERIMENTAL_FEATURE_XWAYLAND_NATIVE_SCALING) &&
+          meta_settings_is_experimental_feature_enabled (settings,
+                                                         META_EXPERIMENTAL_FEATURE_SCALE_MONITOR_FRAMEBUFFER))
+        return (int) ceil (manager->highest_monitor_scale);
+    }
+
+  return 1;
+}
+
+int
+meta_xwayland_get_x11_ui_scaling_factor (MetaXWaylandManager *manager)
+{
+  MetaWaylandCompositor *compositor = manager->compositor;
+  MetaContext *context = meta_wayland_compositor_get_context (compositor);
+  MetaBackend *backend = meta_context_get_backend (context);
+  MetaMonitorManager *monitor_manager =
+    meta_backend_get_monitor_manager (backend);
+  MetaSettings *settings = meta_backend_get_settings (backend);
+
+  switch (meta_monitor_manager_get_layout_mode (monitor_manager))
+    {
+    case META_LOGICAL_MONITOR_LAYOUT_MODE_PHYSICAL:
+      return meta_settings_get_ui_scaling_factor (settings);
+    case META_LOGICAL_MONITOR_LAYOUT_MODE_LOGICAL:
+      return meta_xwayland_get_effective_scale (manager);
+    }
+
+  g_assert_not_reached ();
 }

@@ -124,9 +124,10 @@ meta_backend_native_dispose (GObject *object)
 }
 
 static ClutterBackend *
-meta_backend_native_create_clutter_backend (MetaBackend *backend)
+meta_backend_native_create_clutter_backend (MetaBackend    *backend,
+                                            ClutterContext *context)
 {
-  return CLUTTER_BACKEND (meta_clutter_backend_native_new (backend));
+  return CLUTTER_BACKEND (meta_clutter_backend_native_new (backend, context));
 }
 
 static ClutterSeat *
@@ -136,6 +137,8 @@ meta_backend_native_create_default_seat (MetaBackend  *backend,
   MetaBackendNative *backend_native = META_BACKEND_NATIVE (backend);
   MetaBackendNativePrivate *priv =
     meta_backend_native_get_instance_private (backend_native);
+  ClutterContext *clutter_context =
+    meta_backend_get_clutter_context (backend);
   const char *seat_id = NULL;
   MetaSeatNativeFlag flags;
 
@@ -158,6 +161,7 @@ meta_backend_native_create_default_seat (MetaBackend  *backend,
 
   return CLUTTER_SEAT (g_object_new (META_TYPE_SEAT_NATIVE,
                                      "backend", backend,
+                                     "context", clutter_context,
                                      "seat-id", seat_id,
                                      "name", seat_id,
                                      "flags", flags,
@@ -638,6 +642,7 @@ init_gpus (MetaBackendNative  *native,
     meta_backend_native_get_instance_private (native);
   MetaBackend *backend = META_BACKEND (native);
   MetaUdev *udev = meta_backend_native_get_udev (native);
+  MetaKms *kms = meta_backend_native_get_kms (native);
   g_autoptr (GError) local_error = NULL;
   MetaUdevDeviceType device_type = 0;
   GList *devices;
@@ -701,6 +706,8 @@ init_gpus (MetaBackendNative  *native,
     }
 
   g_list_free_full (devices, g_object_unref);
+
+  meta_kms_notify_probed (kms);
 
   if (!meta_backend_is_headless (backend) &&
       g_list_length (meta_backend_get_gpus (backend)) == 0)

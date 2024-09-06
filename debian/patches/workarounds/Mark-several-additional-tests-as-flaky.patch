@@ -16,10 +16,10 @@ Forwarded: no
  3 files changed, 58 insertions(+), 3 deletions(-)
 
 diff --git a/src/tests/clutter/conform/gesture.c b/src/tests/clutter/conform/gesture.c
-index 7d259f6..e732c1d 100644
+index f3901a2..c0affef 100644
 --- a/src/tests/clutter/conform/gesture.c
 +++ b/src/tests/clutter/conform/gesture.c
-@@ -135,6 +135,12 @@ gesture_state_machine_move_to_waiting (void)
+@@ -133,6 +133,12 @@ gesture_state_machine_move_to_waiting (void)
    ClutterGesture *gesture = CLUTTER_GESTURE (g_object_new (TEST_TYPE_GESTURE, NULL));
    gboolean was_updated;
  
@@ -32,7 +32,7 @@ index 7d259f6..e732c1d 100644
    virtual_pointer = clutter_seat_create_virtual_device (seat, CLUTTER_POINTER_DEVICE);
    now_us = g_get_monotonic_time ();
  
-@@ -196,6 +202,12 @@ gesture_state_machine_move_to_cancelled_while_possible (void)
+@@ -193,6 +199,12 @@ gesture_state_machine_move_to_cancelled_while_possible (void)
    gboolean was_updated;
    ClutterGestureState gesture_state_change;
  
@@ -45,7 +45,7 @@ index 7d259f6..e732c1d 100644
    virtual_pointer = clutter_seat_create_virtual_device (seat, CLUTTER_POINTER_DEVICE);
    now_us = g_get_monotonic_time ();
  
-@@ -244,6 +256,12 @@ gesture_state_machine_move_to_cancelled_on_sequence_cancel (void)
+@@ -240,6 +252,12 @@ gesture_state_machine_move_to_cancelled_on_sequence_cancel (void)
    gboolean was_updated;
    ClutterGestureState gesture_state_change;
  
@@ -58,7 +58,7 @@ index 7d259f6..e732c1d 100644
    virtual_pointer = clutter_seat_create_virtual_device (seat, CLUTTER_POINTER_DEVICE);
    now_us = g_get_monotonic_time ();
  
-@@ -302,6 +320,12 @@ gesture_multiple_mouse_buttons (void)
+@@ -297,6 +315,12 @@ gesture_multiple_mouse_buttons (void)
    ClutterGesture *gesture = CLUTTER_GESTURE (g_object_new (TEST_TYPE_GESTURE, NULL));
    gboolean was_updated;
  
@@ -72,7 +72,7 @@ index 7d259f6..e732c1d 100644
    now_us = g_get_monotonic_time ();
  
 diff --git a/src/tests/clutter/conform/grab.c b/src/tests/clutter/conform/grab.c
-index 26125a2..af6b79d 100644
+index 93a8cf4..9018a53 100644
 --- a/src/tests/clutter/conform/grab.c
 +++ b/src/tests/clutter/conform/grab.c
 @@ -620,6 +620,12 @@ grab_input_only (void)
@@ -85,14 +85,14 @@ index 26125a2..af6b79d 100644
 +      return;
 +    }
 +
-   seat = clutter_backend_get_default_seat (clutter_get_default_backend ());
+   seat = clutter_test_get_default_seat ();
    pointer = clutter_seat_create_virtual_device (seat, CLUTTER_POINTER_DEVICE);
  
 diff --git a/src/tests/meson.build b/src/tests/meson.build
-index d575147..cbdb0c5 100644
+index 0b1c0f0..7e3ddb8 100644
 --- a/src/tests/meson.build
 +++ b/src/tests/meson.build
-@@ -393,6 +393,7 @@ test_cases += [
+@@ -423,6 +423,7 @@ test_cases += [
      'name': 'input-capture',
      'suite': 'backends/native',
      'sources': [ 'input-capture-tests.c' ],
@@ -100,7 +100,7 @@ index d575147..cbdb0c5 100644
    },
    {
      'name': 'thread',
-@@ -684,8 +685,14 @@ foreach test_case: test_cases
+@@ -714,8 +715,14 @@ foreach test_case: test_cases
  
    test_depends = [ default_plugin ] + test_case.get('depends', [])
  
@@ -116,7 +116,7 @@ index d575147..cbdb0c5 100644
      env: test_env,
      depends: test_depends,
      is_parallel: false,
-@@ -746,8 +753,26 @@ stacking_tests = [
+@@ -776,8 +783,26 @@ stacking_tests = [
  ]
  
  foreach stacking_test: stacking_tests
@@ -144,12 +144,12 @@ index d575147..cbdb0c5 100644
      env: test_env,
      args: [
        files('stacking' / stacking_test + '.metatest'),
-@@ -757,7 +782,7 @@ foreach stacking_test: stacking_tests
-     should_fail: stacking_test.startswith('fixme-'),
-   )
+@@ -919,7 +944,7 @@ test('get-state-tool-gdbus', mutter,
  
--  if have_installed_tests
-+  if have_installed_tests and not flaky
-     installed_tests_cdata = configuration_data()
-     installed_tests_cdata.set('apiversion', libmutter_api_version)
-     installed_tests_cdata.set('libexecdir', libexecdir)
+ # Installed tests
+ 
+-if have_installed_tests
++if have_installed_tests and not flaky
+   install_subdir('stacking', install_dir: tests_datadir)
+ 
+   foreach stacking_test: stacking_tests

@@ -53,6 +53,7 @@
 #include <stdlib.h>
 
 #include "backends/meta-barrier-private.h"
+#include "backends/meta-color-manager-private.h"
 #include "backends/meta-cursor-renderer.h"
 #include "backends/meta-cursor-tracker-private.h"
 #include "backends/meta-dbus-session-watcher.h"
@@ -213,7 +214,6 @@ meta_backend_dispose (GObject *object)
 
   g_clear_pointer (&priv->cursor_tracker, meta_cursor_tracker_destroy);
   g_clear_object (&priv->current_device);
-  g_clear_object (&priv->color_manager);
   g_clear_object (&priv->monitor_manager);
   g_clear_object (&priv->orientation_manager);
 #ifdef HAVE_REMOTE_DESKTOP
@@ -257,6 +257,9 @@ meta_backend_dispose (GObject *object)
   g_clear_pointer (&priv->stage, clutter_actor_destroy);
   g_clear_pointer (&priv->idle_manager, meta_idle_manager_free);
   g_clear_object (&priv->renderer);
+  /* the renderer keeps references to color devices which keep references
+   * to the color manager. */
+  g_clear_object (&priv->color_manager);
 #ifdef HAVE_EGL
   g_clear_object (&priv->egl);
 #endif
@@ -351,6 +354,9 @@ update_cursors (MetaBackend *backend)
 void
 meta_backend_monitors_changed (MetaBackend *backend)
 {
+  MetaColorManager *color_manager = meta_backend_get_color_manager (backend);
+
+  meta_color_manager_monitors_changed (color_manager);
   meta_backend_update_stage (backend);
   update_cursors (backend);
 }
@@ -1195,11 +1201,13 @@ static GSourceFuncs clutter_source_funcs = {
 };
 
 static ClutterBackend *
-meta_clutter_backend_constructor (gpointer user_data)
+meta_clutter_backend_constructor (ClutterContext *context,
+                                  gpointer        user_data)
 {
   MetaBackend *backend = META_BACKEND (user_data);
 
-  return META_BACKEND_GET_CLASS (backend)->create_clutter_backend (backend);
+  return META_BACKEND_GET_CLASS (backend)->create_clutter_backend (backend,
+                                                                   context);
 }
 
 static ClutterSeat *
@@ -1217,8 +1225,7 @@ init_clutter (MetaBackend  *backend,
   MetaBackendSource *backend_source;
   GSource *source;
 
-  priv->clutter_context = clutter_create_context (CLUTTER_CONTEXT_FLAG_NONE,
-                                                  meta_clutter_backend_constructor,
+  priv->clutter_context = clutter_create_context (meta_clutter_backend_constructor,
                                                   backend,
                                                   error);
   if (!priv->clutter_context)

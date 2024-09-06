@@ -40,6 +40,7 @@ enum
 {
   COLOR_SPACE_CHANGED,
   HDR_METADATA_CHANGED,
+  BACKLIGHT_CHANGED,
 
   N_SIGNALS
 };
@@ -216,7 +217,12 @@ meta_output_set_backlight (MetaOutput *output,
 {
   MetaOutputPrivate *priv = meta_output_get_instance_private (output);
 
+  g_return_if_fail (backlight >= priv->info->backlight_min);
+  g_return_if_fail (backlight <= priv->info->backlight_max);
+
   priv->backlight = backlight;
+
+  g_signal_emit (output, signals[BACKLIGHT_CHANGED], 0);
 }
 
 int
@@ -300,29 +306,29 @@ meta_output_get_assigned_crtc (MetaOutput *output)
   return priv->crtc;
 }
 
-MetaMonitorTransform
-meta_output_logical_to_crtc_transform (MetaOutput           *output,
-                                       MetaMonitorTransform  transform)
+MtkMonitorTransform
+meta_output_logical_to_crtc_transform (MetaOutput          *output,
+                                       MtkMonitorTransform  transform)
 {
   MetaOutputPrivate *priv = meta_output_get_instance_private (output);
-  MetaMonitorTransform panel_orientation_transform;
+  MtkMonitorTransform panel_orientation_transform;
 
   panel_orientation_transform = priv->info->panel_orientation_transform;
-  return meta_monitor_transform_transform (transform,
-                                           panel_orientation_transform);
+  return mtk_monitor_transform_transform (transform,
+                                          panel_orientation_transform);
 }
 
-MetaMonitorTransform
-meta_output_crtc_to_logical_transform (MetaOutput           *output,
-                                       MetaMonitorTransform  transform)
+MtkMonitorTransform
+meta_output_crtc_to_logical_transform (MetaOutput          *output,
+                                       MtkMonitorTransform  transform)
 {
   MetaOutputPrivate *priv = meta_output_get_instance_private (output);
-  MetaMonitorTransform inverted_panel_orientation_transform;
+  MtkMonitorTransform inverted_panel_orientation_transform;
 
   inverted_panel_orientation_transform =
-    meta_monitor_transform_invert (priv->info->panel_orientation_transform);
-  return meta_monitor_transform_transform (transform,
-                                           inverted_panel_orientation_transform);
+    mtk_monitor_transform_invert (priv->info->panel_orientation_transform);
+  return mtk_monitor_transform_transform (transform,
+                                          inverted_panel_orientation_transform);
 }
 
 static void
@@ -676,6 +682,13 @@ meta_output_class_init (MetaOutputClass *klass)
                   0,
                   NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
+  signals[BACKLIGHT_CHANGED] =
+    g_signal_new ("backlight-changed",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_LAST,
+                  0,
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE, 0);
 }
 
 gboolean
@@ -707,6 +720,70 @@ meta_tile_info_equal (MetaTileInfo *a,
     return FALSE;
 
   if (a->tile_h != b->tile_h)
+    return FALSE;
+
+  return TRUE;
+}
+
+static gboolean
+hdr_primaries_equal (double x1, double x2)
+{
+  return fabs (x1 - x2) < (0.00002 - DBL_EPSILON);
+}
+
+static gboolean
+hdr_nits_equal (double x1, double x2)
+{
+  return fabs (x1 - x2) < (1.0 - DBL_EPSILON);
+}
+
+static gboolean
+hdr_min_luminance_equal (double x1, double x2)
+{
+  return fabs (x1 - x2) < (0.0001 - DBL_EPSILON);
+}
+
+gboolean
+meta_output_hdr_metadata_equal (MetaOutputHdrMetadata *metadata,
+                                MetaOutputHdrMetadata *other_metadata)
+{
+  if (!metadata->active && !other_metadata->active)
+    return TRUE;
+
+  if (metadata->active != other_metadata->active)
+    return FALSE;
+
+  if (metadata->eotf != other_metadata->eotf)
+      return FALSE;
+
+  if (!hdr_primaries_equal (metadata->mastering_display_primaries[0].x,
+                            other_metadata->mastering_display_primaries[0].x) ||
+      !hdr_primaries_equal (metadata->mastering_display_primaries[0].y,
+                            other_metadata->mastering_display_primaries[0].y) ||
+      !hdr_primaries_equal (metadata->mastering_display_primaries[1].x,
+                            other_metadata->mastering_display_primaries[1].x) ||
+      !hdr_primaries_equal (metadata->mastering_display_primaries[1].y,
+                            other_metadata->mastering_display_primaries[1].y) ||
+      !hdr_primaries_equal (metadata->mastering_display_primaries[2].x,
+                            other_metadata->mastering_display_primaries[2].x) ||
+      !hdr_primaries_equal (metadata->mastering_display_primaries[2].y,
+                            other_metadata->mastering_display_primaries[2].y) ||
+      !hdr_primaries_equal (metadata->mastering_display_white_point.x,
+                            other_metadata->mastering_display_white_point.x) ||
+      !hdr_primaries_equal (metadata->mastering_display_white_point.y,
+                            other_metadata->mastering_display_white_point.y))
+    return FALSE;
+
+  if (!hdr_nits_equal (metadata->mastering_display_max_luminance,
+                       other_metadata->mastering_display_max_luminance))
+    return FALSE;
+
+  if (!hdr_min_luminance_equal (metadata->mastering_display_min_luminance,
+                                other_metadata->mastering_display_min_luminance))
+    return FALSE;
+
+  if (!hdr_nits_equal (metadata->max_cll, other_metadata->max_cll) ||
+      !hdr_nits_equal (metadata->max_fall, other_metadata->max_fall))
     return FALSE;
 
   return TRUE;

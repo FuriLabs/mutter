@@ -843,16 +843,17 @@ drag_xgrab_get_focus_surface (MetaWaylandEventHandler *handler,
                               ClutterEventSequence    *sequence,
                               gpointer                 user_data)
 {
-  ClutterSeat *clutter_seat;
+  MetaWaylandDragGrab *drag_grab = user_data;
+  ClutterInputDevice *drag_device;
+  ClutterEventSequence *drag_sequence;
 
-  clutter_seat = clutter_input_device_get_seat (device);
-  if (sequence ||
-      device != clutter_seat_get_pointer (clutter_seat))
+  drag_device = meta_wayland_drag_grab_get_device (drag_grab, &drag_sequence);
+
+  if (drag_sequence != sequence ||
+      drag_device != device)
     return NULL;
 
-  return meta_wayland_event_handler_chain_up_get_focus_surface (handler,
-                                                                device,
-                                                                sequence);
+  return meta_wayland_drag_grab_get_origin (drag_grab);
 }
 
 static void
@@ -915,9 +916,10 @@ drag_xgrab_release (MetaWaylandEventHandler *handler,
                            CLUTTER_BUTTON3_MASK |
                            CLUTTER_BUTTON4_MASK |
                            CLUTTER_BUTTON5_MASK)) <= 1 &&
-      (!meta_wayland_drag_grab_get_focus (drag_grab) ||
-       meta_wayland_data_source_get_current_action (data_source) ==
-       WL_DATA_DEVICE_MANAGER_DND_ACTION_NONE))
+      ((!meta_wayland_drag_grab_get_focus (drag_grab) ||
+        meta_wayland_data_source_get_current_action (data_source) ==
+        WL_DATA_DEVICE_MANAGER_DND_ACTION_NONE) ||
+       !meta_wayland_data_source_has_target (data_source)))
     meta_xwayland_end_dnd_grab (&seat->data_device, FALSE);
 
   return CLUTTER_EVENT_PROPAGATE;
@@ -1108,10 +1110,10 @@ find_dnd_candidate_device (ClutterStage         *stage,
 
   if (!sequence)
     {
-      if (modifiers &
-          (CLUTTER_BUTTON1_MASK | CLUTTER_BUTTON2_MASK |
-           CLUTTER_BUTTON3_MASK | CLUTTER_BUTTON4_MASK |
-           CLUTTER_BUTTON5_MASK))
+      if ((modifiers &
+           (CLUTTER_BUTTON1_MASK | CLUTTER_BUTTON2_MASK |
+            CLUTTER_BUTTON3_MASK | CLUTTER_BUTTON4_MASK |
+            CLUTTER_BUTTON5_MASK)) == 0)
         return TRUE;
     }
 

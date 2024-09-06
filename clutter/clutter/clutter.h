@@ -29,6 +29,8 @@
 
 #include "clutter/clutter-types.h"
 
+#include "clutter/clutter-actor-accessible.h"
+
 #include "clutter/clutter-action.h"
 #include "clutter/clutter-actor.h"
 #include "clutter/clutter-actor-meta.h"
@@ -48,6 +50,7 @@
 #include "clutter/clutter-colorize-effect.h"
 #include "clutter/clutter-constraint.h"
 #include "clutter/clutter-content.h"
+#include "clutter/clutter-context.h"
 #include "clutter/clutter-deform-effect.h"
 #include "clutter/clutter-desaturate-effect.h"
 #include "clutter/clutter-effect.h"
@@ -84,14 +87,12 @@
 #include "clutter/clutter-pipeline-cache.h"
 #include "clutter/clutter-property-transition.h"
 #include "clutter/clutter-rotate-action.h"
-#include "clutter/clutter-scroll-actor.h"
 #include "clutter/clutter-settings.h"
 #include "clutter/clutter-shader-effect.h"
 #include "clutter/clutter-shader-types.h"
 #include "clutter/clutter-swipe-action.h"
 #include "clutter/clutter-snap-constraint.h"
 #include "clutter/clutter-stage.h"
-#include "clutter/clutter-stage-manager.h"
 #include "clutter/clutter-stage-view.h"
 #include "clutter/clutter-tap-action.h"
 #include "clutter/clutter-text.h"

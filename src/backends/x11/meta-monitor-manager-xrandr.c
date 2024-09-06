@@ -192,25 +192,25 @@ meta_monitor_manager_xrandr_set_power_save_mode (MetaMonitorManager *manager,
 }
 
 static xcb_randr_rotation_t
-meta_monitor_transform_to_xrandr (MetaMonitorTransform transform)
+mtk_monitor_transform_to_xrandr (MtkMonitorTransform transform)
 {
   switch (transform)
     {
-    case META_MONITOR_TRANSFORM_NORMAL:
+    case MTK_MONITOR_TRANSFORM_NORMAL:
       return XCB_RANDR_ROTATION_ROTATE_0;
-    case META_MONITOR_TRANSFORM_90:
+    case MTK_MONITOR_TRANSFORM_90:
       return XCB_RANDR_ROTATION_ROTATE_90;
-    case META_MONITOR_TRANSFORM_180:
+    case MTK_MONITOR_TRANSFORM_180:
       return XCB_RANDR_ROTATION_ROTATE_180;
-    case META_MONITOR_TRANSFORM_270:
+    case MTK_MONITOR_TRANSFORM_270:
       return XCB_RANDR_ROTATION_ROTATE_270;
-    case META_MONITOR_TRANSFORM_FLIPPED:
+    case MTK_MONITOR_TRANSFORM_FLIPPED:
       return XCB_RANDR_ROTATION_REFLECT_X | XCB_RANDR_ROTATION_ROTATE_0;
-    case META_MONITOR_TRANSFORM_FLIPPED_90:
+    case MTK_MONITOR_TRANSFORM_FLIPPED_90:
       return XCB_RANDR_ROTATION_REFLECT_X | XCB_RANDR_ROTATION_ROTATE_90;
-    case META_MONITOR_TRANSFORM_FLIPPED_180:
+    case MTK_MONITOR_TRANSFORM_FLIPPED_180:
       return XCB_RANDR_ROTATION_REFLECT_X | XCB_RANDR_ROTATION_ROTATE_180;
-    case META_MONITOR_TRANSFORM_FLIPPED_270:
+    case MTK_MONITOR_TRANSFORM_FLIPPED_270:
       return XCB_RANDR_ROTATION_REFLECT_X | XCB_RANDR_ROTATION_ROTATE_270;
     }
 
@@ -531,7 +531,7 @@ apply_crtc_assignments (MetaMonitorManager    *manager,
           x = (int) roundf (crtc_assignment->layout.origin.x);
           y = (int) roundf (crtc_assignment->layout.origin.y);
           rotation =
-            meta_monitor_transform_to_xrandr (crtc_assignment->transform);
+            mtk_monitor_transform_to_xrandr (crtc_assignment->transform);
           mode =  meta_crtc_mode_get_id (crtc_mode);
           if (!xrandr_set_crtc_config (manager_xrandr,
                                        crtc,
@@ -659,14 +659,6 @@ meta_monitor_manager_xrandr_apply_monitors_config (MetaMonitorManager      *mana
   g_ptr_array_free (output_assignments, TRUE);
 
   return TRUE;
-}
-
-static void
-meta_monitor_manager_xrandr_change_backlight (MetaMonitorManager *manager,
-					      MetaOutput         *output,
-					      gint                value)
-{
-  meta_output_xrandr_change_backlight (META_OUTPUT_XRANDR (output), value);
 }
 
 static MetaMonitorXrandrData *
@@ -966,7 +958,6 @@ meta_monitor_manager_xrandr_class_init (MetaMonitorManagerXrandrClass *klass)
   manager_class->ensure_initial_config = meta_monitor_manager_xrandr_ensure_initial_config;
   manager_class->apply_monitors_config = meta_monitor_manager_xrandr_apply_monitors_config;
   manager_class->set_power_save_mode = meta_monitor_manager_xrandr_set_power_save_mode;
-  manager_class->change_backlight = meta_monitor_manager_xrandr_change_backlight;
   manager_class->tiled_monitor_added = meta_monitor_manager_xrandr_tiled_monitor_added;
   manager_class->tiled_monitor_removed = meta_monitor_manager_xrandr_tiled_monitor_removed;
   manager_class->calculate_monitor_mode_scale = meta_monitor_manager_xrandr_calculate_monitor_mode_scale;

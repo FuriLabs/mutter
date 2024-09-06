@@ -73,12 +73,12 @@ struct _MetaMonitorClass
   MetaOutput * (* get_main_output) (MetaMonitor *monitor);
   void (* derive_layout) (MetaMonitor  *monitor,
                           MtkRectangle *layout);
-  void (* calculate_crtc_pos) (MetaMonitor          *monitor,
-                               MetaMonitorMode      *monitor_mode,
-                               MetaOutput           *output,
-                               MetaMonitorTransform  crtc_transform,
-                               int                  *out_x,
-                               int                  *out_y);
+  void (* calculate_crtc_pos) (MetaMonitor         *monitor,
+                               MetaMonitorMode     *monitor_mode,
+                               MetaOutput          *output,
+                               MtkMonitorTransform  crtc_transform,
+                               int                 *out_x,
+                               int                 *out_y);
   gboolean (* get_suggested_position) (MetaMonitor *monitor,
                                        int         *width,
                                        int         *height);
@@ -124,6 +124,7 @@ gboolean meta_monitor_get_max_bpc (MetaMonitor  *monitor,
 
 MetaOutputRGBRange meta_monitor_get_rgb_range (MetaMonitor *monitor);
 
+META_EXPORT_TEST
 gboolean meta_monitor_is_laptop_panel (MetaMonitor *monitor);
 
 gboolean meta_monitor_is_virtual (MetaMonitor *monitor);
@@ -171,15 +172,15 @@ MetaConnectorType meta_monitor_get_connector_type (MetaMonitor *monitor);
 
 /* This function returns the transform corrected for the panel orientation */
 META_EXPORT_TEST
-MetaMonitorTransform meta_monitor_logical_to_crtc_transform (MetaMonitor          *monitor,
-                                                             MetaMonitorTransform  transform);
+MtkMonitorTransform meta_monitor_logical_to_crtc_transform (MetaMonitor         *monitor,
+                                                            MtkMonitorTransform  transform);
 /*
  * This function converts a transform corrected for the panel orientation
  * to its logical (user-visible) transform.
  */
 META_EXPORT_TEST
-MetaMonitorTransform meta_monitor_crtc_to_logical_transform (MetaMonitor          *monitor,
-                                                             MetaMonitorTransform  transform);
+MtkMonitorTransform meta_monitor_crtc_to_logical_transform (MetaMonitor         *monitor,
+                                                            MtkMonitorTransform  transform);
 
 META_EXPORT_TEST
 uint32_t meta_monitor_tiled_get_tile_group_id (MetaMonitorTiled *monitor_tiled);
@@ -221,17 +222,22 @@ META_EXPORT_TEST
 GList * meta_monitor_get_modes (MetaMonitor *monitor);
 
 META_EXPORT_TEST
-void meta_monitor_calculate_crtc_pos (MetaMonitor          *monitor,
-                                      MetaMonitorMode      *monitor_mode,
-                                      MetaOutput           *output,
-                                      MetaMonitorTransform  crtc_transform,
-                                      int                  *out_x,
-                                      int                  *out_y);
+void meta_monitor_calculate_crtc_pos (MetaMonitor         *monitor,
+                                      MetaMonitorMode     *monitor_mode,
+                                      MetaOutput          *output,
+                                      MtkMonitorTransform  crtc_transform,
+                                      int                 *out_x,
+                                      int                 *out_y);
 
 META_EXPORT_TEST
 float meta_monitor_calculate_mode_scale (MetaMonitor                 *monitor,
                                          MetaMonitorMode             *monitor_mode,
                                          MetaMonitorScalesConstraint  constraints);
+
+float meta_get_closest_monitor_scale_factor_for_resolution (float width,
+                                                            float height,
+                                                            float scale,
+                                                            float threshold);
 
 META_EXPORT_TEST
 float * meta_monitor_calculate_supported_scales (MetaMonitor                 *monitor,
@@ -312,9 +318,13 @@ size_t meta_monitor_get_gamma_lut_size (MetaMonitor *monitor);
 void meta_monitor_set_gamma_lut (MetaMonitor        *monitor,
                                  const MetaGammaLut *lut);
 
+MetaOutputColorspace meta_monitor_get_color_space (MetaMonitor *monitor);
+
 gboolean meta_monitor_set_color_space (MetaMonitor           *monitor,
                                        MetaOutputColorspace   color_space,
                                        GError               **error);
+
+MetaOutputHdrMetadata * meta_monitor_get_hdr_metadata (MetaMonitor *monitor);
 
 gboolean meta_monitor_set_hdr_metadata (MetaMonitor            *monitor,
                                         MetaOutputHdrMetadata  *metadata,
@@ -326,3 +336,15 @@ gboolean meta_parse_monitor_mode (const char *string,
                                   int        *out_height,
                                   float      *out_refresh_rate,
                                   float       fallback_refresh_rate);
+
+META_EXPORT_TEST
+gboolean meta_monitor_get_backlight_info (MetaMonitor *monitor,
+                                          int         *backlight_min,
+                                          int         *backlight_max);
+
+void meta_monitor_set_backlight (MetaMonitor *monitor,
+                                 int          value);
+
+META_EXPORT_TEST
+gboolean meta_monitor_get_backlight (MetaMonitor *monitor,
+                                     int         *value);

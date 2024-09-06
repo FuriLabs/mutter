@@ -23,7 +23,6 @@
 #include "backends/meta-crtc.h"
 #include "backends/meta-logical-monitor.h"
 #include "backends/meta-monitor.h"
-#include "backends/meta-monitor-config-migration.h"
 #include "backends/meta-monitor-config-store.h"
 #include "backends/meta-output.h"
 #include "core/window-private.h"
@@ -228,10 +227,51 @@ check_test_client_state (MetaTestClient *test_client)
 }
 
 static void
+check_test_client_x11_state (MetaTestClient *test_client)
+{
+  MetaMonitorManager *monitor_manager =
+    meta_backend_get_monitor_manager (test_backend);
+  MetaLogicalMonitor *primary_logical_monitor;
+  MetaMonitor *primary_monitor = NULL;
+  GError *error = NULL;
+
+  primary_logical_monitor =
+    meta_monitor_manager_get_primary_logical_monitor (monitor_manager);
+
+  if (primary_logical_monitor)
+    {
+      GList *monitors;
+
+      monitors = meta_logical_monitor_get_monitors (primary_logical_monitor);
+      primary_monitor = g_list_first (monitors)->data;
+    }
+
+  if (!meta_test_client_do (test_client, &error,
+                            "sync",
+                            NULL))
+    {
+      g_error ("Failed to sync test client '%s': %s",
+               meta_test_client_get_id (test_client), error->message);
+    }
+
+  if (!meta_test_client_do (test_client, &error,
+                            "assert_primary_monitor",
+                            primary_monitor
+                              ? meta_monitor_get_connector (primary_monitor)
+                              : "(none)",
+                              NULL))
+    {
+      g_error ("Failed to assert primary monitor in X11 test client '%s': %s",
+               meta_test_client_get_id (test_client), error->message);
+    }
+}
+
+static void
 check_monitor_test_clients_state (void)
 {
   check_test_client_state (wayland_monitor_test_client);
   check_test_client_state (x11_monitor_test_client);
+  check_test_client_x11_state (x11_monitor_test_client);
 }
 
 static void
@@ -3650,7 +3690,7 @@ meta_test_monitor_non_upright_panel (void)
   test_case.setup.outputs[0].modes[0] = 1;
   test_case.setup.outputs[0].preferred_mode = 1;
   test_case.setup.outputs[0].panel_orientation_transform =
-    META_MONITOR_TRANSFORM_90;
+    MTK_MONITOR_TRANSFORM_90;
   /*
    * Note we do not swap outputs[0].width_mm and height_mm, because these get
    * swapped for rotated panels inside the xrandr / kms code and we directly
@@ -3660,7 +3700,7 @@ meta_test_monitor_non_upright_panel (void)
 
   test_case.expect.monitors[0].modes[0].crtc_modes[0].crtc_mode = 1;
   test_case.expect.crtcs[0].current_mode = 1;
-  test_case.expect.crtcs[0].transform = META_MONITOR_TRANSFORM_90;
+  test_case.expect.crtcs[0].transform = MTK_MONITOR_TRANSFORM_90;
 
   test_setup = meta_create_monitor_test_setup (test_backend,
                                                &test_case.setup,
@@ -4074,26 +4114,211 @@ meta_test_monitor_switch_config_remember_scale (void)
 }
 
 static void
+wait_for_boolean_property (GDBusProxy *proxy,
+                           const char *property_name,
+                           gboolean    expected_value)
+{
+  g_debug ("Waiting for property '%s' to become %s on '%s'",
+           property_name,
+           expected_value ? "TRUE" : "FALSE",
+           g_dbus_proxy_get_interface_name (proxy));
+
+  while (TRUE)
+    {
+      g_autoptr (GVariant) value_variant = NULL;
+
+      value_variant = g_dbus_proxy_get_cached_property (proxy, property_name);
+      g_assert_nonnull (value_variant);
+
+      if (g_variant_get_boolean (value_variant) == expected_value)
+        break;
+
+      g_main_context_iteration (NULL, TRUE);
+    }
+}
+
+static void
+proxy_ready_cb (GObject      *source_object,
+                GAsyncResult *res,
+                gpointer      user_data)
+{
+  GDBusProxy *proxy;
+  GDBusProxy **display_config_proxy_ptr = user_data;
+  g_autoptr (GError) error = NULL;
+
+  proxy = g_dbus_proxy_new_for_bus_finish (res, &error);
+  g_assert_nonnull (proxy);
+  g_assert_no_error (error);
+
+  *display_config_proxy_ptr = proxy;
+}
+
+static void
+meta_test_monitor_has_external_monitor (void)
+{
+  MonitorTestCaseSetup test_case_setup = {
+    .modes = {
+      {
+        .width = 800,
+        .height = 600,
+        .refresh_rate = 60.0
+      },
+    },
+    .n_modes = 1,
+    .outputs = {
+      {
+        .crtc = -1,
+        .modes = { 0 },
+        .n_modes = 1,
+        .preferred_mode = 0,
+        .possible_crtcs = { 0 },
+        .n_possible_crtcs = 1,
+        .width_mm = 222,
+        .height_mm = 125,
+        .is_laptop_panel = TRUE,
+      },
+      {
+        .crtc = -1,
+        .modes = { 0 },
+        .n_modes = 1,
+        .preferred_mode = 0,
+        .possible_crtcs = { 1 },
+        .n_possible_crtcs = 1,
+        .width_mm = 222,
+        .height_mm = 125,
+        .is_laptop_panel = FALSE,
+      }
+    },
+    .n_outputs = 2,
+    .crtcs = {
+      {
+        .current_mode = -1
+      }
+    },
+    .n_crtcs = 2
+  };
+  MetaBackend *backend = meta_context_get_backend (test_context);
+  MetaMonitorManager *monitor_manager =
+    meta_backend_get_monitor_manager (backend);
+  MetaMonitorTestSetup *test_setup;
+  GList *monitors;
+  MetaMonitor *first_monitor;
+  MetaMonitor *second_monitor;
+  g_autoptr (GDBusProxy) display_config_proxy = NULL;
+  g_autoptr (GError) error = NULL;
+
+  g_dbus_proxy_new_for_bus (G_BUS_TYPE_SESSION,
+                            G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
+                            NULL,
+                            "org.gnome.Mutter.DisplayConfig",
+                            "/org/gnome/Mutter/DisplayConfig",
+                            "org.gnome.Mutter.DisplayConfig",
+                            NULL,
+                            proxy_ready_cb,
+                            &display_config_proxy);
+  while (!display_config_proxy)
+    g_main_context_iteration (NULL, TRUE);
+
+  g_debug ("Connecting one builtin and one external monitor");
+
+  test_setup = meta_create_monitor_test_setup (test_backend,
+                                               &test_case_setup,
+                                               MONITOR_TEST_FLAG_NO_STORED);
+  emulate_hotplug (test_setup);
+
+  monitors = meta_monitor_manager_get_monitors (monitor_manager);
+  g_assert_cmpuint (g_list_length (monitors), ==, 2);
+  first_monitor = g_list_nth_data (monitors, 0);
+  second_monitor = g_list_nth_data (monitors, 1);
+  g_assert_true (meta_monitor_is_laptop_panel (first_monitor));
+  g_assert_true (meta_monitor_is_active (first_monitor));
+  g_assert_false (meta_monitor_is_laptop_panel (second_monitor));
+  g_assert_true (meta_monitor_is_active (second_monitor));
+
+  wait_for_boolean_property (G_DBUS_PROXY (display_config_proxy),
+                             "HasExternalMonitor",
+                             TRUE);
+
+  g_debug ("Disconnecting external monitor");
+
+  test_case_setup.n_outputs = 1;
+  test_setup = meta_create_monitor_test_setup (test_backend,
+                                               &test_case_setup,
+                                               MONITOR_TEST_FLAG_NO_STORED);
+  emulate_hotplug (test_setup);
+
+  monitors = meta_monitor_manager_get_monitors (monitor_manager);
+  g_assert_cmpuint (g_list_length (monitors), ==, 1);
+  first_monitor = g_list_nth_data (monitors, 0);
+  g_assert_true (meta_monitor_is_laptop_panel (first_monitor));
+  g_assert_true (meta_monitor_is_active (first_monitor));
+
+  wait_for_boolean_property (G_DBUS_PROXY (display_config_proxy),
+                             "HasExternalMonitor",
+                             FALSE);
+
+  g_debug ("Reconnect external monitor.");
+
+  test_case_setup.n_outputs = 2;
+  test_setup = meta_create_monitor_test_setup (test_backend,
+                                               &test_case_setup,
+                                               MONITOR_TEST_FLAG_NO_STORED);
+  emulate_hotplug (test_setup);
+
+  monitors = meta_monitor_manager_get_monitors (monitor_manager);
+  g_assert_cmpuint (g_list_length (monitors), ==, 2);
+  first_monitor = g_list_nth_data (monitors, 0);
+  second_monitor = g_list_nth_data (monitors, 1);
+  g_assert_true (meta_monitor_is_laptop_panel (first_monitor));
+  g_assert_true (meta_monitor_is_active (first_monitor));
+  g_assert_false (meta_monitor_is_laptop_panel (second_monitor));
+  g_assert_true (meta_monitor_is_active (second_monitor));
+
+  wait_for_boolean_property (G_DBUS_PROXY (display_config_proxy),
+                             "HasExternalMonitor",
+                             TRUE);
+
+  g_debug ("Disable external monitor.");
+
+  meta_monitor_manager_switch_config (monitor_manager,
+                                      META_MONITOR_SWITCH_CONFIG_BUILTIN);
+  while (g_main_context_iteration (NULL, FALSE));
+
+  monitors = meta_monitor_manager_get_monitors (monitor_manager);
+  g_assert_cmpuint (g_list_length (monitors), ==, 2);
+  first_monitor = g_list_nth_data (monitors, 0);
+  second_monitor = g_list_nth_data (monitors, 1);
+  g_assert_true (meta_monitor_is_laptop_panel (first_monitor));
+  g_assert_true (meta_monitor_is_active (first_monitor));
+  g_assert_false (meta_monitor_is_laptop_panel (second_monitor));
+  g_assert_false (meta_monitor_is_active (second_monitor));
+
+  wait_for_boolean_property (G_DBUS_PROXY (display_config_proxy),
+                             "HasExternalMonitor",
+                             FALSE);
+}
+
+static void
 check_monitor_configuration_per_orientation (MonitorTestCase *test_case,
                                              unsigned int     monitor_index,
                                              MetaOrientation  orientation,
                                              int              width,
                                              int              height)
 {
-  MetaMonitorTransform transform;
-  MetaMonitorTransform output_transform;
+  MtkMonitorTransform transform;
+  MtkMonitorTransform output_transform;
   MonitorTestCaseExpect expect = test_case->expect;
   MonitorTestCaseSetup *setup = &test_case->setup;
   int i = 0;
 
-  transform = meta_monitor_transform_from_orientation (orientation);
+  transform = meta_orientation_to_transform (orientation);
   output_transform = setup->outputs[monitor_index].panel_orientation_transform;
   expect.logical_monitors[monitor_index].transform =
-    meta_monitor_transform_transform (transform,
-      meta_monitor_transform_invert (output_transform));
+    mtk_monitor_transform_transform (transform,
+      mtk_monitor_transform_invert (output_transform));
   expect.crtcs[monitor_index].transform = transform;
 
-  if (meta_monitor_transform_is_rotated (transform))
+  if (mtk_monitor_transform_is_rotated (transform))
     {
       expect.logical_monitors[monitor_index].layout.width = height;
       expect.logical_monitors[monitor_index].layout.height = width;
@@ -5082,7 +5307,7 @@ meta_test_monitor_orientation_changes_for_transformed_panel (void)
           .width_mm = 222,
           .height_mm = 125,
           .is_laptop_panel = TRUE,
-          .panel_orientation_transform = META_MONITOR_TRANSFORM_90,
+          .panel_orientation_transform = MTK_MONITOR_TRANSFORM_90,
         },
       },
       .n_outputs = 1,
@@ -5386,7 +5611,7 @@ meta_test_monitor_orientation_changes_with_hotplugging (void)
           .n_monitors = 1,
           .layout = { .x = 1024, .y = 0, .width = 1024, .height = 768 },
           .scale = 1,
-          .transform = META_MONITOR_TRANSFORM_NORMAL,
+          .transform = MTK_MONITOR_TRANSFORM_NORMAL,
         }
       },
       .n_logical_monitors = 1, /* Second is hotplugged later */
@@ -5398,7 +5623,7 @@ meta_test_monitor_orientation_changes_with_hotplugging (void)
         },
         {
           .current_mode = -1,
-          .transform = META_MONITOR_TRANSFORM_NORMAL,
+          .transform = MTK_MONITOR_TRANSFORM_NORMAL,
         }
       },
       .n_crtcs = 2,
@@ -7223,7 +7448,7 @@ meta_test_monitor_custom_first_rotated_config (void)
           .n_monitors = 1,
           .layout = { .x = 0, .y = 0, .width = 768, .height = 1024 },
           .scale = 1,
-          .transform = META_MONITOR_TRANSFORM_270
+          .transform = MTK_MONITOR_TRANSFORM_270
         },
         {
           .monitors = { 1 },
@@ -7238,7 +7463,7 @@ meta_test_monitor_custom_first_rotated_config (void)
       .crtcs = {
         {
           .current_mode = 0,
-          .transform = META_MONITOR_TRANSFORM_270
+          .transform = MTK_MONITOR_TRANSFORM_270
         },
         {
           .current_mode = 0,
@@ -7370,7 +7595,7 @@ meta_test_monitor_custom_second_rotated_config (void)
           .n_monitors = 1,
           .layout = { .x = 1024, .y = 0, .width = 768, .height = 1024 },
           .scale = 1,
-          .transform = META_MONITOR_TRANSFORM_90
+          .transform = MTK_MONITOR_TRANSFORM_90
         }
       },
       .n_logical_monitors = 2,
@@ -7383,7 +7608,7 @@ meta_test_monitor_custom_second_rotated_config (void)
         },
         {
           .current_mode = 0,
-          .transform = META_MONITOR_TRANSFORM_90,
+          .transform = MTK_MONITOR_TRANSFORM_90,
           .x = 1024,
         }
       },
@@ -7553,7 +7778,7 @@ meta_test_monitor_custom_second_rotated_tiled_config (void)
           .n_monitors = 1,
           .layout = { .x = 1024, .y = 0, .width = 600, .height = 800 },
           .scale = 1,
-          .transform = META_MONITOR_TRANSFORM_90
+          .transform = MTK_MONITOR_TRANSFORM_90
         }
       },
       .n_logical_monitors = 2,
@@ -7566,13 +7791,13 @@ meta_test_monitor_custom_second_rotated_tiled_config (void)
         },
         {
           .current_mode = 1,
-          .transform = META_MONITOR_TRANSFORM_90,
+          .transform = MTK_MONITOR_TRANSFORM_90,
           .x = 1024,
           .y = 0,
         },
         {
           .current_mode = 1,
-          .transform = META_MONITOR_TRANSFORM_90,
+          .transform = MTK_MONITOR_TRANSFORM_90,
           .x = 1024,
           .y = 400,
         }
@@ -7752,7 +7977,7 @@ meta_test_monitor_custom_second_rotated_nonnative_tiled_config (void)
           .n_monitors = 1,
           .layout = { .x = 1024, .y = 0, .width = 600, .height = 800 },
           .scale = 1,
-          .transform = META_MONITOR_TRANSFORM_90
+          .transform = MTK_MONITOR_TRANSFORM_90
         }
       },
       .n_logical_monitors = 2,
@@ -7765,13 +7990,13 @@ meta_test_monitor_custom_second_rotated_nonnative_tiled_config (void)
         },
         {
           .current_mode = 1,
-          .transform = META_MONITOR_TRANSFORM_90,
+          .transform = MTK_MONITOR_TRANSFORM_90,
           .x = 1024,
           .y = 0,
         },
         {
           .current_mode = 1,
-          .transform = META_MONITOR_TRANSFORM_90,
+          .transform = MTK_MONITOR_TRANSFORM_90,
           .x = 1024,
           .y = 400,
         }
@@ -7910,7 +8135,7 @@ meta_test_monitor_custom_second_rotated_nonnative_config (void)
           .n_monitors = 1,
           .layout = { .x = 1024, .y = 0, .width = 768, .height = 1024 },
           .scale = 1,
-          .transform = META_MONITOR_TRANSFORM_90
+          .transform = MTK_MONITOR_TRANSFORM_90
         }
       },
       .n_logical_monitors = 2,
@@ -7923,7 +8148,7 @@ meta_test_monitor_custom_second_rotated_nonnative_config (void)
         },
         {
           .current_mode = 0,
-          .transform = META_MONITOR_TRANSFORM_90,
+          .transform = MTK_MONITOR_TRANSFORM_90,
           .x = 1024,
         }
       },
@@ -8169,7 +8394,7 @@ meta_test_monitor_custom_oneoff (void)
           .n_monitors = 1,
           .layout = { .x = 0, .y = 0, .width = 800, .height = 600 },
           .scale = 1,
-          .transform = META_MONITOR_TRANSFORM_NORMAL
+          .transform = MTK_MONITOR_TRANSFORM_NORMAL
         },
       },
       .n_logical_monitors = 1,
@@ -8304,7 +8529,7 @@ meta_test_monitor_custom_lid_switch_config (void)
           .n_monitors = 1,
           .layout = { .x = 0, .y = 0, .width = 768, .height = 1024 },
           .scale = 1,
-          .transform = META_MONITOR_TRANSFORM_270
+          .transform = MTK_MONITOR_TRANSFORM_270
         },
         {
           .monitors = { 1 },
@@ -8319,7 +8544,7 @@ meta_test_monitor_custom_lid_switch_config (void)
       .crtcs = {
         {
           .current_mode = 0,
-          .transform = META_MONITOR_TRANSFORM_270
+          .transform = MTK_MONITOR_TRANSFORM_270
         },
         {
           .current_mode = -1,
@@ -8348,14 +8573,14 @@ meta_test_monitor_custom_lid_switch_config (void)
   test_case.setup.n_outputs = 2;
   test_case.expect.n_monitors = 2;
   test_case.expect.n_outputs = 2;
-  test_case.expect.crtcs[0].transform = META_MONITOR_TRANSFORM_NORMAL;
+  test_case.expect.crtcs[0].transform = MTK_MONITOR_TRANSFORM_NORMAL;
   test_case.expect.crtcs[1].current_mode = 0;
   test_case.expect.crtcs[1].x = 1024;
-  test_case.expect.crtcs[1].transform = META_MONITOR_TRANSFORM_270;
+  test_case.expect.crtcs[1].transform = MTK_MONITOR_TRANSFORM_270;
   test_case.expect.logical_monitors[0].layout =
     (MtkRectangle) { .width = 1024, .height = 768 };
-  test_case.expect.logical_monitors[0].transform = META_MONITOR_TRANSFORM_NORMAL;
-  test_case.expect.logical_monitors[1].transform = META_MONITOR_TRANSFORM_270;
+  test_case.expect.logical_monitors[0].transform = MTK_MONITOR_TRANSFORM_NORMAL;
+  test_case.expect.logical_monitors[1].transform = MTK_MONITOR_TRANSFORM_270;
   test_case.expect.n_logical_monitors = 2;
   test_case.expect.screen_width = 1024 + 768;
 
@@ -8371,13 +8596,13 @@ meta_test_monitor_custom_lid_switch_config (void)
   /* Lid was closed */
 
   test_case.expect.crtcs[0].current_mode = -1;
-  test_case.expect.crtcs[1].transform = META_MONITOR_TRANSFORM_90;
+  test_case.expect.crtcs[1].transform = MTK_MONITOR_TRANSFORM_90;
   test_case.expect.crtcs[1].x = 0;
   test_case.expect.monitors[0].current_mode = -1;
   test_case.expect.logical_monitors[0].layout =
     (MtkRectangle) { .width = 768, .height = 1024 };
   test_case.expect.logical_monitors[0].monitors[0] = 1;
-  test_case.expect.logical_monitors[0].transform = META_MONITOR_TRANSFORM_90;
+  test_case.expect.logical_monitors[0].transform = MTK_MONITOR_TRANSFORM_90;
   test_case.expect.n_logical_monitors = 1;
   test_case.expect.screen_width = 768;
   meta_backend_test_set_is_lid_closed (META_BACKEND_TEST (backend), TRUE);
@@ -8394,16 +8619,16 @@ meta_test_monitor_custom_lid_switch_config (void)
   /* Lid was opened */
 
   test_case.expect.crtcs[0].current_mode = 0;
-  test_case.expect.crtcs[0].transform = META_MONITOR_TRANSFORM_NORMAL;
+  test_case.expect.crtcs[0].transform = MTK_MONITOR_TRANSFORM_NORMAL;
   test_case.expect.crtcs[1].current_mode = 0;
-  test_case.expect.crtcs[1].transform = META_MONITOR_TRANSFORM_270;
+  test_case.expect.crtcs[1].transform = MTK_MONITOR_TRANSFORM_270;
   test_case.expect.crtcs[1].x = 1024;
   test_case.expect.monitors[0].current_mode = 0;
   test_case.expect.logical_monitors[0].layout =
     (MtkRectangle) { .width = 1024, .height = 768 };
   test_case.expect.logical_monitors[0].monitors[0] = 0;
-  test_case.expect.logical_monitors[0].transform = META_MONITOR_TRANSFORM_NORMAL;
-  test_case.expect.logical_monitors[1].transform = META_MONITOR_TRANSFORM_270;
+  test_case.expect.logical_monitors[0].transform = MTK_MONITOR_TRANSFORM_NORMAL;
+  test_case.expect.logical_monitors[1].transform = MTK_MONITOR_TRANSFORM_270;
   test_case.expect.n_logical_monitors = 2;
   test_case.expect.screen_width = 1024 + 768;
   meta_backend_test_set_is_lid_closed (META_BACKEND_TEST (backend), FALSE);
@@ -8425,6 +8650,240 @@ meta_test_monitor_migrated_rotated (void)
     .setup = {
       .modes = {
         {
+          .width = 1920,
+          .height = 1080,
+          .refresh_rate = 60.0
+        }
+      },
+      .n_modes = 1,
+      .outputs = {
+        {
+          .crtc = -1,
+          .modes = { 0 },
+          .n_modes = 1,
+          .preferred_mode = 0,
+          .possible_crtcs = { 0 },
+          .n_possible_crtcs = 1,
+          .width_mm = 222,
+          .height_mm = 125,
+          .serial = "0x123456a",
+        },
+        {
+          .crtc = -1,
+          .modes = { 0 },
+          .n_modes = 1,
+          .preferred_mode = 0,
+          .possible_crtcs = { 1 },
+          .n_possible_crtcs = 1,
+          .width_mm = 222,
+          .height_mm = 125,
+          .serial = "0x123456b",
+        },
+        {
+          .crtc = -1,
+          .modes = { 0 },
+          .n_modes = 1,
+          .preferred_mode = 0,
+          .possible_crtcs = { 2 },
+          .n_possible_crtcs = 1,
+          .width_mm = 222,
+          .height_mm = 125,
+          .serial = "0x123456c",
+        }
+      },
+      .n_outputs = 3,
+      .crtcs = {
+        {
+          .current_mode = 0
+        },
+        {
+          .current_mode = 0
+        },
+        {
+          .current_mode = 0
+        }
+      },
+      .n_crtcs = 3
+    },
+
+    .expect = {
+      .monitors = {
+        {
+          .outputs = { 0 },
+          .n_outputs = 1,
+          .modes = {
+            {
+              .width = 1920,
+              .height = 1080,
+              .refresh_rate = 60.0,
+              .crtc_modes = {
+                {
+                  .output = 0,
+                  .crtc_mode = 0
+                }
+              }
+            }
+          },
+          .n_modes = 1,
+          .current_mode = 0,
+          .width_mm = 222,
+          .height_mm = 125
+        },
+        {
+          .outputs = { 1 },
+          .n_outputs = 1,
+          .modes = {
+            {
+              .width = 1920,
+              .height = 1080,
+              .refresh_rate = 60.0,
+              .crtc_modes = {
+                {
+                  .output = 1,
+                  .crtc_mode = 0
+                }
+              }
+            }
+          },
+          .n_modes = 1,
+          .current_mode = 0,
+          .width_mm = 222,
+          .height_mm = 125
+        },
+        {
+          .outputs = { 2 },
+          .n_outputs = 1,
+          .modes = {
+            {
+              .width = 1920,
+              .height = 1080,
+              .refresh_rate = 60.0,
+              .crtc_modes = {
+                {
+                  .output = 2,
+                  .crtc_mode = 0
+                }
+              }
+            }
+          },
+          .n_modes = 1,
+          .current_mode = 0,
+          .width_mm = 222,
+          .height_mm = 125
+        }
+      },
+      .n_monitors = 3,
+      .logical_monitors = {
+        {
+          .monitors = { 0 },
+          .n_monitors = 1,
+          .layout = { .x = 0, .y = 0, .width = 1080, .height = 1920 },
+          .scale = 1,
+          .transform = MTK_MONITOR_TRANSFORM_270
+        },
+        {
+          .monitors = { 1 },
+          .n_monitors = 1,
+          .layout = { .x = 1080, .y = 0, .width = 960, .height = 540 },
+          .scale = 2
+        },
+        {
+          .monitors = { 2 },
+          .n_monitors = 1,
+          .layout = { .x = 600, .y = 1920, .width = 1920, .height = 1080 },
+          .scale = 1
+        }
+      },
+      .n_logical_monitors = 3,
+      .primary_logical_monitor = 0,
+      .n_outputs = 3,
+      .crtcs = {
+        {
+          .current_mode = 0,
+          .transform = MTK_MONITOR_TRANSFORM_270
+        },
+        {
+          .current_mode = 0,
+          .x = 1080
+        },
+        {
+          .current_mode = 0,
+          .x = 600,
+          .y = 1920
+        }
+      },
+      .n_crtcs = 3,
+      .screen_width = 2520,
+      .screen_height = 3000,
+    }
+  };
+  MetaMonitorTestSetup *test_setup;
+  MetaBackend *backend = meta_context_get_backend (test_context);
+  MetaMonitorManager *monitor_manager =
+    meta_backend_get_monitor_manager (backend);
+  MetaMonitorConfigManager *config_manager = monitor_manager->config_manager;
+  MetaMonitorConfigStore *config_store =
+    meta_monitor_config_manager_get_store (config_manager);
+  g_autofree char *migrated_path = NULL;
+  g_autofree char *old_config_path = NULL;
+  g_autoptr (GFile) old_config_file = NULL;
+  GError *error = NULL;
+  const char *expected_path;
+  g_autofree char *migrated_data = NULL;
+  g_autofree char *expected_data = NULL;
+  g_autoptr (GFile) migrated_file = NULL;
+
+  test_setup = meta_create_monitor_test_setup (test_backend,
+                                               &test_case.setup,
+                                               MONITOR_TEST_FLAG_NONE);
+
+  old_config_path = g_test_build_filename (G_TEST_DIST,
+                                           "tests", "migration",
+                                           "rotated.xml",
+                                           NULL);
+
+  migrated_path = g_build_filename (g_get_tmp_dir (),
+                                    "test-finished-migrated-monitors.xml",
+                                    NULL);
+
+  if (!meta_monitor_config_store_set_custom (config_store,
+                                             old_config_path,
+                                             migrated_path,
+                                             META_MONITORS_CONFIG_FLAG_NONE,
+                                             &error))
+    g_error ("Failed to set custom config store files: %s", error->message);
+
+  emulate_hotplug (test_setup);
+
+  META_TEST_LOG_CALL ("Checking monitor configuration",
+                      meta_check_monitor_configuration (test_context,
+                                                        &test_case.expect));
+  check_monitor_test_clients_state ();
+
+  expected_path = g_test_get_filename (G_TEST_DIST,
+                                       "tests", "migration",
+                                       "rotated-finished.xml",
+                                       NULL);
+  expected_data = meta_read_file (expected_path);
+  migrated_data = meta_read_file (migrated_path);
+
+  g_assert_nonnull (expected_data);
+  g_assert_nonnull (migrated_data);
+
+  g_assert (strcmp (expected_data, migrated_data) == 0);
+
+  migrated_file = g_file_new_for_path (migrated_path);
+  if (!g_file_delete (migrated_file, NULL, &error))
+    g_error ("Failed to remove test data output file: %s", error->message);
+}
+
+static void
+meta_test_monitor_migrated_horizontal_strip (void)
+{
+  MonitorTestCase test_case = {
+    .setup = {
+      .modes = {
+        {
           .width = 800,
           .height = 600,
           .refresh_rate = 60.0
@@ -8441,16 +8900,58 @@ meta_test_monitor_migrated_rotated (void)
           .n_possible_crtcs = 1,
           .width_mm = 222,
           .height_mm = 125,
-          .serial = "0x123456",
+          .serial = "0x123456a",
+        },
+        {
+          .crtc = -1,
+          .modes = { 0 },
+          .n_modes = 1,
+          .preferred_mode = 0,
+          .possible_crtcs = { 1 },
+          .n_possible_crtcs = 1,
+          .width_mm = 222,
+          .height_mm = 125,
+          .serial = "0x123456b",
+        },
+        {
+          .crtc = -1,
+          .modes = { 0 },
+          .n_modes = 1,
+          .preferred_mode = 0,
+          .possible_crtcs = { 2 },
+          .n_possible_crtcs = 1,
+          .width_mm = 222,
+          .height_mm = 125,
+          .serial = "0x123456c",
+        },
+        {
+          .crtc = -1,
+          .modes = { 0 },
+          .n_modes = 1,
+          .preferred_mode = 0,
+          .possible_crtcs = { 3 },
+          .n_possible_crtcs = 1,
+          .width_mm = 222,
+          .height_mm = 125,
+          .serial = "0x123456d",
         }
       },
-      .n_outputs = 1,
+      .n_outputs = 4,
       .crtcs = {
         {
-          .current_mode = -1
+          .current_mode = 0
+        },
+        {
+          .current_mode = 0
+        },
+        {
+          .current_mode = 0
+        },
+        {
+          .current_mode = 0
         }
       },
-      .n_crtcs = 1
+      .n_crtcs = 4
     },
 
     .expect = {
@@ -8475,30 +8976,123 @@ meta_test_monitor_migrated_rotated (void)
           .current_mode = 0,
           .width_mm = 222,
           .height_mm = 125
+        },
+        {
+          .outputs = { 1 },
+          .n_outputs = 1,
+          .modes = {
+            {
+              .width = 800,
+              .height = 600,
+              .refresh_rate = 60.0,
+              .crtc_modes = {
+                {
+                  .output = 1,
+                  .crtc_mode = 0
+                }
+              }
+            }
+          },
+          .n_modes = 1,
+          .current_mode = 0,
+          .width_mm = 222,
+          .height_mm = 125
+        },
+        {
+          .outputs = { 2 },
+          .n_outputs = 1,
+          .modes = {
+            {
+              .width = 800,
+              .height = 600,
+              .refresh_rate = 60.0,
+              .crtc_modes = {
+                {
+                  .output = 2,
+                  .crtc_mode = 0
+                }
+              }
+            }
+          },
+          .n_modes = 1,
+          .current_mode = 0,
+          .width_mm = 222,
+          .height_mm = 125
+        },
+        {
+          .outputs = { 3 },
+          .n_outputs = 1,
+          .modes = {
+            {
+              .width = 800,
+              .height = 600,
+              .refresh_rate = 60.0,
+              .crtc_modes = {
+                {
+                  .output = 3,
+                  .crtc_mode = 0
+                }
+              }
+            }
+          },
+          .n_modes = 1,
+          .current_mode = 0,
+          .width_mm = 222,
+          .height_mm = 125
         }
       },
-      .n_monitors = 1,
+      .n_monitors = 4,
       .logical_monitors = {
         {
           .monitors = { 0 },
           .n_monitors = 1,
-          .layout = { .x = 0, .y = 0, .width = 600, .height = 800 },
-          .scale = 1,
-          .transform = META_MONITOR_TRANSFORM_270
+          .layout = { .x = 0, .y = 150, .width = 400, .height = 300 },
+          .scale = 2
         },
+        {
+          .monitors = { 1 },
+          .n_monitors = 1,
+          .layout = { .x = 400, .y = 0, .width = 800, .height = 600 },
+          .scale = 1
+        },
+        {
+          .monitors = { 2 },
+          .n_monitors = 1,
+          .layout = { .x = 1200, .y = 199, .width = 268, .height = 201 },
+          .scale = 2.985074520111084
+        },
+        {
+          .monitors = { 3 },
+          .n_monitors = 1,
+          .layout = { .x = 1468, .y = 0, .width = 800, .height = 600 },
+          .scale = 1
+        }
       },
-      .n_logical_monitors = 1,
-      .primary_logical_monitor = 0,
-      .n_outputs = 1,
+      .n_logical_monitors = 4,
+      .primary_logical_monitor = 2,
+      .n_outputs = 4,
       .crtcs = {
         {
           .current_mode = 0,
-          .transform = META_MONITOR_TRANSFORM_270
+          .y = 150
+        },
+        {
+          .current_mode = 0,
+          .x = 400
+        },
+        {
+          .current_mode = 0,
+          .x = 1200,
+          .y = 199
+        },
+        {
+          .current_mode = 0,
+          .x = 1468
         }
       },
-      .n_crtcs = 1,
-      .screen_width = 600,
-      .screen_height = 800,
+      .n_crtcs = 4,
+      .screen_width = 2268,
+      .screen_height = 600,
     }
   };
   MetaMonitorTestSetup *test_setup;
@@ -8509,7 +9103,7 @@ meta_test_monitor_migrated_rotated (void)
   MetaMonitorConfigStore *config_store =
     meta_monitor_config_manager_get_store (config_manager);
   g_autofree char *migrated_path = NULL;
-  const char *old_config_path;
+  g_autofree char *old_config_path = NULL;
   g_autoptr (GFile) old_config_file = NULL;
   GError *error = NULL;
   const char *expected_path;
@@ -8521,25 +9115,21 @@ meta_test_monitor_migrated_rotated (void)
                                                &test_case.setup,
                                                MONITOR_TEST_FLAG_NONE);
 
+  old_config_path = g_test_build_filename (G_TEST_DIST,
+                                           "tests", "migration",
+                                           "horizontal-strip.xml",
+                                           NULL);
+
   migrated_path = g_build_filename (g_get_tmp_dir (),
                                     "test-finished-migrated-monitors.xml",
                                     NULL);
+
   if (!meta_monitor_config_store_set_custom (config_store,
-                                             "/dev/null",
+                                             old_config_path,
                                              migrated_path,
                                              META_MONITORS_CONFIG_FLAG_NONE,
                                              &error))
     g_error ("Failed to set custom config store files: %s", error->message);
-
-  old_config_path = g_test_get_filename (G_TEST_DIST,
-                                         "tests", "migration",
-                                         "rotated-old.xml",
-                                         NULL);
-  old_config_file = g_file_new_for_path (old_config_path);
-  if (!meta_migrate_old_monitors_config (config_store,
-                                         old_config_file,
-                                         &error))
-    g_error ("Failed to migrate config: %s", error->message);
 
   emulate_hotplug (test_setup);
 
@@ -8550,7 +9140,7 @@ meta_test_monitor_migrated_rotated (void)
 
   expected_path = g_test_get_filename (G_TEST_DIST,
                                        "tests", "migration",
-                                       "rotated-new-finished.xml",
+                                       "horizontal-strip-finished.xml",
                                        NULL);
   expected_data = meta_read_file (expected_path);
   migrated_data = meta_read_file (migrated_path);
@@ -8566,153 +9156,24 @@ meta_test_monitor_migrated_rotated (void)
 }
 
 static void
-meta_test_monitor_migrated_wiggle_discard (void)
+meta_test_monitor_custom_detached_groups (void)
 {
-  MonitorTestCase test_case = {
-    .setup = {
-      .modes = {
-        {
-          .width = 800,
-          .height = 600,
-          .refresh_rate = 59.0
-        }
-      },
-      .n_modes = 1,
-      .outputs = {
-        {
-          .crtc = -1,
-          .modes = { 0 },
-          .n_modes = 1,
-          .preferred_mode = 0,
-          .possible_crtcs = { 0 },
-          .n_possible_crtcs = 1,
-          .width_mm = 222,
-          .height_mm = 125,
-          .serial = "0x123456",
-        }
-      },
-      .n_outputs = 1,
-      .crtcs = {
-        {
-          .current_mode = -1
-        }
-      },
-      .n_crtcs = 1
-    },
-
-    .expect = {
-      .monitors = {
-        {
-          .outputs = { 0 },
-          .n_outputs = 1,
-          .modes = {
-            {
-              .width = 800,
-              .height = 600,
-              .refresh_rate = 59.0,
-              .crtc_modes = {
-                {
-                  .output = 0,
-                  .crtc_mode = 0
-                }
-              }
-            }
-          },
-          .n_modes = 1,
-          .current_mode = 0,
-          .width_mm = 222,
-          .height_mm = 125
-        }
-      },
-      .n_monitors = 1,
-      .logical_monitors = {
-        {
-          .monitors = { 0 },
-          .n_monitors = 1,
-          .layout = { .x = 0, .y = 0, .width = 800, .height = 600 },
-          .scale = 1,
-          .transform = META_MONITOR_TRANSFORM_NORMAL
-        },
-      },
-      .n_logical_monitors = 1,
-      .primary_logical_monitor = 0,
-      .n_outputs = 1,
-      .crtcs = {
-        {
-          .current_mode = 0,
-        }
-      },
-      .n_crtcs = 1,
-      .screen_width = 800,
-      .screen_height = 600,
-    }
-  };
-  MetaMonitorTestSetup *test_setup;
   MetaBackend *backend = meta_context_get_backend (test_context);
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (backend);
   MetaMonitorConfigManager *config_manager = monitor_manager->config_manager;
   MetaMonitorConfigStore *config_store =
     meta_monitor_config_manager_get_store (config_manager);
-  g_autofree char *migrated_path = NULL;
-  const char *old_config_path;
-  g_autoptr (GFile) old_config_file = NULL;
-  GError *error = NULL;
-  const char *expected_path;
-  g_autofree char *migrated_data = NULL;
-  g_autofree char *expected_data = NULL;
-  g_autoptr (GFile) migrated_file = NULL;
+  g_autofree char *path = NULL;
+  g_autoptr (GError) error = NULL;
 
-  test_setup = meta_create_monitor_test_setup (test_backend,
-                                               &test_case.setup,
-                                               MONITOR_TEST_FLAG_NONE);
-
-  migrated_path = g_build_filename (g_get_tmp_dir (),
-                                    "test-finished-migrated-monitors.xml",
-                                    NULL);
-  if (!meta_monitor_config_store_set_custom (config_store,
-                                             "/dev/null",
-                                             migrated_path,
-                                             META_MONITORS_CONFIG_FLAG_NONE,
-                                             &error))
-    g_error ("Failed to set custom config store files: %s", error->message);
-
-  old_config_path = g_test_get_filename (G_TEST_DIST,
-                                         "tests", "migration",
-                                         "wiggle-old.xml",
-                                         NULL);
-  old_config_file = g_file_new_for_path (old_config_path);
-  if (!meta_migrate_old_monitors_config (config_store,
-                                         old_config_file,
-                                         &error))
-    g_error ("Failed to migrate config: %s", error->message);
-
-  g_test_expect_message ("libmutter", G_LOG_LEVEL_WARNING,
-                         "Failed to finish monitors config migration: "
-                         "Mode not available on monitor");
-  emulate_hotplug (test_setup);
-  g_test_assert_expected_messages ();
-
-  META_TEST_LOG_CALL ("Checking monitor configuration",
-                      meta_check_monitor_configuration (test_context,
-                                                        &test_case.expect));
-  check_monitor_test_clients_state ();
-
-  expected_path = g_test_get_filename (G_TEST_DIST,
-                                       "tests", "migration",
-                                       "wiggle-new-discarded.xml",
-                                       NULL);
-  expected_data = meta_read_file (expected_path);
-  migrated_data = meta_read_file (migrated_path);
-
-  g_assert_nonnull (expected_data);
-  g_assert_nonnull (migrated_data);
-
-  g_assert (strcmp (expected_data, migrated_data) == 0);
-
-  migrated_file = g_file_new_for_path (migrated_path);
-  if (!g_file_delete (migrated_file, NULL, &error))
-    g_error ("Failed to remove test data output file: %s", error->message);
+  path = g_test_build_filename (G_TEST_DIST, "tests", "monitor-configs",
+                                "detached-groups.xml", NULL);
+  meta_monitor_config_store_set_custom (config_store, path, NULL,
+                                        META_MONITORS_CONFIG_FLAG_NONE,
+                                        &error);
+  g_assert_nonnull (error);
+  g_assert_cmpstr (error->message, ==, "Logical monitors not adjacent");
 }
 
 static gboolean
@@ -8845,153 +9306,6 @@ meta_test_monitor_wm_tiling (void)
   meta_window_tile (test_window, META_TILE_MAXIMIZED);
 
   meta_test_client_destroy (test_client);
-}
-
-static void
-meta_test_monitor_migrated_wiggle (void)
-{
-  MonitorTestCase test_case = {
-    .setup = {
-      .modes = {
-        {
-          .width = 800,
-          .height = 600,
-          .refresh_rate = 60.0
-        }
-      },
-      .n_modes = 1,
-      .outputs = {
-        {
-          .crtc = -1,
-          .modes = { 0 },
-          .n_modes = 1,
-          .preferred_mode = 0,
-          .possible_crtcs = { 0 },
-          .n_possible_crtcs = 1,
-          .width_mm = 222,
-          .height_mm = 125,
-          .serial = "0x123456",
-        }
-      },
-      .n_outputs = 1,
-      .crtcs = {
-        {
-          .current_mode = -1
-        }
-      },
-      .n_crtcs = 1
-    },
-
-    .expect = {
-      .monitors = {
-        {
-          .outputs = { 0 },
-          .n_outputs = 1,
-          .modes = {
-            {
-              .width = 800,
-              .height = 600,
-              .refresh_rate = 60.0,
-              .crtc_modes = {
-                {
-                  .output = 0,
-                  .crtc_mode = 0
-                }
-              }
-            }
-          },
-          .n_modes = 1,
-          .current_mode = 0,
-          .width_mm = 222,
-          .height_mm = 125
-        }
-      },
-      .n_monitors = 1,
-      .logical_monitors = {
-        {
-          .monitors = { 0 },
-          .n_monitors = 1,
-          .layout = { .x = 0, .y = 0, .width = 600, .height = 800 },
-          .scale = 1,
-          .transform = META_MONITOR_TRANSFORM_90
-        },
-      },
-      .n_logical_monitors = 1,
-      .primary_logical_monitor = 0,
-      .n_outputs = 1,
-      .crtcs = {
-        {
-          .current_mode = 0,
-          .transform = META_MONITOR_TRANSFORM_90
-        }
-      },
-      .n_crtcs = 1,
-      .screen_width = 600,
-      .screen_height = 800,
-    }
-  };
-  MetaMonitorTestSetup *test_setup;
-  MetaBackend *backend = meta_context_get_backend (test_context);
-  MetaMonitorManager *monitor_manager =
-    meta_backend_get_monitor_manager (backend);
-  MetaMonitorConfigManager *config_manager = monitor_manager->config_manager;
-  MetaMonitorConfigStore *config_store =
-    meta_monitor_config_manager_get_store (config_manager);
-  g_autofree char *migrated_path = NULL;
-  const char *old_config_path;
-  g_autoptr (GFile) old_config_file = NULL;
-  GError *error = NULL;
-  const char *expected_path;
-  g_autofree char *migrated_data = NULL;
-  g_autofree char *expected_data = NULL;
-  g_autoptr (GFile) migrated_file = NULL;
-
-  test_setup = meta_create_monitor_test_setup (test_backend,
-                                               &test_case.setup,
-                                               MONITOR_TEST_FLAG_NONE);
-
-  migrated_path = g_build_filename (g_get_tmp_dir (),
-                                    "test-finished-migrated-monitors.xml",
-                                    NULL);
-  if (!meta_monitor_config_store_set_custom (config_store,
-                                             "/dev/null",
-                                             migrated_path,
-                                             META_MONITORS_CONFIG_FLAG_NONE,
-                                             &error))
-    g_error ("Failed to set custom config store files: %s", error->message);
-
-  old_config_path = g_test_get_filename (G_TEST_DIST,
-                                         "tests", "migration",
-                                         "wiggle-old.xml",
-                                         NULL);
-  old_config_file = g_file_new_for_path (old_config_path);
-  if (!meta_migrate_old_monitors_config (config_store,
-                                         old_config_file,
-                                         &error))
-    g_error ("Failed to migrate config: %s", error->message);
-
-  emulate_hotplug (test_setup);
-
-  META_TEST_LOG_CALL ("Checking monitor configuration",
-                      meta_check_monitor_configuration (test_context,
-                                                        &test_case.expect));
-  check_monitor_test_clients_state ();
-
-  expected_path = g_test_get_filename (G_TEST_DIST,
-                                       "tests", "migration",
-                                       "wiggle-new-finished.xml",
-                                       NULL);
-  expected_data = meta_read_file (expected_path);
-  migrated_data = meta_read_file (migrated_path);
-
-  g_assert_nonnull (expected_data);
-  g_assert_nonnull (migrated_data);
-
-  g_assert (strcmp (expected_data, migrated_data) == 0);
-
-  migrated_file = g_file_new_for_path (migrated_path);
-  if (!g_file_delete (migrated_file, NULL, &error))
-    g_error ("Failed to remove test data output file: %s", error->message);
 }
 
 static void
@@ -10024,6 +10338,9 @@ init_monitor_tests (void)
   add_monitor_test ("/backends/monitor/switch-config-remember-scale",
                     meta_test_monitor_switch_config_remember_scale);
 
+  add_monitor_test ("/backends/monitor/has-external-monitor",
+                    meta_test_monitor_has_external_monitor);
+
   add_monitor_test ("/backends/monitor/orientation/is-managed",
                     meta_test_monitor_orientation_is_managed);
   add_monitor_test ("/backends/monitor/orientation/initial-rotated",
@@ -10081,13 +10398,13 @@ init_monitor_tests (void)
                     meta_test_monitor_custom_oneoff);
   add_monitor_test ("/backends/monitor/custom/lid-switch-config",
                     meta_test_monitor_custom_lid_switch_config);
+  add_monitor_test ("/backends/monitor/custom/detached-groups",
+                    meta_test_monitor_custom_detached_groups);
 
   add_monitor_test ("/backends/monitor/migrated/rotated",
                     meta_test_monitor_migrated_rotated);
-  add_monitor_test ("/backends/monitor/migrated/wiggle",
-                    meta_test_monitor_migrated_wiggle);
-  add_monitor_test ("/backends/monitor/migrated/wiggle-discard",
-                    meta_test_monitor_migrated_wiggle_discard);
+  add_monitor_test ("/backends/monitor/migrated/horizontal-strip",
+                    meta_test_monitor_migrated_horizontal_strip);
 
   add_monitor_test ("/backends/monitor/wm/tiling",
                     meta_test_monitor_wm_tiling);

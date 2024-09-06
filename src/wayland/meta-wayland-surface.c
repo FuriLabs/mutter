@@ -81,6 +81,7 @@ enum
 
   PROP_SCANOUT_CANDIDATE,
   PROP_WINDOW,
+  PROP_MAIN_MONITOR,
 
   N_PROPS
 };
@@ -143,6 +144,10 @@ static void
 set_surface_is_on_output (MetaWaylandSurface *surface,
                           MetaWaylandOutput  *wayland_output,
                           gboolean            is_on_output);
+
+static void
+on_main_monitor_destroyed (gpointer  user_data,
+                           GObject  *where_the_monitor_was);
 
 static void
 role_assignment_valist_to_properties (GType       role_type,
@@ -260,16 +265,16 @@ meta_wayland_surface_assign_role (MetaWaylandSurface *surface,
 }
 
 static MtkRegion *
-region_transform (const MtkRegion      *region,
-                  MetaMonitorTransform  transform,
-                  int                   width,
-                  int                   height)
+region_transform (const MtkRegion     *region,
+                  MtkMonitorTransform  transform,
+                  int                  width,
+                  int                  height)
 {
   MtkRegion *transformed_region;
   MtkRectangle *rects;
   int n_rects, i;
 
-  if (transform == META_MONITOR_TRANSFORM_NORMAL)
+  if (transform == MTK_MONITOR_TRANSFORM_NORMAL)
     return mtk_region_copy (region);
 
   n_rects = mtk_region_num_rectangles (region);
@@ -278,11 +283,11 @@ region_transform (const MtkRegion      *region,
     {
       rects[i] = mtk_region_get_rectangle (region, i);
 
-      meta_rectangle_transform (&rects[i],
-                                transform,
-                                width,
-                                height,
-                                &rects[i]);
+      mtk_rectangle_transform (&rects[i],
+                               transform,
+                               width,
+                               height,
+                               &rects[i]);
     }
 
   transformed_region = mtk_region_create_rectangles (rects, n_rects);
@@ -344,7 +349,7 @@ surface_process_damage (MetaWaylandSurface *surface,
         {
           int width, height;
 
-          if (meta_monitor_transform_is_rotated (surface->buffer_transform))
+          if (mtk_monitor_transform_is_rotated (surface->buffer_transform))
             {
               width = meta_wayland_surface_get_buffer_height (surface);
               height = meta_wayland_surface_get_buffer_width (surface);
@@ -392,9 +397,7 @@ surface_process_damage (MetaWaylandSurface *surface,
           MtkRectangle rect;
           rect = mtk_region_get_rectangle (buffer_region, i);
 
-          meta_surface_actor_process_damage (actor,
-                                             rect.x, rect.y,
-                                             rect.width, rect.height);
+          meta_surface_actor_process_damage (actor, &rect);
         }
     }
 }
@@ -450,6 +453,9 @@ meta_wayland_surface_state_set_default (MetaWaylandSurfaceState *state)
 
   state->drm_syncobj.acquire = NULL;
   state->drm_syncobj.release = NULL;
+
+  state->has_new_color_state = FALSE;
+  state->color_state = NULL;
 }
 
 static void
@@ -472,6 +478,7 @@ meta_wayland_surface_state_clear (MetaWaylandSurfaceState *state)
   g_clear_object (&state->texture);
   g_clear_object (&state->drm_syncobj.acquire);
   g_clear_object (&state->drm_syncobj.release);
+  g_clear_object (&state->color_state);
 
   g_clear_pointer (&state->surface_damage, mtk_region_unref);
   g_clear_pointer (&state->buffer_damage, mtk_region_unref);
@@ -642,6 +649,14 @@ meta_wayland_surface_state_merge_into (MetaWaylandSurfaceState *from,
   g_clear_object (&from->drm_syncobj.acquire);
   g_set_object (&to->drm_syncobj.release, from->drm_syncobj.release);
   g_clear_object (&from->drm_syncobj.release);
+
+  if (from->has_new_color_state)
+    {
+      g_set_object (&to->color_state, from->color_state);
+      g_clear_object (&from->color_state);
+
+      to->has_new_color_state = TRUE;
+    }
 }
 
 static void
@@ -704,6 +719,7 @@ meta_wayland_surface_apply_placement_ops (MetaWaylandSurface      *parent,
       if (!op->sibling)
         {
           surface->applied_state.parent = NULL;
+          meta_wayland_surface_set_main_monitor (surface, NULL);
           continue;
         }
 
@@ -729,6 +745,8 @@ meta_wayland_surface_apply_placement_ops (MetaWaylandSurface      *parent,
                                 surface->applied_state.subsurface_branch_node);
           break;
         }
+
+      meta_wayland_surface_set_main_monitor (surface, parent->main_monitor);
     }
 }
 
@@ -782,9 +800,6 @@ meta_wayland_surface_apply_state (MetaWaylandSurface      *surface,
           state->buffer->type != META_WAYLAND_BUFFER_TYPE_SINGLE_PIXEL));
     }
 
-  if (state->scale > 0)
-    surface->applied_state.scale = state->scale;
-
   if (state->has_new_buffer_transform)
     surface->buffer_transform = state->buffer_transform;
 
@@ -802,6 +817,28 @@ meta_wayland_surface_apply_state (MetaWaylandSurface      *surface,
       surface->viewport.dst_width = state->viewport_dst_width;
       surface->viewport.dst_height = state->viewport_dst_height;
       surface->viewport.has_dst_size = surface->viewport.dst_width > 0;
+    }
+
+  if (meta_wayland_surface_is_xwayland (surface))
+    {
+#ifdef HAVE_XWAYLAND
+      MetaXWaylandManager *xwayland_manager =
+        &surface->compositor->xwayland_manager;
+
+      if (surface->viewport.has_dst_size)
+        {
+          surface->applied_state.scale = 1;
+        }
+      else
+        {
+          surface->applied_state.scale =
+            meta_xwayland_get_effective_scale (xwayland_manager);
+        }
+#endif
+    }
+  else if (state->scale > 0)
+    {
+      surface->applied_state.scale = state->scale;
     }
 
   state->derived.surface_size_changed =
@@ -833,6 +870,9 @@ meta_wayland_surface_apply_state (MetaWaylandSurface      *surface,
       if (state->input_region)
         surface->input_region = mtk_region_ref (state->input_region);
     }
+
+  if (state->has_new_color_state)
+    g_set_object (&surface->color_state, state->color_state);
 
   /*
    * A new commit indicates a new content update, so any previous
@@ -978,8 +1018,9 @@ meta_wayland_surface_commit (MetaWaylandSurface *surface)
       MetaMultiTexture *committed_texture = surface->committed_state.texture;
       int committed_scale = surface->committed_state.scale;
 
-      if ((meta_multi_texture_get_width (committed_texture) % committed_scale != 0) ||
-          (meta_multi_texture_get_height (committed_texture) % committed_scale != 0))
+      if (((meta_multi_texture_get_width (committed_texture) % committed_scale != 0) ||
+           (meta_multi_texture_get_height (committed_texture) % committed_scale != 0)) &&
+          !meta_wayland_surface_is_xwayland (surface))
         {
           if (surface->role && !META_IS_WAYLAND_CURSOR_SURFACE (surface->role))
             {
@@ -1199,7 +1240,7 @@ wl_surface_commit (struct wl_client   *client,
   meta_wayland_surface_commit (surface);
 }
 
-static MetaMonitorTransform
+static MtkMonitorTransform
 transform_from_wl_output_transform (int32_t transform_value)
 {
   enum wl_output_transform transform = transform_value;
@@ -1207,21 +1248,21 @@ transform_from_wl_output_transform (int32_t transform_value)
   switch (transform)
     {
     case WL_OUTPUT_TRANSFORM_NORMAL:
-      return META_MONITOR_TRANSFORM_NORMAL;
+      return MTK_MONITOR_TRANSFORM_NORMAL;
     case WL_OUTPUT_TRANSFORM_90:
-      return META_MONITOR_TRANSFORM_90;
+      return MTK_MONITOR_TRANSFORM_90;
     case WL_OUTPUT_TRANSFORM_180:
-      return META_MONITOR_TRANSFORM_180;
+      return MTK_MONITOR_TRANSFORM_180;
     case WL_OUTPUT_TRANSFORM_270:
-      return META_MONITOR_TRANSFORM_270;
+      return MTK_MONITOR_TRANSFORM_270;
     case WL_OUTPUT_TRANSFORM_FLIPPED:
-      return META_MONITOR_TRANSFORM_FLIPPED;
+      return MTK_MONITOR_TRANSFORM_FLIPPED;
     case WL_OUTPUT_TRANSFORM_FLIPPED_90:
-      return META_MONITOR_TRANSFORM_FLIPPED_90;
+      return MTK_MONITOR_TRANSFORM_FLIPPED_90;
     case WL_OUTPUT_TRANSFORM_FLIPPED_180:
-      return META_MONITOR_TRANSFORM_FLIPPED_180;
+      return MTK_MONITOR_TRANSFORM_FLIPPED_180;
     case WL_OUTPUT_TRANSFORM_FLIPPED_270:
-      return META_MONITOR_TRANSFORM_FLIPPED_270;
+      return MTK_MONITOR_TRANSFORM_FLIPPED_270;
     default:
       return -1;
     }
@@ -1234,7 +1275,7 @@ wl_surface_set_buffer_transform (struct wl_client   *client,
 {
   MetaWaylandSurface *surface = wl_resource_get_user_data (resource);
   MetaWaylandSurfaceState *pending = surface->pending_state;
-  MetaMonitorTransform buffer_transform;
+  MtkMonitorTransform buffer_transform;
 
   buffer_transform = transform_from_wl_output_transform (transform);
 
@@ -1456,10 +1497,10 @@ out:
   return scale;
 }
 
-static MetaMonitorTransform
+static MtkMonitorTransform
 meta_wayland_surface_get_output_transform (MetaWaylandSurface *surface)
 {
-  MetaMonitorTransform transform = META_MONITOR_TRANSFORM_NORMAL;
+  MtkMonitorTransform transform = MTK_MONITOR_TRANSFORM_NORMAL;
   MetaWindow *window;
   MetaLogicalMonitor *logical_monitor;
 
@@ -1480,12 +1521,14 @@ update_surface_output_state (gpointer key, gpointer value, gpointer user_data)
 {
   MetaWaylandOutput *wayland_output = value;
   MetaWaylandSurface *surface = user_data;
+  MetaMonitor *monitor;
   MetaLogicalMonitor *logical_monitor;
   gboolean is_on_logical_monitor;
 
   g_assert (surface->role);
 
-  logical_monitor = meta_wayland_output_get_logical_monitor (wayland_output);
+  monitor = meta_wayland_output_get_monitor (wayland_output);
+  logical_monitor = meta_monitor_get_logical_monitor (monitor);
   if (!logical_monitor)
     {
       set_surface_is_on_output (surface, wayland_output, FALSE);
@@ -1507,6 +1550,16 @@ meta_wayland_surface_update_outputs (MetaWaylandSurface *surface)
   g_hash_table_foreach (surface->compositor->outputs,
                         update_surface_output_state,
                         surface);
+
+  if (meta_wayland_surface_is_xwayland (surface))
+    {
+#ifdef HAVE_XWAYLAND
+      MetaXWaylandManager *xwayland_manager =
+        &surface->compositor->xwayland_manager;
+
+      surface->applied_state.scale = meta_xwayland_get_effective_scale (xwayland_manager);
+#endif
+    }
 }
 
 void
@@ -1570,6 +1623,14 @@ meta_wayland_surface_dispose (GObject *object)
   g_clear_pointer (&surface->applied_state.subsurface_branch_node, g_node_destroy);
 
   g_clear_pointer (&surface->shortcut_inhibited_seats, g_hash_table_destroy);
+
+  if (surface->main_monitor)
+    {
+      g_object_weak_unref (G_OBJECT (surface->main_monitor),
+                           on_main_monitor_destroyed,
+                           surface);
+      surface->main_monitor = NULL;
+    }
 
   G_OBJECT_CLASS (meta_wayland_surface_parent_class)->dispose (object);
 }
@@ -1862,6 +1923,29 @@ meta_wayland_surface_get_property (GObject    *object,
     case PROP_WINDOW:
       g_value_set_object (value, meta_wayland_surface_get_window (surface));
       break;
+    case PROP_MAIN_MONITOR:
+      g_value_set_object (value, surface->main_monitor);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+    }
+}
+
+static void
+meta_wayland_surface_set_property (GObject      *object,
+                                   guint         prop_id,
+                                   const GValue *value,
+                                   GParamSpec   *pspec)
+{
+  MetaWaylandSurface *surface = META_WAYLAND_SURFACE (object);
+
+  switch (prop_id)
+    {
+    case PROP_MAIN_MONITOR:
+      meta_wayland_surface_set_main_monitor (surface,
+                                             g_value_get_object (value));
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -1875,6 +1959,7 @@ meta_wayland_surface_class_init (MetaWaylandSurfaceClass *klass)
 
   object_class->dispose = meta_wayland_surface_dispose;
   object_class->get_property = meta_wayland_surface_get_property;
+  object_class->set_property = meta_wayland_surface_set_property;
 
   obj_props[PROP_SCANOUT_CANDIDATE] =
     g_param_spec_object ("scanout-candidate", NULL, NULL,
@@ -1887,6 +1972,14 @@ meta_wayland_surface_class_init (MetaWaylandSurfaceClass *klass)
                          META_TYPE_WINDOW,
                          G_PARAM_READABLE |
                          G_PARAM_STATIC_STRINGS);
+
+  obj_props[PROP_MAIN_MONITOR] =
+    g_param_spec_object ("main-monitor", NULL, NULL,
+                         META_TYPE_LOGICAL_MONITOR,
+                         G_PARAM_READWRITE |
+                         G_PARAM_EXPLICIT_NOTIFY |
+                         G_PARAM_STATIC_STRINGS);
+
   g_object_class_install_properties (object_class, N_PROPS, obj_props);
 
   surface_signals[SURFACE_DESTROY] =
@@ -2249,7 +2342,7 @@ meta_wayland_surface_get_width (MetaWaylandSurface *surface)
     {
       int width;
 
-      if (meta_monitor_transform_is_rotated (surface->buffer_transform))
+      if (mtk_monitor_transform_is_rotated (surface->buffer_transform))
         width = meta_wayland_surface_get_buffer_height (surface);
       else
         width = meta_wayland_surface_get_buffer_width (surface);
@@ -2273,7 +2366,7 @@ meta_wayland_surface_get_height (MetaWaylandSurface *surface)
     {
       int height;
 
-      if (meta_monitor_transform_is_rotated (surface->buffer_transform))
+      if (mtk_monitor_transform_is_rotated (surface->buffer_transform))
         height = meta_wayland_surface_get_buffer_width (surface);
       else
         height = meta_wayland_surface_get_buffer_height (surface);
@@ -2309,9 +2402,8 @@ meta_wayland_surface_try_acquire_scanout (MetaWaylandSurface *surface,
                                           CoglOnscreen       *onscreen,
                                           ClutterStageView   *stage_view)
 {
-  MetaRendererView *renderer_view;
   MetaSurfaceActor *surface_actor;
-  MetaMonitorTransform view_transform;
+  MtkMonitorTransform view_transform;
   ClutterActorBox actor_box;
   MtkRectangle *dst_rect_ptr = NULL;
   MtkRectangle dst_rect;
@@ -2328,8 +2420,7 @@ meta_wayland_surface_try_acquire_scanout (MetaWaylandSurface *surface,
   if (surface->buffer->use_count == 0)
     return NULL;
 
-  renderer_view = META_RENDERER_VIEW (stage_view);
-  view_transform = meta_renderer_view_get_transform (renderer_view);
+  view_transform = clutter_stage_view_get_transform (stage_view);
   if (view_transform != surface->buffer_transform)
     {
       meta_topic (META_DEBUG_RENDER,
@@ -2353,7 +2444,7 @@ meta_wayland_surface_try_acquire_scanout (MetaWaylandSurface *surface,
     .height = (int) roundf ((actor_box.y2 - actor_box.y1) * view_scale),
   };
 
-  if (meta_monitor_transform_is_rotated (view_transform))
+  if (mtk_monitor_transform_is_rotated (view_transform))
     {
       untransformed_view_width = view_rect.height;
       untransformed_view_height = view_rect.width;
@@ -2364,11 +2455,11 @@ meta_wayland_surface_try_acquire_scanout (MetaWaylandSurface *surface,
       untransformed_view_height = view_rect.height;
     }
 
-  meta_rectangle_transform (&dst_rect,
-                            view_transform,
-                            untransformed_view_width,
-                            untransformed_view_height,
-                            &dst_rect);
+  mtk_rectangle_transform (&dst_rect,
+                           view_transform,
+                           untransformed_view_width,
+                           untransformed_view_height,
+                           &dst_rect);
 
   /* Use an implicit destination rect when possible */
   if (surface->viewport.has_dst_size ||
@@ -2462,7 +2553,7 @@ committed_state_handle_highest_scale_monitor (MetaWaylandSurface *surface)
       WL_SURFACE_PREFERRED_BUFFER_SCALE_SINCE_VERSION)
     {
       int ceiled_scale;
-      MetaMonitorTransform transform;
+      MtkMonitorTransform transform;
 
       ceiled_scale = (int) ceil (scale);
       if (ceiled_scale > 0 && ceiled_scale != surface->preferred_scale)
@@ -2509,4 +2600,60 @@ void
 meta_wayland_surface_notify_actor_changed (MetaWaylandSurface *surface)
 {
   g_signal_emit (surface, surface_signals[SURFACE_ACTOR_CHANGED], 0);
+}
+
+static void
+meta_wayland_surface_set_main_monitor_internal (MetaWaylandSurface *surface,
+                                                MetaLogicalMonitor *logical_monitor,
+                                                gconstpointer       not_this_monitor)
+{
+  MetaWaylandSurface *subsurface_surface;
+
+  if (surface->main_monitor == logical_monitor)
+    return;
+
+  if (surface->main_monitor && surface->main_monitor != not_this_monitor)
+    {
+      g_object_weak_unref (G_OBJECT (surface->main_monitor),
+                           on_main_monitor_destroyed,
+                           surface);
+    }
+
+  if (logical_monitor)
+    {
+      g_object_weak_ref (G_OBJECT (logical_monitor),
+                         on_main_monitor_destroyed,
+                         surface);
+    }
+
+  surface->main_monitor = logical_monitor;
+
+  g_object_notify_by_pspec (G_OBJECT (surface), obj_props[PROP_MAIN_MONITOR]);
+
+  META_WAYLAND_SURFACE_FOREACH_SUBSURFACE (&surface->committed_state,
+                                           subsurface_surface)
+    meta_wayland_surface_set_main_monitor (subsurface_surface, logical_monitor);
+}
+
+static void
+on_main_monitor_destroyed (gpointer  user_data,
+                           GObject  *where_the_monitor_was)
+{
+  MetaWaylandSurface *surface = META_WAYLAND_SURFACE (user_data);
+
+  meta_wayland_surface_set_main_monitor_internal (surface, NULL,
+                                                  where_the_monitor_was);
+}
+
+void
+meta_wayland_surface_set_main_monitor (MetaWaylandSurface *surface,
+                                       MetaLogicalMonitor *logical_monitor)
+{
+  meta_wayland_surface_set_main_monitor_internal (surface, logical_monitor, NULL);
+}
+
+MetaLogicalMonitor *
+meta_wayland_surface_get_main_monitor (MetaWaylandSurface *surface)
+{
+  return surface->main_monitor;
 }

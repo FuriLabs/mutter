@@ -26,6 +26,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+#include <X11/extensions/Xrandr.h>
 #include <X11/extensions/sync.h>
 
 #include "core/events.h"
@@ -281,6 +282,7 @@ text_clear_func (GtkClipboard *clipboard,
 static void
 process_line (const char *line)
 {
+  GdkDisplay *display = gdk_display_get_default ();
   GError *error = NULL;
   int argc;
   char **argv;
@@ -474,7 +476,6 @@ process_line (const char *line)
           goto out;
         }
 
-      GdkDisplay *display = gdk_display_get_default ();
       GdkWindow *gdkwindow = gtk_widget_get_window (window);
       Display *xdisplay = gdk_x11_display_get_xdisplay (display);
       Window xwindow = GDK_WINDOW_XID (gdkwindow);
@@ -875,6 +876,65 @@ process_line (const char *line)
           goto out;
         }
     }
+  else if (strcmp (argv[0], "assert_primary_monitor") == 0)
+    {
+      Display *xdisplay = gdk_x11_display_get_xdisplay (display);
+      GdkWindow *root_window = gdk_screen_get_root_window ((gdk_screen_get_default ()));
+      Window root_xwindow = gdk_x11_window_get_xid (root_window);
+      XRRScreenResources *resources;
+      RROutput primary_output;
+      XRROutputInfo *output_info;
+      char *expected_name;
+
+      if (wayland)
+        {
+          g_print ("Can only assert primary monitor on X11\n");
+          goto out;
+        }
+
+      if (argc != 2)
+        {
+          g_print ("usage: %s <monitor-name>\n", argv[0]);
+          goto out;
+        }
+
+      expected_name = argv[1];
+
+      resources = XRRGetScreenResourcesCurrent (xdisplay, root_xwindow);
+      if (!resources)
+        {
+          g_print ("Failed to retrieve XRANDR resources\n");
+          goto out;
+        }
+
+      primary_output = XRRGetOutputPrimary (xdisplay, root_xwindow);
+      if (!primary_output)
+        {
+          if (g_strcmp0 (expected_name, "(none)") != 0)
+            {
+              g_print ("Failed to primary XRANDR output\n");
+              goto out;
+            }
+        }
+      else
+        {
+          output_info = XRRGetOutputInfo (xdisplay, resources, primary_output);
+          if (!output_info)
+            {
+              g_print ("Failed to primary XRANDR output info\n");
+              goto out;
+            }
+
+          if (g_strcmp0 (expected_name, output_info->name) != 0)
+            {
+              XRRFreeOutputInfo (output_info);
+              g_print ("XRANDR output %s primary, expected %s\n",
+                       output_info->name, expected_name);
+              goto out;
+            }
+          XRRFreeOutputInfo (output_info);
+        }
+    }
   else if (strcmp (argv[0], "stop_after_next") == 0)
     {
       if (sync_after_lines != -1)
@@ -897,7 +957,6 @@ process_line (const char *line)
     }
   else if (strcmp (argv[0], "clipboard-set") == 0)
     {
-      GdkDisplay *display = gdk_display_get_default ();
       GtkClipboard *clipboard;
       GdkAtom atom;
       GtkTargetList *target_list;

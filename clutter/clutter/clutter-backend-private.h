@@ -38,6 +38,8 @@ struct _ClutterBackend
   /*< private >*/
   GObject parent_instance;
 
+  ClutterContext *context;
+
   CoglRenderer *cogl_renderer;
   CoglDisplay *cogl_display;
   CoglContext *cogl_context;
@@ -67,9 +69,6 @@ struct _ClutterBackendClass
                                                 GError         **error);
   CoglRenderer *        (* get_renderer)       (ClutterBackend  *backend,
                                                 GError         **error);
-  CoglDisplay *         (* get_display)        (ClutterBackend  *backend,
-                                                CoglRenderer    *renderer,
-                                                GError         **error);
   gboolean              (* create_context)     (ClutterBackend  *backend,
                                                 GError         **error);
 
@@ -79,8 +78,6 @@ struct _ClutterBackendClass
 
   /* signals */
   void (* resolution_changed) (ClutterBackend *backend);
-  void (* font_changed)       (ClutterBackend *backend);
-  void (* settings_changed)   (ClutterBackend *backend);
 };
 
 ClutterStageWindow *    _clutter_backend_create_stage                   (ClutterBackend         *backend,

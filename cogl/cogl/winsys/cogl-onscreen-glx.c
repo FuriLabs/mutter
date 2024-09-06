@@ -76,14 +76,12 @@ cogl_onscreen_glx_allocate (CoglFramebuffer  *framebuffer,
     _cogl_xlib_renderer_get_data (display->renderer);
   CoglGLXRenderer *glx_renderer = display->renderer->winsys;
   Window xwin;
-  const CoglFramebufferConfig *config;
   GLXFBConfig fbconfig;
   GError *fbconfig_error = NULL;
 
   g_return_val_if_fail (glx_display->glx_context, FALSE);
 
-  config = cogl_framebuffer_get_config (framebuffer);
-  if (!cogl_display_glx_find_fbconfig (display, config,
+  if (!cogl_display_glx_find_fbconfig (display,
                                        &fbconfig,
                                        &fbconfig_error))
     {
@@ -93,19 +91,6 @@ cogl_onscreen_glx_allocate (CoglFramebuffer  *framebuffer,
                    fbconfig_error->message);
       g_error_free (fbconfig_error);
       return FALSE;
-    }
-
-  /* Update the real number of samples_per_pixel now that we have
-   * found an fbconfig... */
-  if (config->samples_per_pixel)
-    {
-      int samples;
-      int status = glx_renderer->glXGetFBConfigAttrib (xlib_renderer->xdpy,
-                                                       fbconfig,
-                                                       GLX_SAMPLES,
-                                                       &samples);
-      g_return_val_if_fail (status == Success, TRUE);
-      cogl_framebuffer_update_samples_per_pixel (framebuffer, samples);
     }
 
   /* FIXME: We need to explicitly Select for ConfigureNotify events.

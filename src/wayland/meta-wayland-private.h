@@ -77,6 +77,8 @@ struct _MetaXWaylandManager
   int rr_error_base;
 
   gboolean should_enable_ei_portal;
+
+  double highest_monitor_scale;
 };
 
 struct _MetaWaylandCompositor
@@ -88,6 +90,7 @@ struct _MetaWaylandCompositor
   struct wl_display *wayland_display;
   char *display_name;
   GSource *source;
+  struct wl_listener client_created_listener;
 
   GHashTable *outputs;
   GList *frame_callback_surfaces;

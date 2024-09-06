@@ -47,7 +47,7 @@ struct _MetaOverlay
   CoglPipeline *pipeline;
   CoglTexture *texture;
 
-  MetaMonitorTransform buffer_transform;
+  MtkMonitorTransform buffer_transform;
 
   graphene_rect_t current_rect;
   graphene_rect_t previous_rect;
@@ -63,7 +63,6 @@ struct _MetaStage
   GPtrArray *watchers[N_WATCH_MODES];
 
   GList *overlays;
-  gboolean is_active;
 };
 
 G_DEFINE_TYPE (MetaStage, meta_stage, CLUTTER_TYPE_STAGE);
@@ -93,10 +92,10 @@ meta_overlay_free (MetaOverlay *overlay)
 }
 
 static void
-meta_overlay_set (MetaOverlay          *overlay,
-                  CoglTexture          *texture,
-                  graphene_rect_t      *rect,
-                  MetaMonitorTransform  buffer_transform)
+meta_overlay_set (MetaOverlay         *overlay,
+                  CoglTexture         *texture,
+                  graphene_rect_t     *rect,
+                  MtkMonitorTransform  buffer_transform)
 {
   if (overlay->texture != texture)
     {
@@ -113,8 +112,8 @@ meta_overlay_set (MetaOverlay          *overlay,
       graphene_matrix_t matrix;
 
       graphene_matrix_init_identity (&matrix);
-      meta_monitor_transform_transform_matrix (buffer_transform,
-                                               &matrix);
+      mtk_monitor_transform_transform_matrix (buffer_transform,
+                                              &matrix);
       cogl_pipeline_set_layer_matrix (overlay->pipeline, 0, &matrix);
 
       overlay->buffer_transform = buffer_transform;
@@ -274,26 +273,6 @@ meta_stage_paint_view (ClutterStage     *stage,
 }
 
 static void
-meta_stage_activate (ClutterStage *actor)
-{
-  MetaStage *stage = META_STAGE (actor);
-
-  CLUTTER_STAGE_CLASS (meta_stage_parent_class)->activate (actor);
-
-  stage->is_active = TRUE;
-}
-
-static void
-meta_stage_deactivate (ClutterStage *actor)
-{
-  MetaStage *stage = META_STAGE (actor);
-
-  CLUTTER_STAGE_CLASS (meta_stage_parent_class)->deactivate (actor);
-
-  stage->is_active = FALSE;
-}
-
-static void
 on_power_save_changed (MetaMonitorManager        *monitor_manager,
                        MetaPowerSaveChangeReason  reason,
                        MetaStage                 *stage)
@@ -314,8 +293,6 @@ meta_stage_class_init (MetaStageClass *klass)
 
   actor_class->paint = meta_stage_paint;
 
-  stage_class->activate = meta_stage_activate;
-  stage_class->deactivate = meta_stage_deactivate;
   stage_class->before_paint = meta_stage_before_paint;
   stage_class->paint_view = meta_stage_paint_view;
 }
@@ -333,7 +310,7 @@ key_focus_actor_changed (ClutterStage *stage,
   if (key_focus == CLUTTER_ACTOR (stage))
     key_focus = NULL;
 
-  meta_stage_set_active (META_STAGE (stage), key_focus != NULL);
+  clutter_stage_set_active (stage, key_focus != NULL);
 }
 
 static void
@@ -360,6 +337,7 @@ meta_stage_new (MetaBackend *backend)
 
   stage = g_object_new (META_TYPE_STAGE,
                         "context", meta_backend_get_clutter_context (backend),
+                        "accessible-name", "Main stage",
                         NULL);
   stage->backend = backend;
 
@@ -453,11 +431,11 @@ meta_stage_remove_cursor_overlay (MetaStage   *stage,
 }
 
 void
-meta_stage_update_cursor_overlay (MetaStage            *stage,
-                                  MetaOverlay          *overlay,
-                                  CoglTexture          *texture,
-                                  graphene_rect_t      *rect,
-                                  MetaMonitorTransform  buffer_transform)
+meta_stage_update_cursor_overlay (MetaStage           *stage,
+                                  MetaOverlay         *overlay,
+                                  CoglTexture         *texture,
+                                  graphene_rect_t     *rect,
+                                  MtkMonitorTransform  buffer_transform)
 {
   meta_overlay_set (overlay, texture, rect, buffer_transform);
   queue_redraw_for_overlay (stage, overlay);
@@ -472,19 +450,6 @@ meta_overlay_set_visible (MetaOverlay *overlay,
 
   overlay->is_visible = is_visible;
   queue_redraw_for_overlay (overlay->stage, overlay);
-}
-
-void
-meta_stage_set_active (MetaStage *stage,
-                       gboolean   is_active)
-{
-  if (stage->is_active == is_active)
-    return;
-
-  if (is_active)
-    g_signal_emit_by_name (CLUTTER_STAGE (stage), "activate");
-  else
-    g_signal_emit_by_name (CLUTTER_STAGE (stage), "deactivate");
 }
 
 MetaStageWatch *

@@ -29,6 +29,7 @@
 #include "backends/meta-color-profile.h"
 #include "backends/meta-color-store.h"
 #include "backends/meta-monitor.h"
+#include "core/meta-debug-control-private.h"
 
 #define EFI_PANEL_COLOR_INFO_PATH \
   "/sys/firmware/efi/efivars/INTERNAL_PANEL_COLOR_INFO-01e1ada1-79f2-46b3-8d3e-71fc0996ca6b"
@@ -36,13 +37,19 @@
 enum
 {
   READY,
-  CHANGED,
-  UPDATED,
+  CALIBRATION_CHANGED,
+  COLOR_STATE_CHANGED,
 
   N_SIGNALS
 };
 
 static guint signals[N_SIGNALS];
+
+typedef enum
+{
+  UPDATE_RESULT_CALIBRATION = 1 << 0,
+  UPDATE_RESULT_COLOR_STATE = 1 << 1,
+} UpdateResult;
 
 typedef enum
 {
@@ -56,6 +63,7 @@ struct _MetaColorDevice
   GObject parent;
 
   MetaColorManager *color_manager;
+  gulong manager_ready_handler_id;
 
   char *cd_device_id;
   MetaMonitor *monitor;
@@ -69,6 +77,8 @@ struct _MetaColorDevice
   GCancellable *assigned_profile_cancellable;
 
   GCancellable *cancellable;
+
+  ClutterColorState *color_state;
 
   PendingState pending_state;
   gboolean is_ready;
@@ -157,7 +167,7 @@ ensure_default_profile_cb (GObject      *source_object,
 
   g_set_object (&color_device->assigned_profile, color_profile);
 
-  g_signal_emit (color_device, signals[CHANGED], 0);
+  meta_color_device_update (color_device);
 }
 
 static void
@@ -274,13 +284,17 @@ meta_color_device_dispose (GObject *object)
   g_clear_object (&color_device->cancellable);
   g_clear_signal_handler (&color_device->device_profile_ready_handler_id,
                           color_device->device_profile);
+  g_clear_signal_handler (&color_device->manager_ready_handler_id,
+                          color_manager);
+
 
   g_clear_object (&color_device->assigned_profile);
   g_clear_object (&color_device->device_profile);
 
   cd_device = color_device->cd_device;
   cd_device_id = color_device->cd_device_id;
-  if (!cd_device && cd_device_id)
+  if (!cd_device && !color_device->is_ready &&
+      cd_device_id && meta_color_manager_is_ready (color_manager))
     {
       g_autoptr (GError) error = NULL;
 
@@ -301,6 +315,7 @@ meta_color_device_dispose (GObject *object)
   g_clear_pointer (&color_device->cd_device_id, g_free);
   g_clear_object (&color_device->cd_device);
   g_clear_object (&color_device->monitor);
+  g_clear_object (&color_device->color_state);
 
   G_OBJECT_CLASS (meta_color_device_parent_class)->dispose (object);
 }
@@ -312,6 +327,10 @@ meta_color_device_class_init (MetaColorDeviceClass *klass)
 
   object_class->dispose = meta_color_device_dispose;
 
+  /**
+   * MetaColorDevice::ready:
+   * @device: the #MetaColorDevice which became ready
+   */
   signals[READY] =
     g_signal_new ("ready",
                   G_TYPE_FROM_CLASS (klass),
@@ -319,14 +338,23 @@ meta_color_device_class_init (MetaColorDeviceClass *klass)
                   NULL, NULL, NULL,
                   G_TYPE_NONE, 1,
                   G_TYPE_BOOLEAN);
-  signals[CHANGED] =
-    g_signal_new ("changed",
+  /**
+   * MetaColorDevice::calibration-changed:
+   * @device: the #MetaColorDevice which emitted the signal
+   *
+   * The signal notifies that the color calibration of the device has changed.
+   * Calibration is anything that changes the monitors behavior when given
+   * a signal. Changes to the white point from the source are also considered
+   * calibration even though they are technically not on the monitor.
+   */
+  signals[CALIBRATION_CHANGED] =
+    g_signal_new ("calibration-changed",
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_LAST, 0,
                   NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
-  signals[UPDATED] =
-    g_signal_new ("updated",
+  signals[COLOR_STATE_CHANGED] =
+    g_signal_new ("color-state-changed",
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_LAST, 0,
                   NULL, NULL, NULL,
@@ -572,19 +600,14 @@ generate_color_device_props (MetaMonitor *monitor)
   return device_props;
 }
 
-MetaColorDevice *
-meta_color_device_new (MetaColorManager *color_manager,
-                       MetaMonitor      *monitor)
+static void
+create_cd_device (MetaColorDevice *color_device)
 {
-  MetaColorDevice *color_device;
+  MetaColorManager *color_manager = color_device->color_manager;
+  MetaMonitor *monitor = color_device->monitor;
   g_autoptr (GHashTable) device_props = NULL;
 
   device_props = generate_color_device_props (monitor);
-  color_device = g_object_new (META_TYPE_COLOR_DEVICE, NULL);
-  color_device->cd_device_id = generate_cd_device_id (monitor);
-  color_device->monitor = g_object_ref (monitor);
-  color_device->cancellable = g_cancellable_new ();
-  color_device->color_manager = color_manager;
 
   cd_client_create_device (meta_color_manager_get_cd_client (color_manager),
                            color_device->cd_device_id,
@@ -593,15 +616,137 @@ meta_color_device_new (MetaColorManager *color_manager,
                            color_device->cancellable,
                            on_cd_device_created,
                            color_device);
-
-  return color_device;
 }
 
-void
-meta_color_device_destroy (MetaColorDevice *color_device)
+static void
+on_manager_ready (MetaColorManager *color_manager,
+                  MetaColorDevice  *color_device)
 {
-  g_object_run_dispose (G_OBJECT (color_device));
-  g_object_unref (color_device);
+  create_cd_device (color_device);
+}
+
+static ClutterColorspace
+get_color_space_from_monitor (MetaMonitor *monitor)
+{
+  switch (meta_monitor_get_color_space (monitor))
+    {
+    case META_OUTPUT_COLORSPACE_DEFAULT:
+    case META_OUTPUT_COLORSPACE_UNKNOWN:
+      return CLUTTER_COLORSPACE_DEFAULT;
+    case META_OUTPUT_COLORSPACE_BT2020:
+      return CLUTTER_COLORSPACE_BT2020;
+    }
+  g_assert_not_reached ();
+}
+
+static ClutterTransferFunction
+get_transfer_function_from_monitor (MetaMonitor *monitor)
+{
+  const MetaOutputHdrMetadata *hdr_metadata =
+    meta_monitor_get_hdr_metadata (monitor);
+
+  if (!hdr_metadata->active)
+    return CLUTTER_TRANSFER_FUNCTION_DEFAULT;
+
+  switch (hdr_metadata->eotf)
+    {
+    case META_OUTPUT_HDR_METADATA_EOTF_PQ:
+      return CLUTTER_TRANSFER_FUNCTION_PQ;
+    case META_OUTPUT_HDR_METADATA_EOTF_TRADITIONAL_GAMMA_SDR:
+      return CLUTTER_TRANSFER_FUNCTION_DEFAULT;
+    case META_OUTPUT_HDR_METADATA_EOTF_TRADITIONAL_GAMMA_HDR:
+      g_warning ("Unhandled HDR EOTF (traditional gamma hdr)");
+      return CLUTTER_TRANSFER_FUNCTION_DEFAULT;
+    case META_OUTPUT_HDR_METADATA_EOTF_HLG:
+      g_warning ("Unhandled HDR EOTF (HLG)");
+      return CLUTTER_TRANSFER_FUNCTION_DEFAULT;
+    }
+
+  g_assert_not_reached ();
+}
+
+static UpdateResult
+update_color_state (MetaColorDevice *color_device)
+{
+  MetaMonitor *monitor = color_device->monitor;
+  MetaBackend *backend =
+    meta_color_manager_get_backend (color_device->color_manager);
+  MetaContext *context = meta_backend_get_context (backend);
+  MetaDebugControl *debug_control = meta_context_get_debug_control (context);
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
+  g_autoptr (ClutterColorState) color_state = NULL;
+  ClutterColorspace colorspace;
+  ClutterTransferFunction transfer_function;
+  float min_lum, max_lum, ref_lum;
+  float reference_luminance_factor;
+  UpdateResult result = 0;
+
+  colorspace = get_color_space_from_monitor (monitor);
+  transfer_function = get_transfer_function_from_monitor (monitor);
+
+  clutter_transfer_function_get_default_luminances (transfer_function,
+                                                    &min_lum,
+                                                    &max_lum,
+                                                    &ref_lum);
+
+  reference_luminance_factor =
+    meta_debug_control_get_luminance_percentage (debug_control) / 100.0f;
+  ref_lum = ref_lum * reference_luminance_factor;
+
+  color_state = clutter_color_state_new_full (clutter_context,
+                                              colorspace,
+                                              transfer_function,
+                                              min_lum, max_lum, ref_lum);
+
+  if (!color_device->color_state ||
+      !clutter_color_state_equals (color_device->color_state, color_state))
+    {
+      g_set_object (&color_device->color_state, color_state);
+      result |= UPDATE_RESULT_COLOR_STATE;
+    }
+
+  return result;
+}
+
+MetaColorDevice *
+meta_color_device_new (MetaColorManager *color_manager,
+                       MetaMonitor      *monitor)
+{
+  MetaBackend *backend = meta_color_manager_get_backend (color_manager);
+  MetaContext *context = meta_backend_get_context (backend);
+  MetaDebugControl *debug_control = meta_context_get_debug_control (context);
+  MetaColorDevice *color_device;
+
+  color_device = g_object_new (META_TYPE_COLOR_DEVICE, NULL);
+  color_device->cd_device_id = generate_cd_device_id (monitor);
+  color_device->monitor = g_object_ref (monitor);
+  color_device->cancellable = g_cancellable_new ();
+  color_device->color_manager = color_manager;
+
+  update_color_state (color_device);
+
+  if (meta_monitor_is_virtual (monitor))
+    {
+      meta_color_device_notify_ready (color_device, FALSE);
+    }
+  else if (meta_color_manager_is_ready (color_manager))
+    {
+      create_cd_device (color_device);
+    }
+  else
+    {
+      color_device->manager_ready_handler_id =
+        g_signal_connect (color_manager, "ready",
+                          G_CALLBACK (on_manager_ready),
+                          color_device);
+    }
+
+  g_signal_connect_object (debug_control, "notify::luminance-percentage",
+                           G_CALLBACK (meta_color_device_update),
+                           color_device,
+                           G_CONNECT_SWAPPED | G_CONNECT_AFTER);
+
+  return color_device;
 }
 
 void
@@ -1207,6 +1352,12 @@ meta_color_device_get_monitor (MetaColorDevice *color_device)
   return color_device->monitor;
 }
 
+ClutterColorState *
+meta_color_device_get_color_state (MetaColorDevice *color_device)
+{
+  return color_device->color_state;
+}
+
 MetaColorProfile *
 meta_color_device_get_device_profile (MetaColorDevice *color_device)
 {
@@ -1225,25 +1376,148 @@ meta_color_device_get_assigned_profile (MetaColorDevice *color_device)
   return color_device->assigned_profile;
 }
 
-void
-meta_color_device_update (MetaColorDevice *color_device,
-                          unsigned int     temperature)
+static void
+set_color_space_and_hdr_metadata (MetaMonitor           *monitor,
+                                  gboolean               enable,
+                                  MetaOutputColorspace  *color_space,
+                                  MetaOutputHdrMetadata *hdr_metadata)
 {
+  MetaBackend *backend = meta_monitor_get_backend (monitor);
+  ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
+  CoglContext *cogl_context = clutter_backend_get_cogl_context (clutter_backend);
+
+  if (enable &&
+      !cogl_context_has_feature (cogl_context, COGL_FEATURE_ID_TEXTURE_HALF_FLOAT))
+    {
+      g_warning ("Tried to enable HDR without half float rendering support, ignoring");
+      enable = FALSE;
+    }
+
+  if (enable)
+    {
+      *color_space = META_OUTPUT_COLORSPACE_BT2020;
+      *hdr_metadata = (MetaOutputHdrMetadata) {
+        .active = TRUE,
+        .eotf = META_OUTPUT_HDR_METADATA_EOTF_PQ,
+      };
+
+      meta_topic (META_DEBUG_COLOR,
+                  "ColorDevice: Trying to enabling HDR mode "
+                  "(Colorimetry: bt.2020, TF: PQ, HDR Metadata: Minimal):");
+    }
+  else
+    {
+      *color_space = META_OUTPUT_COLORSPACE_DEFAULT;
+      *hdr_metadata = (MetaOutputHdrMetadata) {
+        .active = FALSE,
+      };
+
+      meta_topic (META_DEBUG_COLOR,
+                  "ColorDevice: Trying to enable default mode "
+                  "(Colorimetry: default, TF: default, HDR Metadata: None):");
+    }
+}
+
+static UpdateResult
+update_hdr (MetaColorDevice *color_device)
+{
+  MetaMonitor *monitor = color_device->monitor;
+  MetaBackend *backend = meta_monitor_get_backend (monitor);
+  MetaContext *context = meta_backend_get_context (backend);
+  MetaDebugControl *debug_control = meta_context_get_debug_control (context);
+  MetaOutputColorspace color_space;
+  MetaOutputHdrMetadata hdr_metadata;
+  gboolean hdr_enabled;
+  g_autoptr (GError) error = NULL;
+
+  hdr_enabled = meta_debug_control_is_hdr_enabled (debug_control);
+  set_color_space_and_hdr_metadata (monitor, hdr_enabled,
+                                    &color_space, &hdr_metadata);
+
+  if (meta_monitor_get_color_space (monitor) == color_space &&
+      meta_output_hdr_metadata_equal (meta_monitor_get_hdr_metadata (monitor),
+                                      &hdr_metadata))
+    return 0;
+
+  if (!meta_monitor_set_color_space (monitor, color_space, &error))
+    {
+      meta_monitor_set_color_space (monitor,
+                                    META_OUTPUT_COLORSPACE_DEFAULT,
+                                    NULL);
+      meta_monitor_set_hdr_metadata (monitor, &(MetaOutputHdrMetadata) {
+                                       .active = FALSE,
+                                     }, NULL);
+
+      if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED))
+        {
+          meta_topic (META_DEBUG_COLOR,
+                      "ColorDevice: Colorimetry not supported "
+                      "on monitor %s",
+                      meta_monitor_get_display_name (monitor));
+        }
+      else
+        {
+          g_warning ("Failed to set color space on monitor %s: %s",
+                     meta_monitor_get_display_name (monitor), error->message);
+        }
+
+      return 0;
+    }
+
+  if (!meta_monitor_set_hdr_metadata (monitor, &hdr_metadata, &error))
+    {
+      meta_monitor_set_color_space (monitor,
+                                    META_OUTPUT_COLORSPACE_DEFAULT,
+                                    NULL);
+      meta_monitor_set_hdr_metadata (monitor, &(MetaOutputHdrMetadata) {
+                                       .active = FALSE,
+                                     }, NULL);
+
+      if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED))
+        {
+          meta_topic (META_DEBUG_COLOR,
+                      "ColorDevice: HDR Metadata not supported "
+                      "on monitor %s",
+                      meta_monitor_get_display_name (monitor));
+        }
+      else
+        {
+          g_warning ("Failed to set HDR metadata on monitor %s: %s",
+                     meta_monitor_get_display_name (monitor),
+                     error->message);
+        }
+
+      return 0;
+    }
+
+    meta_topic (META_DEBUG_COLOR,
+                "ColorDevice: successfully set on monitor %s",
+                meta_monitor_get_display_name (monitor));
+
+  return UPDATE_RESULT_CALIBRATION;
+}
+
+static UpdateResult
+update_white_point (MetaColorDevice *color_device)
+{
+  MetaColorManager *color_manager = color_device->color_manager;
+  MetaMonitor *monitor = color_device->monitor;
   MetaColorProfile *color_profile;
-  MetaMonitor *monitor;
   size_t lut_size;
+  unsigned int temperature;
+
+  if (!meta_color_device_is_ready (color_device))
+    return 0;
 
   color_profile = meta_color_device_get_assigned_profile (color_device);
   if (!color_profile)
-    return;
+    return 0;
 
-  monitor = color_device->monitor;
-  if (!meta_monitor_is_active (monitor))
-    return;
+  temperature = meta_color_manager_get_temperature (color_manager);
 
   meta_topic (META_DEBUG_COLOR,
-              "Updating device '%s' (%s) using color profile '%s' "
-              "and temperature %uK",
+              "Updating white point of device '%s' (%s) "
+              "using color profile '%s' and temperature %uK",
               meta_color_device_get_id (color_device),
               meta_monitor_get_connector (monitor),
               meta_color_profile_get_id (color_profile),
@@ -1260,7 +1534,7 @@ meta_color_device_update (MetaColorDevice *color_device,
           meta_topic (META_DEBUG_COLOR,
                       "Setting brightness to %s%% from brightness profile",
                       brightness_profile);
-          meta_color_manager_set_brightness (color_device->color_manager,
+          meta_color_manager_set_brightness (color_manager,
                                              atoi (brightness_profile));
         }
     }
@@ -1277,5 +1551,25 @@ meta_color_device_update (MetaColorDevice *color_device,
       meta_monitor_set_gamma_lut (monitor, lut);
     }
 
-  g_signal_emit (color_device, signals[UPDATED], 0);
+  return UPDATE_RESULT_CALIBRATION;
+}
+
+void
+meta_color_device_update (MetaColorDevice *color_device)
+{
+  MetaMonitor *monitor = color_device->monitor;
+  UpdateResult result = 0;
+
+  if (!meta_monitor_is_active (monitor))
+    return;
+
+  result |= update_hdr (color_device);
+  result |= update_white_point (color_device);
+  result |= update_color_state (color_device);
+
+  if (result & UPDATE_RESULT_CALIBRATION)
+    g_signal_emit (color_device, signals[CALIBRATION_CHANGED], 0);
+
+  if (result & UPDATE_RESULT_COLOR_STATE)
+    g_signal_emit (color_device, signals[COLOR_STATE_CHANGED], 0);
 }

@@ -105,7 +105,7 @@ test_coglbox_init (TestCoglbox *self)
 {
   g_autoptr (GError) error = NULL;
   CoglContext *ctx =
-    clutter_backend_get_cogl_context (clutter_get_default_backend ());
+    clutter_backend_get_cogl_context (clutter_test_get_backend ());
   gchar *file;
 
   file = g_build_filename (TESTS_DATADIR, "redhand.png", NULL);
@@ -154,7 +154,6 @@ test_cogl_tex_tile_main (int argc, char *argv[])
   /* Stage */
   stage = clutter_test_get_stage ();
   clutter_actor_set_size (stage, 400, 400);
-  clutter_stage_set_title (CLUTTER_STAGE (stage), "Cogl Texture Tiling");
   g_signal_connect (stage, "destroy", G_CALLBACK (clutter_test_quit), NULL);
 
   /* Cogl Box */

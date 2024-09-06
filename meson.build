@@ -1,5 +1,5 @@
 project('mutter', 'c',
-  version: '47.beta',
+  version: '47.rc',
   meson_version: '>= 1.3.0',
   license: 'GPLv2+'
 )
@@ -16,7 +16,7 @@ mutter_builddir = meson.current_build_dir()
 lcms2_req = '>= 2.6'
 colord_req = '>= 1.4.5'
 fribidi_req = '>= 1.0.0'
-glib_req = '>= 2.75.1'
+glib_req = '>= 2.81.1'
 gi_req = '>= 0.9.5'
 graphene_req = '>= 1.10.2'
 gtk3_req = '>= 3.19.8'
@@ -26,7 +26,7 @@ pango_req = '>= 1.46.0'
 cairo_req = '>= 1.10.0'
 pangocairo_req = '>= 1.20'
 pixman_req = '>= 0.42'
-gsettings_desktop_schemas_req = '>= 40.alpha'
+gsettings_desktop_schemas_req = '>= 47.beta'
 x11_req = '>= 1.7.0'
 xcomposite_req = '>= 0.4'
 xkbcommon_req = '>= 0.4.3'
@@ -54,7 +54,7 @@ gbm_req = '>= 21.3'
 libdrm_req = '>= 2.4.118'
 
 # screen cast version requirements
-libpipewire_req = '>= 0.3.33'
+libpipewire_req = '>= 1.2.0'
 
 # profiler requirements
 sysprof_req = '>= 3.37.2'
@@ -298,11 +298,10 @@ endif
 have_libwacom = get_option('libwacom')
 if have_libwacom
   libwacom_dep = dependency('libwacom', version: libwacom_req)
-endif
-
-have_pango_ft2 = get_option('pango_ft2')
-if have_pango_ft2
-  pangoft2_dep = dependency('pangoft2')
+  have_libwacom_get_num_rings = cc.has_function('libwacom_get_num_rings',
+    dependencies: libwacom_dep)
+else
+  have_libwacom_get_num_rings = false
 endif
 
 have_startup_notification = get_option('startup_notification') and have_x11_client
@@ -346,7 +345,7 @@ int main (int argc, char ** argv) {
 }
 ''', name : 'timerfd_create(2) system call')
 
-have_malloc_trim = meson.get_compiler('c').has_function('malloc_trim')
+have_malloc_trim = cc.has_function('malloc_trim')
 
 have_documentation = get_option('docs')
 have_tests = get_option('tests').enable_auto_if(have_native_backend).enabled()
@@ -424,16 +423,6 @@ if have_tests
       have_x11_tests = true
     endif
   endif
-
-  add_test_setup('CI',
-    env: [
-      'MUTTER_DEBUG_DUMMY_MODE_SPECS=800x600@10.0',
-    ],
-    exe_wrapper: [
-      default_test_wrappers,
-    ],
-    timeout_multiplier: 10,
-  )
 endif
 
 have_profiler = get_option('profiler')
@@ -563,12 +552,12 @@ cdata.set('HAVE_EGL_DEVICE', have_egl_device)
 cdata.set('HAVE_WAYLAND_EGLSTREAM', have_wayland_eglstream)
 cdata.set('HAVE_LIBGUDEV', have_libgudev)
 cdata.set('HAVE_LIBWACOM', have_libwacom)
+cdata.set('HAVE_LIBWACOM_GET_NUM_RINGS', have_libwacom_get_num_rings)
 cdata.set('HAVE_SM', have_sm)
 cdata.set('HAVE_STARTUP_NOTIFICATION', have_startup_notification)
 cdata.set('HAVE_INTROSPECTION', have_introspection)
 cdata.set('HAVE_PROFILER', have_profiler)
 cdata.set('HAVE_LIBDISPLAY_INFO', have_libdisplay_info)
-cdata.set('HAVE_PANGO_FT2', have_pango_ft2)
 cdata.set('HAVE_TIMERFD', have_timerfd)
 cdata.set('HAVE_MALLOC_TRIM', have_malloc_trim)
 cdata.set('HAVE_EVENTFD', have_eventfd)

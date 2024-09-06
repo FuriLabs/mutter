@@ -36,6 +36,7 @@
 #include <string.h>
 
 #include "cogl/cogl-context-private.h"
+#include "cogl/cogl-feature-private.h"
 #include "cogl/cogl-pipeline-private.h"
 #include "cogl/driver/gl/cogl-util-gl-private.h"
 #include "cogl/driver/gl/cogl-pipeline-opengl-private.h"
@@ -188,6 +189,26 @@ add_layer_fragment_boilerplate_cb (CoglPipelineLayer *layer,
   return TRUE;
 }
 
+static char *
+glsl_version_string (CoglContext *ctx)
+{
+  gboolean needs_es_annotation = ctx->glsl_es && ctx->glsl_major > 1;
+
+  return g_strdup_printf ("%d%02d%s",
+                          ctx->glsl_major,
+                          ctx->glsl_minor,
+                          needs_es_annotation ? " es" : "");
+}
+
+static gboolean
+is_glsl140_syntax (CoglContext *ctx)
+{
+  if (ctx->glsl_es)
+    return COGL_CHECK_GL_VERSION (ctx->glsl_major, ctx->glsl_minor, 3, 0);
+
+  return COGL_CHECK_GL_VERSION (ctx->glsl_major, ctx->glsl_minor, 1, 40);
+}
+
 void
 _cogl_glsl_shader_set_source_with_boilerplate (CoglContext *ctx,
                                                GLuint shader_gl_handle,
@@ -197,21 +218,17 @@ _cogl_glsl_shader_set_source_with_boilerplate (CoglContext *ctx,
                                                const char **strings_in,
                                                const GLint *lengths_in)
 {
-  const char *vertex_boilerplate;
-  const char *fragment_boilerplate;
-
-  const char **strings = g_alloca (sizeof (char *) * (count_in + 4));
-  GLint *lengths = g_alloca (sizeof (GLint) * (count_in + 4));
-  char *version_string;
+  const char **strings = g_alloca (sizeof (char *) * (count_in + 5));
+  GLint *lengths = g_alloca (sizeof (GLint) * (count_in + 5));
+  g_autofree char *glsl_version = NULL;
+  g_autofree char *version_string = NULL;
   int count = 0;
-
   int n_layers;
+  g_autoptr (GString) layer_declarations = NULL;
 
-  vertex_boilerplate = _COGL_VERTEX_SHADER_BOILERPLATE;
-  fragment_boilerplate = _COGL_FRAGMENT_SHADER_BOILERPLATE;
+  glsl_version = glsl_version_string (ctx);
+  version_string = g_strdup_printf ("#version %s\n\n", glsl_version);
 
-  version_string = g_strdup_printf ("#version %i\n\n",
-                                    ctx->glsl_version_to_use);
   strings[count] = version_string;
   lengths[count++] = -1;
 
@@ -225,20 +242,31 @@ _cogl_glsl_shader_set_source_with_boilerplate (CoglContext *ctx,
 
   if (shader_gl_type == GL_VERTEX_SHADER)
     {
-      strings[count] = vertex_boilerplate;
-      lengths[count++] = strlen (vertex_boilerplate);
+      if (is_glsl140_syntax (ctx))
+        {
+          strings[count] = _COGL_VERTEX_SHADER_FALLBACK_BOILERPLATE;
+          lengths[count++] = strlen (_COGL_VERTEX_SHADER_FALLBACK_BOILERPLATE);
+        }
+
+      strings[count] = _COGL_VERTEX_SHADER_BOILERPLATE;
+      lengths[count++] = strlen (_COGL_VERTEX_SHADER_BOILERPLATE);
     }
   else if (shader_gl_type == GL_FRAGMENT_SHADER)
     {
-      strings[count] = fragment_boilerplate;
-      lengths[count++] = strlen (fragment_boilerplate);
+      if (is_glsl140_syntax (ctx))
+        {
+          strings[count] = _COGL_FRAGMENT_SHADER_FALLBACK_BOILERPLATE;
+          lengths[count++] = strlen (_COGL_FRAGMENT_SHADER_FALLBACK_BOILERPLATE);
+        }
+
+      strings[count] = _COGL_FRAGMENT_SHADER_BOILERPLATE;
+      lengths[count++] = strlen (_COGL_FRAGMENT_SHADER_BOILERPLATE);
     }
 
   n_layers = cogl_pipeline_get_n_layers (pipeline);
   if (n_layers)
     {
-      GString *layer_declarations = ctx->codegen_boilerplate_buffer;
-      g_string_set_size (layer_declarations, 0);
+      layer_declarations = g_string_new ("");
 
       g_string_append_printf (layer_declarations,
                               "varying vec4 _cogl_tex_coord[%d];\n",
@@ -308,8 +336,6 @@ _cogl_glsl_shader_set_source_with_boilerplate (CoglContext *ctx,
 
   GE( ctx, glShaderSource (shader_gl_handle, count,
                            (const char **) strings, lengths) );
-
-  g_free (version_string);
 }
 GLuint
 _cogl_pipeline_vertend_glsl_get_shader (CoglPipeline *pipeline)

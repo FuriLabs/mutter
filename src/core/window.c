@@ -223,6 +223,7 @@ enum
   PROP_EFFECT,
   PROP_SUSPEND_STATE,
   PROP_MAPPED,
+  PROP_MAIN_MONITOR,
 
   PROP_LAST,
 };
@@ -444,6 +445,9 @@ meta_window_get_property(GObject         *object,
     case PROP_MAPPED:
       g_value_set_boolean (value, win->mapped);
       break;
+    case PROP_MAIN_MONITOR:
+      g_value_set_object (value, win->monitor);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -613,6 +617,11 @@ meta_window_class_init (MetaWindowClass *klass)
     g_param_spec_boolean ("mapped", NULL, NULL,
                           FALSE,
                           G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
+
+  obj_props[PROP_MAIN_MONITOR] =
+    g_param_spec_object ("main-monitor", NULL, NULL,
+                         META_TYPE_LOGICAL_MONITOR,
+                         G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
   g_object_class_install_properties (object_class, PROP_LAST, obj_props);
 
@@ -965,6 +974,8 @@ meta_window_main_monitor_changed (MetaWindow               *window,
   if (window->monitor)
     g_signal_emit_by_name (window->display, "window-entered-monitor",
                            window->monitor->number, window);
+
+  g_object_notify_by_pspec (G_OBJECT (window), obj_props[PROP_MAIN_MONITOR]);
 }
 
 MetaLogicalMonitor *
@@ -7245,10 +7256,12 @@ window_has_pointer_wayland (MetaWindow *window)
   ClutterInputDevice *dev;
   ClutterStage *stage;
   ClutterActor *pointer_actor, *window_actor;
+  ClutterContext *context;
 
-  seat = clutter_backend_get_default_seat (clutter_get_default_backend ());
-  dev = clutter_seat_get_pointer (seat);
   stage = CLUTTER_STAGE (meta_backend_get_stage (backend_from_window (window)));
+  context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
+  seat = clutter_backend_get_default_seat (clutter_context_get_backend (context));
+  dev = clutter_seat_get_pointer (seat);
   pointer_actor = clutter_stage_get_device_actor (stage, dev, NULL);
   window_actor = CLUTTER_ACTOR (meta_window_get_compositor_private (window));
 
@@ -8023,4 +8036,104 @@ meta_window_set_normal_hints (MetaWindow    *window,
        * consistent with base and size increment constraints.
        */
     }
+}
+
+/**
+ * meta_window_stage_to_protocol_rect:
+ * @window: A #MetaWindow
+ * @stage_rect: x #MtkRectangle in stage coordinate space
+ * @protocol_rect: (out): x #MtkRectangle in protocol coordinate space
+ *
+ * Transform the coordinates from stage coordinates to protocol coordinates
+ */
+void
+meta_window_stage_to_protocol_rect (MetaWindow         *window,
+                                    const MtkRectangle *stage_rect,
+                                    MtkRectangle       *protocol_rect)
+{
+  MetaWindowClass *klass = META_WINDOW_GET_CLASS (window);
+
+  klass->stage_to_protocol (window,
+                            stage_rect->x, stage_rect->y,
+                            &protocol_rect->x, &protocol_rect->y);
+  klass->stage_to_protocol (window,
+                            stage_rect->width, stage_rect->height,
+                            &protocol_rect->width, &protocol_rect->height);
+}
+
+/**
+ * meta_window_stage_to_protocol_point:
+ * @window: A #MetaWindow
+ * @stage_x: x cordinate in stage coordinate space
+ * @stage_y: y cordinate in stage coordinate space
+ * @protocol_x: (out): x cordinate in protocol coordinate space
+ * @protocol_y: (out): y cordinate in protocol coordinate space
+ *
+ * Transform the coordinates from stage coordinates to protocol coordinates
+ */
+void
+meta_window_stage_to_protocol_point (MetaWindow *window,
+                                     int         stage_x,
+                                     int         stage_y,
+                                     int        *protocol_x,
+                                     int        *protocol_y)
+{
+  MetaWindowClass *klass = META_WINDOW_GET_CLASS (window);
+
+  klass->stage_to_protocol (window,
+                            stage_x, stage_y,
+                            protocol_x, protocol_y);
+}
+
+/**
+ * meta_window_protocol_to_stage_rect:
+ * @window: A #MetaWindow
+ * @protocol_rect: rectangle in protocol coordinate space
+ * @stage_rect: (out): rect in stage coordinate space
+ *
+ * Transform the coordinates from protocol coordinates to coordinates expected
+ * by the stage and internal window management logic.
+ */
+void
+meta_window_protocol_to_stage_rect (MetaWindow *window,
+                                    const MtkRectangle *protocol_rect,
+                                    MtkRectangle       *stage_rect)
+{
+  MetaWindowClass *klass = META_WINDOW_GET_CLASS (window);
+
+  klass->protocol_to_stage (window,
+                            protocol_rect->x, protocol_rect->y,
+                            &stage_rect->x, &stage_rect->y,
+                            MTK_ROUNDING_STRATEGY_SHRINK);
+  klass->protocol_to_stage (window,
+                            protocol_rect->width, protocol_rect->height,
+                            &stage_rect->width, &stage_rect->height,
+                            MTK_ROUNDING_STRATEGY_GROW);
+}
+
+/**
+ * meta_window_protocol_to_stage_point:
+ * @window: A #MetaWindow
+ * @protocol_x: x cordinate in protocol coordinate space
+ * @protocol_y: y cordinate in protocol coordinate space
+ * @stage_x: (out): x cordinate in stage coordinate space
+ * @stage_y: (out): y cordinate in stage coordinate space
+ *
+ * Transform the coordinates from protocol coordinates to coordinates expected
+ * by the stage and internal window management logic.
+ */
+void
+meta_window_protocol_to_stage_point (MetaWindow          *window,
+                                     int                  protocol_x,
+                                     int                  protocol_y,
+                                     int                 *stage_x,
+                                     int                 *stage_y,
+                                     MtkRoundingStrategy  rounding_strategy)
+{
+  MetaWindowClass *klass = META_WINDOW_GET_CLASS (window);
+
+  klass->protocol_to_stage (window,
+                            protocol_x, protocol_y,
+                            stage_x, stage_y,
+                            rounding_strategy);
 }

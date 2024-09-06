@@ -34,11 +34,11 @@
 #include "backends/meta-crtc.h"
 #include "backends/meta-cursor.h"
 #include "backends/meta-display-config-shared.h"
-#include "backends/meta-monitor-transform.h"
 #include "backends/meta-viewport-info.h"
 #include "core/util-private.h"
 #include "meta/display.h"
 #include "meta/meta-monitor-manager.h"
+#include "mtk/mtk.h"
 
 #define META_MONITOR_MANAGER_MIN_SCREEN_WIDTH 640
 #define META_MONITOR_MANAGER_MIN_SCREEN_HEIGHT 480
@@ -85,7 +85,7 @@ struct _MetaCrtcAssignment
   MetaCrtc *crtc;
   MetaCrtcMode *mode;
   graphene_rect_t layout;
-  MetaMonitorTransform transform;
+  MtkMonitorTransform transform;
   GPtrArray *outputs;
 
   gpointer backend_private;
@@ -183,9 +183,6 @@ struct _MetaMonitorManager
  *
  * @set_power_save_mode: Sets the #MetaPowerSave mode (for all displays).
  *
- * @change_backlight: Changes the backlight intensity to the given value (in
- *   percent).
- *
  * @tiled_monitor_added: Should be called by a #MetaMonitor when it is created.
  *
  * @tiled_monitor_removed: Should be called by a #MetaMonitor when it is
@@ -222,10 +219,6 @@ struct _MetaMonitorManagerClass
 
   void (* set_power_save_mode) (MetaMonitorManager *manager,
                                 MetaPowerSave       power_save);
-
-  void (* change_backlight) (MetaMonitorManager *manager,
-                             MetaOutput         *output,
-                             int                 backlight);
 
   void (* tiled_monitor_added) (MetaMonitorManager *manager,
                                 MetaMonitor        *monitor);
@@ -432,3 +425,5 @@ gboolean meta_monitor_manager_apply_monitors_config (MetaMonitorManager        *
                                                      MetaMonitorsConfig        *config,
                                                      MetaMonitorsConfigMethod   method,
                                                      GError                   **error);
+
+MetaLogicalMonitorLayoutMode meta_monitor_manager_get_layout_mode (MetaMonitorManager *manager);

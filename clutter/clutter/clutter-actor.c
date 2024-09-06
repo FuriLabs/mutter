@@ -515,6 +515,7 @@
 #include "clutter/clutter-stage-view-private.h"
 #include "clutter/clutter-timeline.h"
 #include "clutter/clutter-transition.h"
+#include "glib-object.h"
 
 
 static const CoglColor transparent = { 0x00, 0x00, 0x00, 0x00 };
@@ -544,6 +545,10 @@ typedef enum
 struct _ClutterActorPrivate
 {
   ClutterContext *context;
+
+  /* Accessibility */
+  AtkObject *accessible;
+  gchar *accessible_name;
 
   /* request mode */
   ClutterRequestMode request_mode;
@@ -849,6 +854,10 @@ enum
   PROP_CONTENT_REPEAT,
 
   PROP_COLOR_STATE,
+
+  /* Accessible */
+  PROP_ACCESSIBLE_ROLE,
+  PROP_ACCESSIBLE_NAME,
 
   PROP_LAST
 };
@@ -1412,6 +1421,7 @@ clutter_actor_real_map (ClutterActor *self)
 {
   ClutterActorPrivate *priv = self->priv;
   ClutterActor *iter;
+  AtkObject *accessible;
 
   g_assert (!clutter_actor_is_mapped (self));
 
@@ -1447,6 +1457,12 @@ clutter_actor_real_map (ClutterActor *self)
    * children, so apps see a top-down notification.
    */
   g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_MAPPED]);
+
+  accessible = clutter_actor_get_accessible (self);
+  if (accessible && !clutter_actor_is_painting_unmapped (self))
+    atk_object_notify_state_change (accessible,
+                                    ATK_STATE_SHOWING,
+                                    TRUE);
 
   for (iter = priv->first_child;
        iter != NULL;
@@ -1547,6 +1563,7 @@ clutter_actor_real_unmap (ClutterActor *self)
 {
   ClutterActorPrivate *priv = self->priv;
   ClutterActor *iter;
+  AtkObject *accessible;
 
   g_assert (clutter_actor_is_mapped (self));
 
@@ -1577,6 +1594,12 @@ clutter_actor_real_unmap (ClutterActor *self)
    * children, so apps see a bottom-up notification.
    */
   g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_MAPPED]);
+
+  accessible = clutter_actor_get_accessible (self);
+  if (accessible && !clutter_actor_is_painting_unmapped (self))
+    atk_object_notify_state_change (accessible,
+                                    ATK_STATE_SHOWING,
+                                    FALSE);
 
   if (priv->n_pointers > 0)
     {
@@ -1711,6 +1734,7 @@ void
 clutter_actor_show (ClutterActor *self)
 {
   ClutterActorPrivate *priv;
+  AtkObject *accessible;
 
   g_return_if_fail (CLUTTER_IS_ACTOR (self));
 
@@ -1747,6 +1771,12 @@ clutter_actor_show (ClutterActor *self)
 
   g_signal_emit (self, actor_signals[SHOW], 0);
   g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_VISIBLE]);
+
+  accessible = clutter_actor_get_accessible (self);
+  if (accessible)
+    atk_object_notify_state_change (accessible,
+                                    ATK_STATE_VISIBLE,
+                                    TRUE);
 
   if (priv->parent != NULL)
     clutter_actor_queue_redraw (self);
@@ -1802,6 +1832,7 @@ void
 clutter_actor_hide (ClutterActor *self)
 {
   ClutterActorPrivate *priv;
+  AtkObject *accessible;
 
   g_return_if_fail (CLUTTER_IS_ACTOR (self));
 
@@ -1838,6 +1869,13 @@ clutter_actor_hide (ClutterActor *self)
 
   g_signal_emit (self, actor_signals[HIDE], 0);
   g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_VISIBLE]);
+
+  accessible = clutter_actor_get_accessible (self);
+  if (accessible)
+    atk_object_notify_state_change (accessible,
+                                    ATK_STATE_VISIBLE,
+                                    FALSE);
+
 
   if (priv->parent != NULL && priv->needs_allocation)
     clutter_actor_queue_redraw (priv->parent);
@@ -3034,11 +3072,12 @@ _clutter_actor_draw_paint_volume_full (ClutterActor       *self,
   CoglPrimitive *prim;
   graphene_point3d_t line_ends[12 * 2];
   int n_vertices;
-  CoglContext *ctx =
-    clutter_backend_get_cogl_context (clutter_get_default_backend ());
+  ClutterContext *context = clutter_actor_get_context (self);
+  ClutterBackend *backend = clutter_context_get_backend (context);
+  CoglContext *cogl_context = clutter_backend_get_cogl_context (backend);
 
   if (outline == NULL)
-    outline = cogl_pipeline_new (ctx);
+    outline = cogl_pipeline_new (cogl_context);
 
   _clutter_paint_volume_complete (pv);
 
@@ -3065,7 +3104,7 @@ _clutter_actor_draw_paint_volume_full (ClutterActor       *self,
       line_ends[22] = pv->vertices[3]; line_ends[23] = pv->vertices[7];
     }
 
-  prim = cogl_primitive_new_p3 (ctx, COGL_VERTICES_MODE_LINES,
+  prim = cogl_primitive_new_p3 (cogl_context, COGL_VERTICES_MODE_LINES,
                                 n_vertices,
                                 (CoglVertexP3 *)line_ends);
 
@@ -4811,6 +4850,14 @@ clutter_actor_set_property (GObject      *object,
       clutter_actor_set_color_state_internal (actor, g_value_get_object (value));
       break;
 
+    case PROP_ACCESSIBLE_ROLE:
+      clutter_actor_set_accessible_role (actor, g_value_get_enum (value));
+      break;
+
+    case PROP_ACCESSIBLE_NAME:
+      clutter_actor_set_accessible_name (actor, g_value_get_string (value));
+      break;
+
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -5268,6 +5315,14 @@ clutter_actor_get_property (GObject    *object,
       g_value_set_object (value, priv->color_state);
       break;
 
+    case PROP_ACCESSIBLE_ROLE:
+      g_value_set_enum (value, clutter_actor_get_accessible_role (actor));
+      break;
+
+    case PROP_ACCESSIBLE_NAME:
+      g_value_set_string (value, priv->accessible_name);
+      break;
+
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -5279,7 +5334,8 @@ clutter_actor_dispose (GObject *object)
 {
   ClutterActor *self = CLUTTER_ACTOR (object);
   ClutterActorPrivate *priv = self->priv;
-  ClutterBackend *backend = clutter_get_default_backend ();
+  ClutterContext *context = clutter_actor_get_context (self);
+  ClutterBackend *backend = clutter_context_get_backend (context);
 
   CLUTTER_NOTE (MISC, "Dispose actor (name='%s', ref_count:%d) of type '%s'",
                 _clutter_actor_get_debug_name (self),
@@ -5312,6 +5368,8 @@ clutter_actor_dispose (GObject *object)
 
   g_clear_signal_handler (&priv->resolution_changed_id, backend);
   g_clear_signal_handler (&priv->font_changed_id, backend);
+
+  g_clear_pointer (&priv->accessible_name, g_free);
 
   g_clear_object (&priv->pango_context);
   g_clear_object (&priv->actions);
@@ -5405,7 +5463,32 @@ clutter_actor_get_accessible (ClutterActor *self)
 static AtkObject *
 clutter_actor_real_get_accessible (ClutterActor *actor)
 {
-  return atk_gobject_accessible_for_object (G_OBJECT (actor));
+  ClutterActorPrivate *priv = actor->priv;
+
+  if (priv->accessible == NULL)
+    {
+        if (!clutter_get_accessibility_enabled ())
+          return NULL;
+
+        priv->accessible =
+          g_object_new (CLUTTER_ACTOR_GET_CLASS (actor)->get_accessible_type (),
+                        NULL);
+
+        atk_object_initialize (priv->accessible, actor);
+        /* AtkGObjectAccessible, which ClutterActorAccessible derives from, clears
+         * the back reference to the object in a weak notify for the object;
+         * weak-ref notification, which occurs during g_object_real_dispose(),
+         * is then the optimal time to clear the forward reference. We
+         * can't clear the reference in dispose() before chaining up, since
+         * clutter_actor_dispose() causes notifications to be sent out, which
+         * will result in a new accessible object being created.
+         */
+        g_object_add_weak_pointer (G_OBJECT (actor),
+                                   (gpointer *)&priv->accessible);
+
+    }
+
+  return priv->accessible;
 }
 
 static AtkObject *
@@ -5615,6 +5698,7 @@ clutter_actor_class_init (ClutterActorClass *klass)
   klass->queue_relayout = clutter_actor_real_queue_relayout;
   klass->apply_transform = clutter_actor_real_apply_transform;
   klass->get_accessible = clutter_actor_real_get_accessible;
+  klass->get_accessible_type = clutter_actor_accessible_get_type;
   klass->get_paint_volume = clutter_actor_real_get_paint_volume;
   klass->has_overlaps = clutter_actor_real_has_overlaps;
   klass->calculate_resource_scale = clutter_actor_real_calculate_resource_scale;
@@ -6788,6 +6872,27 @@ clutter_actor_class_init (ClutterActorClass *klass)
                          G_PARAM_CONSTRUCT |
                          G_PARAM_STATIC_STRINGS |
                          G_PARAM_EXPLICIT_NOTIFY);
+
+  /**
+   * ClutterActor:accessible-role:
+   *
+   * The accessible role of this object
+   */
+  obj_props[PROP_ACCESSIBLE_ROLE] =
+    g_param_spec_enum ("accessible-role", NULL, NULL,
+                       ATK_TYPE_ROLE,
+                       ATK_ROLE_INVALID,
+                       G_PARAM_READWRITE | G_PARAM_CONSTRUCT | G_PARAM_EXPLICIT_NOTIFY);
+
+  /**
+   * ClutterActor:accessible-name:
+   *
+   * Object instance's name for assistive technology access.
+   */
+  obj_props[PROP_ACCESSIBLE_NAME] =
+    g_param_spec_string ("accessible-name", NULL, NULL,
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT | G_PARAM_EXPLICIT_NOTIFY);
 
   g_object_class_install_properties (object_class, PROP_LAST, obj_props);
 
@@ -11782,6 +11887,7 @@ clutter_actor_set_reactive (ClutterActor *actor,
                             gboolean      reactive)
 {
   ClutterActorPrivate *priv;
+  AtkObject *accessible;
 
   g_return_if_fail (CLUTTER_IS_ACTOR (actor));
 
@@ -11796,6 +11902,12 @@ clutter_actor_set_reactive (ClutterActor *actor,
     actor->flags &= ~CLUTTER_ACTOR_REACTIVE;
 
   g_object_notify_by_pspec (G_OBJECT (actor), obj_props[PROP_REACTIVE]);
+
+  accessible = clutter_actor_get_accessible (actor);
+  if (accessible)
+    atk_object_notify_state_change (accessible,
+                                    ATK_STATE_SENSITIVE,
+                                    reactive);
 
   if (!clutter_actor_get_reactive (actor) && priv->n_pointers > 0)
     {
@@ -11844,6 +11956,42 @@ clutter_actor_get_reactive (ClutterActor *actor)
 
   return (actor->flags & CLUTTER_ACTOR_REACTIVE) != FALSE;
 }
+
+void
+clutter_actor_set_no_layout (ClutterActor *actor,
+                             gboolean      no_layout)
+{
+ g_return_if_fail (CLUTTER_IS_ACTOR (actor));
+
+ if (no_layout == clutter_actor_is_no_layout (actor))
+   return;
+
+ if (no_layout)
+   actor->flags |= CLUTTER_ACTOR_NO_LAYOUT;
+ else
+   actor->flags &= ~CLUTTER_ACTOR_NO_LAYOUT;
+}
+
+/**
+* clutter_actor_is_no_layout:
+* @actor: a #ClutterActor
+*
+* Checks whether @actor is marked as no layout.
+*
+* That means the @actor provides an explicit layout management
+* policy for its children; this will prevent Clutter from automatic
+* queueing of relayout and will defer all layouting to the actor itself
+*
+* Return value: %TRUE if the actor is marked as no layout
+*/
+gboolean
+clutter_actor_is_no_layout (ClutterActor *actor)
+{
+ g_return_val_if_fail (CLUTTER_IS_ACTOR (actor), FALSE);
+
+ return (actor->flags & CLUTTER_ACTOR_NO_LAYOUT) != FALSE;
+}
+
 
 static void
 clutter_actor_store_content_box (ClutterActor *self,
@@ -12888,7 +13036,7 @@ update_pango_context (ClutterBackend *backend,
   gchar *font_name;
   gdouble resolution;
 
-  settings = clutter_settings_get_default ();
+  settings = clutter_context_get_settings (backend->context);
 
   /* update the text direction */
   dir = clutter_get_default_text_direction ();
@@ -12939,7 +13087,8 @@ PangoContext *
 clutter_actor_get_pango_context (ClutterActor *self)
 {
   ClutterActorPrivate *priv;
-  ClutterBackend *backend = clutter_get_default_backend ();
+  ClutterContext *context = clutter_actor_get_context (self);
+  ClutterBackend *backend = clutter_context_get_backend (context);
 
   g_return_val_if_fail (CLUTTER_IS_ACTOR (self), NULL);
 
@@ -12980,15 +13129,16 @@ PangoContext *
 clutter_actor_create_pango_context (ClutterActor *self)
 {
   CoglPangoFontMap *font_map;
-  PangoContext *context;
+  ClutterContext *context = clutter_actor_get_context (self);
+  PangoContext *pango_context;
 
-  font_map = COGL_PANGO_FONT_MAP (clutter_get_font_map ());
+  font_map = clutter_context_get_pango_fontmap (context);
 
-  context = cogl_pango_font_map_create_context (font_map);
-  update_pango_context (clutter_get_default_backend (), context);
-  pango_context_set_language (context, pango_language_get_default ());
+  pango_context = cogl_pango_font_map_create_context (font_map);
+  update_pango_context (clutter_context_get_backend (context), pango_context);
+  pango_context_set_language (pango_context, pango_language_get_default ());
 
-  return context;
+  return pango_context;
 }
 
 /**
@@ -13175,138 +13325,6 @@ _clutter_actor_set_enable_paint_unmapped (ClutterActor *self,
       clutter_actor_update_map_state (self, MAP_STATE_CHECK);
       pop_in_paint_unmapped_branch (self, 1);
     }
-}
-
-/**
- * clutter_actor_get_flags:
- * @self: a #ClutterActor
- *
- * Retrieves the flags set on @self
- *
- * Return value: a bitwise or of #ClutterActorFlags or 0
- */
-ClutterActorFlags
-clutter_actor_get_flags (ClutterActor *self)
-{
-  g_return_val_if_fail (CLUTTER_IS_ACTOR (self), 0);
-
-  return self->flags;
-}
-
-/**
- * clutter_actor_set_flags:
- * @self: a #ClutterActor
- * @flags: the flags to set
- *
- * Sets @flags on @self
- *
- * This function will emit notifications for the changed properties
- */
-void
-clutter_actor_set_flags (ClutterActor      *self,
-                         ClutterActorFlags  flags)
-{
-  ClutterActorFlags old_flags;
-  GObject *obj;
-  gboolean was_reactive_set, reactive_set;
-  gboolean was_realized_set, realized_set;
-  gboolean was_mapped_set, mapped_set;
-  gboolean was_visible_set, visible_set;
-
-  g_return_if_fail (CLUTTER_IS_ACTOR (self));
-
-  if (self->flags == flags)
-    return;
-
-  obj = G_OBJECT (self);
-  g_object_ref (obj);
-  g_object_freeze_notify (obj);
-
-  old_flags = self->flags;
-
-  was_reactive_set = ((old_flags & CLUTTER_ACTOR_REACTIVE) != 0);
-  was_realized_set = ((old_flags & CLUTTER_ACTOR_REALIZED) != 0);
-  was_mapped_set   = ((old_flags & CLUTTER_ACTOR_MAPPED)   != 0);
-  was_visible_set  = ((old_flags & CLUTTER_ACTOR_VISIBLE)  != 0);
-
-  self->flags |= flags;
-
-  reactive_set = ((self->flags & CLUTTER_ACTOR_REACTIVE) != 0);
-  realized_set = ((self->flags & CLUTTER_ACTOR_REALIZED) != 0);
-  mapped_set   = ((self->flags & CLUTTER_ACTOR_MAPPED)   != 0);
-  visible_set  = ((self->flags & CLUTTER_ACTOR_VISIBLE)  != 0);
-
-  if (reactive_set != was_reactive_set)
-    g_object_notify_by_pspec (obj, obj_props[PROP_REACTIVE]);
-
-  if (realized_set != was_realized_set)
-    g_object_notify_by_pspec (obj, obj_props[PROP_REALIZED]);
-
-  if (mapped_set != was_mapped_set)
-    g_object_notify_by_pspec (obj, obj_props[PROP_MAPPED]);
-
-  if (visible_set != was_visible_set)
-    g_object_notify_by_pspec (obj, obj_props[PROP_VISIBLE]);
-
-  g_object_thaw_notify (obj);
-  g_object_unref (obj);
-}
-
-/**
- * clutter_actor_unset_flags:
- * @self: a #ClutterActor
- * @flags: the flags to unset
- *
- * Unsets @flags on @self
- *
- * This function will emit notifications for the changed properties
- */
-void
-clutter_actor_unset_flags (ClutterActor      *self,
-                           ClutterActorFlags  flags)
-{
-  ClutterActorFlags old_flags;
-  GObject *obj;
-  gboolean was_reactive_set, reactive_set;
-  gboolean was_realized_set, realized_set;
-  gboolean was_mapped_set, mapped_set;
-  gboolean was_visible_set, visible_set;
-
-  g_return_if_fail (CLUTTER_IS_ACTOR (self));
-
-  obj = G_OBJECT (self);
-  g_object_freeze_notify (obj);
-
-  old_flags = self->flags;
-
-  was_reactive_set = ((old_flags & CLUTTER_ACTOR_REACTIVE) != 0);
-  was_realized_set = ((old_flags & CLUTTER_ACTOR_REALIZED) != 0);
-  was_mapped_set   = ((old_flags & CLUTTER_ACTOR_MAPPED)   != 0);
-  was_visible_set  = ((old_flags & CLUTTER_ACTOR_VISIBLE)  != 0);
-
-  self->flags &= ~flags;
-
-  if (self->flags == old_flags)
-    return;
-
-  reactive_set = ((self->flags & CLUTTER_ACTOR_REACTIVE) != 0);
-  realized_set = ((self->flags & CLUTTER_ACTOR_REALIZED) != 0);
-  mapped_set   = ((self->flags & CLUTTER_ACTOR_MAPPED)   != 0);
-  visible_set  = ((self->flags & CLUTTER_ACTOR_VISIBLE)  != 0);
-
-  if (reactive_set != was_reactive_set)
-    g_object_notify_by_pspec (obj, obj_props[PROP_REACTIVE]);
-
-  if (realized_set != was_realized_set)
-    g_object_notify_by_pspec (obj, obj_props[PROP_REALIZED]);
-
-  if (mapped_set != was_mapped_set)
-    g_object_notify_by_pspec (obj, obj_props[PROP_MAPPED]);
-
-  if (visible_set != was_visible_set)
-    g_object_notify_by_pspec (obj, obj_props[PROP_VISIBLE]);
-
-  g_object_thaw_notify (obj);
 }
 
 static void
@@ -14664,7 +14682,8 @@ clutter_actor_get_real_resource_scale (ClutterActor *self)
     }
   else
     {
-      ClutterBackend *backend = clutter_get_default_backend ();
+      ClutterContext *context = clutter_actor_get_context (self);
+      ClutterBackend *backend = clutter_context_get_backend (context);
 
       guessed_scale = clutter_backend_get_fallback_resource_scale (backend);
     }
@@ -18458,15 +18477,53 @@ clutter_actor_create_texture_paint_node (ClutterActor *self,
   return node;
 }
 
-gboolean
-clutter_actor_has_accessible (ClutterActor *actor)
+/**
+ * clutter_actor_set_accessible:
+ * @self: A #ClutterActor
+ * @accessible: an accessible
+ *
+ * This method allows to set a customly created accessible object to
+ * this widget
+ *
+ * NULL is a valid value for @accessible. That contemplates the
+ * hypothetical case of not needing anymore a custom accessible object
+ * for the widget. Next call of [method@Clutter.Actor.get_accessible] would
+ * create and return a default accessible.
+ *
+ * It assumes that the call to atk_object_initialize that bound the
+ * gobject with the custom accessible object was already called, so
+ * not a responsibility of this method.
+ */
+void
+clutter_actor_set_accessible (ClutterActor *self,
+                              AtkObject    *accessible)
 {
-  g_return_val_if_fail (CLUTTER_IS_ACTOR (actor), FALSE);
+  ClutterActorPrivate *priv;
 
-  if (CLUTTER_ACTOR_GET_CLASS (actor)->has_accessible)
-    return CLUTTER_ACTOR_GET_CLASS (actor)->has_accessible (actor);
+  g_return_if_fail (CLUTTER_IS_ACTOR (self));
+  g_return_if_fail (accessible == NULL || ATK_IS_GOBJECT_ACCESSIBLE (accessible));
 
-  return TRUE;
+  priv = self->priv;
+  if (priv->accessible != accessible)
+    {
+      if (priv->accessible)
+        {
+          g_object_remove_weak_pointer (G_OBJECT (self),
+                                        (gpointer *)&priv->accessible);
+          g_object_unref (priv->accessible);
+          priv->accessible = NULL;
+        }
+
+      if (accessible)
+        {
+          priv->accessible = g_object_ref (accessible);
+          /* See note in clutter_actor_get_accessible() */
+          g_object_add_weak_pointer (G_OBJECT (self),
+                                     (gpointer *)&priv->accessible);
+        }
+      else
+        priv->accessible = NULL;
+    }
 }
 
 void
@@ -18671,4 +18728,128 @@ clutter_actor_class_get_layout_manager_type (ClutterActorClass *actor_class)
   g_return_val_if_fail (CLUTTER_IS_ACTOR_CLASS (actor_class), G_TYPE_INVALID);
 
   return actor_class->layout_manager_type;
+}
+
+/**
+ * clutter_actor_set_accessible_name:
+ * @self: widget to set the accessible name for
+ * @name: (nullable): a character string to be set as the accessible name
+ *
+ * This method sets @name as the accessible name for @self.
+ *
+ * Usually you will have no need to set the accessible name for an
+ * object, as usually there is a label for most of the interface
+ * elements.
+ */
+void
+clutter_actor_set_accessible_name (ClutterActor *self,
+                                   const gchar  *name)
+{
+  ClutterActorPrivate *priv;
+  AtkObject *accessible;
+
+  g_return_if_fail (CLUTTER_IS_ACTOR (self));
+
+  priv = self->priv;
+  if (g_strcmp0 (name, priv->accessible_name) == 0)
+    return;
+
+  if (priv->accessible_name != NULL)
+    g_free (priv->accessible_name);
+
+  accessible = clutter_actor_get_accessible (self);
+  priv->accessible_name = g_strdup (name);
+
+  if (accessible)
+    g_object_notify (G_OBJECT (accessible), "accessible-name");
+
+  g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_ACCESSIBLE_NAME]);
+}
+
+/**
+ * clutter_actor_get_accessible_name:
+ * @self: widget to get the accessible name for
+ *
+ * Gets the accessible name for this widget. See
+ * clutter_actor_set_accessible_name() for more information.
+ *
+ * Returns: a character string representing the accessible name
+ * of the widget.
+ */
+const gchar *
+clutter_actor_get_accessible_name (ClutterActor *actor)
+{
+  g_return_val_if_fail (CLUTTER_IS_ACTOR (actor), NULL);
+
+  return actor->priv->accessible_name;
+}
+
+/**
+ * clutter_actor_set_accessible_role:
+ * @self: widget to set the accessible role for
+ * @role: The role to use
+ *
+ * This method sets @role as the accessible role for @self. This
+ * role describes what kind of user interface element @self is and
+ * is provided so that assistive technologies know how to present
+ * @self to the user.
+ *
+ * Usually you will have no need to set the accessible role for an
+ * object, as this information is extracted from the context of the
+ * object (ie: a #StButton has by default a push button role). This
+ * method is only required when you need to redefine the role
+ * currently associated with the widget, for instance if it is being
+ * used in an unusual way (ie: a #StButton used as a togglebutton), or
+ * if a generic object is used directly (ie: a container as a menu
+ * item).
+ *
+ * If @role is #ATK_ROLE_INVALID, the role will not be changed
+ * and the accessible's default role will be used instead.
+ */
+void
+clutter_actor_set_accessible_role (ClutterActor *self,
+                                   AtkRole       role)
+{
+  AtkObject *accessible;
+
+  g_return_if_fail (CLUTTER_IS_ACTOR (self));
+
+  if (self->accessible_role == role)
+    return;
+
+  accessible = clutter_actor_get_accessible (self);
+  self->accessible_role = role;
+
+  if (accessible)
+    g_object_notify (G_OBJECT (accessible), "accessible-role");
+
+  g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_ACCESSIBLE_ROLE]);
+}
+
+
+/**
+ * clutter_actor_get_accessible_role:
+ * @self: widget to get the accessible role for
+ *
+ * Gets the #AtkRole for this widget. See
+ * clutter_actor_set_accessible_role() for more information.
+ *
+ * Returns: accessible #AtkRole for this widget
+ */
+AtkRole
+clutter_actor_get_accessible_role (ClutterActor *self)
+{
+  AtkRole role = ATK_ROLE_INVALID;
+  AtkObject *accessible;
+
+  g_return_val_if_fail (CLUTTER_IS_ACTOR (self), role);
+
+  accessible = clutter_actor_get_accessible (self);
+
+  if (self->accessible_role != ATK_ROLE_INVALID)
+    role = self->accessible_role;
+  else if (accessible != NULL)
+    role = atk_object_get_role (accessible);
+
+  return role;
 }

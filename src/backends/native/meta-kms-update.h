@@ -22,11 +22,11 @@
 #include <stdint.h>
 #include <xf86drmMode.h>
 
-#include "backends/meta-monitor-transform.h"
 #include "backends/meta-output.h"
 #include "backends/native/meta-drm-buffer.h"
 #include "backends/native/meta-kms-types.h"
 #include "meta/boxes.h"
+#include "mtk/mtk.h"
 
 typedef enum _MetaKmsFeedbackResult
 {
@@ -39,7 +39,7 @@ typedef enum _MetaKmsAssignPlaneFlag
   META_KMS_ASSIGN_PLANE_FLAG_NONE = 0,
   META_KMS_ASSIGN_PLANE_FLAG_FB_UNCHANGED = 1 << 0,
   META_KMS_ASSIGN_PLANE_FLAG_ALLOW_FAIL = 1 << 1,
-  META_KMS_ASSIGN_PLANE_FLAG_DIRECT_SCANOUT = 1 << 2,
+  META_KMS_ASSIGN_PLANE_FLAG_DISABLE_IMPLICIT_SYNC = 1 << 2,
 } MetaKmsAssignPlaneFlag;
 
 struct _MetaKmsPageFlipListenerVtable
@@ -156,6 +156,13 @@ META_EXPORT_TEST
 void meta_kms_update_set_crtc_gamma (MetaKmsUpdate      *update,
                                      MetaKmsCrtc        *crtc,
                                      const MetaGammaLut *gamma);
+
+int
+meta_kms_update_get_sync_fd (MetaKmsUpdate *update);
+
+void
+meta_kms_update_set_sync_fd (MetaKmsUpdate *update,
+                             int            sync_fd);
 
 void meta_kms_plane_assignment_set_fb_damage (MetaKmsPlaneAssignment *plane_assignment,
                                               const int              *rectangles,

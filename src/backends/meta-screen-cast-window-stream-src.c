@@ -134,7 +134,7 @@ maybe_draw_cursor_sprite (MetaScreenCastWindowStreamSrc *window_src,
   cairo_surface_t *stream_surface;
   int width, height;
   float scale;
-  MetaMonitorTransform transform;
+  MtkMonitorTransform transform;
   int hotspot_x, hotspot_y;
   cairo_t *cr;
 
@@ -201,8 +201,10 @@ maybe_blit_cursor_sprite (MetaScreenCastWindowStreamSrc *window_src,
                           MtkRectangle                  *stream_rect)
 {
   MetaBackend *backend = get_backend (window_src);
+  ClutterBackend *clutter_backend =
+    meta_backend_get_clutter_backend (backend);
   CoglContext *cogl_context =
-    clutter_backend_get_cogl_context (clutter_get_default_backend ());
+    clutter_backend_get_cogl_context (clutter_backend);
   MetaCursorRenderer *cursor_renderer =
     meta_backend_get_cursor_renderer (backend);
   MetaCursorTracker *cursor_tracker =
@@ -215,7 +217,7 @@ maybe_blit_cursor_sprite (MetaScreenCastWindowStreamSrc *window_src,
   CoglPipeline *pipeline;
   int width, height;
   float scale;
-  MetaMonitorTransform transform;
+  MtkMonitorTransform transform;
   int hotspot_x, hotspot_y;
   float x, y;
   graphene_matrix_t matrix;
@@ -252,8 +254,8 @@ maybe_blit_cursor_sprite (MetaScreenCastWindowStreamSrc *window_src,
                                    COGL_PIPELINE_FILTER_LINEAR);
 
   graphene_matrix_init_identity (&matrix);
-  meta_monitor_transform_transform_matrix (transform,
-                                           &matrix);
+  mtk_monitor_transform_transform_matrix (transform,
+                                          &matrix);
   cogl_pipeline_set_layer_matrix (pipeline, 0, &matrix);
 
   cogl_framebuffer_draw_rectangle (framebuffer,
@@ -636,7 +638,7 @@ meta_screen_cast_window_stream_src_set_cursor_metadata (MetaScreenCastStreamSrc 
   MetaCursorSprite *cursor_sprite;
   graphene_point_t cursor_position;
   float scale;
-  MetaMonitorTransform transform;
+  MtkMonitorTransform transform;
   graphene_point_t relative_cursor_position;
   int x, y;
 

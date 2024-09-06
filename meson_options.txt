@@ -111,12 +111,6 @@ option('sound_player',
   description: 'Enable sound player support using libcanberra',
 )
 
-option('pango_ft2',
-  type: 'boolean',
-  value: true,
-  description: 'Enable PangoFt2 support'
-)
-
 option('startup_notification',
   type: 'boolean',
   value: true,
@@ -227,7 +221,7 @@ option('catch',
 
 option('libdisplay_info',
   type: 'feature',
-  value: 'auto',
+  value: 'enabled',
   deprecated: {'true': 'enabled', 'false': 'disabled'},
   description: 'Build with or without libdisplay-info'
 )

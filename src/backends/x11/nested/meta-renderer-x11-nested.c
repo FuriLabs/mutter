@@ -25,6 +25,7 @@
 #include <glib-object.h>
 
 #include "backends/meta-backend-private.h"
+#include "backends/meta-color-manager.h"
 #include "backends/meta-logical-monitor.h"
 #include "backends/meta-output.h"
 #include "backends/meta-renderer.h"
@@ -63,6 +64,7 @@ create_offscreen (CoglContext *cogl_context,
 static MetaRendererView *
 meta_renderer_x11_nested_create_view (MetaRenderer        *renderer,
                                       MetaLogicalMonitor  *logical_monitor,
+                                      MetaMonitor         *monitor,
                                       MetaOutput          *output,
                                       MetaCrtc            *crtc,
                                       GError             **error)
@@ -70,6 +72,9 @@ meta_renderer_x11_nested_create_view (MetaRenderer        *renderer,
   MetaBackend *backend = meta_renderer_get_backend (renderer);
   ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
   CoglContext *cogl_context = clutter_backend_get_cogl_context (clutter_backend);
+  MetaColorManager *color_manager = meta_backend_get_color_manager (backend);
+  MetaColorDevice *color_device =
+    meta_color_manager_get_color_device (color_manager, monitor);
   float view_scale;
   const MetaCrtcConfig *crtc_config;
   int width, height;
@@ -97,12 +102,14 @@ meta_renderer_x11_nested_create_view (MetaRenderer        *renderer,
 
   view = g_object_new (META_TYPE_RENDERER_VIEW,
                        "name", meta_output_get_name (output),
+                       "backend", backend,
+                       "color-device", color_device,
                        "stage", meta_backend_get_stage (backend),
                        "layout", &view_layout,
                        "crtc", crtc,
                        "refresh-rate", mode_info->refresh_rate,
                        "framebuffer", COGL_FRAMEBUFFER (fake_onscreen),
-                       "transform", META_MONITOR_TRANSFORM_NORMAL,
+                       "transform", MTK_MONITOR_TRANSFORM_NORMAL,
                        "scale", view_scale,
                        NULL);
   g_object_set_data (G_OBJECT (view), "crtc", crtc);

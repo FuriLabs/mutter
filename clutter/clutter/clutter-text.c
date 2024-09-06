@@ -39,11 +39,14 @@
 
 #include "config.h"
 
+#include <atk/atk.h>
+
 #include <string.h>
 #include <math.h>
 
 #include "clutter/clutter-text.h"
 
+#include "clutter/clutter-text-accessible-private.h"
 #include "clutter/clutter-actor-private.h"
 #include "clutter/clutter-animatable.h"
 #include "clutter/clutter-backend-private.h"
@@ -742,15 +745,16 @@ clutter_text_create_layout_no_cache (ClutterText       *text,
 
       if (dir == CLUTTER_TEXT_DIRECTION_DEFAULT)
         {
-          ClutterBackend *backend = clutter_get_default_backend ();
-
           if (clutter_actor_has_key_focus (CLUTTER_ACTOR (text)))
             {
-              ClutterSeat *seat;
-              ClutterKeymap *keymap;
+              ClutterContext *clutter_context =
+                clutter_actor_get_context (CLUTTER_ACTOR (text));
+              ClutterBackend *backend =
+                clutter_context_get_backend (clutter_context);
+              ClutterSeat *seat =
+                clutter_backend_get_default_seat (backend);
+              ClutterKeymap *keymap = clutter_seat_get_keymap (seat);
 
-              seat = clutter_backend_get_default_seat (backend);
-              keymap = clutter_seat_get_keymap (seat);
               dir = clutter_keymap_get_direction (keymap);
             }
           else
@@ -856,9 +860,8 @@ clutter_text_settings_changed_cb (ClutterText *text)
 {
   ClutterTextPrivate *priv = clutter_text_get_instance_private (text);
   guint password_hint_time = 0;
-  ClutterSettings *settings;
-
-  settings = clutter_settings_get_default ();
+  ClutterContext *context = clutter_actor_get_context (CLUTTER_ACTOR (text));
+  ClutterSettings *settings = clutter_context_get_settings (context);
 
   g_object_get (settings, "password-hint-time", &password_hint_time, NULL);
 
@@ -1736,17 +1739,54 @@ clutter_text_get_property (GObject    *gobject,
 }
 
 static void
+clutter_text_constructed (GObject *gobject)
+{
+  ClutterText *self = CLUTTER_TEXT (gobject);
+  ClutterTextPrivate *priv = clutter_text_get_instance_private (self);
+  ClutterContext *context = clutter_actor_get_context (CLUTTER_ACTOR (self));
+  ClutterSettings *settings = clutter_context_get_settings (context);
+  ClutterBackend *backend = clutter_context_get_backend (context);
+  gchar *font_name;
+  int password_hint_time;
+
+  /* get the default font name from the context; we don't use
+   * set_font_description() here because we are initializing
+   * the Text and we don't need notifications and sanity checks
+   */
+  g_object_get (settings,
+                "font-name", &font_name,
+                "password-hint-time", &password_hint_time,
+                NULL);
+
+  priv->font_name = font_name; /* font_name is allocated */
+  priv->font_desc = pango_font_description_from_string (font_name);
+  priv->show_password_hint = password_hint_time > 0;
+  priv->password_hint_timeout = password_hint_time;
+
+  priv->settings_changed_id =
+    g_signal_connect_swapped (backend,
+                              "settings-changed",
+                              G_CALLBACK (clutter_text_settings_changed_cb),
+                              self);
+
+  G_OBJECT_CLASS (clutter_text_parent_class)->constructed (gobject);
+}
+
+static void
 clutter_text_dispose (GObject *gobject)
 {
   ClutterText *self = CLUTTER_TEXT (gobject);
   ClutterTextPrivate *priv = clutter_text_get_instance_private (self);
+  ClutterContext *context =
+    clutter_actor_get_context (CLUTTER_ACTOR (self));
+  ClutterBackend *backend = clutter_context_get_backend (context);
 
   /* get rid of the entire cache */
   clutter_text_dirty_cache (self);
 
   g_clear_signal_handler (&priv->direction_changed_id, self);
   g_clear_signal_handler (&priv->settings_changed_id,
-                          clutter_get_default_backend ());
+                          backend);
 
   g_clear_handle_id (&priv->password_hint_id, g_source_remove);
 
@@ -1875,11 +1915,9 @@ clutter_text_foreach_selection_rectangle (ClutterText              *self,
 }
 
 static CoglPipeline *
-create_color_pipeline (void)
+create_color_pipeline (CoglContext *ctx)
 {
   static CoglPipelineKey color_pipeline_key = "clutter-text-color-pipeline-private";
-  CoglContext *ctx =
-    clutter_backend_get_cogl_context (clutter_get_default_backend ());
   CoglPipeline *color_pipeline;
 
   color_pipeline =
@@ -1937,7 +1975,10 @@ paint_selection_rectangle (ClutterText           *self,
   ClutterTextPrivate *priv = clutter_text_get_instance_private (self);
   ClutterActor *actor = CLUTTER_ACTOR (self);
   guint8 paint_opacity = clutter_actor_get_paint_opacity (actor);
-  CoglPipeline *color_pipeline = create_color_pipeline ();
+  ClutterContext *context = clutter_actor_get_context (actor);
+  ClutterBackend *backend = clutter_context_get_backend (context);
+  CoglContext *cogl_context = clutter_backend_get_cogl_context (backend);
+  CoglPipeline *color_pipeline = create_color_pipeline (cogl_context);
   PangoLayout *layout = clutter_text_get_layout (self);
   ClutterColorState *color_state =
     clutter_paint_context_get_color_state (paint_context);
@@ -2017,7 +2058,10 @@ selection_paint (ClutterText         *self,
         clutter_paint_context_get_color_state (paint_context);
       ClutterColorState *target_color_state =
         clutter_paint_context_get_target_color_state (paint_context);
-      CoglPipeline *color_pipeline = create_color_pipeline ();
+      ClutterContext *context = clutter_actor_get_context (actor);
+      ClutterBackend *backend = clutter_context_get_backend (context);
+      CoglContext *cogl_context = clutter_backend_get_cogl_context (backend);
+      CoglPipeline *color_pipeline = create_color_pipeline (cogl_context);
       CoglColor cogl_color;
 
       /* No selection, just draw the cursor */
@@ -2217,12 +2261,12 @@ clutter_text_update_click_count (ClutterText        *self,
                                  const ClutterEvent *event)
 {
   ClutterTextPrivate *priv = clutter_text_get_instance_private (self);
-  ClutterSettings *settings;
+  ClutterContext *context = clutter_actor_get_context (CLUTTER_ACTOR (self));
+  ClutterSettings *settings = clutter_context_get_settings (context);
   int double_click_time, double_click_distance;
   uint32_t evtime;
   float x, y;
 
-  settings = clutter_settings_get_default ();
   clutter_event_get_coords (event, &x, &y);
   evtime = clutter_event_get_time (event);
 
@@ -3158,7 +3202,9 @@ static void
 clutter_text_im_focus (ClutterText *text)
 {
   ClutterTextPrivate *priv = clutter_text_get_instance_private (text);
-  ClutterBackend *backend = clutter_get_default_backend ();
+  ClutterContext *context =
+    clutter_actor_get_context (CLUTTER_ACTOR (text));
+  ClutterBackend *backend = clutter_context_get_backend (context);
   ClutterInputMethod *method = clutter_backend_get_input_method (backend);
 
   if (!method)
@@ -3192,7 +3238,8 @@ clutter_text_key_focus_out (ClutterActor *actor)
 {
   ClutterTextPrivate *priv =
     clutter_text_get_instance_private (CLUTTER_TEXT (actor));
-  ClutterBackend *backend = clutter_get_default_backend ();
+  ClutterContext *context = clutter_actor_get_context (actor);
+  ClutterBackend *backend = clutter_context_get_backend (context);
   ClutterInputMethod *method = clutter_backend_get_input_method (backend);
 
   priv->has_focus = FALSE;
@@ -3840,10 +3887,12 @@ clutter_text_class_init (ClutterTextClass *klass)
 
   gobject_class->set_property = clutter_text_set_property;
   gobject_class->get_property = clutter_text_get_property;
+  gobject_class->constructed = clutter_text_constructed;
   gobject_class->dispose = clutter_text_dispose;
   gobject_class->finalize = clutter_text_finalize;
 
   actor_class->paint = clutter_text_paint;
+  actor_class->get_accessible_type = clutter_text_accessible_get_type;
   actor_class->get_paint_volume = clutter_text_get_paint_volume;
   actor_class->get_preferred_width = clutter_text_get_preferred_width;
   actor_class->get_preferred_height = clutter_text_get_preferred_height;
@@ -4451,10 +4500,8 @@ clutter_text_class_init (ClutterTextClass *klass)
 static void
 clutter_text_init (ClutterText *self)
 {
-  ClutterSettings *settings;
   ClutterTextPrivate *priv;
-  gchar *font_name;
-  int i, password_hint_time;
+  int i;
 
   priv = clutter_text_get_instance_private (self);
 
@@ -4480,18 +4527,6 @@ clutter_text_init (ClutterText *self)
   priv->selection_color = default_selection_color;
   priv->selected_text_color = default_selected_text_color;
 
-  /* get the default font name from the context; we don't use
-   * set_font_description() here because we are initializing
-   * the Text and we don't need notifications and sanity checks
-   */
-  settings = clutter_settings_get_default ();
-  g_object_get (settings,
-                "font-name", &font_name,
-                "password-hint-time", &password_hint_time,
-                NULL);
-
-  priv->font_name = font_name; /* font_name is allocated */
-  priv->font_desc = pango_font_description_from_string (font_name);
   priv->is_default_font = TRUE;
 
   priv->position = -1;
@@ -4508,18 +4543,10 @@ clutter_text_init (ClutterText *self)
   priv->preedit_set = FALSE;
 
   priv->password_char = 0;
-  priv->show_password_hint = password_hint_time > 0;
-  priv->password_hint_timeout = password_hint_time;
 
   priv->text_y = 0;
 
   priv->cursor_size = DEFAULT_CURSOR_SIZE;
-
-  priv->settings_changed_id =
-    g_signal_connect_swapped (clutter_get_default_backend (),
-                              "settings-changed",
-                              G_CALLBACK (clutter_text_settings_changed_cb),
-                              self);
 
   priv->direction_changed_id =
     g_signal_connect (self, "notify::text-direction",
@@ -4827,9 +4854,12 @@ void
 clutter_text_set_editable (ClutterText *self,
                            gboolean     editable)
 {
-  ClutterBackend *backend = clutter_get_default_backend ();
+  ClutterContext *context =
+    clutter_actor_get_context (CLUTTER_ACTOR (self));
+  ClutterBackend *backend = clutter_context_get_backend (context);
   ClutterInputMethod *method = clutter_backend_get_input_method (backend);
   ClutterTextPrivate *priv;
+  AtkObject *accessible;
 
   g_return_if_fail (CLUTTER_IS_TEXT (self));
 
@@ -4837,6 +4867,7 @@ clutter_text_set_editable (ClutterText *self,
 
   if (priv->editable != editable)
     {
+      accessible = clutter_actor_get_accessible (CLUTTER_ACTOR (self));
       priv->editable = editable;
 
       if (method)
@@ -4850,6 +4881,10 @@ clutter_text_set_editable (ClutterText *self,
       clutter_text_queue_redraw (CLUTTER_ACTOR (self));
 
       g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_EDITABLE]);
+      if (accessible)
+        atk_object_notify_state_change (accessible,
+                                        ATK_STATE_EDITABLE,
+                                        priv->editable);
     }
 }
 
@@ -5418,7 +5453,10 @@ clutter_text_set_font_name (ClutterText *self,
   /* get the default font name from the backend */
   if (font_name == NULL || font_name[0] == '\0')
     {
-      ClutterSettings *settings = clutter_settings_get_default ();
+      ClutterContext *context =
+        clutter_actor_get_context (CLUTTER_ACTOR (self));
+      ClutterSettings *settings =
+        clutter_context_get_settings (context);
       gchar *default_font_name = NULL;
 
       g_object_get (settings, "font-name", &default_font_name, NULL);
@@ -6162,6 +6200,7 @@ clutter_text_set_password_char (ClutterText *self,
                                 gunichar     wc)
 {
   ClutterTextPrivate *priv;
+  AtkObject *accessible;
 
   g_return_if_fail (CLUTTER_IS_TEXT (self));
 
@@ -6169,12 +6208,17 @@ clutter_text_set_password_char (ClutterText *self,
 
   if (priv->password_char != wc)
     {
+      accessible = clutter_actor_get_accessible (CLUTTER_ACTOR (self));
       priv->password_char = wc;
 
       clutter_text_dirty_cache (self);
       clutter_actor_queue_relayout (CLUTTER_ACTOR (self));
 
       g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_PASSWORD_CHAR]);
+
+      if (accessible)
+        atk_object_set_role (accessible,
+                             priv->password_char != 0 ? ATK_ROLE_PASSWORD_TEXT : ATK_ROLE_TEXT);
     }
 }
 

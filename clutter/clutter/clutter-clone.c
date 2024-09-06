@@ -23,7 +23,7 @@
 
 /**
  * ClutterClone:
- * 
+ *
  * An actor that displays a clone of a source actor
  *
  * #ClutterClone is a [class@Clutter.Actor] which draws with the paint
@@ -387,7 +387,10 @@ clutter_clone_init (ClutterClone *self)
 ClutterActor *
 clutter_clone_new (ClutterActor *source)
 {
-  return g_object_new (CLUTTER_TYPE_CLONE, "source", source,  NULL);
+  return g_object_new (CLUTTER_TYPE_CLONE,
+                       "source", source,
+                       "accessible-role", ATK_ROLE_IMAGE,
+                       NULL);
 }
 
 static void

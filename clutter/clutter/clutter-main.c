@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <glib/gi18n-lib.h>
 
+#include "clutter/clutter-accessibility-private.h"
 #include "clutter/clutter-actor-private.h"
 #include "clutter/clutter-backend-private.h"
 #include "clutter/clutter-context-private.h"
@@ -37,14 +38,12 @@
 #include "clutter/clutter-private.h"
 #include "clutter/clutter-settings-private.h"
 #include "clutter/clutter-stage.h"
-#include "clutter/clutter-stage-manager.h"
 #include "clutter/clutter-stage-private.h"
 #include "clutter/clutter-backend-private.h"
 
 #include "cogl/cogl.h"
 #include "cogl-pango/cogl-pango.h"
 
-#include "cally/cally.h" /* For accessibility support */
 
 typedef struct
 {
@@ -58,10 +57,6 @@ G_DEFINE_QUARK (clutter_pipeline_capability, clutter_pipeline_capability)
 /* main context */
 static ClutterContext *ClutterCntx       = NULL;
 
-/* command line options */
-static gboolean clutter_is_initialized       = FALSE;
-static gboolean clutter_enable_accessibility = TRUE;
-
 /* debug flags */
 guint clutter_debug_flags       = 0;
 guint clutter_paint_debug_flags = 0;
@@ -71,50 +66,6 @@ guint clutter_pick_debug_flags  = 0;
  * in the estimates.
  */
 int clutter_max_render_time_constant_us = 1000;
-
-gboolean
-_clutter_context_get_show_fps (void)
-{
-  ClutterContext *context = _clutter_context_get_default ();
-
-  return context->show_fps;
-}
-
-/**
- * clutter_get_accessibility_enabled:
- *
- * Returns whether Clutter has accessibility support enabled.  As
- * least, a value of TRUE means that there are a proper AtkUtil
- * implementation available
- *
- * Return value: %TRUE if Clutter has accessibility support enabled
- */
-gboolean
-clutter_get_accessibility_enabled (void)
-{
-  return cally_get_cally_initialized ();
-}
-
-/**
- * clutter_disable_accessibility:
- *
- * Disable loading the accessibility support. It has the same effect
- * as setting the environment variable
- * CLUTTER_DISABLE_ACCESSIBILITY. For the same reason, this method
- * should be called before clutter_init().
- */
-void
-clutter_disable_accessibility (void)
-{
-  if (clutter_is_initialized)
-    {
-      g_warning ("clutter_disable_accessibility() can only be called before "
-                 "initializing Clutter.");
-      return;
-    }
-
-  clutter_enable_accessibility = FALSE;
-}
 
 static gboolean
 _clutter_threads_dispatch (gpointer data)
@@ -341,14 +292,6 @@ clutter_threads_add_timeout (guint       interval,
                                            NULL);
 }
 
-gboolean
-_clutter_context_is_initialized (void)
-{
-  if (ClutterCntx == NULL)
-    return FALSE;
-
-  return ClutterCntx->is_initialized;
-}
 
 ClutterContext *
 _clutter_context_get_default (void)
@@ -358,8 +301,7 @@ _clutter_context_get_default (void)
 }
 
 ClutterContext *
-clutter_create_context (ClutterContextFlags         flags,
-                        ClutterBackendConstructor   backend_constructor,
+clutter_create_context (ClutterBackendConstructor   backend_constructor,
                         gpointer                    user_data,
                         GError                    **error)
 {
@@ -370,13 +312,11 @@ clutter_create_context (ClutterContextFlags         flags,
       return NULL;
     }
 
-  ClutterCntx = clutter_context_new (flags,
-                                     backend_constructor, user_data,
+  ClutterCntx = clutter_context_new (backend_constructor, user_data,
                                      error);
   if (!ClutterCntx)
     return NULL;
 
-  clutter_is_initialized = TRUE;
   g_object_add_weak_pointer (G_OBJECT (ClutterCntx), (gpointer *) &ClutterCntx);
   return ClutterCntx;
 }
@@ -426,7 +366,7 @@ emit_event (ClutterStage *stage,
 
   if (event_type == CLUTTER_KEY_PRESS ||
       event_type == CLUTTER_KEY_RELEASE)
-    cally_snoop_key_event (stage, (ClutterKeyEvent *) event);
+    clutter_accessibility_snoop_key_event (stage, (ClutterKeyEvent *) event);
 
   clutter_stage_emit_event (stage, event);
 }
@@ -486,7 +426,7 @@ void
 clutter_stage_handle_event (ClutterStage *stage,
                             ClutterEvent *event)
 {
-  ClutterContext *context = _clutter_context_get_default();
+  ClutterContext *context;
   ClutterActor *event_actor = NULL;
   ClutterEventType event_type;
   gboolean filtered;
@@ -498,6 +438,7 @@ clutter_stage_handle_event (ClutterStage *stage,
   if (CLUTTER_ACTOR_IN_DESTRUCTION (stage))
     return;
 
+  context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
   event_type = clutter_event_type (event);
 
   switch (event_type)
@@ -621,7 +562,7 @@ clutter_stage_process_event (ClutterStage *stage,
 
   COGL_TRACE_BEGIN_SCOPED (ProcessEvent, "Clutter::Stage::process_event()");
 
-  context = _clutter_context_get_default ();
+  context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
   seat = clutter_backend_get_default_seat (context->backend);
 
   /* push events on a stack, so that we don't need to
@@ -634,22 +575,6 @@ clutter_stage_process_event (ClutterStage *stage,
   _clutter_process_event_details (CLUTTER_ACTOR (stage), context, event);
 
   context->current_event = g_slist_delete_link (context->current_event, context->current_event);
-}
-
-/**
- * clutter_get_font_map:
- *
- * Retrieves the #PangoFontMap instance used by Clutter.
- * You can use the global font map object with the COGL
- * Pango API.
- *
- * Return value: (transfer none): the #PangoFontMap instance. The returned
- *   value is owned by Clutter and it should never be unreferenced.
- */
-PangoFontMap *
-clutter_get_font_map (void)
-{
-  return PANGO_FONT_MAP (clutter_context_get_pango_fontmap (ClutterCntx));
 }
 
 typedef struct _ClutterRepaintFunction

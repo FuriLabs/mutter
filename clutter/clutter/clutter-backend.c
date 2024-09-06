@@ -61,6 +61,15 @@ enum
   LAST_SIGNAL
 };
 
+enum
+{
+  PROP_0,
+  PROP_CONTEXT,
+  N_PROPS
+};
+
+static GParamSpec *pspecs[N_PROPS] = { 0 };
+
 G_DEFINE_ABSTRACT_TYPE (ClutterBackend, clutter_backend, G_TYPE_OBJECT)
 
 static guint backend_signals[LAST_SIGNAL] = { 0, };
@@ -90,14 +99,51 @@ clutter_backend_dispose (GObject *gobject)
 }
 
 static void
+clutter_backend_get_property (GObject      *object,
+                              guint         prop_id,
+                              GValue       *value,
+                              GParamSpec   *pspec)
+{
+  ClutterBackend *backend = CLUTTER_BACKEND (object);
+
+  switch (prop_id)
+    {
+    case PROP_CONTEXT:
+      g_value_set_object (value, backend->context);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+    }
+}
+
+static void
+clutter_backend_set_property (GObject      *object,
+                              guint         prop_id,
+                              const GValue *value,
+                              GParamSpec   *pspec)
+{
+  ClutterBackend *backend = CLUTTER_BACKEND (object);
+
+  switch (prop_id)
+    {
+    case PROP_CONTEXT:
+      backend->context = g_value_get_object (value);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+    }
+}
+
+static void
 clutter_backend_real_resolution_changed (ClutterBackend *backend)
 {
-  ClutterContext *context;
-  ClutterSettings *settings;
+  ClutterContext *context = backend->context;
+  ClutterSettings *settings = clutter_context_get_settings (context);
   gdouble resolution;
   gint dpi;
 
-  settings = clutter_settings_get_default ();
   g_object_get (settings, "font-dpi", &dpi, NULL);
 
   if (dpi < 0)
@@ -105,7 +151,6 @@ clutter_backend_real_resolution_changed (ClutterBackend *backend)
   else
     resolution = dpi / 1024.0;
 
-  context = _clutter_context_get_default ();
   if (context->font_map != NULL)
     cogl_pango_font_map_set_resolution (context->font_map, resolution);
 }
@@ -132,36 +177,7 @@ clutter_backend_do_real_create_context (ClutterBackend  *backend,
     goto error;
 
   CLUTTER_NOTE (BACKEND, "Creating Cogl display");
-  if (klass->get_display != NULL)
-    {
-      backend->cogl_display = klass->get_display (backend,
-                                                  backend->cogl_renderer,
-                                                  error);
-    }
-  else
-    {
-      CoglOnscreenTemplate *tmpl;
-      gboolean res;
-
-      tmpl = cogl_onscreen_template_new ();
-
-      /* XXX: I have some doubts that this is a good design.
-       *
-       * Conceptually should we be able to check an onscreen_template
-       * without more details about the CoglDisplay configuration?
-       */
-      res = cogl_renderer_check_onscreen_template (backend->cogl_renderer,
-                                                   tmpl,
-                                                   error);
-
-      if (!res)
-        goto error;
-
-      backend->cogl_display = cogl_display_new (backend->cogl_renderer, tmpl);
-
-      /* the display owns the template */
-      g_object_unref (tmpl);
-    }
+  backend->cogl_display = cogl_display_new (backend->cogl_renderer);
 
   if (backend->cogl_display == NULL)
     goto error;
@@ -267,6 +283,8 @@ clutter_backend_class_init (ClutterBackendClass *klass)
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
 
   gobject_class->dispose = clutter_backend_dispose;
+  gobject_class->get_property = clutter_backend_get_property;
+  gobject_class->set_property = clutter_backend_set_property;
 
   /**
    * ClutterBackend::resolution-changed:
@@ -294,7 +312,7 @@ clutter_backend_class_init (ClutterBackendClass *klass)
     g_signal_new (I_("font-changed"),
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
-                  G_STRUCT_OFFSET (ClutterBackendClass, font_changed),
+                  0,
                   NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
@@ -309,9 +327,18 @@ clutter_backend_class_init (ClutterBackendClass *klass)
     g_signal_new (I_("settings-changed"),
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
-                  G_STRUCT_OFFSET (ClutterBackendClass, settings_changed),
+                  0,
                   NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
+
+  pspecs[PROP_CONTEXT] =
+    g_param_spec_object ("context", NULL, NULL,
+                         CLUTTER_TYPE_CONTEXT,
+                         G_PARAM_READWRITE |
+                         G_PARAM_STATIC_STRINGS |
+                         G_PARAM_CONSTRUCT_ONLY);
+
+  g_object_class_install_properties (gobject_class, N_PROPS, pspecs);
 
   klass->resolution_changed = clutter_backend_real_resolution_changed;
 
@@ -412,7 +439,7 @@ clutter_backend_get_resolution (ClutterBackend *backend)
 
   g_return_val_if_fail (CLUTTER_IS_BACKEND (backend), -1.0);
 
-  settings = clutter_settings_get_default ();
+  settings = clutter_context_get_settings (backend->context);
   g_object_get (settings, "font-dpi", &resolution, NULL);
 
   if (resolution < 0)

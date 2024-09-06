@@ -27,6 +27,7 @@
 #include "core/util-private.h"
 #include "meta/boxes.h"
 #include "meta/common.h"
+#include "mtk/mtk.h"
 
 #define BOX_LEFT(box)    ((box).x)                /* Leftmost pixel of rect */
 #define BOX_RIGHT(box)   ((box).x + (box).width)  /* One pixel past right   */
@@ -236,10 +237,3 @@ META_EXPORT_TEST
 GList* meta_rectangle_find_nonintersected_monitor_edges (
                                            const GList         *monitor_rects,
                                            const GSList        *all_struts);
-
-META_EXPORT_TEST
-void meta_rectangle_transform (const MtkRectangle   *rect,
-                               MetaMonitorTransform  transform,
-                               int                   width,
-                               int                   height,
-                               MtkRectangle         *dest);

@@ -222,7 +222,7 @@ test_cogl_point_sprites_main (int argc, char *argv[])
   ClutterActor *stage;
   CoglTexture *tex;
   CoglContext *ctx =
-    clutter_backend_get_cogl_context (clutter_get_default_backend ());
+    clutter_backend_get_cogl_context (clutter_test_get_backend ());
   Data data;
   GError *error = NULL;
   int i;
@@ -263,7 +263,6 @@ test_cogl_point_sprites_main (int argc, char *argv[])
   stage = clutter_test_get_stage ();
   clutter_actor_set_background_color (CLUTTER_ACTOR (stage),
                                       &COGL_COLOR_INIT (0, 0, 0, 255));
-  clutter_stage_set_title (CLUTTER_STAGE (stage), "Cogl Point Sprites");
   g_signal_connect (stage, "destroy", G_CALLBACK (clutter_test_quit), NULL);
   g_signal_connect (CLUTTER_STAGE (stage), "after-paint", G_CALLBACK (on_after_paint), &data);
 

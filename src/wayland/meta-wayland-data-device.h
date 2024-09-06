@@ -91,10 +91,10 @@ void     meta_wayland_drag_grab_set_focus        (MetaWaylandDragGrab           
                                                   MetaWaylandSurface              *surface);
 MetaWaylandSurface *
          meta_wayland_drag_grab_get_focus        (MetaWaylandDragGrab             *drag_grab);
-void     meta_wayland_drag_grab_update_feedback_actor (MetaWaylandDragGrab *drag_grab,
-                                                       const ClutterEvent  *event);
 
 MetaWaylandSeat * meta_wayland_drag_grab_get_seat (MetaWaylandDragGrab *drag_grab);
 
 ClutterInputDevice * meta_wayland_drag_grab_get_device (MetaWaylandDragGrab    *drag_grab,
                                                         ClutterEventSequence  **sequence);
+
+MetaWaylandSurface * meta_wayland_drag_grab_get_origin (MetaWaylandDragGrab *drag_grab);

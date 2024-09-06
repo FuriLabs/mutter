@@ -40,7 +40,7 @@ typedef struct _MetaLogicalMonitorConfig
 {
   MtkRectangle layout;
   GList *monitor_configs;
-  MetaMonitorTransform transform;
+  MtkMonitorTransform transform;
   float scale;
   gboolean is_primary;
   gboolean is_presentation;
@@ -49,13 +49,13 @@ typedef struct _MetaLogicalMonitorConfig
 typedef struct _MetaMonitorsConfigKey
 {
   GList *monitor_specs;
+  MetaLogicalMonitorLayoutMode layout_mode;
 } MetaMonitorsConfigKey;
 
 enum _MetaMonitorsConfigFlag
 {
   META_MONITORS_CONFIG_FLAG_NONE = 0,
-  META_MONITORS_CONFIG_FLAG_MIGRATED = (1 << 0),
-  META_MONITORS_CONFIG_FLAG_SYSTEM_CONFIG = (1 << 1),
+  META_MONITORS_CONFIG_FLAG_SYSTEM_CONFIG = (1 << 0),
 };
 
 struct _MetaMonitorsConfig
@@ -107,7 +107,7 @@ MetaMonitorsConfig * meta_monitor_config_manager_create_suggested (MetaMonitorCo
 META_EXPORT_TEST
 MetaMonitorsConfig * meta_monitor_config_manager_create_for_orientation (MetaMonitorConfigManager *config_manager,
                                                                          MetaMonitorsConfig       *base_config,
-                                                                         MetaMonitorTransform      transform);
+                                                                         MtkMonitorTransform       transform);
 
 META_EXPORT_TEST
 MetaMonitorsConfig * meta_monitor_config_manager_create_for_builtin_orientation (MetaMonitorConfigManager *config_manager,
@@ -207,7 +207,6 @@ META_EXPORT_TEST
 gboolean meta_verify_monitors_config (MetaMonitorsConfig *config,
                                       MetaMonitorManager *monitor_manager,
                                       GError            **error);
-
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (MetaMonitorConfig, meta_monitor_config_free)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (MetaLogicalMonitorConfig,

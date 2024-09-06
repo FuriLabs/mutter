@@ -138,18 +138,14 @@ subdir('protocol')
 subdir('drm-mock')
 subdir('wayland-test-clients')
 
-if have_installed_tests
-  stacking_files_datadir = pkgdatadir / 'tests'
-  install_subdir('stacking', install_dir: stacking_files_datadir)
-endif
-
 test_env = environment()
 
 test_env_variables = {
   'G_TEST_SRCDIR': mutter_srcdir / 'src',
-  'G_TEST_BUILDDIR': mutter_builddir,
+  'G_TEST_BUILDDIR': mutter_builddir / 'src' / 'tests',
   'XDG_CONFIG_HOME': mutter_builddir / '.config',
   'MUTTER_TEST_PLUGIN_PATH': '@0@'.format(default_plugin.full_path()),
+  'MUTTER_REF_TEST_RESULT_DIR': mutter_builddir / 'meson-logs' / 'tests' / 'ref-tests',
   'GSETTINGS_SCHEMA_DIR': ':'.join([mutter_builddir / 'src' / 'tests',
                                     locally_compiled_schemas_dir]),
 }
@@ -170,6 +166,7 @@ test_client = executable('mutter-test-client',
     gio_unix_dep,
     x11_dep,
     xext_dep,
+    xrandr_dep,
     graphene_dep,
     gsettings_desktop_schemas_dep,
   ],
@@ -201,6 +198,7 @@ install_data(
   [
     'mutter_dbusrunner.py',
     'logind_helpers.py',
+    'socket-launch.sh',
   ],
   install_dir: tests_datadir,
 )
@@ -247,8 +245,6 @@ test_cases += [
       'unit-tests.c',
       'boxes-tests.c',
       'boxes-tests.h',
-      'monitor-config-migration-unit-tests.c',
-      'monitor-config-migration-unit-tests.h',
       'monitor-store-unit-tests.c',
       'monitor-store-unit-tests.h',
       'monitor-transform-tests.c',
@@ -274,6 +270,11 @@ test_cases += [
     'name': 'monitor-utils',
     'suite': 'unit',
     'sources': [ 'monitor-util-tests.c', ],
+  },
+  {
+    'name': 'monitor-backlight',
+    'suite': 'backend',
+    'sources': [ 'monitor-backlight-tests.c', ]
   },
   {
     'name': 'stage-views',
@@ -308,6 +309,9 @@ test_cases += [
     'name': 'keybindings',
     'suite': 'input',
     'sources': [ 'keybindings.c' ],
+    'installed_runner_args': [
+      '--compile-schemas',
+    ],
   },
 ]
 
@@ -329,6 +333,23 @@ screen_cast_client = executable('mutter-screen-cast-client',
   install: have_installed_tests,
   install_dir: mutter_installed_tests_libexecdir,
   install_rpath: pkglibdir,
+)
+
+backlight_client = executable('monitor-backlight-client',
+  sources: [
+    'monitor-backlight-client.c',
+    built_dbus_sources['meta-dbus-display-config'],
+  ],
+  include_directories: tests_includes,
+  c_args: [
+    tests_c_args,
+    '-DG_LOG_DOMAIN="mutter-monitor-backlight-test-client"',
+  ],
+  dependencies: [
+    gio_dep,
+  ],
+  install: have_installed_tests,
+  install_dir: mutter_installed_tests_libexecdir,
 )
 
 input_capture_client = executable('mutter-input-capture-test-client',
@@ -359,18 +380,27 @@ test_cases += [
     'sources': [ 'kms-utils-unit-tests.c', ],
   },
   {
-    'name': 'native-unit',
+    'name': 'native-virtual-monitor',
     'suite': 'backends/native',
     'sources': [
-      'native-headless.c',
-      'native-screen-cast.c',
-      'native-screen-cast.h',
       'native-virtual-monitor.c',
-      'native-virtual-monitor.h',
-      'native-bezier-tests.c',
+    ],
+  },
+  {
+    'name': 'native-screen-cast',
+    'suite': 'backends/native',
+    'sources': [
+      'native-screen-cast.c',
     ],
     'depends': [
       screen_cast_client,
+    ],
+  },
+  {
+    'name': 'bezier',
+    'suite': 'backends/native',
+    'sources': [
+      'native-bezier-tests.c',
     ],
   },
   {
@@ -756,22 +786,6 @@ foreach stacking_test: stacking_tests
     timeout: 60,
     should_fail: stacking_test.startswith('fixme-'),
   )
-
-  if have_installed_tests
-    installed_tests_cdata = configuration_data()
-    installed_tests_cdata.set('apiversion', libmutter_api_version)
-    installed_tests_cdata.set('libexecdir', libexecdir)
-    installed_tests_cdata.set('tests_datadir', tests_datadir)
-    installed_tests_cdata.set('stacking_test', stacking_test)
-
-    configure_file(
-      input: 'stacking.test.in',
-      output: stacking_test + '.test',
-      configuration: installed_tests_cdata,
-      install: true,
-      install_dir: mutter_installed_tests_datadir,
-    )
-  endif
 endforeach
 
 if have_kvm_tests or have_tty_tests
@@ -902,3 +916,64 @@ test('get-state-tool-gdbus', mutter,
   is_parallel: false,
   timeout: 60,
 )
+
+# Installed tests
+
+if have_installed_tests
+  install_subdir('stacking', install_dir: tests_datadir)
+
+  foreach stacking_test: stacking_tests
+    stacking_installed_tests_cdata = configuration_data()
+    stacking_installed_tests_cdata.set('apiversion', libmutter_api_version)
+    stacking_installed_tests_cdata.set('libexecdir', libexecdir)
+    stacking_installed_tests_cdata.set('tests_datadir', tests_datadir)
+    stacking_installed_tests_cdata.set('stacking_test', stacking_test)
+
+    configure_file(
+      input: 'stacking.test.in',
+      output: stacking_test + '.test',
+      configuration: stacking_installed_tests_cdata,
+      install: true,
+      install_dir: mutter_installed_tests_datadir,
+    )
+  endforeach
+
+  install_subdir('monitor-configs', install_dir: tests_datadir)
+  install_subdir('migration', install_dir: tests_datadir)
+  install_subdir('ref-tests', install_dir: tests_datadir)
+  install_subdir('icc-profiles', install_dir: tests_datadir)
+
+  install_data('org.gnome.mutter.test.gschema.xml', install_dir: tests_datadir)
+
+  foreach test_case: test_cases
+    if test_case.has_key('installed_runner_args')
+      runner_args = test_case['installed_runner_args']
+    else
+      runner_args = []
+    endif
+
+    if test_case.has_key('launch')
+      foreach service: test_case['launch']
+        runner_args += '--launch=@0@'.format(service)
+      endforeach
+    endif
+
+    installed_tests_cdata = configuration_data()
+    installed_tests_cdata.set('apiversion', libmutter_api_version)
+    installed_tests_cdata.set('libexecdir', libexecdir)
+    installed_tests_cdata.set('pkgdatadir', pkgdatadir)
+    installed_tests_cdata.set('reftestresultdir', '/tmp/mutter-ref-test-results')
+    installed_tests_cdata.set('testname', test_case['name'])
+    installed_tests_cdata.set('testexecutable', 'mutter-' + test_case['name'])
+    installed_tests_cdata.set('runnerargs', ' '.join(runner_args))
+
+    configure_file(
+      input: 'generic.test.in',
+      output: test_case['name'] + '.test',
+      configuration: installed_tests_cdata,
+      install: true,
+      install_dir: mutter_installed_tests_datadir,
+    )
+  endforeach
+
+endif

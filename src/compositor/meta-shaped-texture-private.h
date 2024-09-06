@@ -44,7 +44,7 @@ MtkRegion * meta_shaped_texture_get_opaque_region (MetaShapedTexture *stex);
 gboolean meta_shaped_texture_is_opaque (MetaShapedTexture *stex);
 gboolean meta_shaped_texture_has_alpha (MetaShapedTexture *stex);
 void meta_shaped_texture_set_transform (MetaShapedTexture    *stex,
-                                        MetaMonitorTransform  transform);
+                                        MtkMonitorTransform  transform);
 void meta_shaped_texture_set_viewport_src_rect (MetaShapedTexture *stex,
                                                 graphene_rect_t   *src_rect);
 void meta_shaped_texture_reset_viewport_src_rect (MetaShapedTexture *stex);
@@ -55,12 +55,9 @@ void meta_shaped_texture_reset_viewport_dst_size (MetaShapedTexture *stex);
 void meta_shaped_texture_set_buffer_scale (MetaShapedTexture *stex,
                                            int                buffer_scale);
 
-gboolean meta_shaped_texture_update_area (MetaShapedTexture *stex,
-                                          int                x,
-                                          int                y,
-                                          int                width,
-                                          int                height,
-                                          MtkRectangle      *clip);
+gboolean meta_shaped_texture_update_area (MetaShapedTexture  *stex,
+                                          const MtkRectangle *area,
+                                          MtkRectangle       *clip);
 
 int meta_shaped_texture_get_width (MetaShapedTexture *stex);
 int meta_shaped_texture_get_height (MetaShapedTexture *stex);

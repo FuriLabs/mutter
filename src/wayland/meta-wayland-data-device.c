@@ -321,14 +321,6 @@ meta_wayland_drag_grab_get_focus (MetaWaylandDragGrab *drag_grab)
   return drag_grab->drag_focus;
 }
 
-void
-meta_wayland_drag_grab_update_feedback_actor (MetaWaylandDragGrab *drag_grab,
-                                              const ClutterEvent  *event)
-{
-  meta_feedback_actor_update (META_FEEDBACK_ACTOR (drag_grab->feedback_actor),
-                              event);
-}
-
 MetaWaylandSeat *
 meta_wayland_drag_grab_get_seat (MetaWaylandDragGrab *drag_grab)
 {
@@ -343,6 +335,12 @@ meta_wayland_drag_grab_get_device (MetaWaylandDragGrab    *drag_grab,
     *sequence = drag_grab->sequence;
 
   return drag_grab->device;
+}
+
+MetaWaylandSurface *
+meta_wayland_drag_grab_get_origin (MetaWaylandDragGrab *drag_grab)
+{
+  return drag_grab->drag_origin;
 }
 
 static void
@@ -481,6 +479,30 @@ drag_grab_focus (MetaWaylandEventHandler *handler,
     meta_wayland_drag_grab_set_focus (drag_grab, surface);
 }
 
+static void
+data_device_update_position (MetaWaylandDragGrab *drag_grab,
+                             graphene_point_t    *point)
+{
+  MetaWaylandCompositor *compositor =
+    meta_wayland_seat_get_compositor (drag_grab->seat);
+  MetaContext *context = meta_wayland_compositor_get_context (compositor);
+  MetaBackend *backend = meta_context_get_backend (context);
+  MetaMonitorManager *monitor_manager =
+    meta_backend_get_monitor_manager (backend);
+  MetaFeedbackActor *feedback_actor =
+    META_FEEDBACK_ACTOR (drag_grab->feedback_actor);
+  MetaLogicalMonitor *monitor;
+
+  if (!drag_grab->drag_surface)
+    return;
+
+  meta_feedback_actor_set_position (feedback_actor, point->x, point->y);
+
+  monitor = meta_monitor_manager_get_logical_monitor_at (monitor_manager,
+                                                         point->x, point->y);
+  meta_wayland_surface_set_main_monitor (drag_grab->drag_surface, monitor);
+}
+
 static gboolean
 drag_grab_motion (MetaWaylandEventHandler *handler,
 		  const ClutterEvent      *event,
@@ -498,19 +520,16 @@ drag_grab_motion (MetaWaylandEventHandler *handler,
       drag_grab->sequence != clutter_event_get_event_sequence (event))
     return CLUTTER_EVENT_STOP;
 
+  clutter_event_get_position (event, &point);
+
   if (drag_grab->drag_focus)
     {
-      clutter_event_get_coords (event, &point.x, &point.y);
       time_ms = clutter_event_get_time (event);
       meta_wayland_surface_drag_dest_motion (drag_grab->drag_focus,
                                              point.x, point.y, time_ms);
     }
 
-  if (drag_grab->drag_surface)
-    {
-      meta_feedback_actor_update (META_FEEDBACK_ACTOR (drag_grab->feedback_actor),
-                                  event);
-    }
+  data_device_update_position (drag_grab, &point);
 
   meta_dnd_wayland_on_motion_event (meta_backend_get_dnd (backend), event);
 
@@ -748,8 +767,7 @@ meta_wayland_data_device_start_drag (MetaWaylandDataDevice           *data_devic
                                       0, 0);
       clutter_actor_add_child (drag_grab->feedback_actor, drag_surface_actor);
 
-      meta_feedback_actor_set_position (META_FEEDBACK_ACTOR (drag_grab->feedback_actor),
-                                        pos.x, pos.y);
+      data_device_update_position (drag_grab, &pos);
     }
 
   input = meta_wayland_seat_get_input (seat);

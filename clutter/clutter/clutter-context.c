@@ -22,7 +22,7 @@
 
 #include <hb-glib.h>
 
-#include "cally/cally.h"
+#include "clutter/clutter-accessibility-private.h"
 #include "clutter/clutter-backend-private.h"
 #include "clutter/clutter-color-manager.h"
 #include "clutter/clutter-debug.h"
@@ -31,8 +31,8 @@
 #include "clutter/clutter-paint-node-private.h"
 #include "clutter/clutter-settings-private.h"
 
-static gboolean clutter_disable_mipmap_text = FALSE;
 static gboolean clutter_show_fps = FALSE;
+static gboolean clutter_enable_accessibility = TRUE;
 
 #ifdef CLUTTER_ENABLE_DEBUG
 static const GDebugKey clutter_debug_keys[] = {
@@ -97,6 +97,8 @@ clutter_context_dispose (GObject *object)
   g_clear_object (&priv->color_manager);
   g_clear_pointer (&context->events_queue, g_async_queue_unref);
   g_clear_pointer (&context->backend, clutter_backend_destroy);
+  g_clear_object (&context->stage_manager);
+  g_clear_object (&context->settings);
 
   G_OBJECT_CLASS (clutter_context_parent_class)->dispose (object);
 }
@@ -167,7 +169,6 @@ clutter_get_text_direction (void)
 
 static gboolean
 clutter_context_init_real (ClutterContext       *context,
-                           ClutterContextFlags   flags,
                            GError              **error)
 {
   ClutterContextPrivate *priv = clutter_context_get_instance_private (context);
@@ -194,11 +195,12 @@ clutter_context_init_real (ClutterContext       *context,
 
   priv->text_direction = clutter_get_text_direction ();
 
-  context->is_initialized = TRUE;
-
   /* Initialize a11y */
-  if (!(flags & CLUTTER_CONTEXT_FLAG_NO_A11Y))
-    cally_accessibility_init ();
+  if (clutter_enable_accessibility)
+    {
+      _clutter_accessibility_override_atk_util ();
+      CLUTTER_NOTE (MISC, "Clutter Accessibility initialized");
+    }
 
   /* Initialize types required for paint nodes */
   clutter_paint_node_init_types (context->backend);
@@ -247,14 +249,13 @@ init_clutter_debug (ClutterContext *context)
   if (env_string)
     clutter_show_fps = TRUE;
 
-  env_string = g_getenv ("CLUTTER_DISABLE_MIPMAPPED_TEXT");
+  env_string = g_getenv ("CLUTTER_DISABLE_ACCESSIBILITY");
   if (env_string)
-    clutter_disable_mipmap_text = TRUE;
+    clutter_enable_accessibility = FALSE;
 }
 
 ClutterContext *
-clutter_context_new (ClutterContextFlags         flags,
-                     ClutterBackendConstructor   backend_constructor,
+clutter_context_new (ClutterBackendConstructor   backend_constructor,
                      gpointer                    user_data,
                      GError                    **error)
 {
@@ -266,12 +267,13 @@ clutter_context_new (ClutterContextFlags         flags,
 
   init_clutter_debug (context);
   context->show_fps = clutter_show_fps;
-  context->is_initialized = FALSE;
 
-  context->backend = backend_constructor (user_data);
-  context->settings = clutter_settings_get_default ();
+  context->backend = backend_constructor (context, user_data);
+  context->settings = g_object_new (CLUTTER_TYPE_SETTINGS, NULL);
   _clutter_settings_set_backend (context->settings,
                                  context->backend);
+
+  context->stage_manager = g_object_new (CLUTTER_TYPE_STAGE_MANAGER, NULL);
 
   context->events_queue =
     g_async_queue_new_full ((GDestroyNotify) clutter_event_free);
@@ -282,7 +284,7 @@ clutter_context_new (ClutterContextFlags         flags,
                                       NULL);
   priv->pipeline_cache = g_object_new (CLUTTER_TYPE_PIPELINE_CACHE, NULL);
 
-  if (!clutter_context_init_real (context, flags, error))
+  if (!clutter_context_init_real (context, error))
     return NULL;
 
   return context;
@@ -306,7 +308,6 @@ clutter_context_get_pango_fontmap (ClutterContext *context)
 {
   CoglPangoFontMap *font_map;
   gdouble resolution;
-  gboolean use_mipmapping;
   ClutterBackend *backend;
   CoglContext *cogl_context;
 
@@ -319,9 +320,6 @@ clutter_context_get_pango_fontmap (ClutterContext *context)
 
   resolution = clutter_backend_get_resolution (context->backend);
   cogl_pango_font_map_set_resolution (font_map, resolution);
-
-  use_mipmapping = !clutter_disable_mipmap_text;
-  cogl_pango_font_map_set_use_mipmapping (font_map, use_mipmapping);
 
   context->font_map = font_map;
 
@@ -353,4 +351,37 @@ clutter_context_get_color_manager (ClutterContext *context)
   ClutterContextPrivate *priv = clutter_context_get_instance_private (context);
 
   return priv->color_manager;
+}
+
+/**
+ * clutter_get_accessibility_enabled:
+ *
+ * Returns whether Clutter has accessibility support enabled.
+ *
+ * Return value: %TRUE if Clutter has accessibility support enabled
+ */
+gboolean
+clutter_get_accessibility_enabled (void)
+{
+  return clutter_enable_accessibility;
+}
+
+ClutterStageManager *
+clutter_context_get_stage_manager (ClutterContext *context)
+{
+  return context->stage_manager;
+}
+
+gboolean
+clutter_context_get_show_fps (ClutterContext *context)
+{
+  return context->show_fps;
+}
+
+ClutterSettings *
+clutter_context_get_settings (ClutterContext *context)
+{
+  g_return_val_if_fail (CLUTTER_IS_CONTEXT (context), NULL);
+
+  return context->settings;
 }

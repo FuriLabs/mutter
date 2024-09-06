@@ -32,7 +32,6 @@
 
 #include "cogl/cogl-display.h"
 #include "cogl/cogl-renderer.h"
-#include "cogl/cogl-onscreen-template-private.h"
 
 struct _CoglDisplay
 {
@@ -42,7 +41,6 @@ struct _CoglDisplay
 
   gboolean setup;
   CoglRenderer *renderer;
-  CoglOnscreenTemplate *onscreen_template;
 
   void *winsys;
 };

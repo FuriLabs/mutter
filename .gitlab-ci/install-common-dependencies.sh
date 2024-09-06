@@ -56,6 +56,24 @@ done
 
 SCRIPTS_DIR="$(dirname $0)"
 
+if ! pkgconf --atleast-version 1.2.3 libpipewire-0.3
+then
+     ./$SCRIPTS_DIR/install-meson-project.sh \
+       "${OPTIONS[@]}" \
+       -Dalsa=disabled \
+       -Dbluez5=disabled \
+       -Dexamples=disabled \
+       -Dgstreamer=disabled \
+       -Djack=disabled \
+       -Dman=disabled \
+       -Dpipewire-alsa=disabled \
+       -Dpipewire-jack=disabled \
+       -Dsystemd=enabled \
+       -Dtests=disabled \
+       https://gitlab.freedesktop.org/pipewire/pipewire.git \
+       1.2.3
+fi
+
 if ! pkgconf --atleast-version 1.23.0 wayland-server
 then
      ./$SCRIPTS_DIR/install-meson-project.sh \
@@ -72,7 +90,7 @@ then
       1.36
 fi
 
-if ! gsettings get org.gnome.desktop.interface accent-color >/dev/null 2>&1
+if ! pkgconf --atleast-version 47.beta gsettings-desktop-schemas
 then
     ./$SCRIPTS_DIR/install-meson-project.sh \
       "${OPTIONS[@]}" \

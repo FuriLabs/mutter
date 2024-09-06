@@ -43,6 +43,14 @@ enum
   N_SIGNALS
 };
 
+static GDebugKey experimental_feature_keys[] = {
+  { "scale-monitor-framebuffer", META_EXPERIMENTAL_FEATURE_SCALE_MONITOR_FRAMEBUFFER },
+  { "kms-modifiers", META_EXPERIMENTAL_FEATURE_KMS_MODIFIERS },
+  { "autoclose-xwayland", META_EXPERIMENTAL_FEATURE_AUTOCLOSE_XWAYLAND },
+  { "variable-refresh-rate", META_EXPERIMENTAL_FEATURE_VARIABLE_REFRESH_RATE },
+  { "xwayland-native-scaling", META_EXPERIMENTAL_FEATURE_XWAYLAND_NATIVE_SCALING },
+};
+
 static guint signals[N_SIGNALS];
 
 struct _MetaSettings
@@ -164,6 +172,8 @@ meta_settings_get_global_scaling_factor (MetaSettings *settings,
 static gboolean
 update_font_dpi (MetaSettings *settings)
 {
+  ClutterContext *clutter_context;
+  ClutterSettings *clutter_settings;
   double text_scaling_factor;
   /* Number of logical pixels on an inch when unscaled */
   const double dots_per_inch = 96;
@@ -181,8 +191,10 @@ update_font_dpi (MetaSettings *settings)
   if (font_dpi != settings->font_dpi)
     {
       settings->font_dpi = font_dpi;
+      clutter_context = meta_backend_get_clutter_context (settings->backend);
+      clutter_settings = clutter_context_get_settings (clutter_context);
 
-      g_object_set (clutter_settings_get_default (),
+      g_object_set (clutter_settings,
                     "font-dpi", font_dpi,
                     NULL);
 
@@ -296,6 +308,8 @@ experimental_features_handler (GVariant *features_variant,
         feature = META_EXPERIMENTAL_FEATURE_AUTOCLOSE_XWAYLAND;
       else if (g_str_equal (feature_str, "variable-refresh-rate"))
         feature = META_EXPERIMENTAL_FEATURE_VARIABLE_REFRESH_RATE;
+      else if (g_str_equal (feature_str, "xwayland-native-scaling"))
+        feature = META_EXPERIMENTAL_FEATURE_XWAYLAND_NATIVE_SCALING;
 
       if (feature)
         g_message ("Enabling experimental feature '%s'", feature_str);
@@ -538,6 +552,8 @@ meta_settings_dispose (GObject *object)
 static void
 meta_settings_init (MetaSettings *settings)
 {
+  const char *experimental_features_env;
+
   settings->interface_settings = g_settings_new ("org.gnome.desktop.interface");
   g_signal_connect (settings->interface_settings, "changed",
                     G_CALLBACK (interface_settings_changed),
@@ -560,6 +576,21 @@ meta_settings_init (MetaSettings *settings)
                     G_CALLBACK (meta_settings_update_ui_scaling_factor), NULL);
   g_signal_connect (settings, "ui-scaling-factor-changed",
                     G_CALLBACK (meta_settings_update_font_dpi), NULL);
+
+  experimental_features_env = getenv ("MUTTER_DEBUG_EXPERIMENTAL_FEATURES");
+  if (experimental_features_env)
+    {
+      MetaExperimentalFeature experimental_features;
+
+      experimental_features =
+        g_parse_debug_string (experimental_features_env,
+                              experimental_feature_keys,
+                              G_N_ELEMENTS (experimental_feature_keys));
+
+      meta_settings_override_experimental_features (settings);
+      meta_settings_enable_experimental_feature (settings,
+                                                 experimental_features);
+    }
 
   update_global_scaling_factor (settings);
   update_experimental_features (settings);

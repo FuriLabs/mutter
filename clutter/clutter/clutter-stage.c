@@ -41,6 +41,7 @@
 
 #include "clutter/clutter-stage.h"
 
+#include "clutter/clutter-stage-accessible-private.h"
 #include "clutter/clutter-action-private.h"
 #include "clutter/clutter-actor-private.h"
 #include "clutter/clutter-backend-private.h"
@@ -116,7 +117,6 @@ typedef struct _ClutterStagePrivate
   graphene_matrix_t view;
   float viewport[4];
 
-  gchar *title;
   ClutterActor *key_focused_actor;
 
   ClutterGrab *topmost_grab;
@@ -138,6 +138,7 @@ typedef struct _ClutterStagePrivate
   GPtrArray *all_active_gestures;
 
   guint actor_needs_immediate_relayout : 1;
+  gboolean is_active;
 } ClutterStagePrivate;
 
 enum
@@ -145,7 +146,6 @@ enum
   PROP_0,
 
   PROP_PERSPECTIVE,
-  PROP_TITLE,
   PROP_KEY_FOCUS,
   PROP_IS_GRABBED,
 
@@ -156,8 +156,6 @@ static GParamSpec *obj_props[PROP_LAST] = { NULL, };
 
 enum
 {
-  ACTIVATE,
-  DEACTIVATE,
   DELETE_EVENT,
   BEFORE_UPDATE,
   PREPARE_FRAME,
@@ -621,25 +619,68 @@ clutter_stage_emit_key_focus_event (ClutterStage *stage,
                                     gboolean      focus_in)
 {
   ClutterStagePrivate *priv = clutter_stage_get_instance_private (stage);
+  AtkObject *old_accessible, *new_accessible = NULL;
 
   if (priv->key_focused_actor == NULL)
     return;
 
+  old_accessible = clutter_actor_get_accessible (priv->key_focused_actor);
+  new_accessible = clutter_actor_get_accessible (CLUTTER_ACTOR (stage));
+
   _clutter_actor_set_has_key_focus (CLUTTER_ACTOR (stage), focus_in);
 
+  if (old_accessible)
+    atk_object_notify_state_change (old_accessible,
+                                    ATK_STATE_FOCUSED,
+                                    !focus_in);
+  if (new_accessible)
+    atk_object_notify_state_change (new_accessible,
+                                    ATK_STATE_FOCUSED,
+                                    focus_in);
   g_object_notify_by_pspec (G_OBJECT (stage), obj_props[PROP_KEY_FOCUS]);
 }
 
-static void
-clutter_stage_real_activate (ClutterStage *stage)
+gboolean
+clutter_stage_is_active (ClutterStage *stage)
 {
-  clutter_stage_emit_key_focus_event (stage, TRUE);
+  ClutterStagePrivate *priv;
+
+  g_return_val_if_fail (CLUTTER_IS_STAGE (stage), FALSE);
+
+  priv = clutter_stage_get_instance_private (stage);
+
+  return priv->is_active;
 }
 
-static void
-clutter_stage_real_deactivate (ClutterStage *stage)
+void
+clutter_stage_set_active (ClutterStage *stage,
+                          gboolean      is_active)
 {
-  clutter_stage_emit_key_focus_event (stage, FALSE);
+  ClutterStagePrivate *priv;
+  AtkObject *accessible;
+
+  g_return_if_fail (CLUTTER_IS_STAGE (stage));
+
+  priv = clutter_stage_get_instance_private (stage);
+
+  if (priv->is_active == is_active)
+    return;
+
+  priv->is_active = is_active;
+  accessible = clutter_actor_get_accessible (CLUTTER_ACTOR (stage));
+  if (accessible)
+    {
+      atk_object_notify_state_change (accessible,
+                                      ATK_STATE_ACTIVE,
+                                      priv->is_active);
+      /* Emit AtkWindow signals */
+      if (priv->is_active)
+        g_signal_emit_by_name (accessible, "activate", 0);
+      else
+        g_signal_emit_by_name (accessible, "deactivate", 0);
+    }
+
+  clutter_stage_emit_key_focus_event (stage, is_active);
 }
 
 void
@@ -1008,7 +1049,10 @@ _clutter_stage_do_pick_on_view (ClutterStage      *stage,
                                 MtkRegion        **clear_area)
 {
   g_autoptr (ClutterPickStack) pick_stack = NULL;
+  ClutterContext *context;
+  ClutterBackend *backend;
   ClutterPickContext *pick_context;
+  CoglContext *cogl_context;
   graphene_point3d_t p;
   graphene_ray_t ray;
   ClutterActor *actor;
@@ -1017,7 +1061,10 @@ _clutter_stage_do_pick_on_view (ClutterStage      *stage,
 
   setup_ray_for_coordinates (stage, x, y, &p, &ray);
 
-  pick_context = clutter_pick_context_new_for_view (view, mode, &p, &ray);
+  context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
+  backend = clutter_context_get_backend (context);
+  cogl_context = clutter_backend_get_cogl_context (backend);
+  pick_context = clutter_pick_context_new_for_view (view, cogl_context, mode, &p, &ray);
 
   clutter_actor_pick (CLUTTER_ACTOR (stage), pick_context);
   pick_stack = clutter_pick_context_steal_stack (pick_context);
@@ -1101,15 +1148,103 @@ clutter_stage_real_apply_transform (ClutterActor      *stage,
 }
 
 static void
+on_seat_unfocus_inhibited_changed (ClutterStage *stage,
+                                   ClutterSeat  *seat)
+{
+  ClutterInputDevice *device;
+  graphene_point_t point = GRAPHENE_POINT_INIT_ZERO;
+
+  device = clutter_seat_get_pointer (seat);
+
+  if (!clutter_stage_get_device_coords (stage, device, NULL, &point))
+    return;
+
+  clutter_stage_pick_and_update_device (stage,
+                                        device,
+                                        NULL, NULL,
+                                        CLUTTER_DEVICE_UPDATE_IGNORE_CACHE |
+                                        CLUTTER_DEVICE_UPDATE_EMIT_CROSSING,
+                                        point,
+                                        CLUTTER_CURRENT_TIME);
+}
+
+static void
 clutter_stage_constructed (GObject *gobject)
 {
   ClutterStage *self = CLUTTER_STAGE (gobject);
-  ClutterStageManager *stage_manager;
+  ClutterContext *context =
+    clutter_actor_get_context (CLUTTER_ACTOR (self));
+  ClutterStageManager *stage_manager =
+    clutter_context_get_stage_manager (context);
+  MtkRectangle geom = { 0, };
+  ClutterStagePrivate *priv;
+  ClutterStageWindow *impl;
+  ClutterBackend *backend;
+  ClutterSeat *seat;
+  GError *error;
 
-  stage_manager = clutter_stage_manager_get_default ();
+  /* a stage is a top-level object */
+  CLUTTER_SET_PRIVATE_FLAGS (self, CLUTTER_IS_TOPLEVEL);
+
+  priv = clutter_stage_get_instance_private (self);
+
+  CLUTTER_NOTE (BACKEND, "Creating stage from the default backend");
+  backend = clutter_context_get_backend (context);
+
+  error = NULL;
+  impl = _clutter_backend_create_stage (backend, self, &error);
+
+  if (G_LIKELY (impl != NULL))
+    {
+      _clutter_stage_set_window (self, impl);
+      _clutter_stage_window_get_geometry (priv->impl, &geom);
+    }
+  else
+    {
+      if (error != NULL)
+        {
+          g_critical ("Unable to create a new stage implementation: %s",
+                      error->message);
+          g_error_free (error);
+        }
+      else
+        g_critical ("Unable to create a new stage implementation.");
+    }
+
+  priv->event_queue = g_queue_new ();
+  priv->cur_event_actors = g_ptr_array_sized_new (32);
+  priv->cur_event_emission_chain =
+    g_array_sized_new (FALSE, TRUE, sizeof (EventReceiver), 32);
+  g_array_set_clear_func (priv->cur_event_emission_chain,
+                          (GDestroyNotify) free_event_receiver);
+
+  priv->pointer_devices =
+    g_hash_table_new_full (NULL, NULL,
+                           NULL, (GDestroyNotify) free_pointer_device_entry);
+  priv->touch_sequences =
+    g_hash_table_new_full (NULL, NULL,
+                           NULL, (GDestroyNotify) free_pointer_device_entry);
+
+  priv->all_active_gestures = g_ptr_array_sized_new (64);
+
+  clutter_actor_set_background_color (CLUTTER_ACTOR (self),
+                                      &default_stage_color);
+
+  clutter_stage_queue_actor_relayout (self, CLUTTER_ACTOR (self));
+
+  clutter_actor_set_reactive (CLUTTER_ACTOR (self), TRUE);
+  clutter_stage_set_key_focus (self, NULL);
+  clutter_stage_set_viewport (self, geom.width, geom.height);
+
+  seat = clutter_backend_get_default_seat (backend);
+  g_signal_connect_object (seat, "is-unfocus-inhibited-changed",
+                           G_CALLBACK (on_seat_unfocus_inhibited_changed),
+                           self,
+                           G_CONNECT_SWAPPED);
 
   /* this will take care to sinking the floating reference */
   _clutter_stage_manager_add_stage (stage_manager, self);
+  clutter_actor_set_accessible_role (CLUTTER_ACTOR (self), ATK_ROLE_WINDOW);
 
   G_OBJECT_CLASS (clutter_stage_parent_class)->constructed (gobject);
 }
@@ -1124,9 +1259,6 @@ clutter_stage_set_property (GObject      *object,
 
   switch (prop_id)
     {
-    case PROP_TITLE:
-      clutter_stage_set_title (stage, g_value_get_string (value));
-      break;
 
     case PROP_KEY_FOCUS:
       clutter_stage_set_key_focus (stage, g_value_get_object (value));
@@ -1153,10 +1285,6 @@ clutter_stage_get_property (GObject    *gobject,
       g_value_set_boxed (value, &priv->perspective);
       break;
 
-    case PROP_TITLE:
-      g_value_set_string (value, priv->title);
-      break;
-
     case PROP_KEY_FOCUS:
       g_value_set_object (value, priv->key_focused_actor);
       break;
@@ -1176,6 +1304,7 @@ clutter_stage_dispose (GObject *object)
 {
   ClutterStage        *stage = CLUTTER_STAGE (object);
   ClutterStagePrivate *priv = clutter_stage_get_instance_private (stage);
+  ClutterContext *context;
   ClutterStageManager *stage_manager;
 
   clutter_actor_hide (CLUTTER_ACTOR (object));
@@ -1200,7 +1329,8 @@ clutter_stage_dispose (GObject *object)
   priv->pending_relayouts = NULL;
 
   /* this will release the reference on the stage */
-  stage_manager = clutter_stage_manager_get_default ();
+  context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
+  stage_manager = clutter_context_get_stage_manager (context);
   _clutter_stage_manager_remove_stage (stage_manager, stage);
 
   g_hash_table_remove_all (priv->pointer_devices);
@@ -1228,8 +1358,6 @@ clutter_stage_finalize (GObject *object)
 
   g_hash_table_destroy (priv->pointer_devices);
   g_hash_table_destroy (priv->touch_sequences);
-
-  g_free (priv->title);
 
   G_OBJECT_CLASS (clutter_stage_parent_class)->finalize (object);
 }
@@ -1300,6 +1428,7 @@ clutter_stage_class_init (ClutterStageClass *klass)
   gobject_class->finalize = clutter_stage_finalize;
 
   actor_class->allocate = clutter_stage_allocate;
+  actor_class->get_accessible_type = clutter_stage_accessible_get_type;
   actor_class->get_preferred_width = clutter_stage_get_preferred_width;
   actor_class->get_preferred_height = clutter_stage_get_preferred_height;
   actor_class->get_paint_volume = clutter_stage_get_paint_volume;
@@ -1326,18 +1455,6 @@ clutter_stage_class_init (ClutterStageClass *klass)
                           G_PARAM_READABLE |
                           G_PARAM_STATIC_STRINGS |
                           G_PARAM_EXPLICIT_NOTIFY);
-
-  /**
-   * ClutterStage:title:
-   *
-   * The stage's title - usually displayed in stage windows title decorations.
-   */
-  obj_props[PROP_TITLE] =
-      g_param_spec_string ("title", NULL, NULL,
-                           NULL,
-                           G_PARAM_READWRITE |
-                           G_PARAM_STATIC_STRINGS |
-                           G_PARAM_EXPLICIT_NOTIFY);
 
   /**
    * ClutterStage:key-focus:
@@ -1367,35 +1484,6 @@ clutter_stage_class_init (ClutterStageClass *klass)
                             G_PARAM_EXPLICIT_NOTIFY);
 
   g_object_class_install_properties (gobject_class, PROP_LAST, obj_props);
-
-  /**
-   * ClutterStage::activate:
-   * @stage: the stage which was activated
-   *
-   * The signal is emitted when the stage receives key focus
-   * from the underlying window system.
-   */
-  stage_signals[ACTIVATE] =
-    g_signal_new (I_("activate"),
-		  G_TYPE_FROM_CLASS (gobject_class),
-		  G_SIGNAL_RUN_LAST,
-		  G_STRUCT_OFFSET (ClutterStageClass, activate),
-		  NULL, NULL, NULL,
-		  G_TYPE_NONE, 0);
-  /**
-   * ClutterStage::deactivate:
-   * @stage: the stage which was deactivated
-   *
-   * The signal is emitted when the stage loses key focus
-   * from the underlying window system.
-   */
-  stage_signals[DEACTIVATE] =
-    g_signal_new (I_("deactivate"),
-		  G_TYPE_FROM_CLASS (gobject_class),
-		  G_SIGNAL_RUN_LAST,
-		  G_STRUCT_OFFSET (ClutterStageClass, deactivate),
-		  NULL, NULL, NULL,
-		  G_TYPE_NONE, 0);
 
   /**
    * ClutterStage::before-update:
@@ -1571,101 +1659,11 @@ clutter_stage_class_init (ClutterStageClass *klass)
                   0,
                   NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
-
-  klass->activate = clutter_stage_real_activate;
-  klass->deactivate = clutter_stage_real_deactivate;
-}
-
-static void
-on_seat_unfocus_inhibited_changed (ClutterStage *stage,
-                                   ClutterSeat  *seat)
-{
-  ClutterInputDevice *device;
-  graphene_point_t point = GRAPHENE_POINT_INIT_ZERO;
-
-  device = clutter_seat_get_pointer (seat);
-
-  if (!clutter_stage_get_device_coords (stage, device, NULL, &point))
-    return;
-
-  clutter_stage_pick_and_update_device (stage,
-                                        device,
-                                        NULL, NULL,
-                                        CLUTTER_DEVICE_UPDATE_IGNORE_CACHE |
-                                        CLUTTER_DEVICE_UPDATE_EMIT_CROSSING,
-                                        point,
-                                        CLUTTER_CURRENT_TIME);
 }
 
 static void
 clutter_stage_init (ClutterStage *self)
 {
-  MtkRectangle geom = { 0, };
-  ClutterStagePrivate *priv;
-  ClutterStageWindow *impl;
-  ClutterBackend *backend;
-  ClutterSeat *seat;
-  GError *error;
-
-  /* a stage is a top-level object */
-  CLUTTER_SET_PRIVATE_FLAGS (self, CLUTTER_IS_TOPLEVEL);
-
-  priv = clutter_stage_get_instance_private (self);
-
-  CLUTTER_NOTE (BACKEND, "Creating stage from the default backend");
-  backend = clutter_get_default_backend ();
-
-  error = NULL;
-  impl = _clutter_backend_create_stage (backend, self, &error);
-
-  if (G_LIKELY (impl != NULL))
-    {
-      _clutter_stage_set_window (self, impl);
-      _clutter_stage_window_get_geometry (priv->impl, &geom);
-    }
-  else
-    {
-      if (error != NULL)
-        {
-          g_critical ("Unable to create a new stage implementation: %s",
-                      error->message);
-          g_error_free (error);
-        }
-      else
-        g_critical ("Unable to create a new stage implementation.");
-    }
-
-  priv->event_queue = g_queue_new ();
-  priv->cur_event_actors = g_ptr_array_sized_new (32);
-  priv->cur_event_emission_chain =
-    g_array_sized_new (FALSE, TRUE, sizeof (EventReceiver), 32);
-  g_array_set_clear_func (priv->cur_event_emission_chain,
-                          (GDestroyNotify) free_event_receiver);
-
-  priv->pointer_devices =
-    g_hash_table_new_full (NULL, NULL,
-                           NULL, (GDestroyNotify) free_pointer_device_entry);
-  priv->touch_sequences =
-    g_hash_table_new_full (NULL, NULL,
-                           NULL, (GDestroyNotify) free_pointer_device_entry);
-
-  priv->all_active_gestures = g_ptr_array_sized_new (64);
-
-  clutter_actor_set_background_color (CLUTTER_ACTOR (self),
-                                      &default_stage_color);
-
-  clutter_stage_queue_actor_relayout (self, CLUTTER_ACTOR (self));
-
-  clutter_actor_set_reactive (CLUTTER_ACTOR (self), TRUE);
-  clutter_stage_set_title (self, g_get_prgname ());
-  clutter_stage_set_key_focus (self, NULL);
-  clutter_stage_set_viewport (self, geom.width, geom.height);
-
-  seat = clutter_backend_get_default_seat (backend);
-  g_signal_connect_object (seat, "is-unfocus-inhibited-changed",
-                           G_CALLBACK (on_seat_unfocus_inhibited_changed),
-                           self,
-                           G_CONNECT_SWAPPED);
 }
 
 static void
@@ -2007,55 +2005,6 @@ clutter_stage_get_actor_at_pos (ClutterStage    *stage,
 }
 
 /**
- * clutter_stage_set_title:
- * @stage: A #ClutterStage
- * @title: A utf8 string for the stage windows title.
- *
- * Sets the stage title.
- **/
-void
-clutter_stage_set_title (ClutterStage       *stage,
-			 const gchar        *title)
-{
-  ClutterStagePrivate *priv;
-  ClutterStageWindow *impl;
-
-  g_return_if_fail (CLUTTER_IS_STAGE (stage));
-
-  priv = clutter_stage_get_instance_private (stage);
-
-  g_free (priv->title);
-  priv->title = g_strdup (title);
-
-  impl = CLUTTER_STAGE_WINDOW (priv->impl);
-  if (CLUTTER_STAGE_WINDOW_GET_IFACE(impl)->set_title != NULL)
-    CLUTTER_STAGE_WINDOW_GET_IFACE (impl)->set_title (impl, priv->title);
-
-  g_object_notify_by_pspec (G_OBJECT (stage), obj_props[PROP_TITLE]);
-}
-
-/**
- * clutter_stage_get_title:
- * @stage: A #ClutterStage
- *
- * Gets the stage title.
- *
- * Return value: pointer to the title string for the stage. The
- * returned string is owned by the actor and should not
- * be modified or freed.
- **/
-const gchar *
-clutter_stage_get_title (ClutterStage       *stage)
-{
-  ClutterStagePrivate *priv;
-
-  g_return_val_if_fail (CLUTTER_IS_STAGE (stage), NULL);
-
-  priv = clutter_stage_get_instance_private (stage);
-  return priv->title;
-}
-
-/**
  * clutter_stage_set_key_focus:
  * @stage: the #ClutterStage
  * @actor: (allow-none): the actor to set key focus to, or %NULL
@@ -2066,9 +2015,10 @@ clutter_stage_get_title (ClutterStage       *stage)
  */
 void
 clutter_stage_set_key_focus (ClutterStage *stage,
-			     ClutterActor *actor)
+                             ClutterActor *actor)
 {
   ClutterStagePrivate *priv;
+  AtkObject *old_accessible, *new_accessible = NULL;
 
   g_return_if_fail (CLUTTER_IS_STAGE (stage));
   g_return_if_fail (actor == NULL || CLUTTER_IS_ACTOR (actor));
@@ -2090,6 +2040,7 @@ clutter_stage_set_key_focus (ClutterStage *stage,
       ClutterActor *old_focused_actor;
 
       old_focused_actor = priv->key_focused_actor;
+      old_accessible = clutter_actor_get_accessible (old_focused_actor);
 
       /* set key_focused_actor to NULL before emitting the signal or someone
        * might hide the previously focused actor in the signal handler
@@ -2099,8 +2050,10 @@ clutter_stage_set_key_focus (ClutterStage *stage,
       _clutter_actor_set_has_key_focus (old_focused_actor, FALSE);
     }
   else
-    _clutter_actor_set_has_key_focus (CLUTTER_ACTOR (stage), FALSE);
-
+    {
+      old_accessible = clutter_actor_get_accessible (CLUTTER_ACTOR (stage));
+      _clutter_actor_set_has_key_focus (CLUTTER_ACTOR (stage), FALSE);
+    }
   /* Note, if someone changes key focus in focus-out signal handler we'd be
    * overriding the latter call below moving the focus where it was originally
    * intended. The order of events would be:
@@ -2119,10 +2072,26 @@ clutter_stage_set_key_focus (ClutterStage *stage,
       (actor && clutter_actor_contains (priv->topmost_grab->actor, actor)))
     {
       if (actor != NULL)
-        _clutter_actor_set_has_key_focus (actor, TRUE);
+        {
+          new_accessible = clutter_actor_get_accessible (actor);
+          _clutter_actor_set_has_key_focus (actor, TRUE);
+        }
       else
-        _clutter_actor_set_has_key_focus (CLUTTER_ACTOR (stage), TRUE);
+        {
+          new_accessible = clutter_actor_get_accessible (CLUTTER_ACTOR (stage));
+          _clutter_actor_set_has_key_focus (CLUTTER_ACTOR (stage), TRUE);
+        }
     }
+
+  if (old_accessible)
+    atk_object_notify_state_change (old_accessible,
+                                    ATK_STATE_FOCUSED,
+                                    FALSE);
+  if (new_accessible)
+    atk_object_notify_state_change (new_accessible,
+                                    ATK_STATE_FOCUSED,
+                                    TRUE);
+
 
   g_object_notify_by_pspec (G_OBJECT (stage), obj_props[PROP_KEY_FOCUS]);
 }
@@ -2733,7 +2702,9 @@ clutter_stage_paint_to_buffer (ClutterStage        *stage,
                                ClutterPaintFlag     paint_flags,
                                GError             **error)
 {
-  ClutterBackend *clutter_backend = clutter_get_default_backend ();
+  ClutterContext *context =
+    clutter_actor_get_context (CLUTTER_ACTOR (stage));
+  ClutterBackend *clutter_backend = clutter_context_get_backend (context);
   CoglContext *cogl_context =
     clutter_backend_get_cogl_context (clutter_backend);
   int texture_width, texture_height;
@@ -2802,7 +2773,9 @@ clutter_stage_paint_to_content (ClutterStage        *stage,
                                 ClutterPaintFlag     paint_flags,
                                 GError             **error)
 {
-  ClutterBackend *clutter_backend = clutter_get_default_backend ();
+  ClutterContext *context =
+    clutter_actor_get_context (CLUTTER_ACTOR (stage));
+  ClutterBackend *clutter_backend = clutter_context_get_backend (context);
   CoglContext *cogl_context =
     clutter_backend_get_cogl_context (clutter_backend);
   int texture_width, texture_height;
@@ -2847,6 +2820,7 @@ clutter_stage_capture_view_into (ClutterStage     *stage,
 {
   CoglFramebuffer *framebuffer;
   ClutterBackend *backend;
+  ClutterContext *clutter_context;
   CoglContext *context;
   CoglBitmap *bitmap;
   MtkRectangle view_layout;
@@ -2867,7 +2841,8 @@ clutter_stage_capture_view_into (ClutterStage     *stage,
   texture_width = roundf (rect->width * view_scale);
   texture_height = roundf (rect->height * view_scale);
 
-  backend = clutter_get_default_backend ();
+  clutter_context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
+  backend = clutter_context_get_backend (clutter_context);
   context = clutter_backend_get_cogl_context (backend);
   bitmap = cogl_bitmap_new_for_data (context,
                                      (int) texture_width,
@@ -3888,7 +3863,7 @@ clutter_grab_activate (ClutterGrab *grab)
       ClutterSeat *seat;
 
       /* First grab in the chain, trigger a backend grab too */
-      context = _clutter_context_get_default ();
+      context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
       seat = clutter_backend_get_default_seat (context->backend);
       priv->grab_state =
         clutter_seat_grab (seat, clutter_get_current_event_time ());
@@ -4024,7 +3999,7 @@ clutter_stage_unlink_grab (ClutterStage *stage,
       ClutterSeat *seat;
 
       /* This was the last remaining grab, trigger a backend ungrab */
-      context = _clutter_context_get_default ();
+      context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
       seat = clutter_backend_get_default_seat (context->backend);
       clutter_seat_ungrab (seat, clutter_get_current_event_time ());
       priv->grab_state = CLUTTER_GRAB_STATE_NONE;

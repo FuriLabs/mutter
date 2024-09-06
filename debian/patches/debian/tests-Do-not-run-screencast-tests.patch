@@ -7,20 +7,37 @@ dbus daemon) so, we can't easily get one up and running while building.
 
 So let's disable this for now
 ---
- src/tests/native-headless.c | 3 ++-
- 1 file changed, 2 insertions(+), 1 deletion(-)
+ src/tests/meson.build | 20 ++++++++++----------
+ 1 file changed, 10 insertions(+), 10 deletions(-)
 
-diff --git a/src/tests/native-headless.c b/src/tests/native-headless.c
-index 39393fc..b54469b 100644
---- a/src/tests/native-headless.c
-+++ b/src/tests/native-headless.c
-@@ -27,7 +27,8 @@ static void
- init_tests (MetaContext *context)
- {
-   init_virtual_monitor_tests (context);
--  init_screen_cast_tests ();
-+  // init_screen_cast_tests ();
-+  (void) init_screen_cast_tests;
-   init_bezier_tests ();
- }
- 
+diff --git a/src/tests/meson.build b/src/tests/meson.build
+index 4f39724..0b1c0f0 100644
+--- a/src/tests/meson.build
++++ b/src/tests/meson.build
+@@ -386,16 +386,16 @@ test_cases += [
+       'native-virtual-monitor.c',
+     ],
+   },
+-  {
+-    'name': 'native-screen-cast',
+-    'suite': 'backends/native',
+-    'sources': [
+-      'native-screen-cast.c',
+-    ],
+-    'depends': [
+-      screen_cast_client,
+-    ],
+-  },
++#  {
++#    'name': 'native-screen-cast',
++#    'suite': 'backends/native',
++#    'sources': [
++#      'native-screen-cast.c',
++#    ],
++#    'depends': [
++#      screen_cast_client,
++#    ],
++#  },
+   {
+     'name': 'bezier',
+     'suite': 'backends/native',

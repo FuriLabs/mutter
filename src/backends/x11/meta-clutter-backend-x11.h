@@ -56,7 +56,5 @@ G_DECLARE_FINAL_TYPE (MetaClutterBackendX11, meta_clutter_backend_x11,
                       META, CLUTTER_BACKEND_X11,
                       ClutterBackend)
 
-MetaClutterBackendX11 * meta_clutter_backend_x11_new (MetaBackend *backend);
-
-void meta_clutter_x11_set_use_stereo_stage (gboolean use_stereo);
-gboolean meta_clutter_x11_get_use_stereo_stage (void);
+MetaClutterBackendX11 * meta_clutter_backend_x11_new (MetaBackend    *backend,
+                                                      ClutterContext *context);

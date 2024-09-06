@@ -20,17 +20,12 @@
 #pragma once
 
 #include "clutter-backend.h"
-#include "clutter-stage-manager.h"
 #include "clutter-settings.h"
 #include "cogl-pango/cogl-pango.h"
 
-typedef enum _ClutterContextFlags
-{
-  CLUTTER_CONTEXT_FLAG_NONE = 0,
-  CLUTTER_CONTEXT_FLAG_NO_A11Y = 1 << 0,
-} ClutterContextFlags;
 
-typedef ClutterBackend * (* ClutterBackendConstructor) (gpointer user_data);
+typedef ClutterBackend * (* ClutterBackendConstructor) (ClutterContext *context,
+                                                        gpointer        user_data);
 
 #define CLUTTER_TYPE_CONTEXT (clutter_context_get_type ())
 CLUTTER_EXPORT
@@ -40,8 +35,7 @@ G_DECLARE_FINAL_TYPE (ClutterContext, clutter_context,
 /**
  * clutter_context_new: (skip)
  */
-ClutterContext * clutter_context_new (ClutterContextFlags         flags,
-                                      ClutterBackendConstructor   backend_constructor,
+ClutterContext * clutter_context_new (ClutterBackendConstructor   backend_constructor,
                                       gpointer                    user_data,
                                       GError                    **error);
 
@@ -76,3 +70,11 @@ ClutterPipelineCache * clutter_context_get_pipeline_cache (ClutterContext *clutt
  */
 CLUTTER_EXPORT
 ClutterColorManager * clutter_context_get_color_manager (ClutterContext *context);
+
+/**
+ * clutter_context_get_settings:
+ *
+ * Returns: (transfer none): The %ClutterSettings
+ */
+CLUTTER_EXPORT
+ClutterSettings * clutter_context_get_settings (ClutterContext *context);

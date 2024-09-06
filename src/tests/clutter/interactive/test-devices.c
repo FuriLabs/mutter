@@ -171,7 +171,6 @@ test_devices_main (int argc, char **argv)
 
   stage = clutter_test_get_stage ();
   clutter_actor_set_background_color (stage, &COGL_COLOR_INIT (114, 159, 207, 255));
-  clutter_stage_set_title (CLUTTER_STAGE (stage), "Devices");
   g_signal_connect (stage,
                     "destroy", G_CALLBACK (clutter_test_quit),
                     NULL);
@@ -185,7 +184,7 @@ test_devices_main (int argc, char **argv)
 
   clutter_actor_show (stage);
 
-  seat = clutter_backend_get_default_seat (clutter_get_default_backend ());
+  seat = clutter_test_get_default_seat ();
   g_signal_connect (seat,
                     "device-added", G_CALLBACK (seat_device_added_cb),
                     app);

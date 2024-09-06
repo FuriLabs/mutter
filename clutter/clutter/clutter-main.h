@@ -107,9 +107,6 @@ void                    clutter_stage_handle_event              (ClutterStage *s
 CLUTTER_EXPORT
 gboolean                clutter_get_accessibility_enabled       (void);
 
-CLUTTER_EXPORT
-void                    clutter_disable_accessibility           (void);
-
 /* Threading functions */
 CLUTTER_EXPORT
 guint                   clutter_threads_add_idle                (GSourceFunc    func,
@@ -140,9 +137,6 @@ guint                   clutter_threads_add_repaint_func_full   (ClutterRepaintF
                                                                  GDestroyNotify notify);
 CLUTTER_EXPORT
 void                    clutter_threads_remove_repaint_func     (guint          handle_id);
-
-CLUTTER_EXPORT
-PangoFontMap *          clutter_get_font_map                    (void);
 
 CLUTTER_EXPORT
 ClutterTextDirection    clutter_get_default_text_direction      (void);
