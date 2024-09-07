@@ -1143,7 +1143,7 @@ if have_installed_tests
       output: stacking_test + '.test',
       configuration: stacking_installed_tests_cdata,
       install: true,
-      install_dir: mutter_installed_tests_datadir,
+      install_dir: mutter_installed_tests_datadir / 'stacking',
     )
   endforeach
 
