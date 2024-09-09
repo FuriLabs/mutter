@@ -1,0 +1,27 @@
+From: Simon McVittie <smcv@debian.org>
+Date: Sat, 7 Sep 2024 10:12:18 +0100
+Subject: tests: Install stacking tests into a subdirectory
+
+These are not reliable enough on ci.debian.net to be used as a QA gate.
+
+Bug-Debian: https://bugs.debian.org/1072512
+Bug-Debian: https://bugs.debian.org/1077800
+Bug-Debian: https://bugs.debian.org/1078359
+Forwarded: not-needed, workaround
+---
+ src/tests/meson.build | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/tests/meson.build b/src/tests/meson.build
+index 577c333..d92b6fc 100644
+--- a/src/tests/meson.build
++++ b/src/tests/meson.build
+@@ -945,7 +945,7 @@ if have_installed_tests
+       output: stacking_test + '.test',
+       configuration: stacking_installed_tests_cdata,
+       install: true,
+-      install_dir: mutter_installed_tests_datadir,
++      install_dir: mutter_installed_tests_datadir / 'stacking',
+     )
+   endforeach
+ 

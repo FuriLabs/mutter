@@ -1,0 +1,43 @@
+From: Simon McVittie <smcv@debian.org>
+Date: Sat, 7 Sep 2024 17:16:48 +0100
+Subject: color-management-tests: Use a temporary XDG_DATA_HOME
+
+Previously this test tried to write to /usr when run as an
+installed-test, which happens to work on Gitlab-CI because we're running
+as root inside a container, but will not work when running in a more
+realistic scenario as an unprivileged user (which is how Debian's
+autopkgtest framework runs this test).
+
+This also avoids leaving non-package-manager-managed detritus in /usr.
+
+Signed-off-by: Simon McVittie <smcv@debian.org>
+---
+ src/tests/color-management-tests.c | 10 +---------
+ 1 file changed, 1 insertion(+), 9 deletions(-)
+
+diff --git a/src/tests/color-management-tests.c b/src/tests/color-management-tests.c
+index 1039ec8..b82b72e 100644
+--- a/src/tests/color-management-tests.c
++++ b/src/tests/color-management-tests.c
+@@ -1428,20 +1428,12 @@ int
+ main (int argc, char **argv)
+ {
+   g_autoptr (MetaContext) context = NULL;
+-  char *path;
+ 
+   context = meta_create_test_context (META_CONTEXT_TEST_TYPE_TEST,
+-                                      META_CONTEXT_TEST_FLAG_NONE);
++                                      META_CONTEXT_TEST_FLAG_TEMP_XDG_DATA_HOME);
+ 
+   g_assert (meta_context_configure (context, &argc, &argv, NULL));
+ 
+-  path = g_test_build_filename (G_TEST_BUILT,
+-                                "tests",
+-                                "share",
+-                                NULL);
+-  g_setenv ("XDG_DATA_HOME", path, TRUE);
+-  g_free (path);
+-
+   test_context = context;
+ 
+   init_tests ();

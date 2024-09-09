@@ -10,16 +10,28 @@ fi
 
 cd "$AUTOPKGTEST_TMP"
 
-if [ -z "$(ginsttest-runner -l "$namespace")" ]; then
+tests="$(ginsttest-runner -l "$namespace" \
+    | grep -v /stacking/ \
+    | grep -v '/input-capture\.test' \
+    | grep -v '/thread\.test' \
+    | cut -d' ' -f1)"
+
+if [ -z "$tests" ]; then
     echo "Error: no installed-tests found matching $namespace" >&2
     exit 1
 fi
 
+# copied from .gitlab-ci.yml
+# needed by xwayland
+mkdir -p -m 1777 /tmp/.X11-unix
+
 e=0
+# Intentionally word-splitting $tests:
+# shellcheck disable=SC2086
 ginsttest-runner \
     --log-directory "$AUTOPKGTEST_ARTIFACTS" \
     --tap \
-    "$namespace" || e="$?"
+    $tests || e="$?"
 
 if [ "$e" -ne 0 ]; then
     arch="$(dpkg --print-architecture)"
@@ -33,3 +45,5 @@ if [ "$e" -ne 0 ]; then
 
     exit "$e"
 fi
+
+# vim:set sw=4 sts=4 et:

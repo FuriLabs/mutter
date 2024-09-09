@@ -7,13 +7,16 @@ on ARM, so having them fail is not a regression. They usually succeed
 after a few retries, but that's time-consuming and unsuitable to be a
 QA gate.
 
+The input-capture test frequently hangs until it times out, so put that
+one in a separate suite so that we don't need to run it at all.
+
 Signed-off-by: Simon McVittie <smcv@debian.org>
 Forwarded: no
 ---
  src/tests/clutter/conform/gesture.c | 24 ++++++++++++++++++++++++
  src/tests/clutter/conform/grab.c    |  6 ++++++
- src/tests/meson.build               | 31 ++++++++++++++++++++++++++++---
- 3 files changed, 58 insertions(+), 3 deletions(-)
+ src/tests/meson.build               | 15 +++++++++++++--
+ 3 files changed, 43 insertions(+), 2 deletions(-)
 
 diff --git a/src/tests/clutter/conform/gesture.c b/src/tests/clutter/conform/gesture.c
 index f3901a2..c0affef 100644
@@ -89,18 +92,18 @@ index 93a8cf4..9018a53 100644
    pointer = clutter_seat_create_virtual_device (seat, CLUTTER_POINTER_DEVICE);
  
 diff --git a/src/tests/meson.build b/src/tests/meson.build
-index 0b1c0f0..7e3ddb8 100644
+index 0b1c0f0..577c333 100644
 --- a/src/tests/meson.build
 +++ b/src/tests/meson.build
 @@ -423,6 +423,7 @@ test_cases += [
      'name': 'input-capture',
      'suite': 'backends/native',
      'sources': [ 'input-capture-tests.c' ],
-+    'flaky': true,
++    'broken': true,
    },
    {
      'name': 'thread',
-@@ -714,8 +715,14 @@ foreach test_case: test_cases
+@@ -714,8 +715,18 @@ foreach test_case: test_cases
  
    test_depends = [ default_plugin ] + test_case.get('depends', [])
  
@@ -110,46 +113,22 @@ index 0b1c0f0..7e3ddb8 100644
 +    extra_suites += 'flaky'
 +  endif
 +
++  if test_case.get('broken', false)
++    extra_suites += 'broken'
++  endif
++
    test(test_case['name'], test_executable,
 -    suite: ['core', 'mutter/' + test_case['suite']],
 +    suite: ['core', 'mutter/' + test_case['suite']] + extra_suites,
      env: test_env,
      depends: test_depends,
      is_parallel: false,
-@@ -776,8 +783,26 @@ stacking_tests = [
- ]
+@@ -777,7 +788,7 @@ stacking_tests = [
  
  foreach stacking_test: stacking_tests
-+  extra_suites = []
-+  flaky = false
-+
-+  if {
-+    'closed-transient-only-take-focus-parents': true,
-+    # https://gitlab.gnome.org/GNOME/mutter/-/issues/3050
-+    'fullscreen-maximize': true,
-+    'minimized': true,
-+    # https://gitlab.gnome.org/GNOME/mutter/-/issues/2509, https://bugs.debian.org/1050022
-+    'restore-size': true,
-+    # https://gitlab.gnome.org/GNOME/mutter/-/issues/3051
-+    'unfullscreen-strut-change': true,
-+    'unmaximize-new-size': true,
-+  }.get(stacking_test, false)
-+    extra_suites += 'flaky'
-+    flaky = true
-+  endif
-+
    test(stacking_test, test_runner,
 -    suite: ['core', 'mutter/stacking'],
-+    suite: ['core', 'mutter/stacking'] + extra_suites,
++    suite: ['core', 'mutter/stacking', 'flaky'],
      env: test_env,
      args: [
        files('stacking' / stacking_test + '.metatest'),
-@@ -919,7 +944,7 @@ test('get-state-tool-gdbus', mutter,
- 
- # Installed tests
- 
--if have_installed_tests
-+if have_installed_tests and not flaky
-   install_subdir('stacking', install_dir: tests_datadir)
- 
-   foreach stacking_test: stacking_tests

@@ -1,0 +1,104 @@
+From: Simon McVittie <smcv@debian.org>
+Date: Sat, 7 Sep 2024 15:12:10 +0100
+Subject: tests: Add a utility function to delete a directory recursively
+
+Originally contributed to GLib by Will Thompson, presumably on behalf
+of Endless OS Foundation LLC, under LGPL-2.1-or-later (which is
+GPL-compatible).
+
+Co-authored-by: Will Thompson <wjt@endlessos.org>
+Signed-off-by: Simon McVittie <smcv@debian.org>
+---
+ src/tests/meta-test-utils-private.h |  2 ++
+ src/tests/meta-test-utils.c         | 57 +++++++++++++++++++++++++++++++++++++
+ 2 files changed, 59 insertions(+)
+
+diff --git a/src/tests/meta-test-utils-private.h b/src/tests/meta-test-utils-private.h
+index 6720f6f..0e7fc01 100644
+--- a/src/tests/meta-test-utils-private.h
++++ b/src/tests/meta-test-utils-private.h
+@@ -21,3 +21,5 @@
+ 
+ void meta_ensure_test_client_path (int    argc,
+                                    char **argv);
++
++void meta_rm_rf (const char *path);
+diff --git a/src/tests/meta-test-utils.c b/src/tests/meta-test-utils.c
+index 3de6a04..8afd13b 100644
+--- a/src/tests/meta-test-utils.c
++++ b/src/tests/meta-test-utils.c
+@@ -2,6 +2,7 @@
+ 
+ /*
+  * Copyright (C) 2014-2017 Red Hat, Inc.
++ * Copyright (C) 2024 Endless OS Foundation LLC
+  *
+  * This program is free software; you can redistribute it and/or
+  * modify it under the terms of the GNU General Public License as
+@@ -21,6 +22,8 @@
+ 
+ #include "tests/meta-test-utils-private.h"
+ 
++#include <ftw.h>
++#include <glib/gstdio.h>
+ #include <gio/gio.h>
+ #include <string.h>
+ #include <X11/Xlib-xcb.h>
+@@ -916,3 +919,57 @@ meta_flush_input (MetaContext *context)
+   g_mutex_unlock (&mutex);
+ #endif
+ }
++
++static int
++rm_rf_nftw_visitor (const char *fpath,
++                    const struct stat *sb,
++                    int typeflag,
++                    struct FTW *ftwbuf)
++{
++  switch (typeflag)
++    {
++    case FTW_DP:
++    case FTW_D:
++    case FTW_DNR:
++      if (g_rmdir (fpath) != 0)
++        {
++          int errsv = errno;
++          g_printerr ("Unable to clean up temporary directory %s: %s\n",
++                      fpath,
++                      g_strerror (errsv));
++        }
++      break;
++
++    default:
++      if (g_remove (fpath) != 0)
++        {
++          int errsv = errno;
++          g_printerr ("Unable to clean up temporary file %s: %s\n",
++                      fpath,
++                      g_strerror (errsv));
++        }
++      break;
++    }
++
++  return 0;
++}
++
++void
++meta_rm_rf (const char *path)
++{
++  /* nopenfd specifies the maximum number of directories that [n]ftw() will
++   * hold open simultaneously. Rather than attempt to determine how many file
++   * descriptors are available, we assume that 5 are available when tearing
++   * down a test case; if that assumption is invalid, the only harm is leaving
++   * a temporary directory on disk.
++   */
++  const int nopenfd = 5;
++  int ret = nftw (path, rm_rf_nftw_visitor, nopenfd, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
++  if (ret != 0)
++    {
++      int errsv = errno;
++      g_printerr ("Unable to clean up temporary directory %s: %s\n",
++                  path,
++                  g_strerror (errsv));
++    }
++}

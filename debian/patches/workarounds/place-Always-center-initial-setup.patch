@@ -10,7 +10,7 @@ Forwarded: not-needed
  1 file changed, 4 insertions(+)
 
 diff --git a/src/core/place.c b/src/core/place.c
-index 01b0bd3..72e4cda 100644
+index d420479..a877558 100644
 --- a/src/core/place.c
 +++ b/src/core/place.c
 @@ -382,6 +382,10 @@ window_place_centered (MetaWindow *window)

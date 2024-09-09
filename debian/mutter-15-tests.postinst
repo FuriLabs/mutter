@@ -1,0 +1,14 @@
+#!/bin/sh
+
+set -e
+action="$1"
+
+case "$action" in
+    (configure)
+        glib-compile-schemas /usr/share/mutter-15/tests
+        ;;
+esac
+
+#DEBHELPER#
+
+# vim:set sts=4 sw=4 et:

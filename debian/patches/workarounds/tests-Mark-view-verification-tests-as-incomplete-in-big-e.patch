@@ -15,10 +15,10 @@ Applied-upstream: no, this is a workaround
  2 files changed, 10 insertions(+)
 
 diff --git a/src/tests/meta-ref-test.c b/src/tests/meta-ref-test.c
-index 905096e..15d4759 100644
+index 2dffc63..1da51cf 100644
 --- a/src/tests/meta-ref-test.c
 +++ b/src/tests/meta-ref-test.c
-@@ -523,6 +523,11 @@ meta_ref_test_verify_view (ClutterStageView *view,
+@@ -524,6 +524,11 @@ meta_ref_test_verify_view (ClutterStageView *view,
        g_assert_cmpint (ref_status, ==, CAIRO_STATUS_SUCCESS);
        ensure_expected_format (&ref_image);
  

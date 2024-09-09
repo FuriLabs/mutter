@@ -50,7 +50,7 @@ TEST_COMMAND_BASE=env \
 	dbus-run-session -- xvfb-run -s '+iglx -noreset' -a \
 	dh_auto_test -- -C $(BUILDDIR) --no-rebuild --verbose --timeout-multiplier 6 \
 	           --no-stdsplit --print-errorlogs
-TEST_COMMAND=$(TEST_COMMAND_BASE) --no-suite flaky
+TEST_COMMAND=$(TEST_COMMAND_BASE) --no-suite flaky --no-suite broken
 TEST_COMMAND_FLAKY=env DEB_ALLOW_FLAKY_TESTS=1 $(TEST_COMMAND_BASE) --suite flaky
 
 # Ignore test failures on official architectures

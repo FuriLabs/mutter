@@ -3,7 +3,12 @@ debian/tests-Do-not-run-screencast-tests.patch
 debian/Support-Dynamic-triple-double-buffering.patch
 workarounds/tests-skip-monitor-width-size-check-as-it-may-lead-to-une.patch
 workarounds/tests-Skip-thread-priority-test.patch
-workarounds/Mark-several-additional-tests-as-flaky.patch
 workarounds/place-Always-center-initial-setup.patch
+workarounds/Mark-several-additional-tests-as-flaky.patch
+workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
+tests-Add-a-utility-function-to-delete-a-directory-recurs.patch
+MetaContextTest-Optionally-create-and-destroy-a-temporary.patch
+color-management-tests-Use-a-temporary-XDG_DATA_HOME.patch
+color-management-profile-conflict-test-Use-a-temporary-XD.patch
 ubuntu/x11-Add-support-for-fractional-scaling-using-Randr.patch
 ubuntu/window-Add-ability-to-override-the-edge-constraints.patch

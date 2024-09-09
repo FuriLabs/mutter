@@ -15,3 +15,9 @@ Classes: desktop
 Depends: gnome-desktop-testing,
          mutter-15-tests
 Restrictions: allow-stderr skippable
+
+Tests: installed-tests-flaky
+Classes: desktop
+Depends: gnome-desktop-testing,
+         mutter-15-tests
+Restrictions: allow-stderr flaky
