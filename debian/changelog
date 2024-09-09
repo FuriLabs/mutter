@@ -1,4 +1,4 @@
-mutter (47~rc-1ubuntu1) UNRELEASED; urgency=medium
+mutter (47~rc-4ubuntu1) UNRELEASED; urgency=medium
 
   * Merge with Debian. Remaining changes:
     - Add x11-Add-support-for-fractional-scaling-using-Randr.patch
@@ -9,7 +9,51 @@ mutter (47~rc-1ubuntu1) UNRELEASED; urgency=medium
   * Remove the cogl color patches: applied in new release
   * Remove the mesa workaround patch: shouldn't be needed any more
 
- -- Jeremy Bícha <jbicha@ubuntu.com>  Fri, 06 Sep 2024 09:04:45 -0400
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Mon, 09 Sep 2024 09:04:45 -0400
+
+mutter (47~rc-4) experimental; urgency=medium
+
+  * Team upload
+  * d/mutter-15-tests.postrm: Clean up gschemas.compiled created by postinst
+
+ -- Simon McVittie <smcv@debian.org>  Sat, 07 Sep 2024 21:41:22 +0100
+
+mutter (47~rc-3) experimental; urgency=medium
+
+  * Team upload
+  * d/p/workarounds, d/tests: Treat all stacking tests as flaky.
+    Unfortunately these don't seem to be stable enough to be used as a
+    QA gate, and there are enough of them that at least one will often
+    fail in any given buildd build or autopkgtest run
+    (Mitigates: #1077800) (Closes: #1072512, #1078359)
+  * d/tests: Also treat thread.test as flaky.
+    This doesn't seem to be reliable in autopkgtest-virt-qemu or -lxc,
+    although I can't reproduce the failure when running it separately.
+  * d/rules, d/p/workarounds: Don't run the input-capture test at all.
+    In my sbuild environment and on some buildds, it often hangs until it
+    times out after 10 minutes, which is a waste of time. We were ignoring
+    its result anyway.
+  * d/mutter-15-tests.postinst: Compile required schemas for installed-tests
+    (Closes: #1081016)
+  * d/p/tests-Add-a-utility-function-to-delete-a-directory-recurs.patch,
+    d/p/MetaContextTest-Optionally-create-and-destroy-a-temporary.patch,
+    d/p/color-management-tests-Use-a-temporary-XDG_DATA_HOME.patch,
+    d/p/color-management-profile-conflict-test-Use-a-temporary-XD.patch:
+    Add patches to fix autopkgtests when not running as root
+  * Correct bug number in previous changelog entry
+  * Standards-Version: 4.7.0 (no changes required)
+  * d/source/lintian-overrides: Update for use of ${env:deb_udevdir}
+
+ -- Simon McVittie <smcv@debian.org>  Sat, 07 Sep 2024 20:18:48 +0100
+
+mutter (47~rc-2) experimental; urgency=medium
+
+  * debian/*symbols: Update architectures for new cogl_trace symbols
+  * Have mutter-15-tests depend on pipewire & libglib2.0-bin
+    (Closes: #1081016)
+  * autopkgtest: create the required /tmp/.X11-unix/
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Fri, 06 Sep 2024 19:30:25 -0400
 
 mutter (47~rc-1) experimental; urgency=medium
 
