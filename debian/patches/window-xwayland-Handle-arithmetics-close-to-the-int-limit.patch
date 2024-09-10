@@ -1,0 +1,73 @@
+From: =?utf-8?q?Jonas_=C3=85dahl?= <jadahl@gmail.com>
+Date: Mon, 2 Sep 2024 16:18:47 +0200
+Subject: window/xwayland: Handle arithmetics close to the int limits
+
+`(int) (1.0f * (float) INT_MAX)` doesn't necessarily result in INT_MAX
+due to how floating point arithmetics. Handle this better by setting
+INT_MIN/MAX explicitly, when the floating point value post scaling
+exceeds the corresponding limit.
+
+This fixes resizing of electron windows.
+
+Fixes: 6e8c7c5f84 ("Add experimental mode to use native scaling of Xwayland clients")
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3997>
+(cherry picked from commit 2d64965a55f818d40fef0fe04bf3fad70fae29f5)
+---
+ src/wayland/meta-window-xwayland.c | 28 ++++++++++++++++++++++------
+ 1 file changed, 22 insertions(+), 6 deletions(-)
+
+diff --git a/src/wayland/meta-window-xwayland.c b/src/wayland/meta-window-xwayland.c
+index 5eeb98e..6c2abf0 100644
+--- a/src/wayland/meta-window-xwayland.c
++++ b/src/wayland/meta-window-xwayland.c
+@@ -337,6 +337,22 @@ meta_window_xwayland_stage_to_protocol (MetaWindow *window,
+     *protocol_y = stage_y * scale;
+ }
+ 
++static int
++scale_and_handle_overflow (int      protocol,
++                           float    scale,
++                           float (* rounding_function) (float value))
++{
++  float value;
++
++  value = rounding_function (protocol * scale);
++  if (value >= (float) INT_MAX)
++    return INT_MAX;
++  else if (value <= (float) INT_MIN)
++    return INT_MIN;
++  else
++    return (int) value;
++}
++
+ static void
+ meta_window_xwayland_protocol_to_stage (MetaWindow          *window,
+                                         int                  protocol_x,
+@@ -360,21 +376,21 @@ meta_window_xwayland_protocol_to_stage (MetaWindow          *window,
+     {
+     case MTK_ROUNDING_STRATEGY_SHRINK:
+       if (stage_x)
+-        *stage_x = (int) floorf (protocol_x * scale);
++        *stage_x = scale_and_handle_overflow (protocol_x, scale, floorf);
+       if (stage_y)
+-        *stage_y = (int) floorf (protocol_y * scale);
++        *stage_y = scale_and_handle_overflow (protocol_y, scale, floorf);
+       break;
+     case MTK_ROUNDING_STRATEGY_GROW:
+       if (stage_x)
+-        *stage_x = (int) ceilf (protocol_x * scale);
++        *stage_x = scale_and_handle_overflow (protocol_x, scale, ceilf);
+       if (stage_y)
+-        *stage_y = (int) ceilf (protocol_y * scale);
++        *stage_y = scale_and_handle_overflow (protocol_y, scale, ceilf);
+       break;
+     case MTK_ROUNDING_STRATEGY_ROUND:
+       if (stage_x)
+-        *stage_x = (int) roundf (protocol_x * scale);
++        *stage_x = scale_and_handle_overflow (protocol_x, scale, roundf);
+       if (stage_y)
+-        *stage_y = (int) roundf (protocol_y * scale);
++        *stage_y = scale_and_handle_overflow (protocol_y, scale, roundf);
+       break;
+     }
+ }
