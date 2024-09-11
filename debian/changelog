@@ -1,4 +1,4 @@
-mutter (47~rc-4ubuntu1) UNRELEASED; urgency=medium
+mutter (47~rc-4ubuntu1) oracular; urgency=medium
 
   [ Jeremy Bícha ]
   * Merge with Debian. Remaining changes:
@@ -15,7 +15,7 @@ mutter (47~rc-4ubuntu1) UNRELEASED; urgency=medium
   * d/p/x11-randr-scaling: Update to work with latest upstream changes
   * debian/control: Update VCS references to ubuntu branch
 
- -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Wed, 11 Sep 2024 03:39:27 +0200
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Wed, 11 Sep 2024 03:39:48 +0200
 
 mutter (47~rc-4) experimental; urgency=medium
 
