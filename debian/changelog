@@ -1,5 +1,6 @@
 mutter (47~rc-4ubuntu1) UNRELEASED; urgency=medium
 
+  [ Jeremy Bícha ]
   * Merge with Debian. Remaining changes:
     - Add x11-Add-support-for-fractional-scaling-using-Randr.patch
     - Add window-Add-ability-to-override-the-edge-constraints.patch
@@ -8,8 +9,13 @@ mutter (47~rc-4ubuntu1) UNRELEASED; urgency=medium
     - Remove debian/salsa-ci.yml: Not helpful for us currently
   * Remove the cogl color patches: applied in new release
   * Remove the mesa workaround patch: shouldn't be needed any more
+  * Cherry-pick resizing fix for various Electron apps (LP: #2080073)
 
- -- Jeremy Bícha <jbicha@ubuntu.com>  Mon, 09 Sep 2024 09:04:45 -0400
+  [ Marco Trevisan (Treviño) ]
+  * d/p/x11-randr-scaling: Update to work with latest upstream changes
+  * debian/control: Update VCS references to ubuntu branch
+
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Wed, 11 Sep 2024 03:39:27 +0200
 
 mutter (47~rc-4) experimental; urgency=medium
 
