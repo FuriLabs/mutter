@@ -1,0 +1,28 @@
+From: =?utf-8?q?Michel_D=C3=A4nzer?= <mdaenzer@redhat.com>
+Date: Mon, 16 Sep 2024 15:09:11 +0200
+Subject: window/x11: Use g_autoslist (MetaStrut) in
+ meta_window_x11_update_struts
+
+The wrong type resulted in a crash when returning from the function,
+because g_slist_free was called instead of g_free for the old_struts
+list data pointers.
+
+Fixes: e005d035c0c1 ("boxes: Define cleanup function for MetaStrut and use auto-pointers")
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4028>
+---
+ src/x11/window-x11.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/x11/window-x11.c b/src/x11/window-x11.c
+index 9472060..b4a5472 100644
+--- a/src/x11/window-x11.c
++++ b/src/x11/window-x11.c
+@@ -1643,7 +1643,7 @@ meta_window_x11_move_resize_internal (MetaWindow                *window,
+ static gboolean
+ meta_window_x11_update_struts (MetaWindow *window)
+ {
+-  g_autoslist (GSList) old_struts = NULL;
++  g_autoslist (MetaStrut) old_struts = NULL;
+   GSList *new_struts;
+   GSList *old_iter, *new_iter;
+   uint32_t *struts = NULL;

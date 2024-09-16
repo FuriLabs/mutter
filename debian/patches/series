@@ -1,3 +1,4 @@
+window-x11-Use-g_autoslist-MetaStrut-in-meta_window_x11_u.patch
 workarounds/tests-Mark-view-verification-tests-as-incomplete-in-big-e.patch
 debian/tests-Do-not-run-screencast-tests.patch
 debian/Support-Dynamic-triple-double-buffering.patch
