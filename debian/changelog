@@ -1,9 +1,9 @@
-mutter (47.0-1ubuntu2) UNRELEASED; urgency=medium
+mutter (47.0-1ubuntu2) oracular; urgency=medium
 
   * debian/patches: Refresh Indexes
   * debian/patches: Fix potential crash on destroying x11 struts
 
- -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Mon, 16 Sep 2024 22:36:21 +0200
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Mon, 16 Sep 2024 22:37:21 +0200
 
 mutter (47.0-1ubuntu1) oracular; urgency=medium
 
