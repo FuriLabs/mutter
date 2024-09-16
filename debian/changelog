@@ -1,3 +1,31 @@
+mutter (47.0-1) experimental; urgency=medium
+
+  * New upstream release
+  * debian/libmutter-15-0.symbols: Add new symbol
+  * Bump minimum PipeWire to 1.2.0
+  * Remove patches applied in new release
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Sat, 14 Sep 2024 21:04:17 -0400
+
+mutter (47~rc-5) experimental; urgency=medium
+
+  * Team upload
+
+  [ Simon McVittie ]
+  * d/p/tests-Create-a-temporary-XDG_DATA_HOME-to-run-each-test.patch,
+    d/p/tests-Create-a-temporary-XDG_CONFIG_HOME.patch,
+    d/p/tests-Create-a-temporary-XDG_CACHE_HOME.patch,
+    d/p/color-management-tests-Use-the-inherited-temporary-XDG_DA.patch:
+    Reimplement creation of temporary XDG_DATA_HOME for tests based on
+    upstream feedback.
+  * d/patches, d/clean: Remove duplicate ICC profile from test data
+
+  [ Jeremy Bícha ]
+  * d/p/window-xwayland-Handle-arithmetics-close-to-the-int-limit.patch:
+    Cherry-pick resizing fix for various Electron apps (LP: #2080073)
+
+ -- Simon McVittie <smcv@debian.org>  Thu, 12 Sep 2024 12:55:28 +0100
+
 mutter (47~rc-4ubuntu1) oracular; urgency=medium
 
   [ Jeremy Bícha ]

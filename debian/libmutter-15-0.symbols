@@ -641,6 +641,7 @@ libmutter-15.so.0 libmutter-15-0 #MINVER#
  meta_selection_type_get_type@Base 43.0
  meta_selection_unset_owner@Base 43.0
  meta_service_channel_get_service_client@Base 44~beta
+ meta_session_manager_new_for_fd@Base 47.0-1
  meta_set_color_efivar_test_path@Base 43.0
  meta_set_drm_hdr_metadata@Base 44~rc
  meta_settings_enable_experimental_feature@Base 43.0

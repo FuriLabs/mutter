@@ -343,7 +343,11 @@ page_flip_feedback_discarded (MetaKmsCrtc  *kms_crtc,
   if (error &&
       !g_error_matches (error,
                         G_IO_ERROR,
-                        G_IO_ERROR_PERMISSION_DENIED))
+                        G_IO_ERROR_PERMISSION_DENIED) &&
+      !g_error_matches (error,
+                        META_KMS_ERROR,
+                        META_KMS_ERROR_DISCARDED))
+
     g_warning ("Page flip discarded: %s", error->message);
 
   frame_info = cogl_onscreen_peek_head_frame_info (onscreen);
@@ -2019,8 +2023,8 @@ get_supported_egl_modifiers (CoglOnscreen *onscreen,
   MetaRenderDevice *render_device;
   EGLDisplay egl_display;
   EGLint num_modifiers;
-  GArray *modifiers;
-  GError *error = NULL;
+  g_autofree EGLuint64KHR *modifiers = NULL;
+  g_autoptr (GError) error = NULL;
   gboolean ret;
 
   gpu = meta_crtc_get_gpu (META_CRTC (crtc_kms));
@@ -2040,22 +2044,20 @@ get_supported_egl_modifiers (CoglOnscreen *onscreen,
   if (!ret || num_modifiers == 0)
     return NULL;
 
-  modifiers = g_array_sized_new (FALSE, FALSE, sizeof (uint64_t),
-                                 num_modifiers);
+  modifiers = g_new (typeof (*modifiers), num_modifiers);
   ret = meta_egl_query_dma_buf_modifiers (egl, egl_display,
                                           format, num_modifiers,
-                                          (EGLuint64KHR *) modifiers->data, NULL,
+                                          modifiers, NULL,
                                           &num_modifiers, &error);
 
   if (!ret)
     {
       g_warning ("Failed to query DMABUF modifiers: %s", error->message);
-      g_error_free (error);
-      g_array_free (modifiers, TRUE);
       return NULL;
     }
 
-  return modifiers;
+  return g_array_new_take (g_steal_pointer (&modifiers), num_modifiers, FALSE,
+                           sizeof (*modifiers));
 }
 
 static GArray *

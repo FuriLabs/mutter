@@ -2028,7 +2028,7 @@ needs_flush:
 }
 
 static void
-disarm_all_deadline_timers (MetaKmsImplDevice *impl_device)
+disarm_all_frame_sources (MetaKmsImplDevice *impl_device)
 {
   MetaKmsImplDevicePrivate *priv =
     meta_kms_impl_device_get_instance_private (impl_device);
@@ -2038,11 +2038,30 @@ disarm_all_deadline_timers (MetaKmsImplDevice *impl_device)
   g_hash_table_iter_init (&iter, priv->crtc_frames);
   while (g_hash_table_iter_next (&iter, NULL, (gpointer *) &crtc_frame))
     {
+      MetaKmsUpdate *submitted_update;
+
       crtc_frame->deadline.is_deadline_page_flip = FALSE;
       crtc_frame->await_flush = FALSE;
       crtc_frame->pending_page_flip = FALSE;
       g_clear_pointer (&crtc_frame->pending_update, meta_kms_update_free);
       disarm_crtc_frame_deadline_timer (crtc_frame);
+
+      submitted_update =
+        g_steal_pointer (&crtc_frame->submitted_update.kms_update);
+      if (submitted_update)
+        {
+          MetaKmsFeedback *feedback = NULL;
+          GError *error;
+
+          error = g_error_new (META_KMS_ERROR,
+                               META_KMS_ERROR_DISCARDED,
+                               "Timer disarmed");
+          feedback = meta_kms_feedback_new_failed (NULL, error);
+          queue_result_feedback (impl_device, submitted_update, feedback);
+          meta_kms_feedback_unref (feedback);
+          g_clear_pointer (&submitted_update, meta_kms_update_free);
+        }
+      g_clear_pointer (&crtc_frame->submitted_update.source, g_source_destroy);
     }
 }
 
@@ -2057,27 +2076,29 @@ process_mode_set_update (MetaKmsImplDevice *impl_device,
   MetaThreadImpl *thread_impl = META_THREAD_IMPL (kms_impl);
   MetaThread *thread = meta_thread_impl_get_thread (thread_impl);
   MetaKmsFeedback *feedback;
+  GHashTableIter iter;
   CrtcFrame *crtc_frame;
-  GList *l;
 
-  for (l = meta_kms_update_get_mode_sets (update); l; l = l->next)
+  g_hash_table_iter_init (&iter, priv->crtc_frames);
+  while (g_hash_table_iter_next (&iter, NULL, (gpointer *) &crtc_frame))
     {
-      MetaKmsModeSet *mode_set = l->data;
-      MetaKmsCrtc *crtc = mode_set->crtc;
+      if (crtc_frame->submitted_update.kms_update)
+        {
+          meta_kms_update_merge_from (crtc_frame->submitted_update.kms_update,
+                                      update);
+          meta_kms_update_free (update);
+          update = g_steal_pointer (&crtc_frame->submitted_update.kms_update);
+        }
 
-      crtc_frame = get_crtc_frame (impl_device, crtc);
-      if (!crtc_frame)
-        continue;
-
-      if (!crtc_frame->pending_update)
-        continue;
-
-      meta_kms_update_merge_from (crtc_frame->pending_update, update);
-      meta_kms_update_free (update);
-      update = g_steal_pointer (&crtc_frame->pending_update);
+      if (crtc_frame->pending_update)
+        {
+          meta_kms_update_merge_from (crtc_frame->pending_update, update);
+          meta_kms_update_free (update);
+          update = g_steal_pointer (&crtc_frame->pending_update);
+        }
     }
 
-  disarm_all_deadline_timers (impl_device);
+  disarm_all_frame_sources (impl_device);
 
   meta_thread_inhibit_realtime_in_impl (thread);
   feedback = do_process (impl_device, NULL, update, flags);
@@ -2141,7 +2162,7 @@ meta_kms_impl_device_disable (MetaKmsImplDevice *impl_device)
   if (!priv->device_file)
     return;
 
-  disarm_all_deadline_timers (impl_device);
+  disarm_all_frame_sources (impl_device);
 
   meta_kms_impl_device_hold_fd (impl_device);
   meta_thread_inhibit_realtime_in_impl (thread);

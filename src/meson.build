@@ -372,6 +372,8 @@ mutter_sources = [
   'core/meta-selection.c',
   'core/meta-selection-source.c',
   'core/meta-selection-source-memory.c',
+  'core/meta-session-manager.c',
+  'core/meta-session-state.c',
   'core/meta-sound-player.c',
   'core/meta-tablet-action-mapper.c',
   'core/meta-tool-action-mapper.c',
@@ -707,6 +709,12 @@ if have_wayland
     'wayland/meta-wayland-xdg-foreign.c',
     'wayland/meta-wayland-xdg-foreign.h',
     'wayland/meta-wayland-xdg-foreign-private.h',
+    'wayland/meta-wayland-xdg-session-manager.c',
+    'wayland/meta-wayland-xdg-session-manager.h',
+    'wayland/meta-wayland-xdg-session-state.c',
+    'wayland/meta-wayland-xdg-session-state.h',
+    'wayland/meta-wayland-xdg-session.c',
+    'wayland/meta-wayland-xdg-session.h',
     'wayland/meta-wayland-xdg-shell.c',
     'wayland/meta-wayland-xdg-shell.h',
     'wayland/meta-wayland-xdg-dialog.c',
@@ -1056,7 +1064,7 @@ foreach dbus_interface: dbus_interfaces
   endif
   interface_file = directory / interface
 
-  prefix = dbus_interface['prefix']
+  interface_prefix = dbus_interface['prefix']
 
   if dbus_interface.has_key('object_manager')
     object_manager = dbus_interface['object_manager']
@@ -1065,7 +1073,7 @@ foreach dbus_interface: dbus_interfaces
   endif
 
   dbus_sources = gnome.gdbus_codegen(name, interface_file,
-    interface_prefix: prefix,
+    interface_prefix: interface_prefix,
     namespace: 'MetaDBus',
     object_manager: object_manager,
   )
@@ -1111,6 +1119,7 @@ if have_wayland
     ['xwayland-keyboard-grab', 'unstable', 'v1', ],
     ['linux-drm-syncobj-v1', 'private', ],
     ['color-management-v1', 'private', ],
+    ['session-management-v1', 'private', ],
   ]
   if have_wayland_eglstream
     wayland_eglstream_protocols_dir = wayland_eglstream_protocols_dep.get_variable('pkgdatadir')
@@ -1232,6 +1241,7 @@ libmutter = shared_library(libmutter_name,
     libmutter_cogl_dep,
     libmutter_clutter_dep,
     mutter_deps,
+    gvdb_dep,
   ],
   install_rpath: pkglibdir,
   install_dir: libdir,

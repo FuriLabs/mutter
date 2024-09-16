@@ -6,10 +6,5 @@ workarounds/tests-Skip-thread-priority-test.patch
 workarounds/place-Always-center-initial-setup.patch
 workarounds/Mark-several-additional-tests-as-flaky.patch
 workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
-window-xwayland-Handle-arithmetics-close-to-the-int-limit.patch
-tests-Add-a-utility-function-to-delete-a-directory-recurs.patch
-MetaContextTest-Optionally-create-and-destroy-a-temporary.patch
-color-management-tests-Use-a-temporary-XDG_DATA_HOME.patch
-color-management-profile-conflict-test-Use-a-temporary-XD.patch
 ubuntu/x11-Add-support-for-fractional-scaling-using-Randr.patch
 ubuntu/window-Add-ability-to-override-the-edge-constraints.patch

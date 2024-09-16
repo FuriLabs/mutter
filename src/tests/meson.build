@@ -48,6 +48,7 @@ tests_deps = [
   mutter_deps,
   locally_compiled_schemas_dep,
   wayland_client_dep,
+  gvdb_dep,
 ]
 
 libmutter_test = shared_library(libmutter_test_name,
@@ -629,6 +630,8 @@ wayland_test_cases = [
       test_client_executables.get('xdg-apply-limits'),
       test_client_executables.get('xdg-foreign'),
       test_client_executables.get('xdg-toplevel-bounds'),
+      test_client_executables.get('xdg-session-management'),
+      test_client_executables.get('xdg-session-management-replace'),
       test_client_executables.get('ycbcr'),
     ],
   },

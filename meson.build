@@ -1,5 +1,5 @@
 project('mutter', 'c',
-  version: '47.rc',
+  version: '47.0',
   meson_version: '>= 1.3.0',
   license: 'GPLv2+'
 )
@@ -129,6 +129,7 @@ lcms2_dep = dependency('lcms2', version: lcms2_req)
 harfbuzz_dep = dependency('harfbuzz', version: harfbuzz_req)
 libeis_dep = dependency('libeis-1.0', version: libei_req)
 libei_dep = dependency('libei-1.0', version: libei_req)
+gvdb_dep = dependency('gvdb')
 
 have_wayland = get_option('wayland')
 have_x11 = get_option('x11')
