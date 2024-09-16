@@ -92,10 +92,10 @@ index 93a8cf4..9018a53 100644
    pointer = clutter_seat_create_virtual_device (seat, CLUTTER_POINTER_DEVICE);
  
 diff --git a/src/tests/meson.build b/src/tests/meson.build
-index 0b1c0f0..577c333 100644
+index a505aa5..cd78efe 100644
 --- a/src/tests/meson.build
 +++ b/src/tests/meson.build
-@@ -423,6 +423,7 @@ test_cases += [
+@@ -424,6 +424,7 @@ test_cases += [
      'name': 'input-capture',
      'suite': 'backends/native',
      'sources': [ 'input-capture-tests.c' ],
@@ -103,7 +103,7 @@ index 0b1c0f0..577c333 100644
    },
    {
      'name': 'thread',
-@@ -714,8 +715,18 @@ foreach test_case: test_cases
+@@ -717,8 +718,18 @@ foreach test_case: test_cases
  
    test_depends = [ default_plugin ] + test_case.get('depends', [])
  
@@ -123,7 +123,7 @@ index 0b1c0f0..577c333 100644
      env: test_env,
      depends: test_depends,
      is_parallel: false,
-@@ -777,7 +788,7 @@ stacking_tests = [
+@@ -780,7 +791,7 @@ stacking_tests = [
  
  foreach stacking_test: stacking_tests
    test(stacking_test, test_runner,
