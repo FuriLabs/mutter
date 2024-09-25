@@ -1,3 +1,10 @@
+mutter (47.0-1ubuntu3) oracular; urgency=medium
+
+  * Add patches to restore support for EGL 1.4 and GLES 2.0. They are
+    required for Xilinx (Mali) support (LP: #2080602)
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Wed, 25 Sep 2024 13:49:09 +0800
+
 mutter (47.0-1ubuntu2) oracular; urgency=medium
 
   * debian/patches: Refresh Indexes
