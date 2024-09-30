@@ -1,3 +1,13 @@
+mutter (47.0-1ubuntu4) oracular; urgency=high
+
+  * Add a missing break in derive_logical_monitor_size as part of
+    x11-Add-support-for-fractional-scaling-using-Randr.patch.
+    Because falling through two switch cases was causing the scale to be
+    applied twice, which then resulted in mode verification failing later.
+    (LP: #2080374)
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Mon, 30 Sep 2024 18:15:25 +0800
+
 mutter (47.0-1ubuntu3) oracular; urgency=medium
 
   * Add patches to restore support for EGL 1.4 and GLES 2.0. They are
