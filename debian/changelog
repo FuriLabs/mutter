@@ -1,9 +1,10 @@
 mutter (46.2-1ubuntu0.24.04.3) noble; urgency=medium
 
+  [ Talha Can Havadar ]
   * Add patches to restore support for EGL 1.4 and GLES 2.0. They are
     required for Xilinx (Mali) support (LP: #2080602)
 
- -- Talha Can Havadar <talha.can.havadar@canonical.com>  Tue, 01 Oct 2024 14:56:43 +0200
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 03 Oct 2024 16:03:43 +0800
 
 mutter (46.2-1ubuntu0.24.04.2) noble; urgency=medium
 
