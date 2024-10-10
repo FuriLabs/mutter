@@ -1,3 +1,10 @@
+mutter (46.2-1ubuntu0.24.04.4) noble; urgency=medium
+
+  * Regenerate the patches for Xilinx (Mali) support using gbp pq syntax
+    and fixing an unused uninitialized variable. (LP: #2080602)
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 10 Oct 2024 16:26:01 +0800
+
 mutter (46.2-1ubuntu0.24.04.3) noble; urgency=medium
 
   [ Talha Can Havadar ]
