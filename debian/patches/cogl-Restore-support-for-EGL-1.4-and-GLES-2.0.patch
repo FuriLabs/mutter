@@ -1,0 +1,82 @@
+From: Daniel van Vugt <daniel.van.vugt@canonical.com>
+Date: Tue, 17 Sep 2024 15:52:52 +0800
+Subject: cogl: Restore support for EGL 1.4 and GLES 2.0
+
+This is required for Xilinx (Mali) hardware support.
+
+Origin: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4021
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/2080602
+---
+ cogl/cogl/driver/gl/gl/cogl-driver-gl.c     | 11 +++++++----
+ cogl/cogl/driver/gl/gles/cogl-driver-gles.c |  3 ---
+ cogl/cogl/winsys/cogl-winsys-egl.c          |  7 ++++++-
+ 3 files changed, 13 insertions(+), 8 deletions(-)
+
+diff --git a/cogl/cogl/driver/gl/gl/cogl-driver-gl.c b/cogl/cogl/driver/gl/gl/cogl-driver-gl.c
+index 84ddfce..fff4a9f 100644
+--- a/cogl/cogl/driver/gl/gl/cogl-driver-gl.c
++++ b/cogl/cogl/driver/gl/gl/cogl-driver-gl.c
+@@ -388,7 +388,6 @@ _cogl_get_gl_version (CoglContext *ctx,
+ 
+ static gboolean
+ check_gl_version (CoglContext *ctx,
+-                  char **gl_extensions,
+                   GError **error)
+ {
+   int major, minor;
+@@ -431,6 +430,13 @@ _cogl_driver_update_features (CoglContext *ctx,
+   ctx->glGetString =
+     (void *) _cogl_renderer_get_proc_address (ctx->display->renderer,
+                                               "glGetString");
++
++  if (!check_gl_version (ctx, error))
++    return FALSE;
++
++  /* These are only used in _cogl_context_get_gl_extensions for GL 3.0
++   * so don't look them up before check_gl_version()
++   */
+   ctx->glGetStringi =
+     (void *) _cogl_renderer_get_proc_address (ctx->display->renderer,
+                                               "glGetStringi");
+@@ -440,9 +446,6 @@ _cogl_driver_update_features (CoglContext *ctx,
+ 
+   gl_extensions = _cogl_context_get_gl_extensions (ctx);
+ 
+-  if (!check_gl_version (ctx, gl_extensions, error))
+-    return FALSE;
+-
+   if (G_UNLIKELY (COGL_DEBUG_ENABLED (COGL_DEBUG_WINSYS)))
+     {
+       char *all_extensions = g_strjoinv (" ", gl_extensions);
+diff --git a/cogl/cogl/driver/gl/gles/cogl-driver-gles.c b/cogl/cogl/driver/gl/gles/cogl-driver-gles.c
+index 2931e8f..29ef69a 100644
+--- a/cogl/cogl/driver/gl/gles/cogl-driver-gles.c
++++ b/cogl/cogl/driver/gl/gles/cogl-driver-gles.c
+@@ -580,9 +580,6 @@ _cogl_driver_update_features (CoglContext *context,
+   context->glGetString =
+     (void *) _cogl_renderer_get_proc_address (context->display->renderer,
+                                               "glGetString");
+-  context->glGetStringi =
+-    (void *) _cogl_renderer_get_proc_address (context->display->renderer,
+-                                              "glGetStringi");
+ 
+   gl_extensions = _cogl_context_get_gl_extensions (context);
+ 
+diff --git a/cogl/cogl/winsys/cogl-winsys-egl.c b/cogl/cogl/winsys/cogl-winsys-egl.c
+index 66b9940..0a29e7f 100644
+--- a/cogl/cogl/winsys/cogl-winsys-egl.c
++++ b/cogl/cogl/winsys/cogl-winsys-egl.c
+@@ -113,7 +113,12 @@ static GCallback
+ _cogl_winsys_renderer_get_proc_address (CoglRenderer *renderer,
+                                         const char   *name)
+ {
+-  return eglGetProcAddress (name);
++  GCallback result = eglGetProcAddress (name);
++
++  if (result == NULL)
++    g_module_symbol (renderer->libgl_module, name, (gpointer *)&result);
++
++  return result;
+ }
+ 
+ static void
