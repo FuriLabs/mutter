@@ -1,3 +1,11 @@
+mutter (47.0-1ubuntu5) plucky; urgency=medium
+
+  * Add seat-impl-Initialize-the-impl-reverse-pointer-slightly-ea.patch
+    to avoid crashing when mousekeys or keyboard a11y features are
+    enabled (LP: #2081728)
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Mon, 21 Oct 2024 15:07:57 +0800
+
 mutter (47.0-1ubuntu4) oracular; urgency=high
 
   * Add a missing break in derive_logical_monitor_size as part of
