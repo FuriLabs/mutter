@@ -11,3 +11,4 @@ ubuntu/x11-Add-support-for-fractional-scaling-using-Randr.patch
 ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
 ubuntu/cogl-Restore-support-for-EGL-1.4-and-GLES-2.0.patch
 ubuntu/cogl-gles-Use-unsized-internal-formats-for-RGB8-RGBA8-in-.patch
+workarounds/seat-impl-Initialize-the-impl-reverse-pointer-slightly-ea.patch
