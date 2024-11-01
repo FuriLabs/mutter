@@ -1,3 +1,10 @@
+mutter (47.0-1ubuntu6) plucky; urgency=medium
+
+  [ Nathan Teodosio ]
+  * Fix access check for X11_TMP_UNIX_DIR. (LP: #2069564)
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Fri, 01 Nov 2024 10:09:02 +0100
+
 mutter (47.0-1ubuntu5) plucky; urgency=medium
 
   * Add seat-impl-Initialize-the-impl-reverse-pointer-slightly-ea.patch
