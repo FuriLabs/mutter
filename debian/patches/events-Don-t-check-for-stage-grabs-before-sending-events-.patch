@@ -1,0 +1,47 @@
+From: Sebastian Keller <skeller@gnome.org>
+Date: Tue, 28 May 2024 19:21:12 +0200
+Subject: events: Don't check for stage grabs before sending events to ibus
+
+Prior to the grabs/focus rework in !3420, Wayland grabs were handled
+separately from ClutterGrabs. This required explicitly checking for
+ClutterGrabs as those were expected to prevent events from reaching
+Wayland clients.
+
+Now after !3420, Wayland client grabs also result in ClutterGrabs, which
+means that this check causes input events for popups with grabs to not
+get sent to ibus anymore. Instead the events are getting sent to the
+client directly, which results no ibus support in popups (unless the
+client handles that itself by using a different GTK_IM_MODULE).
+
+However due to the changes from !3420 checking for ClutterGrabs is also
+no longer necessary and the meta_wayland_text_input_update() focus check
+is now sufficient to only forward events to ibus, when the focus is
+actually on a Wayland client. So to fix this we can simply remove the
+check.
+
+This patch fixes a issue where the IBus input method not
+activatable during a filename editing operation, preventing the
+users to enter text of their native language.
+
+Fixes: 2a584a8f0 ("wayland: Make use of Wayland event grabbing mechanism")
+Closes: https://gitlab.gnome.org/GNOME/mutter/-/issues/3502
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3787>
+Origin: upstream, https://gitlab.gnome.org/GNOME/mutter/-/commit/a99e139a
+Bug-Ubuntu: https://bugs.launchpad.net/nautilus/+bug/2076869
+Last-Update: 2024-11-07
+---
+ src/core/events.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/src/core/events.c b/src/core/events.c
+index f766b80..1f36d2f 100644
+--- a/src/core/events.c
++++ b/src/core/events.c
+@@ -288,7 +288,6 @@ meta_display_handle_event (MetaDisplay        *display,
+ 
+ #ifdef HAVE_WAYLAND
+   if (wayland_text_input &&
+-      !has_grab &&
+       !meta_compositor_get_current_window_drag (compositor) &&
+       meta_wayland_text_input_update (wayland_text_input, event))
+     return CLUTTER_EVENT_STOP;
