@@ -17,3 +17,6 @@ ubuntu/backends-Restore-support-for-X11-cursor-themes.patch
 ubuntu/backends-native-Avoid-duplicating-or-losing-KMS-property-.patch
 cogl-Restore-support-for-EGL-1.4-and-GLES-2.0.patch
 cogl-gles-Use-unsized-internal-formats-for-RGB8-RGBA8-in-.patch
+x11-display-Make-subwindow-redirection-call-mode-specific.patch
+display-Move-X11-initial-focus-handling-to-MetaX11Display.patch
+tests-x11-Fix-replace-test-to-catch-the-second-instance-f.patch

@@ -1,0 +1,32 @@
+From: =?utf-8?q?Jonas_=C3=85dahl?= <jadahl@gmail.com>
+Date: Tue, 17 Oct 2023 15:46:00 +0800
+Subject: tests/x11: Fix replace test to catch the second instance failing
+
+The test never noticed that the second instance never actually managed
+to load; it was looping a multi second retry session trying to redirect
+windows, meaning it failed to catch https://gitlab.gnome.org/GNOME/mutter/-/issues/3089.
+
+Fix the test so that it always waits for mutter to finish loading
+successfully, just like it waits fro the first.
+
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3329>
+
+Origin: origin, https://gitlab.gnome.org/GNOME/mutter/-/commit/93d1eb01a6e1dd1ccae46cfb3a4c0aa6caa17eb5
+---
+ src/tests/x11-test.sh | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/tests/x11-test.sh b/src/tests/x11-test.sh
+index 59e460f..d95b246 100755
+--- a/src/tests/x11-test.sh
++++ b/src/tests/x11-test.sh
+@@ -34,6 +34,9 @@ echo \# Launched with pid $MUTTER2_PID
+ MUTTER2_PID=$!
+ wait $MUTTER1_PID
+ 
++echo \# Waiting for the second mutter to finish loading
++gdbus wait --session org.gnome.Mutter.IdleMonitor
++
+ sleep 2
+ 
+ echo \# Terminating clients > /dev/stderr
