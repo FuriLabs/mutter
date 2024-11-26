@@ -1,0 +1,171 @@
+From: Carlos Garnacho <carlosg@gnome.org>
+Date: Sat, 11 May 2024 11:59:13 +0200
+Subject: clutter: Add API to create inactive ClutterGrabs,
+ and activate them explicitly
+
+This gives greater control to the callers on the place where a grab is being
+activated, this may make a difference in the handling of crossing events
+triggered through it, e.g. by having callers rely on having already obtained
+a ClutterGrab prior to handling the resulting effects.
+
+The "input only" grab has also been turned inactive by default, in order to
+to have the ClutterGrab pointer available for checks at the MetaWaylandEventHandler
+focus changing methods triggered through grab activation.
+
+(cherry-picked from commit 8e5f3a1f8388a2b72328bfaef91cb14755a3609f)
+
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3874>
+
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/2025
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/1966635
+---
+ clutter/clutter/clutter-stage-private.h |  7 +++++
+ clutter/clutter/clutter-stage.c         | 49 +++++++++++++++++++++++----------
+ src/tests/clutter/conform/grab.c        |  1 +
+ src/wayland/meta-wayland-input.c        |  2 ++
+ 4 files changed, 45 insertions(+), 14 deletions(-)
+
+diff --git a/clutter/clutter/clutter-stage-private.h b/clutter/clutter/clutter-stage-private.h
+index da38000..6ff67f5 100644
+--- a/clutter/clutter/clutter-stage-private.h
++++ b/clutter/clutter/clutter-stage-private.h
+@@ -151,4 +151,11 @@ ClutterActor * clutter_stage_update_device_for_event (ClutterStage *stage,
+ void clutter_stage_update_devices_in_view (ClutterStage     *stage,
+                                            ClutterStageView *view);
+ 
++CLUTTER_EXPORT
++ClutterGrab * clutter_stage_grab_inactive (ClutterStage *stage,
++                                           ClutterActor *actor);
++
++CLUTTER_EXPORT
++void clutter_grab_activate (ClutterGrab *grab);
++
+ G_END_DECLS
+diff --git a/clutter/clutter/clutter-stage.c b/clutter/clutter/clutter-stage.c
+index 719d76b..2945748 100644
+--- a/clutter/clutter/clutter-stage.c
++++ b/clutter/clutter/clutter-stage.c
+@@ -3830,18 +3830,31 @@ clutter_stage_grab_full (ClutterStage *stage,
+                          ClutterActor *actor,
+                          gboolean      owns_actor)
+ {
+-  ClutterStagePrivate *priv;
+-  ClutterGrab *grab;
+-  gboolean was_grabbed;
+-
+   g_return_val_if_fail (CLUTTER_IS_STAGE (stage), NULL);
+   g_return_val_if_fail (CLUTTER_IS_ACTOR (actor), NULL);
+   g_return_val_if_fail (stage ==
+                         (ClutterStage *) _clutter_actor_get_stage_internal (actor),
+                         NULL);
+ 
++  return clutter_grab_new (stage, actor, owns_actor);
++}
++
++void
++clutter_grab_activate (ClutterGrab *grab)
++{
++  ClutterStage *stage;
++  ClutterStagePrivate *priv;
++  gboolean was_grabbed;
++
++  g_return_if_fail (CLUTTER_IS_GRAB (grab));
++
++  stage = grab->stage;
+   priv = clutter_stage_get_instance_private (stage);
+ 
++  /* This grab is already active */
++  if (grab->prev || grab->next || priv->topmost_grab == grab)
++    return;
++
+   if (!priv->topmost_grab)
+     {
+       ClutterContext *context;
+@@ -3854,8 +3867,6 @@ clutter_stage_grab_full (ClutterStage *stage,
+         clutter_seat_grab (seat, clutter_get_current_event_time ());
+     }
+ 
+-  grab = clutter_grab_new (stage, actor, owns_actor);
+-
+   grab->prev = NULL;
+   grab->next = priv->topmost_grab;
+ 
+@@ -3876,10 +3887,10 @@ clutter_stage_grab_full (ClutterStage *stage,
+ 
+       CLUTTER_NOTE (GRABS,
+                     "[grab=%p] Attached seat grab (n_grabs: %u) on actor: %s",
+-                    grab, n_grabs, _clutter_actor_get_debug_name (actor));
++                    grab, n_grabs, _clutter_actor_get_debug_name (grab->actor));
+     }
+ 
+-  clutter_actor_attach_grab (actor, grab);
++  clutter_actor_attach_grab (grab->actor, grab);
+   clutter_stage_notify_grab (stage, grab, grab->next);
+ 
+   if (was_grabbed != !!priv->topmost_grab)
+@@ -3887,8 +3898,6 @@ clutter_stage_grab_full (ClutterStage *stage,
+ 
+   if (grab->next)
+     clutter_grab_notify (grab->next);
+-
+-  return grab;
+ }
+ 
+ /**
+@@ -3905,15 +3914,27 @@ clutter_stage_grab_full (ClutterStage *stage,
+ ClutterGrab *
+ clutter_stage_grab (ClutterStage *stage,
+                     ClutterActor *actor)
++{
++  ClutterGrab *grab;
++
++  grab = clutter_stage_grab_full (stage, actor, FALSE);
++  clutter_grab_activate (grab);
++
++  return grab;
++}
++
++ClutterGrab *
++clutter_stage_grab_inactive (ClutterStage *stage,
++                             ClutterActor *actor)
+ {
+   return clutter_stage_grab_full (stage, actor, FALSE);
+ }
+ 
+ ClutterGrab *
+-clutter_stage_grab_input_only (ClutterStage        *stage,
+-                               ClutterEventHandler  handler,
+-                               gpointer             user_data,
+-                               GDestroyNotify       user_data_destroy)
++clutter_stage_grab_input_only (ClutterStage         *stage,
++                               ClutterEventHandler   handler,
++                               gpointer              user_data,
++                               GDestroyNotify        user_data_destroy)
+ {
+   ClutterInputOnlyActor *input_only_actor;
+   ClutterActor *actor;
+diff --git a/src/tests/clutter/conform/grab.c b/src/tests/clutter/conform/grab.c
+index 4ba11f4..0df0dc4 100644
+--- a/src/tests/clutter/conform/grab.c
++++ b/src/tests/clutter/conform/grab.c
+@@ -634,6 +634,7 @@ grab_input_only (void)
+   grab = clutter_stage_grab_input_only (CLUTTER_STAGE (data.stage),
+                                         handle_input_only_event,
+                                         data.events, NULL);
++  clutter_grab_activate (grab);
+   event_log_compare ((EventLog *) &grab1_log, data.events);
+ 
+   clutter_virtual_input_device_notify_button (pointer,
+diff --git a/src/wayland/meta-wayland-input.c b/src/wayland/meta-wayland-input.c
+index 61bca3f..f7f6f11 100644
+--- a/src/wayland/meta-wayland-input.c
++++ b/src/wayland/meta-wayland-input.c
+@@ -312,6 +312,8 @@ meta_wayland_input_attach_event_handler (MetaWaylandInput                *input,
+                                                    grab_handle_event,
+                                                    input,
+                                                    NULL);
++      clutter_grab_activate (input->grab);
++
+       g_signal_connect_swapped (input->grab, "notify::revoked",
+                                 G_CALLBACK (on_grab_revocation_change),
+                                 input);

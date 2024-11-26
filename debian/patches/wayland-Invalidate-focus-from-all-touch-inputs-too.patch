@@ -1,0 +1,42 @@
+From: Alessandro Astone <alessandro.astone@canonical.com>
+Date: Thu, 17 Oct 2024 13:59:29 +0200
+Subject: wayland: Invalidate focus from all touch inputs too
+
+This allows drag-and-drop within the same surface with touch input.
+
+Test case: drag-and-drop a file into a directory in Nautilus.
+Prior to this change that would only work if the finger first leaves
+then re-enters the surface.
+
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4091>
+(cherry picked from commit 7f89e5b8810bcdeb7080a4bb5b058ea1b69f1571)
+
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/2025
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/1966635
+---
+ src/wayland/meta-wayland-input.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/src/wayland/meta-wayland-input.c b/src/wayland/meta-wayland-input.c
+index f7f6f11..5370c1a 100644
+--- a/src/wayland/meta-wayland-input.c
++++ b/src/wayland/meta-wayland-input.c
+@@ -168,6 +168,18 @@ meta_wayland_input_invalidate_all_focus (MetaWaylandInput    *input,
+       meta_wayland_event_handler_invalidate_focus (handler, device, NULL);
+     }
+ 
++  if (meta_wayland_seat_has_touch (seat))
++    {
++      ClutterEventSequence *sequence;
++
++      device = clutter_seat_get_pointer (clutter_seat);
++      handler = wl_container_of (input->event_handler_list.next, handler, link);
++
++      g_hash_table_iter_init (&iter, seat->touch->touches);
++      while (g_hash_table_iter_next (&iter, (gpointer *) &sequence, NULL))
++        meta_wayland_event_handler_invalidate_focus (handler, device, sequence);
++    }
++
+   if (meta_wayland_seat_has_touch (seat) &&
+       (flags & INVALIDATE_FOCUS_FLAG_CANCEL_TOUCH) != 0)
+     meta_wayland_touch_cancel (seat->touch);

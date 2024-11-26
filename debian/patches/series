@@ -26,3 +26,6 @@ wayland-Ignore-touch-events-in-seat-default-focus-handler.patch
 wayland-Only-cancel-touch-when-a-new-event-handler-takes-.patch
 wayland-Register-touchpoint-info-on-CLUTTER_ENTER.patch
 wayland-Lock-touch-sequence-info-on-first-entered-surface.patch
+clutter-Add-API-to-create-inactive-ClutterGrabs-and-activ.patch
+wayland-Invalidate-focus-from-all-touch-inputs-too.patch
+wayland-Handle-reentrancy-invalidating-touch-foci.patch
