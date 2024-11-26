@@ -1,9 +1,13 @@
 mutter (46.2-1ubuntu0.24.04.5) UNRELEASED; urgency=medium
 
+  [ 林博仁(Buo-ren Lin) ]
   * Fix Intelligent Input Bus (IBus) not activatable during filename editing
     operations. (LP: #2076869)
 
- -- 林博仁(Buo-ren Lin) <buo.ren.lin@gmail.com>  Thu, 21 Nov 2024 14:44:14 +0100
+  [ Alessandro Astone ]
+  * Backport patches to fix restarting the x11 compositor (LP: #2040453)
+
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Tue, 26 Nov 2024 03:01:07 +0100
 
 mutter (46.2-1ubuntu0.24.04.4) noble; urgency=medium
 
