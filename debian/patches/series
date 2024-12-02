@@ -22,3 +22,7 @@ display-Move-X11-initial-focus-handling-to-MetaX11Display.patch
 tests-x11-Fix-replace-test-to-catch-the-second-instance-f.patch
 events-Don-t-check-for-stage-grabs-before-sending-events-.patch
 compositor-Mark-window-drag-actor-invisible.patch
+wayland-Ignore-touch-events-in-seat-default-focus-handler.patch
+wayland-Only-cancel-touch-when-a-new-event-handler-takes-.patch
+wayland-Register-touchpoint-info-on-CLUTTER_ENTER.patch
+wayland-Lock-touch-sequence-info-on-first-entered-surface.patch

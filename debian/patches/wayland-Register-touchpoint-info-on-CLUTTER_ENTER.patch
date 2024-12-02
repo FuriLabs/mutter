@@ -1,0 +1,75 @@
+From: Carlos Garnacho <carlosg@gnome.org>
+Date: Mon, 15 Jul 2024 23:02:19 +0200
+Subject: wayland: Register touchpoint info on CLUTTER_ENTER
+
+The first event happening for a new touch will be the CLUTTER_ENTER
+event generated when picking it. Use this event for registration of
+the touch info, so that MetaWaylandEventHandler.get_focus_surface may
+get the right focus surface for the device/sequence on the first try.
+
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3889>
+
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/3487
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/2090824
+
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/2025
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/1966635
+---
+ src/wayland/meta-wayland-seat.c  | 16 ++++++++++++++--
+ src/wayland/meta-wayland-touch.c |  5 +++--
+ 2 files changed, 17 insertions(+), 4 deletions(-)
+
+diff --git a/src/wayland/meta-wayland-seat.c b/src/wayland/meta-wayland-seat.c
+index 662066c..ac75858 100644
+--- a/src/wayland/meta-wayland-seat.c
++++ b/src/wayland/meta-wayland-seat.c
+@@ -434,12 +434,24 @@ meta_wayland_seat_update (MetaWaylandSeat    *seat,
+ 
+   switch (clutter_event_type (event))
+     {
++    case CLUTTER_ENTER:
++    case CLUTTER_LEAVE:
++      if (clutter_event_get_event_sequence (event))
++        {
++          if (meta_wayland_seat_has_touch (seat))
++            meta_wayland_touch_update (seat->touch, event);
++        }
++      else
++        {
++          if (meta_wayland_seat_has_pointer (seat))
++            meta_wayland_pointer_update (seat->pointer, event);
++        }
++      break;
++
+     case CLUTTER_MOTION:
+     case CLUTTER_BUTTON_PRESS:
+     case CLUTTER_BUTTON_RELEASE:
+     case CLUTTER_SCROLL:
+-    case CLUTTER_ENTER:
+-    case CLUTTER_LEAVE:
+       if (meta_wayland_seat_has_pointer (seat))
+         meta_wayland_pointer_update (seat->pointer, event);
+       break;
+diff --git a/src/wayland/meta-wayland-touch.c b/src/wayland/meta-wayland-touch.c
+index cfb8fd2..67e92e6 100644
+--- a/src/wayland/meta-wayland-touch.c
++++ b/src/wayland/meta-wayland-touch.c
+@@ -226,7 +226,7 @@ meta_wayland_touch_update (MetaWaylandTouch   *touch,
+   sequence = clutter_event_get_event_sequence (event);
+   event_type = clutter_event_type (event);
+ 
+-  if (event_type == CLUTTER_TOUCH_BEGIN)
++  if (event_type == CLUTTER_ENTER)
+     {
+       MetaWaylandSurface *surface = NULL;
+       MetaBackend *backend;
+@@ -256,7 +256,8 @@ meta_wayland_touch_update (MetaWaylandTouch   *touch,
+   if (!touch_info)
+     return;
+ 
+-  if (event_type != CLUTTER_TOUCH_BEGIN &&
++  if ((event_type == CLUTTER_TOUCH_UPDATE ||
++       event_type == CLUTTER_TOUCH_END) &&
+       !touch_info->begin_delivered)
+     {
+       g_hash_table_remove (touch->touches, sequence);

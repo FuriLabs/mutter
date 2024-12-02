@@ -1,0 +1,85 @@
+From: Carlos Garnacho <carlosg@gnome.org>
+Date: Mon, 15 Jul 2024 22:50:58 +0200
+Subject: wayland: Only cancel touch when a new event handler takes over
+
+And notably, don't cancel touch when an event handler is being
+removed. Touch events are largely unaffected by most Wayland
+grabs (pointer constraints, popups), so we might be cancelling
+input too early if one of these wayland grabs was effective when
+touch interaction began, but stopped sometime between touch updates.
+
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3889>
+
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/3487
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/2090824
+---
+ src/wayland/meta-wayland-input.c | 21 ++++++++++++++++-----
+ 1 file changed, 16 insertions(+), 5 deletions(-)
+
+diff --git a/src/wayland/meta-wayland-input.c b/src/wayland/meta-wayland-input.c
+index 346dfe3..61bca3f 100644
+--- a/src/wayland/meta-wayland-input.c
++++ b/src/wayland/meta-wayland-input.c
+@@ -48,6 +48,12 @@ struct _MetaWaylandInput
+   ClutterGrab *grab;
+ };
+ 
++typedef enum
++{
++  INVALIDATE_FOCUS_FLAG_DEFAULT = 0,
++  INVALIDATE_FOCUS_FLAG_CANCEL_TOUCH = 1 << 0,
++} InvalidateFocusFlag;
++
+ static void meta_wayland_input_sync_focus (MetaWaylandInput *input);
+ 
+ G_DEFINE_FINAL_TYPE (MetaWaylandInput, meta_wayland_input, G_TYPE_OBJECT)
+@@ -137,7 +143,8 @@ meta_wayland_event_handler_invalidate_focus (MetaWaylandEventHandler *handler,
+ }
+ 
+ static void
+-meta_wayland_input_invalidate_all_focus (MetaWaylandInput *input)
++meta_wayland_input_invalidate_all_focus (MetaWaylandInput    *input,
++                                         InvalidateFocusFlag  flags)
+ {
+   MetaWaylandEventHandler *handler;
+   MetaWaylandSeat *seat = input->seat;
+@@ -161,7 +168,8 @@ meta_wayland_input_invalidate_all_focus (MetaWaylandInput *input)
+       meta_wayland_event_handler_invalidate_focus (handler, device, NULL);
+     }
+ 
+-  if (meta_wayland_seat_has_touch (seat))
++  if (meta_wayland_seat_has_touch (seat) &&
++      (flags & INVALIDATE_FOCUS_FLAG_CANCEL_TOUCH) != 0)
+     meta_wayland_touch_cancel (seat->touch);
+ 
+   g_hash_table_iter_init (&iter, seat->tablet_seat->tablets);
+@@ -257,7 +265,8 @@ meta_wayland_input_sync_focus (MetaWaylandInput *input)
+ 
+   g_assert (!wl_list_empty (&input->event_handler_list));
+   handler = wl_container_of (input->event_handler_list.next, handler, link);
+-  meta_wayland_input_invalidate_all_focus (input);
++  meta_wayland_input_invalidate_all_focus (input,
++                                           INVALIDATE_FOCUS_FLAG_CANCEL_TOUCH);
+ }
+ 
+ static void
+@@ -308,7 +317,8 @@ meta_wayland_input_attach_event_handler (MetaWaylandInput                *input,
+                                 input);
+     }
+ 
+-  meta_wayland_input_invalidate_all_focus (input);
++  meta_wayland_input_invalidate_all_focus (input,
++                                           INVALIDATE_FOCUS_FLAG_DEFAULT);
+ 
+   return handler;
+ }
+@@ -340,7 +350,8 @@ meta_wayland_input_detach_event_handler (MetaWaylandInput        *input,
+         wl_container_of (input->event_handler_list.next,
+                          head, link);
+ 
+-      meta_wayland_input_invalidate_all_focus (input);
++      meta_wayland_input_invalidate_all_focus (input,
++                                               INVALIDATE_FOCUS_FLAG_DEFAULT);
+     }
+ 
+   if (input->grab && !should_be_grabbed (input))

@@ -1,0 +1,48 @@
+From: Carlos Garnacho <carlosg@gnome.org>
+Date: Thu, 5 Dec 2024 10:42:14 +0100
+Subject: wayland: Lock touch sequence info on first entered surface
+
+Even though the touch moved to being set up in CLUTTER_ENTER, it
+is still meant to lock onto the pressed surface, we however will
+receive crossing events if the touch moves between actors/surfaces,
+triggering warnings when the touch info registration is attempted
+on the already existing touch sequence.
+
+The reasons to handle this in CLUTTER_ENTER still apply, so ensure
+the touch info for the sequence does not previously exist to avoid
+the warning.
+
+Fixes: 2e82a2049f ("wayland: Register touchpoint info on CLUTTER_ENTER")
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4166>
+
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/2089843
+---
+ src/wayland/meta-wayland-touch.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/src/wayland/meta-wayland-touch.c b/src/wayland/meta-wayland-touch.c
+index 67e92e6..b3c3017 100644
+--- a/src/wayland/meta-wayland-touch.c
++++ b/src/wayland/meta-wayland-touch.c
+@@ -226,7 +226,11 @@ meta_wayland_touch_update (MetaWaylandTouch   *touch,
+   sequence = clutter_event_get_event_sequence (event);
+   event_type = clutter_event_type (event);
+ 
+-  if (event_type == CLUTTER_ENTER)
++  touch_info = touch_get_info (touch, sequence, FALSE);
++
++  if (event_type == CLUTTER_ENTER &&
++      !touch_info &&
++      (clutter_event_get_flags (event) & CLUTTER_EVENT_FLAG_GRAB_NOTIFY) == 0)
+     {
+       MetaWaylandSurface *surface = NULL;
+       MetaBackend *backend;
+@@ -250,8 +254,6 @@ meta_wayland_touch_update (MetaWaylandTouch   *touch,
+       touch_info->touch_surface = touch_surface_get (touch, surface);
+       clutter_event_get_coords (event, &touch_info->start_x, &touch_info->start_y);
+     }
+-  else
+-    touch_info = touch_get_info (touch, sequence, FALSE);
+ 
+   if (!touch_info)
+     return;
