@@ -102,8 +102,8 @@ Standards-Version: 4.7.0
 Homepage: https://mutter.gnome.org/
 XS-Debian-Vcs-Git: https://salsa.debian.org/gnome-team/mutter.git
 XS-Debian-Vcs-Browser: https://salsa.debian.org/gnome-team/mutter
-Vcs-Git: https://salsa.debian.org/gnome-team/mutter.git -b ubuntu/latest
-Vcs-Browser: https://salsa.debian.org/gnome-team/mutter/tree/ubuntu/latest
+Vcs-Git: https://salsa.debian.org/gnome-team/mutter.git -b ubuntu/oracular
+Vcs-Browser: https://salsa.debian.org/gnome-team/mutter/tree/ubuntu/oracular
 
 
 Package: mutter
