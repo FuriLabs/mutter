@@ -1,0 +1,35 @@
+From: Christian Hergert <chergert@redhat.com>
+Date: Wed, 21 Aug 2024 23:03:07 -0700
+Subject: compositor: Mark window drag actor invisible
+
+If the window_drag->handle ClutterActor:visible property is FALSE,
+then we avoid a full-framebuffer damage on the monitor when beginning
+and ending a drag.
+
+Testing with `mutter --wayland --display-server` still shows a full-
+framebuffer damage on the first drag, but that appears to be unrelated
+to this. Subsequent full-framebuffer damage which would occur on
+drag-begin and drag-end have been elided.
+
+Related: #3630
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3975>
+
+Origin: upstream, https://gitlab.gnome.org/GNOME/mutter/-/commit/030270ba3bf14b23a2d7a5371cf158ff2591f327
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/3630
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/2080698
+---
+ src/compositor/meta-window-drag.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/compositor/meta-window-drag.c b/src/compositor/meta-window-drag.c
+index 0cdf1fb..70f5da2 100644
+--- a/src/compositor/meta-window-drag.c
++++ b/src/compositor/meta-window-drag.c
+@@ -1838,6 +1838,7 @@ meta_window_drag_begin (MetaWindowDrag       *window_drag,
+   stage = meta_backend_get_stage (backend);
+ 
+   window_drag->handler = clutter_actor_new ();
++  clutter_actor_hide (window_drag->handler);
+   clutter_actor_set_name (window_drag->handler,
+                           "Window drag helper");
+   g_signal_connect_swapped (window_drag->handler, "event",

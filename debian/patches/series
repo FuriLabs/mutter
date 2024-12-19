@@ -21,3 +21,4 @@ x11-display-Make-subwindow-redirection-call-mode-specific.patch
 display-Move-X11-initial-focus-handling-to-MetaX11Display.patch
 tests-x11-Fix-replace-test-to-catch-the-second-instance-f.patch
 events-Don-t-check-for-stage-grabs-before-sending-events-.patch
+compositor-Mark-window-drag-actor-invisible.patch
