@@ -55,29 +55,50 @@ struct _MetaBackendClass
 {
   GObjectClass parent_class;
 
+  gboolean (* init_basic) (MetaBackend  *backend,
+                           GError      **error);
+
+  gboolean (* init_render) (MetaBackend  *backend,
+                            GError      **error);
+
+  gboolean (* init_post) (MetaBackend  *backend,
+                          GError      **error);
+
   ClutterBackend * (* create_clutter_backend) (MetaBackend    *backend,
                                                ClutterContext *context);
 
-  void (* post_init) (MetaBackend *backend);
-
-  MetaBackendCapabilities (* get_capabilities) (MetaBackend *backend);
-
   MetaMonitorManager * (* create_monitor_manager) (MetaBackend *backend,
                                                    GError     **error);
+
   MetaColorManager * (* create_color_manager) (MetaBackend *backend);
-  MetaCursorRenderer * (* get_cursor_renderer) (MetaBackend        *backend,
-                                                ClutterInputDevice *device);
+
   MetaCursorTracker * (* create_cursor_tracker) (MetaBackend *backend);
+
   MetaRenderer * (* create_renderer) (MetaBackend *backend,
                                       GError     **error);
-  MetaInputSettings * (* get_input_settings) (MetaBackend *backend);
 
   ClutterSeat * (* create_default_seat) (MetaBackend  *backend,
                                          GError      **error);
 
+  gboolean (* create_launcher) (MetaBackend   *backend,
+                                MetaLauncher **launcher_out,
+                                GError       **error);
+
+  MetaBackendCapabilities (* get_capabilities) (MetaBackend *backend);
+
+  MetaCursorRenderer * (* get_cursor_renderer) (MetaBackend        *backend,
+                                                ClutterInputDevice *device);
+
+  MetaInputSettings * (* get_input_settings) (MetaBackend *backend);
+
+  MetaLogicalMonitor * (* get_current_logical_monitor) (MetaBackend *backend);
+
+  gboolean (* is_lid_closed) (MetaBackend *backend);
+
   gboolean (* grab_device) (MetaBackend *backend,
                             int          device_id,
                             uint32_t     timestamp);
+
   gboolean (* ungrab_device) (MetaBackend *backend,
                               int          device_id,
                               uint32_t     timestamp);
@@ -94,15 +115,12 @@ struct _MetaBackendClass
   void (* finish_touch_sequence) (MetaBackend          *backend,
                                   ClutterEventSequence *sequence,
                                   MetaSequenceState     state);
-  MetaLogicalMonitor * (* get_current_logical_monitor) (MetaBackend *backend);
 
   void (* set_keymap) (MetaBackend *backend,
                        const char  *layouts,
                        const char  *variants,
                        const char  *options,
                        const char  *model);
-
-  gboolean (* is_lid_closed) (MetaBackend *backend);
 
   struct xkb_keymap * (* get_keymap) (MetaBackend *backend);
 
@@ -112,12 +130,17 @@ struct _MetaBackendClass
                               guint        idx);
 
   void (* update_stage) (MetaBackend *backend);
+
   void (* select_stage_events) (MetaBackend *backend);
 
   void (* set_pointer_constraint) (MetaBackend           *backend,
                                    MetaPointerConstraint *constraint);
 
   gboolean (* is_headless) (MetaBackend *backend);
+
+  void (* pause) (MetaBackend *backend);
+
+  void (* resume) (MetaBackend *backend);
 };
 
 void meta_backend_destroy (MetaBackend *backend);
@@ -140,7 +163,13 @@ META_EXPORT_TEST
 MetaColorManager * meta_backend_get_color_manager (MetaBackend *backend);
 
 META_EXPORT_TEST
-MetaCursorTracker * meta_backend_get_cursor_tracker (MetaBackend *backend);
+MetaLauncher * meta_backend_get_launcher (MetaBackend *backend);
+
+#ifdef HAVE_LIBGUDEV
+META_EXPORT_TEST
+MetaUdev * meta_backend_get_udev (MetaBackend *backend);
+#endif
+
 MetaCursorRenderer * meta_backend_get_cursor_renderer_for_device (MetaBackend        *backend,
                                                                   ClutterInputDevice *device);
 META_EXPORT_TEST

@@ -76,7 +76,7 @@ test_destroy_init (TestDestroy *self)
   clutter_actor_add_child (CLUTTER_ACTOR (self), self->bg);
   clutter_actor_set_name (self->bg, "Background");
 
-  self->label = clutter_text_new ();
+  self->label = clutter_actor_new ();
   clutter_actor_add_child (CLUTTER_ACTOR (self), self->label);
   clutter_actor_set_name (self->label, "Label");
 }
@@ -140,7 +140,7 @@ actor_destruction (void)
     g_print ("Calling destroy()...\n");
 
   clutter_actor_destroy (test);
-  g_assert (destroy_called);
+  g_assert_true (destroy_called);
   g_assert_false (parent_set_called);
   g_assert_false (property_changed);
   g_assert_null (child);

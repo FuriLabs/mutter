@@ -192,7 +192,7 @@ create_offscreen (ClutterStageView  *view,
                                                  width, height, format);
     }
 
-  cogl_texture_set_auto_mipmap (texture, FALSE);
+  cogl_texture_2d_set_auto_mipmap (COGL_TEXTURE_2D (texture), FALSE);
 
   if (!cogl_texture_allocate (texture, error))
     return FALSE;
@@ -599,7 +599,7 @@ copy_shadowfb_to_onscreen (ClutterStageView *view,
 
       rect = mtk_region_get_rectangle (damage_region, i);
 
-      if (!cogl_blit_framebuffer (shadowfb,
+      if (!cogl_framebuffer_blit (shadowfb,
                                   priv->framebuffer,
                                   rect.x, rect.y,
                                   rect.x, rect.y,

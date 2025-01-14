@@ -115,6 +115,12 @@ struct _MetaWaylandCompositor
    * order they were committed.
    */
   GQueue committed_transactions;
+
+  /* Transactions with time constraints. */
+  GQueue *timed_transactions;
+
+  /* Surfaces with fifo barriers. */
+  GList *barrier_surfaces;
 };
 
 gboolean meta_wayland_compositor_is_egl_display_bound (MetaWaylandCompositor *compositor);

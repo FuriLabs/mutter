@@ -105,8 +105,6 @@ static void show_tile_preview (MetaPlugin   *plugin,
                                int           tile_monitor_number);
 static void hide_tile_preview (MetaPlugin      *plugin);
 
-static const MetaPluginInfo * plugin_info (MetaPlugin *plugin);
-
 /*
  * Plugin private data that we store in the .plugin_private member.
  */
@@ -119,8 +117,6 @@ struct _MetaDefaultPluginPrivate
   ClutterActor          *desktop2;
 
   ClutterActor          *background_group;
-
-  MetaPluginInfo         info;
 };
 
 META_PLUGIN_DECLARE_WITH_CODE (MetaDefaultPlugin, meta_default_plugin,
@@ -165,7 +161,6 @@ meta_default_plugin_class_init (MetaDefaultPluginClass *klass)
   plugin_class->switch_workspace = switch_workspace;
   plugin_class->show_tile_preview = show_tile_preview;
   plugin_class->hide_tile_preview = hide_tile_preview;
-  plugin_class->plugin_info      = plugin_info;
   plugin_class->kill_window_effects   = kill_window_effects;
   plugin_class->kill_switch_workspace = kill_switch_workspace;
 }
@@ -176,12 +171,6 @@ meta_default_plugin_init (MetaDefaultPlugin *self)
   MetaDefaultPluginPrivate *priv;
 
   self->priv = priv = meta_default_plugin_get_instance_private (self);
-
-  priv->info.name        = "Default Effects";
-  priv->info.version     = "0.1";
-  priv->info.author      = "Intel Corp.";
-  priv->info.license     = "GPL";
-  priv->info.description = "This is an example of a plugin implementation.";
 }
 
 /*
@@ -275,7 +264,8 @@ on_switch_workspace_effect_stopped (ClutterTimeline *timeline,
   MetaPlugin               *plugin  = META_PLUGIN (data);
   MetaDefaultPluginPrivate *priv = META_DEFAULT_PLUGIN (plugin)->priv;
   MetaDisplay *display = meta_plugin_get_display (plugin);
-  GList *l = meta_get_window_actors (display);
+  MetaCompositor *compositor = meta_display_get_compositor (display);
+  GList *l = meta_compositor_get_window_actors (compositor);
 
   while (l)
     {
@@ -445,11 +435,12 @@ start (MetaPlugin *plugin)
   MetaDisplay *display = meta_plugin_get_display (plugin);
   MetaContext *context = meta_display_get_context (display);
   MetaBackend *backend = meta_context_get_backend (context);
+  MetaCompositor *compositor = meta_display_get_compositor (display);
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (backend);
 
   self->priv->background_group = meta_background_group_new ();
-  clutter_actor_insert_child_below (meta_get_window_group_for_display (display),
+  clutter_actor_insert_child_below (meta_compositor_get_window_group (compositor),
                                     self->priv->background_group, NULL);
 
   g_signal_connect (monitor_manager, "monitors-changed",
@@ -464,7 +455,7 @@ start (MetaPlugin *plugin)
   if (meta_is_wayland_compositor ())
     init_keymap (self, backend);
 
-  clutter_actor_show (meta_get_stage_for_display (display));
+  clutter_actor_show (meta_backend_get_stage (backend));
 }
 
 static void
@@ -473,6 +464,7 @@ switch_workspace (MetaPlugin *plugin,
                   MetaMotionDirection direction)
 {
   MetaDisplay *display;
+  MetaCompositor *compositor;
   MetaDefaultPluginPrivate *priv = META_DEFAULT_PLUGIN (plugin)->priv;
   GList        *l;
   ClutterActor *stage;
@@ -486,7 +478,8 @@ switch_workspace (MetaPlugin *plugin,
     }
 
   display = meta_plugin_get_display (plugin);
-  stage = meta_get_stage_for_display (display);
+  compositor = meta_display_get_compositor (display);
+  stage = CLUTTER_ACTOR (meta_compositor_get_stage (compositor));
 
   meta_display_get_size (display,
                          &screen_width,
@@ -510,7 +503,9 @@ switch_workspace (MetaPlugin *plugin,
   clutter_actor_add_child (stage, workspace1);
   clutter_actor_add_child (stage, workspace2);
 
-  for (l = g_list_last (meta_get_window_actors (display)); l; l = l->prev)
+  for (l = g_list_last (meta_compositor_get_window_actors (compositor));
+       l;
+       l = l->prev)
     {
       MetaWindowActor *window_actor = l->data;
       ActorPrivate    *apriv	    = get_actor_private (window_actor);
@@ -812,6 +807,7 @@ static DisplayTilePreview *
 get_display_tile_preview (MetaDisplay *display)
 {
   DisplayTilePreview *preview;
+  MetaCompositor *compositor;
 
   if (!display_tile_preview_data_quark)
     {
@@ -829,7 +825,8 @@ get_display_tile_preview (MetaDisplay *display)
       clutter_actor_set_background_color (preview->actor, &COGL_COLOR_INIT (0, 0, 255, 255));
       clutter_actor_set_opacity (preview->actor, 100);
 
-      clutter_actor_add_child (meta_get_window_group_for_display (display), preview->actor);
+      compositor = meta_display_get_compositor (display);
+      clutter_actor_add_child (meta_compositor_get_window_group (compositor), preview->actor);
       g_signal_connect (display,
                         "closing",
                         G_CALLBACK (on_display_closing),
@@ -923,12 +920,4 @@ kill_window_effects (MetaPlugin      *plugin,
 
   if (apriv->tml_destroy)
     finish_timeline (apriv->tml_destroy);
-}
-
-static const MetaPluginInfo *
-plugin_info (MetaPlugin *plugin)
-{
-  MetaDefaultPluginPrivate *priv = META_DEFAULT_PLUGIN (plugin)->priv;
-
-  return &priv->info;
 }

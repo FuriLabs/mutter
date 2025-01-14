@@ -76,6 +76,25 @@ meta_drm_buffer_gbm_export_fd (MetaDrmBuffer  *buffer,
 }
 
 static int
+meta_drm_buffer_gbm_export_fd_for_plane (MetaDrmBuffer  *buffer,
+                                         int             plane,
+                                         GError        **error)
+{
+  MetaDrmBufferGbm *buffer_gbm = META_DRM_BUFFER_GBM (buffer);
+  int fd;
+
+  fd = gbm_bo_get_fd_for_plane (buffer_gbm->bo, plane);
+  if (fd == -1)
+    {
+      g_set_error (error, G_IO_ERROR, g_io_error_from_errno (errno),
+                   "Failed to export buffer fd: %s", g_strerror (errno));
+      return -1;
+    }
+
+  return fd;
+}
+
+static int
 meta_drm_buffer_gbm_get_width (MetaDrmBuffer *buffer)
 {
   MetaDrmBufferGbm *buffer_gbm = META_DRM_BUFFER_GBM (buffer);
@@ -92,11 +111,28 @@ meta_drm_buffer_gbm_get_height (MetaDrmBuffer *buffer)
 }
 
 static int
+meta_drm_buffer_gbm_get_n_planes (MetaDrmBuffer *buffer)
+{
+  MetaDrmBufferGbm *buffer_gbm = META_DRM_BUFFER_GBM (buffer);
+
+  return gbm_bo_get_plane_count (buffer_gbm->bo);
+}
+
+static int
 meta_drm_buffer_gbm_get_stride (MetaDrmBuffer *buffer)
 {
   MetaDrmBufferGbm *buffer_gbm = META_DRM_BUFFER_GBM (buffer);
 
   return gbm_bo_get_stride (buffer_gbm->bo);
+}
+
+static int
+meta_drm_buffer_gbm_get_stride_for_plane (MetaDrmBuffer *buffer,
+                                          int            plane)
+{
+  MetaDrmBufferGbm *buffer_gbm = META_DRM_BUFFER_GBM (buffer);
+
+  return gbm_bo_get_stride_for_plane (buffer_gbm->bo, plane);
 }
 
 static int
@@ -116,8 +152,8 @@ meta_drm_buffer_gbm_get_format (MetaDrmBuffer *buffer)
 }
 
 static int
-meta_drm_buffer_gbm_get_offset (MetaDrmBuffer *buffer,
-                                int            plane)
+meta_drm_buffer_gbm_get_offset_for_plane (MetaDrmBuffer *buffer,
+                                          int            plane)
 {
   MetaDrmBufferGbm *buffer_gbm = META_DRM_BUFFER_GBM (buffer);
 
@@ -308,7 +344,7 @@ meta_drm_buffer_gbm_blit_to_framebuffer (CoglScanout      *scanout,
       goto out;
     }
 
-  result = cogl_blit_framebuffer (COGL_FRAMEBUFFER (cogl_fbo),
+  result = cogl_framebuffer_blit (COGL_FRAMEBUFFER (cogl_fbo),
                                   framebuffer,
                                   0, 0,
                                   x, y,
@@ -375,12 +411,15 @@ meta_drm_buffer_gbm_class_init (MetaDrmBufferGbmClass *klass)
   object_class->finalize = meta_drm_buffer_gbm_finalize;
 
   buffer_class->export_fd = meta_drm_buffer_gbm_export_fd;
+  buffer_class->export_fd_for_plane = meta_drm_buffer_gbm_export_fd_for_plane;
   buffer_class->ensure_fb_id = meta_drm_buffer_gbm_ensure_fb_id;
   buffer_class->get_width = meta_drm_buffer_gbm_get_width;
   buffer_class->get_height = meta_drm_buffer_gbm_get_height;
+  buffer_class->get_n_planes = meta_drm_buffer_gbm_get_n_planes;
   buffer_class->get_stride = meta_drm_buffer_gbm_get_stride;
+  buffer_class->get_stride_for_plane = meta_drm_buffer_gbm_get_stride_for_plane;
   buffer_class->get_bpp = meta_drm_buffer_gbm_get_bpp;
   buffer_class->get_format = meta_drm_buffer_gbm_get_format;
-  buffer_class->get_offset = meta_drm_buffer_gbm_get_offset;
+  buffer_class->get_offset_for_plane = meta_drm_buffer_gbm_get_offset_for_plane;
   buffer_class->get_modifier = meta_drm_buffer_gbm_get_modifier;
 }

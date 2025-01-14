@@ -236,19 +236,6 @@ typedef enum
 } ClutterTextDirection;
 
 /**
- * ClutterShaderType:
- * @CLUTTER_VERTEX_SHADER: a vertex shader
- * @CLUTTER_FRAGMENT_SHADER: a fragment shader
- *
- * The type of GLSL shader program
- */
-typedef enum
-{
-  CLUTTER_VERTEX_SHADER,
-  CLUTTER_FRAGMENT_SHADER
-} ClutterShaderType;
-
-/**
  * ClutterModifierType:
  * @CLUTTER_SHIFT_MASK: Mask applied by the Shift key
  * @CLUTTER_LOCK_MASK: Mask applied by the Caps Lock key
@@ -849,7 +836,7 @@ typedef enum
  * @CLUTTER_REPAINT_FLAGS_POST_PAINT: Run the repaint function after
  *   painting the stages
  *
- * Flags to pass to clutter_threads_add_repaint_func_full().
+ * Flags to pass to [func@Clutter.threads_add_repaint_func].
  */
 typedef enum
 {
@@ -956,38 +943,6 @@ typedef enum
   CLUTTER_REPEAT_Y_AXIS = 1 << 1,
   CLUTTER_REPEAT_BOTH   = CLUTTER_REPEAT_X_AXIS | CLUTTER_REPEAT_Y_AXIS
 } ClutterContentRepeat;
-
-/**
- * ClutterColorspace:
- * @CLUTTER_COLORSPACE_DEFAULT: Unknown colorspace
- * @CLUTTER_COLORSPACE_SRGB: Default sRGB colorspace
- * @CLUTTER_COLORSPACE_BT2020: BT2020 colorspace
- *
- * Colorspace information.
- */
-typedef enum
-{
-  CLUTTER_COLORSPACE_DEFAULT,
-  CLUTTER_COLORSPACE_SRGB,
-  CLUTTER_COLORSPACE_BT2020,
-} ClutterColorspace;
-
-/**
- * ClutterTransferFunction:
- * @CLUTTER_TRANSFER_FUNCTION_DEFAULT: Unknown transfer function
- * @CLUTTER_TRANSFER_FUNCTION_SRGB: The sRGB gamma transfer function
- * @CLUTTER_TRANSFER_FUNCTION_PQ: Perceptual quantizer (PQ)
- * @CLUTTER_TRANSFER_FUNCTION_LINEAR: Linear transfer function
- *
- * Colorspace information.
- */
-typedef enum
-{
-  CLUTTER_TRANSFER_FUNCTION_DEFAULT,
-  CLUTTER_TRANSFER_FUNCTION_SRGB,
-  CLUTTER_TRANSFER_FUNCTION_PQ,
-  CLUTTER_TRANSFER_FUNCTION_LINEAR,
-} ClutterTransferFunction;
 
 /**
  * ClutterEncodingRequiredFormat:

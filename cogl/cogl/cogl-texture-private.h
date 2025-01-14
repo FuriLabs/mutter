@@ -109,26 +109,6 @@ typedef struct _CoglTextureLoader
   } src;
 } CoglTextureLoader;
 
-struct _CoglTexture
-{
-  GObject parent_instance;
-
-  CoglContext *context;
-  gboolean is_primitive;
-  CoglTextureLoader *loader;
-  GList *framebuffers;
-  int max_level_set;
-  int max_level_requested;
-  int width;
-  int height;
-  gboolean allocated;
-
-  /*
-   * Internal format
-   */
-  CoglTextureComponents components;
-  unsigned int premultiplied : 1;
-};
 
 struct _CoglTextureClass
 {
@@ -164,15 +144,13 @@ struct _CoglTextureClass
                          int             rowstride,
                          uint8_t        *data);
 
-  void (* foreach_sub_texture_in_region) (CoglTexture            *tex,
-                                          float                   virtual_tx_1,
-                                          float                   virtual_ty_1,
-                                          float                   virtual_tx_2,
-                                          float                   virtual_ty_2,
-                                          CoglMetaTextureCallback callback,
-                                          void                   *user_data);
-
-  int (* get_max_waste) (CoglTexture *tex);
+  void (* foreach_sub_texture_in_region) (CoglTexture                *tex,
+                                          float                       virtual_tx_1,
+                                          float                       virtual_ty_1,
+                                          float                       virtual_tx_2,
+                                          float                       virtual_ty_2,
+                                          CoglTextureForeachCallback  callback,
+                                          void                       *user_data);
 
   gboolean (* is_sliced) (CoglTexture *tex);
 
@@ -204,10 +182,6 @@ struct _CoglTextureClass
 
   CoglPixelFormat (* get_format) (CoglTexture *tex);
   GLenum (* get_gl_format) (CoglTexture *tex);
-
-  /* Only needs to be implemented if is_primitive == TRUE */
-  void (* set_auto_mipmap) (CoglTexture *texture,
-                            gboolean     value);
 };
 
 gboolean
@@ -260,18 +234,18 @@ void
 _cogl_texture_flush_journal_rendering (CoglTexture *texture);
 
 void
-_cogl_texture_spans_foreach_in_region (CoglSpan *x_spans,
-                                       int n_x_spans,
-                                       CoglSpan *y_spans,
-                                       int n_y_spans,
-                                       CoglTexture **textures,
-                                       float *virtual_coords,
-                                       float x_normalize_factor,
-                                       float y_normalize_factor,
-                                       CoglPipelineWrapMode wrap_x,
-                                       CoglPipelineWrapMode wrap_y,
-                                       CoglMetaTextureCallback callback,
-                                       void *user_data);
+_cogl_texture_spans_foreach_in_region (CoglSpan                    *x_spans,
+                                       int                          n_x_spans,
+                                       CoglSpan                    *y_spans,
+                                       int                          n_y_spans,
+                                       CoglTexture                **textures,
+                                       float                       *virtual_coords,
+                                       float                        x_normalize_factor,
+                                       float                        y_normalize_factor,
+                                       CoglPipelineWrapMode         wrap_x,
+                                       CoglPipelineWrapMode         wrap_y,
+                                       CoglTextureForeachCallback   callback,
+                                       void                        *user_data);
 
 COGL_EXPORT gboolean
 _cogl_texture_set_region (CoglTexture *texture,
@@ -322,7 +296,7 @@ _cogl_texture_set_allocated (CoglTexture *texture,
                              int height);
 
 CoglTextureLoader *
-_cogl_texture_create_loader (void);
+cogl_texture_loader_new (CoglTextureSourceType type);
 
 void
 _cogl_texture_copy_internal_format (CoglTexture *src,
@@ -337,3 +311,5 @@ cogl_texture_get_max_level_set (CoglTexture *texture);
 void
 cogl_texture_set_max_level_set (CoglTexture *texture,
                                 int          max_level_set);
+
+gboolean cogl_texture_is_allocated (CoglTexture *texture);

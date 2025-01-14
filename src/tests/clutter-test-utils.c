@@ -57,13 +57,13 @@ clutter_test_init (int    *argc,
 
   context = meta_create_test_context (META_CONTEXT_TEST_TYPE_HEADLESS,
                                       META_CONTEXT_TEST_FLAG_NO_X11);
-  g_assert (meta_context_configure (context, argc, argv, NULL));
-  g_assert (meta_context_setup (context, NULL));
+  g_assert_true (meta_context_configure (context, argc, argv, NULL));
+  g_assert_true (meta_context_setup (context, NULL));
 
   test_environ = g_new0 (ClutterTestEnvironment, 1);
   test_environ->context = context;
 
-  g_assert (meta_context_start (context, NULL));
+  g_assert_true (meta_context_start (context, NULL));
 
   clutter_test_main_loop = g_main_loop_new (NULL, FALSE);
 }
@@ -239,7 +239,7 @@ clutter_test_add_data_full (const char     *test_path,
   g_return_if_fail (test_path != NULL);
   g_return_if_fail (test_func != NULL);
 
-  g_assert (test_environ != NULL);
+  g_assert_nonnull (test_environ);
 
   data = g_new (ClutterTestData, 1);
   data->test_func = test_func;
@@ -418,10 +418,10 @@ clutter_test_check_actor_at_point (ClutterActor            *stage,
 
   clutter_actor_show (stage);
 
-  clutter_threads_add_repaint_func_full (CLUTTER_REPAINT_FLAGS_POST_PAINT,
-                                         validate_stage,
-                                         data,
-                                         NULL);
+  clutter_threads_add_repaint_func (CLUTTER_REPAINT_FLAGS_POST_PAINT,
+                                    validate_stage,
+                                    data,
+                                    NULL);
 
   while (!data->was_painted)
     g_main_context_iteration (NULL, TRUE);

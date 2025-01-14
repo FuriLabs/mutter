@@ -43,6 +43,7 @@
 #include "backends/meta-color-manager.h"
 #include "backends/meta-idle-monitor-private.h"
 #include "backends/meta-keymap-utils.h"
+#include "backends/meta-launcher.h"
 #include "backends/meta-stage-private.h"
 #include "backends/x11/meta-barrier-x11.h"
 #include "backends/x11/meta-clutter-backend-x11.h"
@@ -60,7 +61,7 @@
 #include "mtk/mtk-x11.h"
 #include "x11/window-x11.h"
 
-struct _MetaBackendX11Private
+typedef struct _MetaBackendX11Private
 {
   /* The host X11 display */
   Display *xdisplay;
@@ -95,19 +96,11 @@ struct _MetaBackendX11Private
   MetaLogicalMonitor *cached_current_logical_monitor;
 
   MetaX11Barriers *barriers;
-};
-typedef struct _MetaBackendX11Private MetaBackendX11Private;
+} MetaBackendX11Private;
 
-static GInitableIface *initable_parent_iface;
-
-static void
-initable_iface_init (GInitableIface *initable_iface);
-
-G_DEFINE_TYPE_WITH_CODE (MetaBackendX11, meta_backend_x11, META_TYPE_BACKEND,
-                         G_ADD_PRIVATE (MetaBackendX11)
-                         G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
-                                                initable_iface_init));
-
+G_DEFINE_TYPE_WITH_PRIVATE (MetaBackendX11,
+                            meta_backend_x11,
+                            META_TYPE_BACKEND)
 
 static void
 uint64_to_xsync_value (uint64_t    value,
@@ -542,15 +535,12 @@ on_kbd_a11y_changed (MetaInputSettings   *input_settings,
   meta_seat_x11_apply_kbd_a11y_settings (seat, a11y_settings);
 }
 
-static void
-meta_backend_x11_post_init (MetaBackend *backend)
+static gboolean
+meta_backend_x11_init_render (MetaBackend  *backend,
+                              GError      **error)
 {
   MetaBackendX11 *x11 = META_BACKEND_X11 (backend);
   MetaBackendX11Private *priv = meta_backend_x11_get_instance_private (x11);
-  MetaMonitorManager *monitor_manager;
-  ClutterBackend *clutter_backend;
-  ClutterSeat *seat;
-  MetaInputSettings *input_settings;
   int major, minor;
 
   priv->source = x_event_source_new (backend);
@@ -575,7 +565,19 @@ meta_backend_x11_post_init (MetaBackend *backend)
     meta_fatal ("X server doesn't have the XKB extension, version %d.%d or newer",
                 XKB_X11_MIN_MAJOR_XKB_VERSION, XKB_X11_MIN_MINOR_XKB_VERSION);
 
-  META_BACKEND_CLASS (meta_backend_x11_parent_class)->post_init (backend);
+  return TRUE;
+}
+
+static gboolean
+meta_backend_x11_init_post (MetaBackend  *backend,
+                            GError      **error)
+{
+  MetaBackendX11 *x11 = META_BACKEND_X11 (backend);
+  MetaBackendX11Private *priv = meta_backend_x11_get_instance_private (x11);
+  MetaMonitorManager *monitor_manager;
+  ClutterBackend *clutter_backend;
+  ClutterSeat *seat;
+  MetaInputSettings *input_settings;
 
   monitor_manager = meta_backend_get_monitor_manager (backend);
   g_signal_connect (monitor_manager, "monitors-changed-internal",
@@ -606,6 +608,33 @@ meta_backend_x11_post_init (MetaBackend *backend)
           XkbLockModifiers (priv->xdisplay, XkbUseCoreKbd, num_mask, num_mask);
         }
     }
+
+  return TRUE;
+}
+
+static gboolean
+meta_backend_x11_create_launcher (MetaBackend   *backend,
+                                  MetaLauncher **launcher_out,
+                                  GError       **error)
+{
+  g_autoptr (MetaLauncher) launcher = NULL;
+  g_autoptr (GError) local_error = NULL;
+
+  *launcher_out = NULL;
+
+  launcher = meta_launcher_new (backend, NULL, NULL, &local_error);
+
+  if (!launcher)
+    {
+      meta_topic (META_DEBUG_BACKEND,
+                  "Creating launcher for the X11 backend failed: %s",
+                  local_error->message);
+
+      return TRUE;
+    }
+
+  *launcher_out = g_steal_pointer (&launcher);
+  return TRUE;
 }
 
 static ClutterBackend *
@@ -955,12 +984,11 @@ init_xinput (MetaBackendX11  *backend_x11,
 }
 
 static gboolean
-meta_backend_x11_initable_init (GInitable    *initable,
-                                GCancellable *cancellable,
-                                GError      **error)
+meta_backend_x11_init_basic (MetaBackend  *backend,
+                             GError      **error)
 {
-  MetaContext *context = meta_backend_get_context (META_BACKEND (initable));
-  MetaBackendX11 *x11 = META_BACKEND_X11 (initable);
+  MetaContext *context = meta_backend_get_context (backend);
+  MetaBackendX11 *x11 = META_BACKEND_X11 (backend);
   MetaBackendX11Private *priv = meta_backend_x11_get_instance_private (x11);
   Display *xdisplay;
   const char *xdisplay_name;
@@ -996,15 +1024,7 @@ meta_backend_x11_initable_init (GInitable    *initable,
   if (priv->have_xinput_23)
     priv->barriers = meta_x11_barriers_new (x11);
 
-  return initable_parent_iface->init (initable, cancellable, error);
-}
-
-static void
-initable_iface_init (GInitableIface *initable_iface)
-{
-  initable_parent_iface = g_type_interface_peek_parent (initable_iface);
-
-  initable_iface->init = meta_backend_x11_initable_init;
+  return TRUE;
 }
 
 static void
@@ -1058,10 +1078,15 @@ meta_backend_x11_class_init (MetaBackendX11Class *klass)
 
   object_class->dispose = meta_backend_x11_dispose;
   object_class->finalize = meta_backend_x11_finalize;
+
+  backend_class->init_basic = meta_backend_x11_init_basic;
+  backend_class->init_render = meta_backend_x11_init_render;
+  backend_class->init_post = meta_backend_x11_init_post;
+
+  backend_class->create_launcher = meta_backend_x11_create_launcher;
   backend_class->create_clutter_backend = meta_backend_x11_create_clutter_backend;
   backend_class->create_color_manager = meta_backend_x11_create_color_manager;
   backend_class->create_default_seat = meta_backend_x11_create_default_seat;
-  backend_class->post_init = meta_backend_x11_post_init;
   backend_class->grab_device = meta_backend_x11_grab_device;
   backend_class->ungrab_device = meta_backend_x11_ungrab_device;
   backend_class->freeze_keyboard = meta_backend_x11_freeze_keyboard;

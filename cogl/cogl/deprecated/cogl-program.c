@@ -38,7 +38,7 @@
 
 #include <string.h>
 
-G_DEFINE_TYPE (CoglProgram, cogl_program, G_TYPE_OBJECT);
+G_DEFINE_FINAL_TYPE (CoglProgram, cogl_program, G_TYPE_OBJECT);
 
 static void
 cogl_program_dispose (GObject *object)
@@ -56,8 +56,7 @@ cogl_program_dispose (GObject *object)
 
       g_free (uniform->name);
 
-      if (uniform->value.count > 1)
-        g_free (uniform->value.v.array);
+      _cogl_boxed_value_destroy (&uniform->value);
     }
 
   g_array_free (program->custom_uniforms, TRUE);

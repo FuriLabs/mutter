@@ -118,9 +118,13 @@ typedef struct _MetaWaylandCreatorParams
   MetaWaylandColorManager *color_manager;
   struct wl_resource *resource;
 
-  ClutterColorspace colorspace;
-  ClutterTransferFunction transfer_function;
-  float min_lum, max_lum, ref_lum;
+  ClutterColorimetry colorimetry;
+  ClutterEOTF eotf;
+  ClutterLuminance lum;
+
+  gboolean is_colorimetry_set;
+  gboolean is_eotf_set;
+  gboolean is_luminance_set;
 } MetaWaylandCreatorParams;
 
 static void meta_wayland_color_management_surface_free (MetaWaylandColorManagementSurface *cm_surface);
@@ -176,15 +180,29 @@ float_to_scaled_uint32 (float value)
 
 static gboolean
 wayland_tf_to_clutter (enum xx_color_manager_v4_transfer_function  tf,
-                       ClutterTransferFunction                    *tf_out)
+                       ClutterEOTF                                *eotf)
 {
   switch (tf)
     {
+    case XX_COLOR_MANAGER_V4_TRANSFER_FUNCTION_GAMMA22:
+      eotf->type = CLUTTER_EOTF_TYPE_GAMMA;
+      eotf->gamma_exp = 2.2f;
+      return TRUE;
+    case XX_COLOR_MANAGER_V4_TRANSFER_FUNCTION_GAMMA28:
+      eotf->type = CLUTTER_EOTF_TYPE_GAMMA;
+      eotf->gamma_exp = 2.8f;
+      return TRUE;
     case XX_COLOR_MANAGER_V4_TRANSFER_FUNCTION_SRGB:
-      *tf_out = CLUTTER_TRANSFER_FUNCTION_SRGB;
+      eotf->type = CLUTTER_EOTF_TYPE_NAMED;
+      eotf->tf_name = CLUTTER_TRANSFER_FUNCTION_SRGB;
       return TRUE;
     case XX_COLOR_MANAGER_V4_TRANSFER_FUNCTION_ST2084_PQ:
-      *tf_out = CLUTTER_TRANSFER_FUNCTION_PQ;
+      eotf->type = CLUTTER_EOTF_TYPE_NAMED;
+      eotf->tf_name = CLUTTER_TRANSFER_FUNCTION_PQ;
+      return TRUE;
+    case XX_COLOR_MANAGER_V4_TRANSFER_FUNCTION_BT709:
+      eotf->type = CLUTTER_EOTF_TYPE_NAMED;
+      eotf->tf_name = CLUTTER_TRANSFER_FUNCTION_BT709;
       return TRUE;
     default:
       return FALSE;
@@ -196,11 +214,12 @@ clutter_tf_to_wayland (ClutterTransferFunction tf)
 {
   switch (tf)
     {
-    case CLUTTER_TRANSFER_FUNCTION_DEFAULT:
     case CLUTTER_TRANSFER_FUNCTION_SRGB:
       return XX_COLOR_MANAGER_V4_TRANSFER_FUNCTION_SRGB;
     case CLUTTER_TRANSFER_FUNCTION_PQ:
       return XX_COLOR_MANAGER_V4_TRANSFER_FUNCTION_ST2084_PQ;
+    case CLUTTER_TRANSFER_FUNCTION_BT709:
+      return XX_COLOR_MANAGER_V4_TRANSFER_FUNCTION_BT709;
     case CLUTTER_TRANSFER_FUNCTION_LINEAR:
       return XX_COLOR_MANAGER_V4_TRANSFER_FUNCTION_LINEAR;
     }
@@ -209,15 +228,21 @@ clutter_tf_to_wayland (ClutterTransferFunction tf)
 
 static gboolean
 wayland_primaries_to_clutter (enum xx_color_manager_v4_primaries  primaries,
-                              ClutterColorspace                  *primaries_out)
+                              ClutterColorimetry                 *colorimetry)
 {
   switch (primaries)
     {
     case XX_COLOR_MANAGER_V4_PRIMARIES_SRGB:
-      *primaries_out = CLUTTER_COLORSPACE_SRGB;
+      colorimetry->type = CLUTTER_COLORIMETRY_TYPE_COLORSPACE;
+      colorimetry->colorspace = CLUTTER_COLORSPACE_SRGB;
       return TRUE;
     case XX_COLOR_MANAGER_V4_PRIMARIES_BT2020:
-      *primaries_out = CLUTTER_COLORSPACE_BT2020;
+      colorimetry->type = CLUTTER_COLORIMETRY_TYPE_COLORSPACE;
+      colorimetry->colorspace = CLUTTER_COLORSPACE_BT2020;
+      return TRUE;
+    case XX_COLOR_MANAGER_V4_PRIMARIES_NTSC:
+      colorimetry->type = CLUTTER_COLORIMETRY_TYPE_COLORSPACE;
+      colorimetry->colorspace = CLUTTER_COLORSPACE_NTSC;
       return TRUE;
     default:
       return FALSE;
@@ -225,15 +250,16 @@ wayland_primaries_to_clutter (enum xx_color_manager_v4_primaries  primaries,
 }
 
 static enum xx_color_manager_v4_primaries
-clutter_primaries_to_wayland (ClutterColorspace primaries)
+clutter_colorspace_to_wayland (ClutterColorspace colorspace)
 {
-  switch (primaries)
+  switch (colorspace)
     {
-    case CLUTTER_COLORSPACE_DEFAULT:
     case CLUTTER_COLORSPACE_SRGB:
       return XX_COLOR_MANAGER_V4_PRIMARIES_SRGB;
     case CLUTTER_COLORSPACE_BT2020:
       return XX_COLOR_MANAGER_V4_PRIMARIES_BT2020;
+    case CLUTTER_COLORSPACE_NTSC:
+      return XX_COLOR_MANAGER_V4_PRIMARIES_NTSC;
     }
   g_assert_not_reached ();
 }
@@ -339,26 +365,75 @@ static void
 send_information (struct wl_resource *info_resource,
                   ClutterColorState  *color_state)
 {
-  ClutterColorspace clutter_colorspace;
-  enum xx_color_manager_v4_primaries primaries;
-  ClutterTransferFunction clutter_tf;
+  enum xx_color_manager_v4_primaries primaries_named;
   enum xx_color_manager_v4_transfer_function tf;
-  float min_lum, max_lum, ref_lum;
+  ClutterColorStateParams *color_state_params;
+  const ClutterColorimetry *colorimetry;
+  const ClutterPrimaries *primaries;
+  const ClutterEOTF *eotf;
+  const ClutterLuminance *lum;
 
-  clutter_colorspace = clutter_color_state_get_colorspace (color_state);
-  primaries = clutter_primaries_to_wayland (clutter_colorspace);
-  xx_image_description_info_v4_send_primaries_named (info_resource, primaries);
+  color_state_params = CLUTTER_COLOR_STATE_PARAMS (color_state);
 
-  clutter_tf = clutter_color_state_get_transfer_function (color_state);
-  tf = clutter_tf_to_wayland (clutter_tf);
-  xx_image_description_info_v4_send_tf_named (info_resource, tf);
+  colorimetry = clutter_color_state_params_get_colorimetry (color_state_params);
+  switch (colorimetry->type)
+    {
+    case CLUTTER_COLORIMETRY_TYPE_COLORSPACE:
+      primaries_named = clutter_colorspace_to_wayland (colorimetry->colorspace);
+      xx_image_description_info_v4_send_primaries_named (info_resource,
+                                                         primaries_named);
 
-  clutter_color_state_get_luminances (color_state,
-                                      &min_lum, &max_lum, &ref_lum);
+      primaries = clutter_colorspace_to_primaries (colorimetry->colorspace);
+      xx_image_description_info_v4_send_primaries (
+        info_resource,
+        float_to_scaled_uint32 (primaries->r_x),
+        float_to_scaled_uint32 (primaries->r_y),
+        float_to_scaled_uint32 (primaries->g_x),
+        float_to_scaled_uint32 (primaries->g_y),
+        float_to_scaled_uint32 (primaries->b_x),
+        float_to_scaled_uint32 (primaries->b_y),
+        float_to_scaled_uint32 (primaries->w_x),
+        float_to_scaled_uint32 (primaries->w_y));
+      break;
+    case CLUTTER_COLORIMETRY_TYPE_PRIMARIES:
+      xx_image_description_info_v4_send_primaries (
+        info_resource,
+        float_to_scaled_uint32 (colorimetry->primaries->r_x),
+        float_to_scaled_uint32 (colorimetry->primaries->r_y),
+        float_to_scaled_uint32 (colorimetry->primaries->g_x),
+        float_to_scaled_uint32 (colorimetry->primaries->g_y),
+        float_to_scaled_uint32 (colorimetry->primaries->b_x),
+        float_to_scaled_uint32 (colorimetry->primaries->b_y),
+        float_to_scaled_uint32 (colorimetry->primaries->w_x),
+        float_to_scaled_uint32 (colorimetry->primaries->w_y));
+      break;
+    }
+
+  eotf = clutter_color_state_params_get_eotf (color_state_params);
+  switch (eotf->type)
+    {
+    case CLUTTER_EOTF_TYPE_NAMED:
+      tf = clutter_tf_to_wayland (eotf->tf_name);
+      xx_image_description_info_v4_send_tf_named (info_resource, tf);
+      break;
+    case CLUTTER_EOTF_TYPE_GAMMA:
+      if (G_APPROX_VALUE (eotf->gamma_exp, 2.2f, 0.0001f))
+        xx_image_description_info_v4_send_tf_named (info_resource,
+                                                    XX_COLOR_MANAGER_V4_TRANSFER_FUNCTION_GAMMA22);
+      else if (G_APPROX_VALUE (eotf->gamma_exp, 2.8f, 0.0001f))
+        xx_image_description_info_v4_send_tf_named (info_resource,
+                                                    XX_COLOR_MANAGER_V4_TRANSFER_FUNCTION_GAMMA28);
+      else
+        xx_image_description_info_v4_send_tf_power (info_resource,
+                                                    float_to_scaled_uint32 (eotf->gamma_exp));
+      break;
+    }
+
+  lum = clutter_color_state_params_get_luminance (color_state_params);
   xx_image_description_info_v4_send_luminances (info_resource,
-                                                float_to_scaled_uint32 (min_lum),
-                                                (uint32_t) max_lum,
-                                                (uint32_t) ref_lum);
+                                                float_to_scaled_uint32 (lum->min),
+                                                (uint32_t) lum->max,
+                                                (uint32_t) lum->ref);
 }
 
 static void
@@ -803,20 +878,17 @@ meta_wayland_creator_params_new (MetaWaylandColorManager *color_manager,
   creator_params->color_manager = color_manager;
   creator_params->resource = resource;
 
-  creator_params->colorspace = CLUTTER_COLORSPACE_DEFAULT;
-  creator_params->transfer_function = CLUTTER_TRANSFER_FUNCTION_DEFAULT;
-
-  creator_params->min_lum = -1.0f;
-  creator_params->max_lum = -1.0f;
-  creator_params->ref_lum = -1.0f;
-
   return creator_params;
 }
 
 static void
 meta_wayland_creator_params_free (MetaWaylandCreatorParams *creator_params)
 {
-  free (creator_params);
+  if (creator_params->is_colorimetry_set &&
+      creator_params->colorimetry.type == CLUTTER_COLORIMETRY_TYPE_PRIMARIES)
+    g_clear_pointer (&creator_params->colorimetry.primaries, g_free);
+
+  g_free (creator_params);
 }
 
 static void
@@ -840,8 +912,7 @@ creator_params_create (struct wl_client   *client,
   g_autoptr (ClutterColorState) color_state = NULL;
   MetaWaylandImageDescription *image_desc;
 
-  if (creator_params->colorspace == CLUTTER_COLORSPACE_DEFAULT ||
-      creator_params->transfer_function == CLUTTER_TRANSFER_FUNCTION_DEFAULT)
+  if (!creator_params->is_colorimetry_set || !creator_params->is_eotf_set)
     {
       wl_resource_post_error (resource,
                               XX_IMAGE_DESCRIPTION_CREATOR_PARAMS_V4_ERROR_INCOMPLETE_SET,
@@ -856,12 +927,10 @@ creator_params_create (struct wl_client   *client,
                         id);
 
   color_state =
-    clutter_color_state_new_full (clutter_context,
-                                  creator_params->colorspace,
-                                  creator_params->transfer_function,
-                                  creator_params->min_lum,
-                                  creator_params->max_lum,
-                                  creator_params->ref_lum);
+    clutter_color_state_params_new_from_primitives (clutter_context,
+                                                    creator_params->colorimetry,
+                                                    creator_params->eotf,
+                                                    creator_params->lum);
 
   image_desc =
     meta_wayland_image_description_new_color_state (color_manager,
@@ -884,9 +953,9 @@ creator_params_set_tf_named (struct wl_client   *client,
 {
   MetaWaylandCreatorParams *creator_params =
     wl_resource_get_user_data (resource);
-  ClutterTransferFunction clutter_tf;
+  ClutterEOTF eotf;
 
-  if (creator_params->transfer_function != CLUTTER_TRANSFER_FUNCTION_DEFAULT)
+  if (creator_params->is_eotf_set)
     {
       wl_resource_post_error (resource,
                               XX_IMAGE_DESCRIPTION_CREATOR_PARAMS_V4_ERROR_ALREADY_SET,
@@ -894,7 +963,7 @@ creator_params_set_tf_named (struct wl_client   *client,
       return;
     }
 
-  if (!wayland_tf_to_clutter (tf, &clutter_tf))
+  if (!wayland_tf_to_clutter (tf, &eotf))
     {
       wl_resource_post_error (resource,
                               XX_IMAGE_DESCRIPTION_CREATOR_PARAMS_V4_ERROR_INVALID_TF,
@@ -902,7 +971,8 @@ creator_params_set_tf_named (struct wl_client   *client,
       return;
     }
 
-  creator_params->transfer_function = clutter_tf;
+  creator_params->eotf = eotf;
+  creator_params->is_eotf_set = TRUE;
 }
 
 static void
@@ -910,9 +980,28 @@ creator_params_set_tf_power (struct wl_client   *client,
                              struct wl_resource *resource,
                              uint32_t            eexp)
 {
-  wl_resource_post_error (resource,
-                          XX_IMAGE_DESCRIPTION_CREATOR_PARAMS_V4_ERROR_INVALID_TF,
-                          "Setting power based transfer characteristics is not supported");
+  MetaWaylandCreatorParams *creator_params =
+    wl_resource_get_user_data (resource);
+
+  if (creator_params->is_eotf_set)
+    {
+      wl_resource_post_error (resource,
+                              XX_IMAGE_DESCRIPTION_CREATOR_PARAMS_V4_ERROR_ALREADY_SET,
+                              "The transfer characteristics were already set");
+      return;
+    }
+
+  if (eexp < 10000 || eexp > 100000)
+    {
+      wl_resource_post_error (resource,
+                              XX_IMAGE_DESCRIPTION_CREATOR_PARAMS_V4_ERROR_INVALID_TF,
+                              "The exponent must be between 1.0 and 10.0");
+      return;
+    }
+
+  creator_params->eotf.type = CLUTTER_EOTF_TYPE_GAMMA;
+  creator_params->eotf.gamma_exp = scaled_uint32_to_float (eexp);
+  creator_params->is_eotf_set = TRUE;
 }
 
 static void
@@ -922,9 +1011,9 @@ creator_params_set_primaries_named (struct wl_client   *client,
 {
   MetaWaylandCreatorParams *creator_params =
     wl_resource_get_user_data (resource);
-  ClutterColorspace colorspace;
+  ClutterColorimetry colorimetry;
 
-  if (creator_params->colorspace != CLUTTER_COLORSPACE_DEFAULT)
+  if (creator_params->is_colorimetry_set)
     {
       wl_resource_post_error (resource,
                               XX_IMAGE_DESCRIPTION_CREATOR_PARAMS_V4_ERROR_ALREADY_SET,
@@ -932,7 +1021,7 @@ creator_params_set_primaries_named (struct wl_client   *client,
       return;
     }
 
-  if (!wayland_primaries_to_clutter (primaries, &colorspace))
+  if (!wayland_primaries_to_clutter (primaries, &colorimetry))
     {
       wl_resource_post_error (resource,
                               XX_IMAGE_DESCRIPTION_CREATOR_PARAMS_V4_ERROR_INVALID_PRIMARIES,
@@ -940,7 +1029,8 @@ creator_params_set_primaries_named (struct wl_client   *client,
       return;
     }
 
-  creator_params->colorspace = colorspace;
+  creator_params->colorimetry = colorimetry;
+  creator_params->is_colorimetry_set = TRUE;
 }
 
 static void
@@ -955,9 +1045,44 @@ creator_params_set_primaries (struct wl_client   *client,
                               int32_t             w_x,
                               int32_t             w_y)
 {
-  wl_resource_post_error (resource,
-                          XX_IMAGE_DESCRIPTION_CREATOR_PARAMS_V4_ERROR_INVALID_PRIMARIES,
-                          "Setting arbitrary primaries is not supported");
+  MetaWaylandCreatorParams *creator_params =
+    wl_resource_get_user_data (resource);
+  ClutterPrimaries *primaries;
+
+  if (creator_params->is_colorimetry_set)
+    {
+      wl_resource_post_error (resource,
+                              XX_IMAGE_DESCRIPTION_CREATOR_PARAMS_V4_ERROR_ALREADY_SET,
+                              "The primaries were already set");
+      return;
+    }
+
+  primaries = g_new0 (ClutterPrimaries, 1);
+  primaries->r_x = scaled_uint32_to_float (r_x);
+  primaries->r_y = scaled_uint32_to_float (r_y);
+  primaries->g_x = scaled_uint32_to_float (g_x);
+  primaries->g_y = scaled_uint32_to_float (g_y);
+  primaries->b_x = scaled_uint32_to_float (b_x);
+  primaries->b_y = scaled_uint32_to_float (b_y);
+  primaries->w_x = scaled_uint32_to_float (w_x);
+  primaries->w_y = scaled_uint32_to_float (w_y);
+
+  if (primaries->r_x < 0.0f || primaries->r_x > 1.0f ||
+      primaries->r_y < 0.0f || primaries->r_y > 1.0f ||
+      primaries->g_x < 0.0f || primaries->g_x > 1.0f ||
+      primaries->g_y < 0.0f || primaries->g_y > 1.0f ||
+      primaries->b_x < 0.0f || primaries->b_x > 1.0f ||
+      primaries->b_y < 0.0f || primaries->b_y > 1.0f ||
+      primaries->w_x < 0.0f || primaries->w_x > 1.0f ||
+      primaries->w_y < 0.0f || primaries->w_y > 1.0f)
+    {
+      g_warning ("Primaries out of expected normalized range");
+      clutter_primaries_ensure_normalized_range (primaries);
+    }
+
+  creator_params->colorimetry.type = CLUTTER_COLORIMETRY_TYPE_PRIMARIES;
+  creator_params->colorimetry.primaries = primaries;
+  creator_params->is_colorimetry_set = TRUE;
 }
 
 static void
@@ -971,9 +1096,7 @@ creator_params_set_luminance (struct wl_client   *client,
     wl_resource_get_user_data (resource);
   float min, max, ref;
 
-  if (creator_params->min_lum >= 0.0f ||
-      creator_params->max_lum >= 0.0f ||
-      creator_params->ref_lum >= 0.0f)
+  if (creator_params->is_luminance_set)
     {
       wl_resource_post_error (resource,
                               XX_IMAGE_DESCRIPTION_CREATOR_PARAMS_V4_ERROR_ALREADY_SET,
@@ -1001,9 +1124,11 @@ creator_params_set_luminance (struct wl_client   *client,
       return;
     }
 
-  creator_params->min_lum = min;
-  creator_params->max_lum = max;
-  creator_params->ref_lum = ref;
+  creator_params->lum.type = CLUTTER_LUMINANCE_TYPE_EXPLICIT;
+  creator_params->lum.min = min;
+  creator_params->lum.max = max;
+  creator_params->lum.ref = ref;
+  creator_params->is_luminance_set = TRUE;
 }
 
 static void
@@ -1284,15 +1409,27 @@ color_manager_send_supported_events (struct wl_resource *resource)
   xx_color_manager_v4_send_supported_feature (resource,
                                               XX_COLOR_MANAGER_V4_FEATURE_PARAMETRIC);
   xx_color_manager_v4_send_supported_feature (resource,
+                                              XX_COLOR_MANAGER_V4_FEATURE_SET_PRIMARIES);
+  xx_color_manager_v4_send_supported_feature (resource,
+                                              XX_COLOR_MANAGER_V4_FEATURE_SET_TF_POWER);
+  xx_color_manager_v4_send_supported_feature (resource,
                                               XX_COLOR_MANAGER_V4_FEATURE_SET_LUMINANCES);
+  xx_color_manager_v4_send_supported_tf_named (resource,
+                                               XX_COLOR_MANAGER_V4_TRANSFER_FUNCTION_GAMMA22);
+  xx_color_manager_v4_send_supported_tf_named (resource,
+                                               XX_COLOR_MANAGER_V4_TRANSFER_FUNCTION_GAMMA28);
   xx_color_manager_v4_send_supported_tf_named (resource,
                                                XX_COLOR_MANAGER_V4_TRANSFER_FUNCTION_SRGB);
   xx_color_manager_v4_send_supported_tf_named (resource,
                                                XX_COLOR_MANAGER_V4_TRANSFER_FUNCTION_ST2084_PQ);
+  xx_color_manager_v4_send_supported_tf_named (resource,
+                                               XX_COLOR_MANAGER_V4_TRANSFER_FUNCTION_BT709);
   xx_color_manager_v4_send_supported_primaries_named (resource,
                                                       XX_COLOR_MANAGER_V4_PRIMARIES_SRGB);
   xx_color_manager_v4_send_supported_primaries_named (resource,
                                                       XX_COLOR_MANAGER_V4_PRIMARIES_BT2020);
+  xx_color_manager_v4_send_supported_primaries_named (resource,
+                                                      XX_COLOR_MANAGER_V4_PRIMARIES_NTSC);
 }
 
 static const struct xx_color_manager_v4_interface

@@ -834,7 +834,7 @@ repick_drop_surface (MetaWaylandCompositor *compositor,
 
       XMapRaised (xdisplay, dnd_window);
 
-      frame_rect = focus_window->rect;
+      frame_rect = meta_window_config_get_rect (focus_window->config);
       meta_xwayland_stage_to_protocol_rect (manager,
                                             &frame_rect,
                                             &frame_rect);

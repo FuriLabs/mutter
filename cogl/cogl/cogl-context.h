@@ -36,12 +36,6 @@
 #error "Only <cogl/cogl.h> can be included directly."
 #endif
 
-/* We forward declare the CoglContext type here to avoid some circular
- * dependency issues with the following headers.
- */
-typedef struct _CoglContext CoglContext;
-typedef struct _CoglTimestampQuery CoglTimestampQuery;
-
 #include "cogl/cogl-display.h"
 #include "cogl/cogl-pipeline.h"
 #include "cogl/cogl-primitive.h"
@@ -178,7 +172,7 @@ cogl_context_get_renderer (CoglContext *context);
  *    buffers are tracked and so cogl_onscreen_get_buffer_age() can be
  *    expected to return age values other than 0.
  * @COGL_FEATURE_ID_BLIT_FRAMEBUFFER: Whether blitting using
- *    cogl_blit_framebuffer() is supported.
+ *    [method@Cogl.Framebuffer.blit] is supported.
  * @COGL_FEATURE_ID_SYNC_FD
  *    cogl_context_get_latest_sync_fd() is supported.
  *
@@ -375,6 +369,15 @@ cogl_context_has_winsys_feature (CoglContext       *context,
  */
 COGL_EXPORT void
 cogl_context_flush (CoglContext *context);
+
+/**
+ * cogl_context_get_rectangle_indices:
+ *
+ * Returns: (transfer none): a #CoglIndices
+ */
+COGL_EXPORT CoglIndices *
+cogl_context_get_rectangle_indices (CoglContext *context,
+                                    int          n_rectangles);
 
 #ifdef HAVE_EGL
 /**

@@ -87,6 +87,9 @@ void meta_wayland_data_device_start_drag (MetaWaylandDataDevice           *data_
 
 void     meta_wayland_data_device_end_drag       (MetaWaylandDataDevice                 *data_device);
 
+MetaWaylandToplevelDrag *
+meta_wayland_data_device_get_toplevel_drag (MetaWaylandDataDevice *data_device);
+
 void     meta_wayland_drag_grab_set_focus        (MetaWaylandDragGrab             *drag_grab,
                                                   MetaWaylandSurface              *surface);
 MetaWaylandSurface *
@@ -98,3 +101,6 @@ ClutterInputDevice * meta_wayland_drag_grab_get_device (MetaWaylandDragGrab    *
                                                         ClutterEventSequence  **sequence);
 
 MetaWaylandSurface * meta_wayland_drag_grab_get_origin (MetaWaylandDragGrab *drag_grab);
+
+MetaWaylandDataSource *
+meta_wayland_drag_grab_get_data_source (MetaWaylandDragGrab *drag_grab);

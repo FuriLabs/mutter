@@ -57,7 +57,7 @@ G_DEFINE_FINAL_TYPE (CoglTexture2DSliced, cogl_texture_2d_sliced, COGL_TYPE_TEXT
 
 typedef struct _ForeachData
 {
-  CoglMetaTextureCallback callback;
+  CoglTextureForeachCallback callback;
   void *user_data;
   float x_normalize_factor;
   float y_normalize_factor;
@@ -157,6 +157,8 @@ setup_spans (CoglContext *ctx,
              CoglPixelFormat internal_format,
              GError **error)
 {
+  CoglTextureDriverClass *tex_driver =
+    COGL_TEXTURE_DRIVER_GET_CLASS (ctx->texture_driver);
   int max_width;
   int max_height;
   int n_x_slices;
@@ -175,10 +177,11 @@ setup_spans (CoglContext *ctx,
       CoglSpan span;
 
       /* Check if size supported else bail out */
-      if (!ctx->driver_vtable->texture_2d_can_create (ctx,
-                                                      max_width,
-                                                      max_height,
-                                                      internal_format))
+      if (!tex_driver->texture_2d_can_create (ctx->texture_driver,
+                                              ctx,
+                                              max_width,
+                                              max_height,
+                                              internal_format))
         {
           g_set_error (error, COGL_TEXTURE_ERROR, COGL_TEXTURE_ERROR_SIZE,
                        "Sliced texture size of %d x %d not possible "
@@ -213,10 +216,11 @@ setup_spans (CoglContext *ctx,
   else
     {
       /* Decrease the size of largest slice until supported by GL */
-      while (!ctx->driver_vtable->texture_2d_can_create (ctx,
-                                                         max_width,
-                                                         max_height,
-                                                         internal_format))
+      while (!tex_driver->texture_2d_can_create (ctx->texture_driver,
+                                                 ctx,
+                                                 max_width,
+                                                 max_height,
+                                                 internal_format))
         {
           /* Alternate between width and height */
           if (max_width > max_height)
@@ -731,14 +735,6 @@ _cogl_texture_2d_sliced_allocate (CoglTexture *tex,
   g_return_val_if_reached (FALSE);
 }
 
-static int
-_cogl_texture_2d_sliced_get_max_waste (CoglTexture *tex)
-{
-  CoglTexture2DSliced *tex_2ds = COGL_TEXTURE_2D_SLICED (tex);
-
-  return tex_2ds->max_waste;
-}
-
 static gboolean
 _cogl_texture_2d_sliced_is_sliced (CoglTexture *tex)
 {
@@ -746,7 +742,7 @@ _cogl_texture_2d_sliced_is_sliced (CoglTexture *tex)
 
   /* It's only after allocating a sliced texture that we will know
    * whether it really needed to be sliced... */
-  if (!tex->allocated)
+  if (!cogl_texture_is_allocated (tex))
     cogl_texture_allocate (tex, NULL);
 
   if (tex_2ds->slice_x_spans->len != 1 ||
@@ -1121,13 +1117,13 @@ re_normalize_sub_texture_coords_cb (CoglTexture *sub_texture,
 
 static void
 _cogl_texture_2d_sliced_foreach_sub_texture_in_region (
-                                       CoglTexture *tex,
-                                       float virtual_tx_1,
-                                       float virtual_ty_1,
-                                       float virtual_tx_2,
-                                       float virtual_ty_2,
-                                       CoglMetaTextureCallback callback,
-                                       void *user_data)
+                                       CoglTexture                *tex,
+                                       float                       virtual_tx_1,
+                                       float                       virtual_ty_1,
+                                       float                       virtual_tx_2,
+                                       float                       virtual_ty_2,
+                                       CoglTextureForeachCallback  callback,
+                                       void                       *user_data)
 {
   CoglTexture2DSliced *tex_2ds = COGL_TEXTURE_2D_SLICED (tex);
   CoglSpan *x_spans = (CoglSpan *)tex_2ds->slice_x_spans->data;
@@ -1188,7 +1184,6 @@ cogl_texture_2d_sliced_class_init (CoglTexture2DSlicedClass *klass)
   texture_class->allocate = _cogl_texture_2d_sliced_allocate;
   texture_class->set_region = _cogl_texture_2d_sliced_set_region;
   texture_class->foreach_sub_texture_in_region = _cogl_texture_2d_sliced_foreach_sub_texture_in_region;
-  texture_class->get_max_waste = _cogl_texture_2d_sliced_get_max_waste;
   texture_class->is_sliced = _cogl_texture_2d_sliced_is_sliced;
   texture_class->can_hardware_repeat = _cogl_texture_2d_sliced_can_hardware_repeat;
   texture_class->transform_coords_to_gl = _cogl_texture_2d_sliced_transform_coords_to_gl;
@@ -1205,9 +1200,6 @@ cogl_texture_2d_sliced_class_init (CoglTexture2DSlicedClass *klass)
 static void
 cogl_texture_2d_sliced_init (CoglTexture2DSliced *self)
 {
-  CoglTexture *texture = COGL_TEXTURE (self);
-
-  texture->is_primitive = FALSE;
 }
 
 static CoglTexture *
@@ -1237,8 +1229,8 @@ cogl_texture_2d_sliced_new_with_size (CoglContext *ctx,
                                       int height,
                                       int max_waste)
 {
-  CoglTextureLoader *loader = _cogl_texture_create_loader ();
-  loader->src_type = COGL_TEXTURE_SOURCE_TYPE_SIZE;
+  CoglTextureLoader *loader =
+    cogl_texture_loader_new (COGL_TEXTURE_SOURCE_TYPE_SIZE);
   loader->src.sized.width = width;
   loader->src.sized.height = height;
   loader->src.sized.format = COGL_PIXEL_FORMAT_ANY;
@@ -1259,8 +1251,7 @@ cogl_texture_2d_sliced_new_from_bitmap (CoglBitmap *bmp,
 
   g_return_val_if_fail (COGL_IS_BITMAP (bmp), NULL);
 
-  loader = _cogl_texture_create_loader ();
-  loader->src_type = COGL_TEXTURE_SOURCE_TYPE_BITMAP;
+  loader = cogl_texture_loader_new (COGL_TEXTURE_SOURCE_TYPE_BITMAP);
   loader->src.bitmap.bitmap = g_object_ref (bmp);
 
   return _cogl_texture_2d_sliced_create_base (_cogl_bitmap_get_context (bmp),

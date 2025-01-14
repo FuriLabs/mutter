@@ -90,7 +90,7 @@ _cogl_sub_texture_map_quad (CoglSubTexture *sub_tex,
 typedef struct _CoglSubTextureForeachData
 {
   CoglSubTexture *sub_tex;
-  CoglMetaTextureCallback callback;
+  CoglTextureForeachCallback callback;
   void *user_data;
 } CoglSubTextureForeachData;
 
@@ -115,13 +115,13 @@ unmap_coords_cb (CoglTexture *slice_texture,
 
 static void
 _cogl_sub_texture_foreach_sub_texture_in_region (
-                                       CoglTexture *tex,
-                                       float virtual_tx_1,
-                                       float virtual_ty_1,
-                                       float virtual_tx_2,
-                                       float virtual_ty_2,
-                                       CoglMetaTextureCallback callback,
-                                       void *user_data)
+                                       CoglTexture                *tex,
+                                       float                       virtual_tx_1,
+                                       float                       virtual_ty_1,
+                                       float                       virtual_tx_2,
+                                       float                       virtual_ty_2,
+                                       CoglTextureForeachCallback  callback,
+                                       void                       *user_data)
 {
   CoglSubTexture *sub_tex = COGL_SUB_TEXTURE (tex);
   CoglTexture *full_texture = sub_tex->full_texture;
@@ -149,15 +149,15 @@ _cogl_sub_texture_foreach_sub_texture_in_region (
       data.callback = callback;
       data.user_data = user_data;
 
-      cogl_meta_texture_foreach_in_region (full_texture,
-                                           mapped_coords[0],
-                                           mapped_coords[1],
-                                           mapped_coords[2],
-                                           mapped_coords[3],
-                                           COGL_PIPELINE_WRAP_MODE_REPEAT,
-                                           COGL_PIPELINE_WRAP_MODE_REPEAT,
-                                           unmap_coords_cb,
-                                           &data);
+      cogl_texture_foreach_in_region (full_texture,
+                                      mapped_coords[0],
+                                      mapped_coords[1],
+                                      mapped_coords[2],
+                                      mapped_coords[3],
+                                      COGL_PIPELINE_WRAP_MODE_REPEAT,
+                                      COGL_PIPELINE_WRAP_MODE_REPEAT,
+                                      unmap_coords_cb,
+                                      &data);
     }
 }
 
@@ -186,15 +186,6 @@ _cogl_sub_texture_allocate (CoglTexture *tex,
                                cogl_texture_get_height (tex));
 
   return status;
-}
-
-static int
-_cogl_sub_texture_get_max_waste (CoglTexture *tex)
-{
-  CoglSubTexture *sub_tex = COGL_SUB_TEXTURE (tex);
-  CoglTextureClass *klass = COGL_TEXTURE_GET_CLASS (sub_tex->full_texture);
-
-  return klass->get_max_waste (sub_tex->full_texture);
 }
 
 static gboolean
@@ -366,7 +357,6 @@ cogl_sub_texture_class_init (CoglSubTextureClass *klass)
   texture_class->set_region = _cogl_sub_texture_set_region;
   texture_class->is_get_data_supported = _cogl_sub_texture_is_get_data_supported;
   texture_class->foreach_sub_texture_in_region = _cogl_sub_texture_foreach_sub_texture_in_region;
-  texture_class->get_max_waste = _cogl_sub_texture_get_max_waste;
   texture_class->is_sliced = _cogl_sub_texture_is_sliced;
   texture_class->can_hardware_repeat = _cogl_sub_texture_can_hardware_repeat;
   texture_class->transform_coords_to_gl = _cogl_sub_texture_transform_coords_to_gl;
@@ -383,9 +373,6 @@ cogl_sub_texture_class_init (CoglSubTextureClass *klass)
 static void
 cogl_sub_texture_init (CoglSubTexture *self)
 {
-  CoglTexture *texture = COGL_TEXTURE (self);
-
-  texture->is_primitive = FALSE;
 }
 
 CoglTexture *

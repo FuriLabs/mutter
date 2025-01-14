@@ -32,7 +32,7 @@
 
 #include <gmodule.h>
 
-#include "cogl/cogl-driver.h"
+#include "cogl/cogl-driver-private.h"
 #include "cogl/cogl-texture-driver.h"
 #include "cogl/cogl-context.h"
 #include "cogl/cogl-closure-list-private.h"
@@ -47,20 +47,15 @@ struct _CoglRenderer
   CoglDisplay *display;
 
   gboolean connected;
-  CoglDriver driver_override;
-  const CoglDriverVtable *driver_vtable;
-  const CoglTextureDriver *texture_driver;
+  CoglDriver *driver;
+  CoglTextureDriver *texture_driver;
   const CoglWinsysVtable *winsys_vtable;
   void *custom_winsys_user_data;
   CoglCustomWinsysVtableGetter custom_winsys_vtable_getter;
 
   CoglList idle_closures;
 
-#ifdef HAVE_X11
-  Display *foreign_xdpy;
-#endif
-
-  CoglDriver driver;
+  CoglDriverId driver_id;
   unsigned long private_features
     [COGL_FLAGS_N_LONGS_FOR_SIZE (COGL_N_PRIVATE_FEATURES)];
   GModule *libgl_module;

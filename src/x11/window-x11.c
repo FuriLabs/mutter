@@ -38,6 +38,7 @@
 #include "compositor/compositor-private.h"
 #include "compositor/meta-window-actor-private.h"
 #include "core/boxes-private.h"
+#include "core/meta-window-config-private.h"
 #include "core/meta-workspace-manager-private.h"
 #include "core/window-private.h"
 #include "core/workspace-private.h"
@@ -671,14 +672,14 @@ meta_window_x11_initialize_state (MetaWindow *window)
   }
 
   /* For override-redirect windows, save the client rect
-   * directly. window->rect was assigned from the XWindowAttributes
+   * directly. window->config->rect was assigned from the XWindowAttributes
    * in the main meta_window_shared_new.
    *
    * For normal windows, do a full ConfigureRequest based on the
    * window hints, as that's what the ICCCM says to do.
    */
-  priv->client_rect = window->rect;
-  window->buffer_rect = window->rect;
+  priv->client_rect = meta_window_config_get_rect (window->config);
+  window->buffer_rect = meta_window_config_get_rect (window->config);
 
   if (!window->override_redirect)
     {
@@ -976,7 +977,7 @@ focus_window_delayed_unmanaged (gpointer user_data)
   meta_window_x11_delayed_focus_data_free (data);
 }
 
-static gboolean
+static void
 focus_window_delayed_timeout (gpointer user_data)
 {
   MetaWindowX11DelayedFocusData *data = user_data;
@@ -990,8 +991,6 @@ focus_window_delayed_timeout (gpointer user_data)
   meta_window_x11_delayed_focus_data_free (data);
 
   meta_window_focus (window, timestamp);
-
-  return G_SOURCE_REMOVE;
 }
 
 static void
@@ -1019,8 +1018,8 @@ meta_window_x11_maybe_focus_delayed (MetaWindow *window,
                               G_CALLBACK (meta_window_x11_delayed_focus_data_free),
                               data);
 
-  data->timeout_id = g_timeout_add (TAKE_FOCUS_FALLBACK_DELAY_MS,
-                                    focus_window_delayed_timeout, data);
+  data->timeout_id = g_timeout_add_once (TAKE_FOCUS_FALLBACK_DELAY_MS,
+                                         focus_window_delayed_timeout, data);
 }
 
 static void
@@ -1410,15 +1409,18 @@ meta_window_x11_move_resize_internal (MetaWindow                *window,
   gboolean configure_frame_first;
   gboolean is_configure_request;
   MetaWindowDrag *window_drag;
+  MtkRectangle frame_rect;
 
   is_configure_request = (flags & META_MOVE_RESIZE_CONFIGURE_REQUEST) != 0;
 
   meta_frame_calc_borders (priv->frame, &borders);
 
-  size_dx = constrained_rect.width - window->rect.width;
-  size_dy = constrained_rect.height - window->rect.height;
+  frame_rect = meta_window_config_get_rect (window->config);
+  size_dx = constrained_rect.width - frame_rect.width;
+  size_dy = constrained_rect.height - frame_rect.height;
 
-  window->rect = constrained_rect;
+  meta_window_config_set_rect (window->config, constrained_rect);
+  frame_rect = meta_window_config_get_rect (window->config);
 
   if (priv->frame)
     {
@@ -1426,8 +1428,8 @@ meta_window_x11_move_resize_internal (MetaWindow                *window,
       int new_x, new_y;
 
       /* Compute new frame size */
-      new_w = window->rect.width + borders.invisible.left + borders.invisible.right;
-      new_h = window->rect.height + borders.invisible.top + borders.invisible.bottom;
+      new_w = frame_rect.width + borders.invisible.left + borders.invisible.right;
+      new_h = frame_rect.height + borders.invisible.top + borders.invisible.bottom;
 
       if (new_w != priv->frame->rect.width ||
           new_h != priv->frame->rect.height)
@@ -1438,8 +1440,8 @@ meta_window_x11_move_resize_internal (MetaWindow                *window,
         }
 
       /* Compute new frame coords */
-      new_x = window->rect.x - borders.invisible.left;
-      new_y = window->rect.y - borders.invisible.top;
+      new_x = frame_rect.x - borders.invisible.left;
+      new_y = frame_rect.y - borders.invisible.top;
 
       if (new_x != priv->frame->rect.x ||
           new_y != priv->frame->rect.y)
@@ -2176,7 +2178,8 @@ meta_window_x11_constructed (GObject *object)
   rect = MTK_RECTANGLE_INIT (attrs.x, attrs.y, attrs.width, attrs.height);
   meta_window_protocol_to_stage_rect (window, &rect, &rect);
 
-  window->rect = rect;
+  window->config = meta_window_config_new ();
+  meta_window_config_set_rect (window->config, rect);
 
   /* size_hints are the "request" */
   window->size_hints.x = rect.x;
@@ -2362,7 +2365,7 @@ meta_window_x11_set_net_wm_state (MetaWindow *window)
       data[i] = x11_display->atom__NET_WM_STATE_MAXIMIZED_VERT;
       ++i;
     }
-  if (window->fullscreen)
+  if (meta_window_is_fullscreen (window))
     {
       data[i] = x11_display->atom__NET_WM_STATE_FULLSCREEN;
       ++i;
@@ -2417,7 +2420,7 @@ meta_window_x11_set_net_wm_state (MetaWindow *window)
 
   mtk_x11_error_trap_pop (x11_display->xdisplay);
 
-  if (window->fullscreen)
+  if (meta_window_is_fullscreen (window))
     {
       if (meta_window_has_fullscreen_monitors (window))
         {
@@ -2729,12 +2732,11 @@ meta_window_x11_get_gravity_position (MetaWindow  *window,
   int w, h;
   int x, y;
 
-  w = window->rect.width;
-  h = window->rect.height;
+  meta_window_config_get_size (window->config, &w, &h);
 
   if (gravity == META_GRAVITY_STATIC)
     {
-      frame_extents = window->rect;
+      frame_extents = meta_window_config_get_rect (window->config);
       if (priv->frame)
         {
           frame_extents.x = priv->frame->rect.x + priv->frame->child_x;
@@ -2744,7 +2746,7 @@ meta_window_x11_get_gravity_position (MetaWindow  *window,
   else
     {
       if (priv->frame == NULL)
-        frame_extents = window->rect;
+        frame_extents = meta_window_config_get_rect (window->config);
       else
         frame_extents = priv->frame->rect;
     }
@@ -2817,10 +2819,11 @@ meta_window_x11_get_session_geometry (MetaWindow  *window,
                                         window->size_hints.win_gravity,
                                         x, y);
 
-  *width = (window->rect.width - window->size_hints.base_width) /
-    window->size_hints.width_inc;
-  *height = (window->rect.height - window->size_hints.base_height) /
-    window->size_hints.height_inc;
+  meta_window_config_get_position (window->config, width, height);
+  *width -= window->size_hints.base_width;
+  *width /= window->size_hints.width_inc;
+  *height -= window->size_hints.base_height;
+  *height /= window->size_hints.height_inc;
 }
 
 static void
@@ -2859,7 +2862,7 @@ meta_window_move_resize_request (MetaWindow  *window,
    * and otherwise use our current up-to-date position.
    *
    * Otherwise you get spurious position changes when the app changes
-   * size, for example, if window->rect is not in sync with the
+   * size, for example, if window->config->rect is not in sync with the
    * server-side position in effect when the configure request was
    * generated.
    */
@@ -2993,7 +2996,7 @@ meta_window_move_resize_request (MetaWindow  *window,
               (window->decorated || !priv->has_custom_frame_extents) &&
               mtk_rectangle_equal (&rect, &monitor_rect) &&
               window->has_fullscreen_func &&
-              !window->fullscreen)
+              !meta_window_is_fullscreen (window))
             {
               /*
               meta_topic (META_DEBUG_GEOMETRY,
@@ -3192,7 +3195,9 @@ meta_window_x11_property_notify (MetaWindow *window,
 static int
 query_pressed_buttons (MetaWindow *window)
 {
-  MetaCursorTracker *tracker = meta_cursor_tracker_get_for_display (window->display);
+  MetaContext *context = meta_display_get_context (window->display);
+  MetaBackend *backend = meta_context_get_backend (context);
+  MetaCursorTracker *tracker = meta_backend_get_cursor_tracker (backend);
   ClutterModifierType mods;
   int button = 0;
 
@@ -3432,7 +3437,8 @@ meta_window_x11_client_message (MetaWindow *window,
           gboolean make_fullscreen;
 
           make_fullscreen = (action == _NET_WM_STATE_ADD ||
-                             (action == _NET_WM_STATE_TOGGLE && !window->fullscreen));
+                             (action == _NET_WM_STATE_TOGGLE &&
+                              !meta_window_is_fullscreen (window)));
           if (make_fullscreen && window->has_fullscreen_func)
             meta_window_make_fullscreen (window);
           else
@@ -4346,6 +4352,7 @@ meta_window_x11_configure_notify (MetaWindow      *window,
 {
   MetaWindowX11 *window_x11 = META_WINDOW_X11 (window);
   MetaWindowX11Private *priv = meta_window_x11_get_instance_private (window_x11);
+  MtkRectangle rect;
 
   g_assert (window->override_redirect);
   g_assert (priv->frame == NULL);
@@ -4355,10 +4362,11 @@ meta_window_x11_configure_notify (MetaWindow      *window,
                                                            event->y,
                                                            event->width,
                                                            event->height),
-                                      &window->rect);
+                                      &rect);
+  meta_window_config_set_rect (window->config, rect);
 
-  priv->client_rect = window->rect;
-  window->buffer_rect = window->rect;
+  priv->client_rect = rect;
+  window->buffer_rect = rect;
 
   meta_window_update_monitor (window, META_WINDOW_UPDATE_MONITOR_FLAGS_NONE);
 
@@ -4602,7 +4610,7 @@ meta_window_x11_can_unredirect (MetaWindowX11 *window_x11)
   if (!window->monitor)
     return FALSE;
 
-  if (window->fullscreen)
+  if (meta_window_is_fullscreen (window))
     return TRUE;
 
   if (meta_window_is_screen_sized (window))
@@ -4927,4 +4935,51 @@ void
 meta_window_x11_shutdown_group (MetaWindow *window)
 {
   remove_window_from_group (window);
+}
+
+void
+meta_window_x11_configure (MetaWindow *window)
+{
+  MtkRectangle prev_rect;
+  MtkRectangle new_rect;
+  MetaMoveResizeFlags flags;
+  gboolean is_fullscreen;
+  g_autoptr (MetaWindowConfig) window_config = NULL;
+
+  window_config = meta_window_new_window_config (window);
+  prev_rect = meta_window_config_get_rect (window->config);
+  meta_window_config_set_rect (window_config, prev_rect);
+  is_fullscreen = meta_window_is_fullscreen (window);
+  meta_window_config_set_is_fullscreen (window_config, is_fullscreen);
+
+  meta_window_emit_configure (window, window_config);
+  new_rect = meta_window_config_get_rect (window_config);
+
+  meta_topic (META_DEBUG_GEOMETRY,
+              "Window %s pre-configured at (%i,%i) [%ix%i]",
+              window->desc, new_rect.x, new_rect.y, new_rect.width, new_rect.height);
+
+  if (!mtk_rectangle_equal (&prev_rect, &new_rect))
+    {
+      window->placed = TRUE;
+
+      /* Update the size hints to match the new pre-configuration */
+      window->size_hints.x = new_rect.x;
+      window->size_hints.y = new_rect.y;
+      window->size_hints.width = new_rect.width;
+      window->size_hints.height = new_rect.height;
+
+      flags = (META_MOVE_RESIZE_MOVE_ACTION |
+               META_MOVE_RESIZE_RESIZE_ACTION |
+               META_MOVE_RESIZE_CONSTRAIN);
+
+      meta_window_move_resize_internal (window,
+                                        flags,
+                                        META_PLACE_FLAG_NONE,
+                                        window->size_hints.win_gravity,
+                                        new_rect);
+    }
+
+  if (meta_window_config_get_is_fullscreen (window_config))
+    meta_window_make_fullscreen (window);
 }

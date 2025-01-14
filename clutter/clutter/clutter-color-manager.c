@@ -24,6 +24,7 @@
 
 #include "clutter/clutter-color-manager-private.h"
 
+#include "clutter/clutter-color-state-params.h"
 #include "clutter/clutter-color-state-private.h"
 #include "clutter/clutter-context.h"
 
@@ -149,9 +150,9 @@ clutter_color_manager_get_default_color_state (ClutterColorManager *color_manage
   if (!color_manager->default_color_state)
     {
       color_manager->default_color_state =
-        clutter_color_state_new (color_manager->context,
-                                 CLUTTER_COLORSPACE_DEFAULT,
-                                 CLUTTER_TRANSFER_FUNCTION_DEFAULT);
+        clutter_color_state_params_new (color_manager->context,
+                                        CLUTTER_COLORSPACE_SRGB,
+                                        CLUTTER_TRANSFER_FUNCTION_SRGB);
     }
 
   return color_manager->default_color_state;

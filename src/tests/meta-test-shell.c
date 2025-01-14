@@ -73,8 +73,6 @@ struct _MetaTestShell
 
   ClutterActor *background_group;
 
-  MetaPluginInfo info;
-
   CoglColor *background_color;
   gboolean disable_animations;
 
@@ -214,7 +212,8 @@ on_switch_workspace_effect_stopped (ClutterTimeline *timeline,
   MetaPlugin *plugin  = META_PLUGIN (data);
   MetaTestShell *test_shell = META_TEST_SHELL (plugin);
   MetaDisplay *display = meta_plugin_get_display (plugin);
-  GList *l = meta_get_window_actors (display);
+  MetaCompositor *compositor = meta_display_get_compositor (display);
+  GList *l = meta_compositor_get_window_actors (compositor);
 
   while (l)
     {
@@ -349,13 +348,14 @@ meta_test_shell_start (MetaPlugin *plugin)
 {
   MetaTestShell *test_shell = META_TEST_SHELL (plugin);
   MetaDisplay *display = meta_plugin_get_display (plugin);
+  MetaCompositor *compositor = meta_display_get_compositor (display);
   MetaContext *context = meta_display_get_context (display);
   MetaBackend *backend = meta_context_get_backend (context);
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (backend);
 
   test_shell->background_group = meta_background_group_new ();
-  clutter_actor_insert_child_below (meta_get_window_group_for_display (display),
+  clutter_actor_insert_child_below (meta_compositor_get_window_group (compositor),
                                     test_shell->background_group, NULL);
 
   g_signal_connect (monitor_manager, "monitors-changed",
@@ -370,7 +370,7 @@ meta_test_shell_start (MetaPlugin *plugin)
                     test_shell);
 
   if (test_shell->show_stage)
-    clutter_actor_show (meta_get_stage_for_display (display));
+    clutter_actor_show (meta_backend_get_stage (backend));
 }
 
 static void
@@ -380,6 +380,7 @@ meta_test_shell_switch_workspace (MetaPlugin          *plugin,
                                   MetaMotionDirection  direction)
 {
   MetaTestShell *test_shell = META_TEST_SHELL (plugin);
+  MetaCompositor *compositor;
   MetaDisplay *display;
   ClutterActor *stage;
   ClutterActor *workspace1, *workspace2;
@@ -393,7 +394,8 @@ meta_test_shell_switch_workspace (MetaPlugin          *plugin,
     }
 
   display = meta_plugin_get_display (plugin);
-  stage = meta_get_stage_for_display (display);
+  compositor = meta_display_get_compositor (display);
+  stage = CLUTTER_ACTOR (meta_compositor_get_stage (compositor));
 
   meta_display_get_size (display,
                          &screen_width,
@@ -415,7 +417,9 @@ meta_test_shell_switch_workspace (MetaPlugin          *plugin,
   clutter_actor_add_child (stage, workspace1);
   clutter_actor_add_child (stage, workspace2);
 
-  for (l = g_list_last (meta_get_window_actors (display)); l; l = l->prev)
+  for (l = g_list_last (meta_compositor_get_window_actors (compositor));
+       l;
+       l = l->prev)
     {
       MetaWindowActor *window_actor = l->data;
       ActorPrivate *actor_priv = get_actor_private (window_actor);
@@ -557,7 +561,7 @@ meta_test_shell_minimize (MetaPlugin      *plugin,
       data->actor = actor;
       data->effect_data = g_new0 (double, 1);
       clutter_actor_get_scale (actor, &scale_x, &scale_y);
-      g_assert (scale_x == scale_y);
+      g_assert_cmpfloat (scale_x, ==, scale_y);
       *((double *) data->effect_data) = scale_x;
       g_signal_connect (actor_priv->minimize_timeline, "stopped",
                         G_CALLBACK (on_minimize_effect_stopped),
@@ -713,6 +717,7 @@ static DisplayTilePreview *
 get_display_tile_preview (MetaDisplay *display)
 {
   DisplayTilePreview *preview;
+  MetaCompositor *compositor;
 
   if (!display_tile_preview_data_quark)
     {
@@ -730,7 +735,8 @@ get_display_tile_preview (MetaDisplay *display)
       clutter_actor_set_background_color (preview->actor, &COGL_COLOR_INIT (0, 0, 255, 255));
       clutter_actor_set_opacity (preview->actor, 100);
 
-      clutter_actor_add_child (meta_get_window_group_for_display (display),
+      compositor = meta_display_get_compositor (display);
+      clutter_actor_add_child (meta_compositor_get_window_group (compositor),
                                preview->actor);
       g_signal_connect (display,
                         "closing",
@@ -809,14 +815,6 @@ meta_test_shell_kill_window_effects (MetaPlugin      *plugin,
     finish_timeline (actor_priv->destroy_timeline);
 }
 
-static const MetaPluginInfo *
-meta_test_shell_plugin_info (MetaPlugin *plugin)
-{
-  MetaTestShell *test_shell = META_TEST_SHELL (plugin);
-
-  return &test_shell->info;
-}
-
 static void
 process_options (MetaTestShell *test_shell,
                  GVariant      *options)
@@ -877,7 +875,6 @@ meta_test_shell_class_init (MetaTestShellClass *klass)
   plugin_class->hide_tile_preview = meta_test_shell_hide_tile_preview;
   plugin_class->kill_window_effects = meta_test_shell_kill_window_effects;
   plugin_class->kill_switch_workspace = meta_test_shell_kill_switch_workspace;
-  plugin_class->plugin_info = meta_test_shell_plugin_info;
 
   obj_props[PROP_OPTIONS] =
     g_param_spec_variant ("options", NULL, NULL,
@@ -892,12 +889,6 @@ meta_test_shell_class_init (MetaTestShellClass *klass)
 static void
 meta_test_shell_init (MetaTestShell *test_shell)
 {
-  test_shell->info.name = "Test Shell";
-  test_shell->info.version = VERSION;
-  test_shell->info.author = "Mutter developers";
-  test_shell->info.license = "GPL";
-  test_shell->info.description = "This is test shell plugin implementation.";
-
   test_shell->show_stage = TRUE;
 }
 

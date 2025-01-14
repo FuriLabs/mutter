@@ -97,7 +97,6 @@ if have_introspection
       'xfixes-4.0',
       libmutter_mtk_gir[0],
       libmutter_cogl_gir[0],
-      libmutter_cogl_pango_gir[0],
       libmutter_clutter_gir[0],
       libmutter_gir[0],
     ],
@@ -644,6 +643,29 @@ wayland_test_cases = [
     'suite': 'wayland',
     'sources': [
       'wayland-client-tests.c',
+    ],
+  },
+  {
+    'name': 'wayland-color-management',
+    'suite': 'wayland',
+    'sources': [
+      'wayland-color-management-test.c',
+      wayland_test_utils,
+    ],
+    'depends': [
+      test_client_executables.get('color-management'),
+    ],
+  },
+  {
+    'name': 'wayland-drm-lease',
+    'suite': 'wayland',
+    'sources': [
+      'wayland-drm-lease-tests.c',
+      wayland_test_utils,
+    ],
+    'variants': [['', test_env_variables + {'MUTTER_DEBUG_LEASE_CONNECTORS': 'Virtual-1'}]],
+    'depends': [
+      test_client_executables.get('drm-lease'),
     ],
   },
   {

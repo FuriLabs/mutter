@@ -41,6 +41,10 @@
 
 #include "clutter/clutter-stage.h"
 
+#ifdef HAVE_FONTS
+#include "clutter/pango/clutter-actor-pango.h"
+#include "clutter/pango/clutter-text-node.h"
+#endif
 #include "clutter/clutter-stage-accessible-private.h"
 #include "clutter/clutter-action-private.h"
 #include "clutter/clutter-actor-private.h"
@@ -402,6 +406,7 @@ clutter_stage_do_paint_view (ClutterStage     *stage,
   MtkRectangle clip_rect;
   g_autoptr (GArray) clip_frusta = NULL;
   graphene_frustum_t clip_frustum;
+  ClutterColorState *color_state;
   ClutterPaintNode *root_node;
   CoglFramebuffer *fb;
   CoglColor bg_color;
@@ -452,16 +457,16 @@ clutter_stage_do_paint_view (ClutterStage     *stage,
   bg_color.alpha = 255;
 
   fb = clutter_stage_view_get_framebuffer (view);
+  color_state = clutter_actor_get_color_state (CLUTTER_ACTOR (stage));
 
-  clutter_paint_context_push_color_state (paint_context,
-                                          clutter_actor_get_color_state (CLUTTER_ACTOR (stage)));
+  root_node = clutter_root_node_new (fb,
+                                     color_state,
+                                     &bg_color,
+                                     COGL_BUFFER_BIT_DEPTH);
 
-  root_node = clutter_root_node_new (fb, &bg_color, COGL_BUFFER_BIT_DEPTH);
   clutter_paint_node_set_static_name (root_node, "Stage (root)");
   clutter_paint_node_paint (root_node, paint_context);
   clutter_paint_node_unref (root_node);
-
-  clutter_paint_context_pop_color_state (paint_context);
 
   clutter_actor_paint (CLUTTER_ACTOR (stage), paint_context);
   clutter_paint_context_destroy (paint_context);
@@ -1425,10 +1430,13 @@ static void
 clutter_stage_paint (ClutterActor        *actor,
                      ClutterPaintContext *paint_context)
 {
+#ifdef HAVE_FONTS
   ClutterStageView *view;
+#endif
 
   CLUTTER_ACTOR_CLASS (clutter_stage_parent_class)->paint (actor, paint_context);
 
+#ifdef HAVE_FONTS
   view = clutter_paint_context_get_stage_view (paint_context);
   if (view &&
       G_UNLIKELY (clutter_paint_debug_flags & CLUTTER_DEBUG_PAINT_MAX_RENDER_TIME))
@@ -1463,6 +1471,7 @@ clutter_stage_paint (ClutterActor        *actor,
 
       g_object_unref (layout);
     }
+#endif
 }
 
 static void

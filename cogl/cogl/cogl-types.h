@@ -311,8 +311,42 @@ typedef enum /*< prefix=COGL_READ_PIXELS >*/
   COGL_READ_PIXELS_COLOR_BUFFER = 1L << 0
 } CoglReadPixelsFlags;
 
+/**
+ * CoglShaderType:
+ * @COGL_SHADER_TYPE_VERTEX: A program for processing vertices
+ * @COGL_SHADER_TYPE_FRAGMENT: A program for processing fragments
+ *
+ * Types of shaders
+ */
+typedef enum
+{
+  COGL_SHADER_TYPE_VERTEX,
+  COGL_SHADER_TYPE_FRAGMENT
+} CoglShaderType;
+
+typedef struct _CoglAttribute CoglAttribute;
+typedef struct _CoglAttributeBuffer CoglAttributeBuffer;
+typedef struct _CoglAtlas CoglAtlas;
+typedef struct _CoglAtlasTexture CoglAtlasTexture;
+typedef struct _CoglBitmap CoglBitmap;
+typedef struct _CoglBuffer CoglBuffer;
+typedef struct _CoglContext CoglContext;
+typedef struct _CoglDisplay CoglDisplay;
+typedef struct _CoglFrameInfo CoglFrameInfo;
+typedef struct _CoglIndices CoglIndices;
+typedef struct _CoglParamSpecColor CoglParamSpecColor;
+typedef struct _CoglPipeline CoglPipeline;
+typedef struct _CoglPixelBuffer CoglPixelBuffer;
+typedef struct _CoglPrimitive CoglPrimitive;
+typedef struct _CoglRenderer CoglRenderer;
 typedef struct _CoglScanout CoglScanout;
 typedef struct _CoglScanoutBuffer CoglScanoutBuffer;
+typedef struct _CoglSnippet CoglSnippet;
+typedef struct _CoglSubTexture CoglSubTexture;
+typedef struct _CoglTexture CoglTexture;
+typedef struct _CoglTexture2D CoglTexture2D;
+typedef struct _CoglTexture2DSliced CoglTexture2DSliced;
+typedef struct _CoglTimestampQuery CoglTimestampQuery;
 
 #define COGL_SCANOUT_ERROR (cogl_scanout_error_quark ())
 

@@ -51,7 +51,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-G_DEFINE_TYPE (CoglContext, cogl_context, G_TYPE_OBJECT);
+G_DEFINE_FINAL_TYPE (CoglContext, cogl_context, G_TYPE_OBJECT);
 
 
 const CoglWinsysVtable *
@@ -60,18 +60,11 @@ _cogl_context_get_winsys (CoglContext *context)
   return context->display->renderer->winsys_vtable;
 }
 
-static const CoglDriverVtable *
-_cogl_context_get_driver (CoglContext *context)
-{
-  return context->driver_vtable;
-}
-
 static void
 cogl_context_dispose (GObject *object)
 {
   CoglContext *context = COGL_CONTEXT (object);
   const CoglWinsysVtable *winsys = _cogl_context_get_winsys (context);
-  const CoglDriverVtable *driver = _cogl_context_get_driver (context);
 
   winsys->context_deinit (context);
 
@@ -133,8 +126,6 @@ cogl_context_dispose (GObject *object)
   g_array_free (context->attribute_name_index_map, TRUE);
 
   g_byte_array_free (context->buffer_map_fallback_array, TRUE);
-
-  driver->context_deinit (context);
 
   g_object_unref (context->display);
 
@@ -219,11 +210,11 @@ cogl_context_new (CoglDisplay *display,
   /* This is duplicated data, but it's much more convenient to have
      the driver attached to the context and the value is accessed a
      lot throughout Cogl */
-  context->driver = display->renderer->driver;
+  context->driver_id = display->renderer->driver_id;
 
   /* Again this is duplicated data, but it convenient to be able
    * access these from the context. */
-  context->driver_vtable = display->renderer->driver_vtable;
+  context->driver = display->renderer->driver;
   context->texture_driver = display->renderer->texture_driver;
 
   for (i = 0; i < G_N_ELEMENTS (context->private_features); i++)
@@ -237,7 +228,8 @@ cogl_context_new (CoglDisplay *display,
       return NULL;
     }
 
-  if (!context->driver_vtable->context_init (context))
+  if (COGL_DRIVER_GET_CLASS (context->driver)->context_init &&
+      !COGL_DRIVER_GET_CLASS (context->driver)->context_init (context->driver, context))
     {
       g_object_unref (display);
       g_object_unref (context);
@@ -389,14 +381,18 @@ cogl_context_get_renderer (CoglContext *context)
 const char *
 _cogl_context_get_driver_vendor (CoglContext *context)
 {
-  return context->driver_vtable->get_vendor (context);
+  CoglDriverClass *driver_klass = COGL_DRIVER_GET_CLASS (context->driver);
+
+  return driver_klass->get_vendor (context->driver, context);
 }
 
 gboolean
 _cogl_context_update_features (CoglContext *context,
                                GError **error)
 {
-  return context->driver_vtable->update_features (context, error);
+  CoglDriverClass *driver_klass = COGL_DRIVER_GET_CLASS (context->driver);
+
+  return driver_klass->update_features (context->driver, context, error);
 }
 
 void
@@ -444,20 +440,30 @@ cogl_context_get_latest_sync_fd (CoglContext *context)
 CoglGraphicsResetStatus
 cogl_context_get_graphics_reset_status (CoglContext *context)
 {
-  return context->driver_vtable->get_graphics_reset_status (context);
+  CoglDriverClass *driver_klass = COGL_DRIVER_GET_CLASS (context->driver);
+
+  return driver_klass->get_graphics_reset_status (context->driver, context);
 }
 
 gboolean
 cogl_context_is_hardware_accelerated (CoglContext *context)
 {
-  return context->driver_vtable->is_hardware_accelerated (context);
+  CoglDriverClass *driver_klass = COGL_DRIVER_GET_CLASS (context->driver);
+
+  if (driver_klass->is_hardware_accelerated)
+    return driver_klass->is_hardware_accelerated (context->driver, context);
+  else
+    return FALSE;
 }
 
 gboolean
 cogl_context_format_supports_upload (CoglContext *ctx,
                                      CoglPixelFormat format)
 {
-  return ctx->texture_driver->format_supports_upload (ctx, format);
+  CoglTextureDriverClass *tex_driver =
+    COGL_TEXTURE_DRIVER_GET_CLASS (ctx->texture_driver);
+
+  return tex_driver->format_supports_upload (ctx->texture_driver, ctx, format);
 }
 
 void
@@ -495,24 +501,32 @@ void
 cogl_context_free_timestamp_query (CoglContext        *context,
                                    CoglTimestampQuery *query)
 {
-  context->driver_vtable->free_timestamp_query (context, query);
+  CoglDriverClass *driver_klass = COGL_DRIVER_GET_CLASS (context->driver);
+
+  driver_klass->free_timestamp_query (context->driver, context, query);
 }
 
 int64_t
 cogl_context_timestamp_query_get_time_ns (CoglContext        *context,
                                           CoglTimestampQuery *query)
 {
-  return context->driver_vtable->timestamp_query_get_time_ns (context, query);
+  CoglDriverClass *driver_klass = COGL_DRIVER_GET_CLASS (context->driver);
+
+  return driver_klass->timestamp_query_get_time_ns (context->driver, context, query);
 }
 
 int64_t
 cogl_context_get_gpu_time_ns (CoglContext *context)
 {
+  CoglDriverClass *driver_klass;
+
   g_return_val_if_fail (cogl_context_has_feature (context,
                                                   COGL_FEATURE_ID_TIMESTAMP_QUERY),
                         0);
 
-  return context->driver_vtable->get_gpu_time_ns (context);
+  driver_klass = COGL_DRIVER_GET_CLASS (context->driver);
+
+  return driver_klass->get_gpu_time_ns (context->driver, context);
 }
 
 /* FIXME: we should distinguish renderer and context features */

@@ -220,26 +220,26 @@ _cogl_atlas_texture_create_atlas (CoglContext *ctx)
 
 static void
 _cogl_atlas_texture_foreach_sub_texture_in_region (
-                                       CoglTexture *tex,
-                                       float virtual_tx_1,
-                                       float virtual_ty_1,
-                                       float virtual_tx_2,
-                                       float virtual_ty_2,
-                                       CoglMetaTextureCallback callback,
-                                       void *user_data)
+                                       CoglTexture                *tex,
+                                       float                       virtual_tx_1,
+                                       float                       virtual_ty_1,
+                                       float                       virtual_tx_2,
+                                       float                       virtual_ty_2,
+                                       CoglTextureForeachCallback  callback,
+                                       void                       *user_data)
 {
   CoglAtlasTexture *atlas_tex = COGL_ATLAS_TEXTURE (tex);
 
   /* Forward on to the sub texture */
-  cogl_meta_texture_foreach_in_region (atlas_tex->sub_texture,
-                                       virtual_tx_1,
-                                       virtual_ty_1,
-                                       virtual_tx_2,
-                                       virtual_ty_2,
-                                       COGL_PIPELINE_WRAP_MODE_REPEAT,
-                                       COGL_PIPELINE_WRAP_MODE_REPEAT,
-                                       callback,
-                                       user_data);
+  cogl_texture_foreach_in_region (atlas_tex->sub_texture,
+                                  virtual_tx_1,
+                                  virtual_ty_1,
+                                  virtual_tx_2,
+                                  virtual_ty_2,
+                                  COGL_PIPELINE_WRAP_MODE_REPEAT,
+                                  COGL_PIPELINE_WRAP_MODE_REPEAT,
+                                  callback,
+                                  user_data);
 }
 
 static void
@@ -253,16 +253,6 @@ _cogl_atlas_texture_gl_flush_legacy_texobj_wrap_modes (CoglTexture *tex,
   _cogl_texture_gl_flush_legacy_texobj_wrap_modes (atlas_tex->sub_texture,
                                                    wrap_mode_s,
                                                    wrap_mode_t);
-}
-
-static int
-_cogl_atlas_texture_get_max_waste (CoglTexture *tex)
-{
-  CoglAtlasTexture *atlas_tex = COGL_ATLAS_TEXTURE (tex);
-  CoglTextureClass *klass = COGL_TEXTURE_GET_CLASS (atlas_tex->sub_texture);
-
-  /* Forward on to the sub texture */
-  return klass->get_max_waste (COGL_TEXTURE (atlas_tex->sub_texture));
 }
 
 static gboolean
@@ -814,7 +804,6 @@ cogl_atlas_texture_class_init (CoglAtlasTextureClass *klass)
   texture_class->allocate = _cogl_atlas_texture_allocate;
   texture_class->set_region = _cogl_atlas_texture_set_region;
   texture_class->foreach_sub_texture_in_region = _cogl_atlas_texture_foreach_sub_texture_in_region;
-  texture_class->get_max_waste = _cogl_atlas_texture_get_max_waste;
   texture_class->is_sliced = _cogl_atlas_texture_is_sliced;
   texture_class->can_hardware_repeat = _cogl_atlas_texture_can_hardware_repeat;
 
@@ -832,9 +821,6 @@ cogl_atlas_texture_class_init (CoglAtlasTextureClass *klass)
 static void
 cogl_atlas_texture_init (CoglAtlasTexture *self)
 {
-  CoglTexture *texture = COGL_TEXTURE (self);
-
-  texture->is_primitive = FALSE;
 }
 
 static CoglTexture *
@@ -877,8 +863,7 @@ cogl_atlas_texture_new_with_size (CoglContext *ctx,
    * data structure */
   g_return_val_if_fail (width > 0 && height > 0, NULL);
 
-  loader = _cogl_texture_create_loader ();
-  loader->src_type = COGL_TEXTURE_SOURCE_TYPE_SIZE;
+  loader = cogl_texture_loader_new (COGL_TEXTURE_SOURCE_TYPE_SIZE);
   loader->src.sized.width = width;
   loader->src.sized.height = height;
   loader->src.sized.format = COGL_PIXEL_FORMAT_ANY;
@@ -895,8 +880,7 @@ cogl_atlas_texture_new_from_bitmap (CoglBitmap *bmp)
 
   g_return_val_if_fail (COGL_IS_BITMAP (bmp), NULL);
 
-  loader = _cogl_texture_create_loader ();
-  loader->src_type = COGL_TEXTURE_SOURCE_TYPE_BITMAP;
+  loader = cogl_texture_loader_new (COGL_TEXTURE_SOURCE_TYPE_BITMAP);
   loader->src.bitmap.bitmap = g_object_ref (bmp);
 
   return _cogl_atlas_texture_create_base (_cogl_bitmap_get_context (bmp),

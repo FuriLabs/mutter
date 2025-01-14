@@ -42,7 +42,7 @@
 
 #include <stdarg.h>
 
-G_DEFINE_TYPE (CoglIndices, cogl_indices, G_TYPE_OBJECT);
+G_DEFINE_FINAL_TYPE (CoglIndices, cogl_indices, G_TYPE_OBJECT);
 
 static void
 cogl_indices_dispose (GObject *object)
@@ -83,42 +83,25 @@ cogl_indices_type_get_size (CoglIndicesType type)
 }
 
 CoglIndices *
-cogl_indices_new_for_buffer (CoglIndicesType type,
-                             CoglIndexBuffer *buffer,
-                             size_t offset)
-{
-  CoglIndices *indices = g_object_new (COGL_TYPE_INDICES, NULL);
-
-  indices->buffer = g_object_ref (buffer);
-  indices->offset = offset;
-
-  indices->type = type;
-
-  return indices;
-}
-
-CoglIndices *
 cogl_indices_new (CoglContext *context,
                   CoglIndicesType type,
                   const void *indices_data,
                   int n_indices)
 {
   size_t buffer_bytes = cogl_indices_type_get_size (type) * n_indices;
-  CoglIndexBuffer *index_buffer = cogl_index_buffer_new (context, buffer_bytes);
-  CoglBuffer *buffer = COGL_BUFFER (index_buffer);
+  g_autoptr (CoglIndexBuffer) index_buffer =
+    cogl_index_buffer_new (context, buffer_bytes);
   CoglIndices *indices;
 
-  if (!cogl_buffer_set_data (buffer,
+  if (!cogl_buffer_set_data (COGL_BUFFER (index_buffer),
                              0,
                              indices_data,
                              buffer_bytes))
-    {
-      g_object_unref (index_buffer);
-      return NULL;
-    }
+    return NULL;
 
-  indices = cogl_indices_new_for_buffer (type, index_buffer, 0);
-  g_object_unref (index_buffer);
+  indices = g_object_new (COGL_TYPE_INDICES, NULL);
+  indices->buffer = g_steal_pointer (&index_buffer);
+  indices->type = type;
 
   return indices;
 }
@@ -137,25 +120,9 @@ cogl_indices_get_indices_type (CoglIndices *indices)
   return indices->type;
 }
 
-size_t
-cogl_indices_get_offset (CoglIndices *indices)
-{
-  g_return_val_if_fail (COGL_IS_INDICES (indices), 0);
-
-  return indices->offset;
-}
-
-void
-cogl_indices_set_offset (CoglIndices *indices,
-                         size_t offset)
-{
-  g_return_if_fail (COGL_IS_INDICES (indices));
-
-  indices->offset = offset;
-}
-
 CoglIndices *
-cogl_get_rectangle_indices (CoglContext *ctx, int n_rectangles)
+cogl_context_get_rectangle_indices (CoglContext *ctx,
+                                    int          n_rectangles)
 {
   int n_indices = n_rectangles * 6;
 
