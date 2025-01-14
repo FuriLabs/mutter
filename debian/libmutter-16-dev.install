@@ -8,5 +8,4 @@ usr/lib/${DEB_HOST_MULTIARCH}/mutter-${env:MUTTER_API_VERSION}/*.gir
 usr/lib/${DEB_HOST_MULTIARCH}/pkgconfig/libmutter-${env:MUTTER_API_VERSION}.pc
 usr/lib/${DEB_HOST_MULTIARCH}/pkgconfig/mutter-clutter-${env:MUTTER_API_VERSION}.pc
 usr/lib/${DEB_HOST_MULTIARCH}/pkgconfig/mutter-cogl-${env:MUTTER_API_VERSION}.pc
-usr/lib/${DEB_HOST_MULTIARCH}/pkgconfig/mutter-cogl-pango-${env:MUTTER_API_VERSION}.pc
 usr/lib/${DEB_HOST_MULTIARCH}/pkgconfig/mutter-mtk-${env:MUTTER_API_VERSION}.pc
