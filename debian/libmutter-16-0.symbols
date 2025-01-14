@@ -1,5 +1,5 @@
-libmutter-15.so.0 libmutter-15-0 #MINVER#
-* Build-Depends-Package: libmutter-15-dev
+libmutter-16.so.0 libmutter-16-0 #MINVER#
+* Build-Depends-Package: libmutter-16-dev
  meta_accelerator_name@Base 44~beta
  meta_add_clutter_debug_flags@Base 43.0
  meta_add_debug_paint_flag@Base 43.0
@@ -922,8 +922,8 @@ libmutter-15.so.0 libmutter-15-0 #MINVER#
  meta_xwayland_override_display_number@Base 43.0
  meta_xwayland_signal@Base 43.0
  set_output_hdr_metadata@Base 44~rc
-libmutter-clutter-15.so.0 libmutter-15-0 #MINVER#
-* Build-Depends-Package: libmutter-15-dev
+libmutter-clutter-16.so.0 libmutter-16-0 #MINVER#
+* Build-Depends-Package: libmutter-16-dev
  _clutter_event_process_filters@Base 43.0
  _clutter_event_push@Base 43.0
  _clutter_flatten_effect_get_type@Base 46~beta
@@ -2113,8 +2113,8 @@ libmutter-clutter-15.so.0 libmutter-15-0 #MINVER#
  clutter_zoom_action_get_transformed_focal_point@Base 43.0
  clutter_zoom_action_get_type@Base 43.0
  clutter_zoom_action_new@Base 43.0
-libmutter-cogl-15.so.0 libmutter-15-0 #MINVER#
-* Build-Depends-Package: libmutter-15-dev
+libmutter-cogl-16.so.0 libmutter-16-0 #MINVER#
+* Build-Depends-Package: libmutter-16-dev
  _cogl_bitmask_clear_all_in_array@Base 43.0
  _cogl_bitmask_foreach@Base 43.0
  _cogl_bitmask_get_from_array@Base 43.0
@@ -2548,8 +2548,8 @@ libmutter-cogl-15.so.0 libmutter-15-0 #MINVER#
  cogl_x11_onscreen_get_type@Base 43.0
  cogl_x11_onscreen_get_x11_window@Base 43.0
  cogl_xlib_renderer_set_foreign_display@Base 43.0
-libmutter-cogl-pango-15.so.0 libmutter-15-0 #MINVER#
-* Build-Depends-Package: libmutter-15-dev
+libmutter-cogl-pango-16.so.0 libmutter-16-0 #MINVER#
+* Build-Depends-Package: libmutter-16-dev
  cogl_pango_ensure_glyph_cache_for_layout@Base 43.0
  cogl_pango_font_map_create_context@Base 43.0
  cogl_pango_font_map_get_renderer@Base 43.0
@@ -2562,8 +2562,8 @@ libmutter-cogl-pango-15.so.0 libmutter-15-0 #MINVER#
  cogl_pango_renderer_get_type@Base 43.0
  cogl_pango_show_layout@Base 43.0
  cogl_pango_show_layout_line@Base 43.0
-libmutter-mtk-15.so.0 libmutter-15-0 #MINVER#
-* Build-Depends-Package: libmutter-15-dev
+libmutter-mtk-16.so.0 libmutter-16-0 #MINVER#
+* Build-Depends-Package: libmutter-16-dev
  mtk_compute_viewport_matrix@Base 47.4
  mtk_monitor_transform_from_string@Base 47.4
  mtk_monitor_transform_invert@Base 47~rc

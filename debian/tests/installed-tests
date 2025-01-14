@@ -2,7 +2,7 @@
 
 set -eu
 
-namespace=mutter-15/
+namespace=mutter-16/
 
 if [ -z "${HOME-}" ] || ! [ -w "${HOME}" ]; then
     export HOME="${AUTOPKGTEST_TMP}"
