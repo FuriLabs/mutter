@@ -25,6 +25,7 @@
 #include <string.h>
 #include <X11/Xlib-xcb.h>
 
+#include "backends/meta-cursor-tracker-private.h"
 #include "backends/meta-monitor-config-store.h"
 #include "backends/meta-virtual-monitor.h"
 #include "backends/native/meta-backend-native.h"
@@ -75,18 +76,18 @@ typedef struct
 
 G_DEFINE_QUARK (meta-test-client-error-quark, meta_test_client_error)
 
-static char *test_client_path;
+static char *test_runner_client_path;
 
 void
 meta_ensure_test_client_path (int    argc,
                               char **argv)
 {
-  test_client_path = g_test_build_filename (G_TEST_BUILT,
-                                            "src",
-                                            "tests",
-                                            "mutter-test-client",
-                                            NULL);
-  if (!g_file_test (test_client_path,
+  test_runner_client_path = g_test_build_filename (G_TEST_BUILT,
+                                                   "src",
+                                                   "tests",
+                                                   "mutter-test-client",
+                                                   NULL);
+  if (!g_file_test (test_runner_client_path,
                     G_FILE_TEST_EXISTS | G_FILE_TEST_IS_EXECUTABLE))
     {
       g_autofree char *basename = NULL;
@@ -95,11 +96,11 @@ meta_ensure_test_client_path (int    argc,
       basename = g_path_get_basename (argv[0]);
 
       dirname = g_path_get_dirname (argv[0]);
-      test_client_path = g_build_filename (dirname,
-                                           "mutter-test-client", NULL);
+      test_runner_client_path = g_build_filename (dirname,
+                                                  "mutter-test-client", NULL);
     }
 
-  if (!g_file_test (test_client_path,
+  if (!g_file_test (test_runner_client_path,
                     G_FILE_TEST_EXISTS | G_FILE_TEST_IS_EXECUTABLE))
     g_error ("mutter-test-client executable not found");
 }
@@ -482,8 +483,7 @@ wait_for_showing_before_redraw (gpointer user_data)
 }
 
 void
-meta_test_client_wait_for_window_shown (MetaTestClient *client,
-                                        MetaWindow     *window)
+meta_wait_for_window_shown (MetaWindow *window)
 {
   MetaDisplay *display = meta_window_get_display (window);
   MetaCompositor *compositor = meta_display_get_compositor (display);
@@ -644,7 +644,7 @@ meta_test_client_new (MetaContext           *context,
 
   subprocess = g_subprocess_launcher_spawn (launcher,
                                             error,
-                                            test_client_path,
+                                            test_runner_client_path,
                                             "--client-id",
                                             id,
                                             (type == META_WINDOW_CLIENT_TYPE_WAYLAND ?
@@ -887,6 +887,8 @@ queue_callback (GTask *task)
   g_cond_signal (&cond);
   g_mutex_unlock (&mutex);
 
+  g_task_return_boolean (task, TRUE);
+
   return G_SOURCE_REMOVE;
 }
 #endif
@@ -915,4 +917,91 @@ meta_flush_input (MetaContext *context)
   g_cond_wait (&cond, &mutex);
   g_mutex_unlock (&mutex);
 #endif
+}
+
+GSubprocess *
+meta_launch_test_executable (const char *name,
+                             const char *argv0,
+                             ...)
+{
+  g_autoptr (GPtrArray) args = NULL;
+  const char *arg;
+  va_list ap;
+  g_autofree char *test_client_path = NULL;
+  GSubprocessLauncher *launcher;
+  GSubprocess *subprocess;
+  GError *error = NULL;
+
+  args = g_ptr_array_new ();
+
+  test_client_path = g_test_build_filename (G_TEST_BUILT, name, NULL);
+  g_ptr_array_add (args, test_client_path);
+
+  va_start (ap, argv0);
+  g_ptr_array_add (args, (char *) argv0);
+  while ((arg = va_arg (ap, const char *)))
+    g_ptr_array_add (args, (char *) arg);
+
+  g_ptr_array_add (args, NULL);
+  va_end (ap);
+
+  launcher = g_subprocess_launcher_new (G_SUBPROCESS_FLAGS_NONE);
+  g_subprocess_launcher_setenv (launcher,
+                                "XDG_RUNTIME_DIR", getenv ("XDG_RUNTIME_DIR"),
+                                TRUE);
+  g_subprocess_launcher_setenv (launcher,
+                                "G_TEST_SRCDIR", g_test_get_dir (G_TEST_DIST),
+                                TRUE);
+  g_subprocess_launcher_setenv (launcher,
+                                "G_TEST_BUILDDIR", g_test_get_dir (G_TEST_BUILT),
+                                TRUE);
+  g_subprocess_launcher_setenv (launcher,
+                                "G_MESSAGES_DEBUG", "all",
+                                TRUE);
+  subprocess = g_subprocess_launcher_spawnv (launcher,
+                                             (const char * const *) args->pdata,
+                                             &error);
+  if (!subprocess)
+    g_error ("Failed to launch screen cast test client: %s", error->message);
+
+  return subprocess;
+}
+
+static void
+test_client_exited (GObject      *source_object,
+                    GAsyncResult *result,
+                    gpointer      user_data)
+{
+  GError *error = NULL;
+
+  if (!g_subprocess_wait_finish (G_SUBPROCESS (source_object),
+                                 result,
+                                 &error))
+    g_error ("Screen cast test client exited with an error: %s", error->message);
+
+  g_main_loop_quit (user_data);
+}
+
+void
+meta_wait_test_process (GSubprocess *subprocess)
+{
+  GMainLoop *loop;
+
+  loop = g_main_loop_new (NULL, FALSE);
+  g_subprocess_wait_check_async (subprocess,
+                                 NULL,
+                                 test_client_exited,
+                                 loop);
+  g_main_loop_run (loop);
+  g_assert_true (g_subprocess_get_successful (subprocess));
+}
+
+void
+meta_wait_for_window_cursor (MetaContext *context)
+{
+  MetaBackend *backend = meta_context_get_backend (context);
+  MetaCursorTracker *cursor_tracker = meta_backend_get_cursor_tracker (backend);
+
+  while (!meta_cursor_tracker_has_window_cursor (cursor_tracker))
+    g_main_context_iteration (NULL, TRUE);
 }

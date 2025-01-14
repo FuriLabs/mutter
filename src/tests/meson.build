@@ -14,6 +14,8 @@ mutter_test_sources = [
   'meta-output-test.h',
   'meta-ref-test.c',
   'meta-ref-test.h',
+  'meta-ref-test-utils.c',
+  'meta-ref-test-utils.h',
   'meta-sensors-proxy-mock.c',
   'meta-sensors-proxy-mock.h',
   'meta-test-monitor.c',
@@ -319,13 +321,24 @@ test_cases += [
     'suite': 'backend',
     'sources': [ 'stage-tests.c', ],
   },
+  {
+    'name': 'debug-control',
+    'suite': 'core',
+    'sources': [ 'debug-control-tests.c', ],
+  },
+]
+
+remote_desktop_utils = [
+  'remote-desktop-utils.c',
+  'remote-desktop-utils.h',
+  built_dbus_sources['meta-dbus-remote-desktop'],
+  built_dbus_sources['meta-dbus-screen-cast'],
 ]
 
 screen_cast_client = executable('mutter-screen-cast-client',
   sources: [
     'screen-cast-client.c',
-    built_dbus_sources['meta-dbus-remote-desktop'],
-    built_dbus_sources['meta-dbus-screen-cast'],
+    remote_desktop_utils,
   ],
   include_directories: tests_includes,
   c_args: [
@@ -376,6 +389,33 @@ input_capture_client = executable('mutter-input-capture-test-client',
   ],
   install: have_installed_tests,
   install_dir: mutter_installed_tests_libexecdir,
+)
+
+reftest_deps = [
+  cairo_dep,
+  glib_dep,
+]
+
+cursor_screen_cast_client = executable('mutter-cursor-tests-screen-cast-client',
+  sources: [
+    'cursor-tests-screen-cast-client.c',
+    'meta-ref-test-utils.c',
+    'meta-ref-test-utils.h',
+    remote_desktop_utils,
+  ],
+  include_directories: tests_includes,
+  c_args: [
+    tests_c_args,
+    '-DG_LOG_DOMAIN="mutter-cursor-tests-screen-cast-client"',
+  ],
+  dependencies: [
+    gio_dep,
+    libpipewire_dep,
+    reftest_deps,
+  ],
+  install: have_installed_tests,
+  install_dir: mutter_installed_tests_libexecdir,
+  install_rpath: pkglibdir,
 )
 
 # Native backend tests
@@ -440,6 +480,29 @@ test_cases += [
       'meta-thread-impl-test.c',
       'meta-thread-impl-test.h',
     ],
+  },
+  {
+    'name': 'cursor-tests',
+    'suite': 'backends/native',
+    'sources': [
+      'cursor-tests.c',
+      wayland_test_utils,
+    ],
+    'depends': [
+      test_client_executables.get('cursor-tests-client'),
+      cursor_screen_cast_client,
+    ]
+  },
+  {
+    'name': 'surface-scale-tests',
+    'suite': 'backends/native',
+    'sources': [
+      'surface-scale-tests.c',
+      wayland_test_utils,
+    ],
+    'depends': [
+      test_client_executables.get('cursor-tests-client'),
+    ]
   },
 ]
 

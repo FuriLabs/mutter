@@ -47,6 +47,7 @@ static guint signals[N_SIGNALS];
 enum
 {
   SURFACE_CONFIGURE,
+  SURFACE_POINTER_ENTER,
   N_SURFACE_SIGNALS
 };
 
@@ -198,7 +199,7 @@ create_gbm_device (WaylandDisplay *display)
   const char *gpu_path;
   int fd;
 
-  gpu_path = lookup_property_value (display, "gpu-path");
+  gpu_path = lookup_property_string (display, "gpu-path");
   if (!gpu_path)
     return NULL;
 
@@ -225,6 +226,95 @@ static const struct xdg_wm_base_listener xdg_wm_base_listener = {
 };
 
 static void
+pointer_handle_enter (void              *user_data,
+                      struct wl_pointer *pointer,
+                      uint32_t           serial,
+                      struct wl_surface *surface_resource,
+                      wl_fixed_t         sx,
+                      wl_fixed_t         sy)
+{
+  WaylandSurface *surface = wl_surface_get_user_data (surface_resource);
+
+  g_signal_emit (surface, surface_signals[SURFACE_POINTER_ENTER],
+                 0, pointer, serial);
+}
+
+static void
+pointer_handle_leave (void              *user_data,
+                      struct wl_pointer *pointer,
+                      uint32_t           serial,
+                      struct wl_surface *surface)
+{
+}
+
+static void
+pointer_handle_motion (void              *user_data,
+                       struct wl_pointer *pointer,
+                       uint32_t           time,
+                       wl_fixed_t         sx,
+                       wl_fixed_t         sy)
+{
+}
+
+static void
+pointer_handle_button (void              *user_data,
+                       struct wl_pointer *wl_pointer,
+                       uint32_t           serial,
+                       uint32_t           time,
+                       uint32_t           button,
+                       uint32_t           state)
+{
+}
+
+static void
+pointer_handle_axis (void              *user_data,
+                     struct wl_pointer *wl_pointer,
+                     uint32_t           time,
+                     uint32_t           axis,
+                     wl_fixed_t         value)
+{
+}
+
+static const struct wl_pointer_listener wl_pointer_listener = {
+  pointer_handle_enter,
+  pointer_handle_leave,
+  pointer_handle_motion,
+  pointer_handle_button,
+  pointer_handle_axis,
+};
+
+static void
+handle_wl_seat_capabilities (void           *user_data,
+                             struct wl_seat *wl_seat,
+                             uint32_t        capabilities)
+{
+  WaylandDisplay *display = user_data;
+
+  if ((capabilities & WL_SEAT_CAPABILITY_POINTER) && !display->wl_pointer)
+    {
+      display->wl_pointer = wl_seat_get_pointer (wl_seat);
+      wl_pointer_add_listener (display->wl_pointer,
+                               &wl_pointer_listener, display);
+    }
+  else if (!(capabilities & WL_SEAT_CAPABILITY_POINTER) && display->wl_pointer)
+    {
+      g_clear_pointer (&display->wl_pointer, wl_pointer_release);
+    }
+}
+
+static void
+handle_wl_seat_name (void           *user_data,
+		     struct wl_seat *wl_seat,
+		     const char     *name)
+{
+}
+
+static const struct wl_seat_listener wl_seat_listener = {
+  handle_wl_seat_capabilities,
+  handle_wl_seat_name,
+};
+
+static void
 test_driver_handle_sync_event (void               *user_data,
                                struct test_driver *test_driver,
                                uint32_t            serial)
@@ -244,12 +334,26 @@ test_driver_handle_property (void               *user_data,
 
   g_hash_table_replace (display->properties,
                         g_strdup (name),
-                        g_strdup (value));
+                        g_variant_new_string (value));
+}
+
+static void
+test_driver_handle_property_int (void               *user_data,
+                                 struct test_driver *test_driver,
+                                 const char         *name,
+                                 const uint32_t      value)
+{
+  WaylandDisplay *display = WAYLAND_DISPLAY (user_data);
+
+  g_hash_table_replace (display->properties,
+                        g_strdup (name),
+                        g_variant_new_int32 (value));
 }
 
 static const struct test_driver_listener test_driver_listener = {
   test_driver_handle_sync_event,
   test_driver_handle_property,
+  test_driver_handle_property_int,
 };
 
 static void
@@ -312,7 +416,7 @@ handle_registry_global (void               *user_data,
     {
       display->compositor =
         wl_registry_bind (registry, id, &wl_compositor_interface,
-                          MIN (version, 5));
+                          MIN (version, 6));
     }
   else if (strcmp (interface, wl_subcompositor_interface.name) == 0)
     {
@@ -368,6 +472,16 @@ handle_registry_global (void               *user_data,
       xdg_wm_base_add_listener (display->xdg_wm_base, &xdg_wm_base_listener,
                                 NULL);
     }
+  else if (strcmp (interface, wl_seat_interface.name) == 0)
+    {
+      g_assert_null (display->wl_seat);
+
+      display->wl_seat = wl_registry_bind (registry, id,
+                                           &wl_seat_interface,
+                                           3);
+      wl_seat_add_listener (display->wl_seat, &wl_seat_listener, display);
+      display->needs_roundtrip = TRUE;
+    }
 
   if (display->capabilities & WAYLAND_DISPLAY_CAPABILITY_TEST_DRIVER)
     {
@@ -405,7 +519,8 @@ wayland_display_new_full (WaylandDisplayCapabilities  capabilities,
 
   display->capabilities = capabilities;
   display->properties = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                               g_free, g_free);
+                                               g_free,
+                                               (GDestroyNotify) g_variant_unref);
   display->formats = g_hash_table_new_full (NULL, NULL, NULL, g_free);
 
   display->display = wayland_display;
@@ -413,6 +528,12 @@ wayland_display_new_full (WaylandDisplayCapabilities  capabilities,
   display->registry = wl_display_get_registry (display->display);
   wl_registry_add_listener (display->registry, &registry_listener, display);
   wl_display_roundtrip (display->display);
+
+  while (display->needs_roundtrip)
+    {
+      display->needs_roundtrip = FALSE;
+      wl_display_roundtrip (display->display);
+    }
 
   g_assert_nonnull (display->compositor);
   g_assert_nonnull (display->subcompositor);
@@ -634,12 +755,60 @@ wayland_surface_class_init (WaylandSurfaceClass *klass)
                   0,
                   NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
+
+  surface_signals[SURFACE_POINTER_ENTER] =
+    g_signal_new ("pointer-enter",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_LAST,
+                  0,
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE, 2,
+                  G_TYPE_POINTER,
+                  G_TYPE_UINT);
 }
 
 static void
 wayland_surface_init (WaylandSurface *surface)
 {
 }
+
+static void
+surface_enter (void              *user_data,
+               struct wl_surface *wl_surface,
+               struct wl_output  *output)
+{
+}
+
+static void
+surface_leave (void              *user_data,
+               struct wl_surface *wl_surface,
+               struct wl_output  *output)
+{
+}
+
+static void
+surface_preferred_buffer_scale (void              *user_data,
+                                struct wl_surface *wl_surface,
+                                int32_t            factor)
+{
+  WaylandSurface *surface = user_data;
+
+  surface->preferred_buffer_scale = factor;
+}
+
+static void
+surface_preferred_buffer_transform (void              *user_data,
+                                    struct wl_surface *wl_surface,
+                                    uint32_t           transform)
+{
+}
+
+static const struct wl_surface_listener surface_listener = {
+  surface_enter,
+  surface_leave,
+  surface_preferred_buffer_scale,
+  surface_preferred_buffer_transform,
+};
 
 WaylandSurface *
 wayland_surface_new (WaylandDisplay *display,
@@ -657,6 +826,9 @@ wayland_surface_new (WaylandDisplay *display,
   surface->default_height = default_height;
   surface->color = color;
   surface->wl_surface = wl_compositor_create_surface (display->compositor);
+  wl_surface_add_listener (surface->wl_surface,
+                           &surface_listener,
+                           surface);
   surface->xdg_surface = xdg_wm_base_get_xdg_surface (display->xdg_wm_base,
                                                       surface->wl_surface);
   xdg_surface_add_listener (surface->xdg_surface, &xdg_surface_listener,
@@ -665,6 +837,22 @@ wayland_surface_new (WaylandDisplay *display,
   xdg_toplevel_add_listener (surface->xdg_toplevel, &xdg_toplevel_listener,
                              surface);
   xdg_toplevel_set_title (surface->xdg_toplevel, title);
+
+  return surface;
+}
+
+WaylandSurface *
+wayland_surface_new_unassigned (WaylandDisplay *display)
+{
+  WaylandSurface *surface;
+
+  surface = g_object_new (WAYLAND_TYPE_SURFACE, NULL);
+
+  surface->display = display;
+  surface->wl_surface = wl_compositor_create_surface (display->compositor);
+  wl_surface_add_listener (surface->wl_surface,
+                           &surface_listener,
+                           surface);
 
   return surface;
 }
@@ -683,10 +871,30 @@ wayland_surface_set_opaque (WaylandSurface *surface)
 }
 
 const char *
-lookup_property_value (WaylandDisplay *display,
-                       const char     *name)
+lookup_property_string (WaylandDisplay *display,
+                        const char     *name)
 {
-  return g_hash_table_lookup (display->properties, name);
+  GVariant *variant;
+  const char *value;
+
+  variant = g_hash_table_lookup (display->properties, name);
+  if (!variant)
+    return NULL;
+
+  g_variant_get (variant, "&s", &value);
+
+  return value;
+}
+
+int32_t
+lookup_property_int (WaylandDisplay *display,
+                     const char     *name)
+{
+  GVariant *variant;
+
+  variant = g_hash_table_lookup (display->properties, name);
+  g_return_val_if_fail (variant, -1);
+  return g_variant_get_int32 (variant);
 }
 
 static void
