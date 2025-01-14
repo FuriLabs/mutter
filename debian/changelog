@@ -1,8 +1,10 @@
-mutter (47.4-1) UNRELEASED; urgency=medium
+mutter (47.4-1) unstable; urgency=medium
 
   * New upstream release
+  * Add Build-Depends: wireplumber for build tests
+  * debian/*.symbols: Update symbols files
 
- -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 14 Jan 2025 14:17:57 -0500
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 14 Jan 2025 15:39:17 -0500
 
 mutter (47.3-2) unstable; urgency=medium
 
