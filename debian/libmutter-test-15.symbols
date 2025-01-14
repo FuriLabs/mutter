@@ -13,6 +13,7 @@ libmutter-test-15.so libmutter-test-15 #MINVER#
  meta_check_monitor_scales@Base 42~beta
  meta_context_test_get_type@Base 41.0
  meta_context_test_run_tests@Base 41.0
+ meta_context_test_set_background_color@Base 47.4
  meta_context_test_wait_for_x11_display@Base 41.0
  meta_create_monitor_test_setup@Base 42~beta
  meta_create_test_context@Base 41.0
@@ -22,6 +23,7 @@ libmutter-test-15.so libmutter-test-15 #MINVER#
  meta_find_window_from_title@Base 42~beta
  meta_flush_input@Base 44~beta
  meta_init_monitor_test_setup@Base 42~beta
+ meta_launch_test_executable@Base 47.4
  meta_monitor_manager_test_emulate_hotplug@Base 41.0
  meta_monitor_manager_test_get_tiled_monitor_count@Base 41.0
  meta_monitor_manager_test_get_type@Base 41.0
@@ -49,13 +51,17 @@ libmutter-test-15.so libmutter-test-15 #MINVER#
  meta_test_client_quit@Base 41.0
  meta_test_client_run@Base 44~beta
  meta_test_client_wait@Base 41.0
- meta_test_client_wait_for_window_shown@Base 41.0
  meta_test_get_gpu@Base 42~beta
  meta_test_monitor_destroy@Base 44~beta
  meta_test_monitor_get_type@Base 44~beta
  meta_test_monitor_new@Base 44~beta
+ meta_test_shell_disable_animations@Base 47.4
  meta_test_shell_get_type@Base 44.3-4~
+ meta_test_shell_set_background_color@Base 47.4
  meta_wait_for_monitors_changed@Base 46~beta
  meta_wait_for_orientation@Base 42~beta
  meta_wait_for_paint@Base 42~beta
  meta_wait_for_possible_orientation_change@Base 42~beta
+ meta_wait_for_window_cursor@Base 47.4
+ meta_wait_for_window_shown@Base 47.4
+ meta_wait_test_process@Base 47.4

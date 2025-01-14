@@ -32,6 +32,7 @@ libmutter-15.so.0 libmutter-15-0 #MINVER#
  meta_backend_get_stage@Base 43.0
  meta_backend_get_type@Base 43.0
  meta_backend_is_headless@Base 43.0
+ meta_backend_is_hw_cursors_inhibited@Base 47.4
  meta_backend_is_rendering_hardware_accelerated@Base 43.0
  meta_backend_lock_layout_group@Base 43.0
  meta_backend_native_get_device_pool@Base 43.0
@@ -111,6 +112,7 @@ libmutter-15.so.0 libmutter-15-0 #MINVER#
  meta_comp_effect_get_type@Base 43.0
  meta_compositor_get_feedback_group@Base 44~beta
  meta_compositor_get_laters@Base 43.0
+ meta_compositor_get_plugin_manager@Base 47.4
  meta_compositor_get_type@Base 43.0
  meta_compositor_type_get_type@Base 43.0
  meta_context_add_option_entries@Base 43.0
@@ -159,6 +161,7 @@ libmutter-15.so.0 libmutter-15-0 #MINVER#
  meta_crtc_unassign_output@Base 43.0
  meta_crtc_unset_config@Base 43.0
  meta_crtc_virtual_get_type@Base 45.0
+ meta_cursor_get_name@Base 47.4
  meta_cursor_get_type@Base 43.0
  meta_cursor_renderer_get_cursor@Base 44.1
  meta_cursor_sprite_wayland_get_type@Base 44.1
@@ -169,6 +172,7 @@ libmutter-15.so.0 libmutter-15-0 #MINVER#
  meta_cursor_tracker_get_scale@Base 43.0
  meta_cursor_tracker_get_sprite@Base 43.0
  meta_cursor_tracker_get_type@Base 43.0
+ meta_cursor_tracker_has_window_cursor@Base 47.4
  meta_cursor_tracker_set_pointer_visible@Base 43.0
  meta_debug_control_get_type@Base 47~beta
  meta_debug_control_set_exported@Base 47~beta
@@ -241,6 +245,7 @@ libmutter-15.so.0 libmutter-15-0 #MINVER#
  meta_exit_code_get_type@Base 43.0
  meta_external_binding_name_for_action@Base 43.0
  meta_fatal@Base 43.0
+ meta_fraction_from_double@Base 47.4
  meta_frame_borders_clear@Base 43.0
  meta_frame_native_ensure_kms_update@Base 44~rc
  meta_frame_native_from_frame@Base 44~rc
@@ -379,6 +384,8 @@ libmutter-15.so.0 libmutter-15-0 #MINVER#
  meta_logical_monitor_configs_have_monitor@Base 43.0
  meta_logical_monitor_get_layout@Base 43.0
  meta_logical_monitor_get_monitors@Base 43.0
+ meta_logical_monitor_get_scale@Base 47.4
+ meta_logical_monitor_get_type@Base 47.4
  meta_logical_monitor_is_primary@Base 43.0
  meta_maximize_flags_get_type@Base 43.0
  meta_monitor_calculate_crtc_pos@Base 43.0
@@ -540,6 +547,7 @@ libmutter-15.so.0 libmutter-15-0 #MINVER#
  meta_plugin_get_display@Base 43.0
  meta_plugin_get_info@Base 43.0
  meta_plugin_get_type@Base 43.0
+ meta_plugin_manager_get_plugin@Base 47.4
  meta_plugin_manager_load@Base 43.0
  meta_plugin_manager_set_plugin_type@Base 43.0
  meta_plugin_map_completed@Base 43.0
@@ -2556,7 +2564,10 @@ libmutter-cogl-pango-15.so.0 libmutter-15-0 #MINVER#
  cogl_pango_show_layout_line@Base 43.0
 libmutter-mtk-15.so.0 libmutter-15-0 #MINVER#
 * Build-Depends-Package: libmutter-15-dev
+ mtk_compute_viewport_matrix@Base 47.4
+ mtk_monitor_transform_from_string@Base 47.4
  mtk_monitor_transform_invert@Base 47~rc
+ mtk_monitor_transform_to_string@Base 47.4
  mtk_monitor_transform_transform@Base 47~rc
  mtk_monitor_transform_transform_matrix@Base 47~rc
  mtk_monitor_transform_transform_point@Base 47~rc
