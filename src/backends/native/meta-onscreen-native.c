@@ -50,6 +50,7 @@
 #include "backends/native/meta-render-device.h"
 #include "backends/native/meta-renderer-native-gles3.h"
 #include "backends/native/meta-renderer-native-private.h"
+#include "backends/native/meta-egl-gbm.h"
 #include "cogl/cogl.h"
 #include "common/meta-cogl-drm-formats.h"
 #include "common/meta-drm-format-helpers.h"
@@ -344,10 +345,7 @@ page_flip_feedback_discarded (MetaKmsCrtc  *kms_crtc,
   if (error &&
       !g_error_matches (error,
                         G_IO_ERROR,
-                        G_IO_ERROR_PERMISSION_DENIED) &&
-      !g_error_matches (error,
-                        META_KMS_ERROR,
-                        META_KMS_ERROR_DISCARDED))
+                        G_IO_ERROR_PERMISSION_DENIED))
 
     g_warning ("Page flip discarded: %s", error->message);
 
@@ -464,6 +462,32 @@ apply_transform (MetaCrtcKms            *crtc_kms,
                                       hw_transform);
 }
 
+static void
+apply_color_encoding (MetaKmsPlaneAssignment *kms_plane_assignment,
+                      MetaKmsPlane           *kms_plane)
+{
+  if (!meta_kms_plane_is_color_encoding_handled (kms_plane,
+                                                 META_KMS_PLANE_YCBCR_COLOR_ENCODING_BT709))
+    return;
+
+  meta_kms_plane_update_set_color_encoding (kms_plane,
+                                            kms_plane_assignment,
+                                            META_KMS_PLANE_YCBCR_COLOR_ENCODING_BT709);
+}
+
+static void
+apply_color_range (MetaKmsPlaneAssignment *kms_plane_assignment,
+                   MetaKmsPlane           *kms_plane)
+{
+  if (!meta_kms_plane_is_color_range_handled (kms_plane,
+                                              META_KMS_PLANE_YCBCR_COLOR_RANGE_LIMITED))
+    return;
+
+  meta_kms_plane_update_set_color_range (kms_plane,
+                                         kms_plane_assignment,
+                                         META_KMS_PLANE_YCBCR_COLOR_RANGE_LIMITED);
+}
+
 static MetaKmsPlaneAssignment *
 assign_primary_plane (MetaCrtcKms            *crtc_kms,
                       MetaDrmBuffer          *buffer,
@@ -503,6 +527,8 @@ assign_primary_plane (MetaCrtcKms            *crtc_kms,
                                                    *dst_rect,
                                                    flags);
   apply_transform (crtc_kms, plane_assignment, primary_kms_plane);
+  apply_color_encoding (plane_assignment, primary_kms_plane);
+  apply_color_range (plane_assignment, primary_kms_plane);
 
   return plane_assignment;
 }
@@ -854,6 +880,7 @@ copy_shared_framebuffer_gpu (CoglOnscreen                         *onscreen,
   struct gbm_bo *bo;
   EGLSync egl_sync = EGL_NO_SYNC;
   g_autofd int sync_fd = -1;
+  EGLImageKHR egl_image;
 
   COGL_TRACE_BEGIN_SCOPED (CopySharedFramebufferSecondaryGpu,
                            "copy_shared_framebuffer_gpu()");
@@ -907,11 +934,19 @@ copy_shared_framebuffer_gpu (CoglOnscreen                         *onscreen,
 
   buffer_gbm = META_DRM_BUFFER_GBM (primary_gpu_fb);
   bo = meta_drm_buffer_gbm_get_bo (buffer_gbm);
+  egl_image = meta_egl_ensure_gbm_bo_egl_image (egl, egl_display, bo, error);
+
+  if (!egl_image)
+    {
+      g_prefix_error (error, "Failed to create EGL image from buffer object for secondary GPU: ");
+      goto done;
+    }
+
   if (!meta_renderer_native_gles3_blit_shared_bo (egl,
                                                   gles3,
                                                   egl_display,
                                                   renderer_gpu_data->secondary.egl_context,
-                                                  secondary_gpu_state->egl_surface,
+                                                  egl_image,
                                                   bo,
                                                   error))
     {
@@ -1308,6 +1343,9 @@ swap_buffer_result_feedback (const MetaKmsFeedback *kms_feedback,
     return;
 
   if (!g_error_matches (error,
+                        META_KMS_ERROR,
+                        META_KMS_ERROR_DISCARDED) &&
+      !g_error_matches (error,
                         G_IO_ERROR,
                         G_IO_ERROR_PERMISSION_DENIED))
     g_warning ("Page flip failed: %s", error->message);
@@ -2028,9 +2066,7 @@ get_supported_kms_modifiers (MetaCrtcKms *crtc_kms,
                              uint32_t     format)
 {
   MetaKmsPlane *plane = meta_crtc_kms_get_assigned_primary_plane (crtc_kms);
-  GArray *modifiers;
   GArray *crtc_mods;
-  unsigned int i;
 
   g_return_val_if_fail (plane, NULL);
 
@@ -2038,26 +2074,7 @@ get_supported_kms_modifiers (MetaCrtcKms *crtc_kms,
   if (!crtc_mods)
     return NULL;
 
-  modifiers = g_array_new (FALSE, FALSE, sizeof (uint64_t));
-
-  /*
-   * For each modifier from base_crtc, check if it's available on all other
-   * CRTCs.
-   */
-  for (i = 0; i < crtc_mods->len; i++)
-    {
-      uint64_t modifier = g_array_index (crtc_mods, uint64_t, i);
-
-      g_array_append_val (modifiers, modifier);
-    }
-
-  if (modifiers->len == 0)
-    {
-      g_array_free (modifiers, TRUE);
-      return NULL;
-    }
-
-  return modifiers;
+  return g_array_copy (crtc_mods);
 }
 
 static GArray *

@@ -9261,7 +9261,7 @@ meta_test_monitor_wm_tiling (void)
                                   &error);
   if (!test_window)
     g_error ("Failed to find the window: %s", error->message);
-  meta_test_client_wait_for_window_shown (test_client, test_window);
+  meta_wait_for_window_shown (test_window);
 
   meta_window_tile (test_window, META_TILE_MAXIMIZED);
   meta_window_move_to_monitor (test_window, 1);
@@ -9924,7 +9924,7 @@ meta_test_monitor_calculate_mode_scale (void)
         .preferred_mode = 0,
         .possible_crtcs = { 0 },
         .n_possible_crtcs = 1,
-        .scale = -1,
+        .dynamic_scale = TRUE,
       }
     },
     .n_outputs = 1,

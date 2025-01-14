@@ -94,8 +94,7 @@ MetaWindow * meta_test_client_find_window (MetaTestClient  *client,
                                            GError         **error);
 
 META_EXPORT
-void meta_test_client_wait_for_window_shown (MetaTestClient *client,
-                                             MetaWindow     *window);
+void meta_wait_for_window_shown (MetaWindow *window);
 
 META_EXPORT
 gboolean meta_test_client_quit (MetaTestClient  *client,
@@ -129,3 +128,14 @@ MetaVirtualMonitor * meta_create_test_monitor (MetaContext *context,
 
 META_EXPORT
 void meta_flush_input (MetaContext *context);
+
+META_EXPORT
+GSubprocess * meta_launch_test_executable (const char *name,
+                                           const char *argv0,
+                                           ...);
+
+META_EXPORT
+void meta_wait_test_process (GSubprocess *subprocess);
+
+META_EXPORT
+void meta_wait_for_window_cursor (MetaContext *context);

@@ -66,6 +66,7 @@ struct _MetaWaylandSurfaceRoleClass
                                     float                  *out_sx,
                                     float                  *out_sy);
   MetaWindow * (*get_window) (MetaWaylandSurfaceRole *surface_role);
+  MetaLogicalMonitor * (*get_preferred_scale_monitor) (MetaWaylandSurfaceRole *surface_role);
 };
 
 struct _MetaWaylandSurfaceState
@@ -332,8 +333,6 @@ void                meta_wayland_surface_drag_dest_focus_out (MetaWaylandSurface
 void                meta_wayland_surface_drag_dest_drop      (MetaWaylandSurface   *surface);
 void                meta_wayland_surface_drag_dest_update    (MetaWaylandSurface   *surface);
 
-double              meta_wayland_surface_get_highest_output_scale (MetaWaylandSurface *surface);
-
 void                meta_wayland_surface_update_outputs (MetaWaylandSurface *surface);
 
 MetaWaylandSurface *meta_wayland_surface_get_toplevel (MetaWaylandSurface *surface);
@@ -418,7 +417,7 @@ struct wl_resource * meta_wayland_surface_get_resource (MetaWaylandSurface *surf
 
 MetaWaylandCompositor * meta_wayland_surface_get_compositor (MetaWaylandSurface *surface);
 
-void meta_wayland_surface_notify_highest_scale_monitor (MetaWaylandSurface *surface);
+void meta_wayland_surface_notify_preferred_scale_monitor (MetaWaylandSurface *surface);
 
 void meta_wayland_surface_notify_actor_changed (MetaWaylandSurface *surface);
 
@@ -426,6 +425,8 @@ void meta_wayland_surface_set_main_monitor (MetaWaylandSurface *surface,
                                             MetaLogicalMonitor *logical_monitor);
 
 MetaLogicalMonitor * meta_wayland_surface_get_main_monitor (MetaWaylandSurface *surface);
+
+MetaLogicalMonitor * meta_wayland_surface_get_preferred_scale_monitor (MetaWaylandSurface *surface);
 
 static inline MetaWaylandSurfaceState *
 meta_wayland_surface_state_new (void)
