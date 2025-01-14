@@ -1,8 +1,13 @@
-mutter (48~alpha-1) UNRELEASED; urgency=medium
+mutter (48~alpha-1) experimental; urgency=medium
 
   * New upstream release
+  * Rename packages for API bump (mutter-15 -> mutter-16)
+  * debian/libmutter-16-0.symbols: Update
+  * libmutter-cogl-pango is no longer provided
+  * Bump minimum libdisplay-info & wayland-protocols
+  * Temporarily disable triple buffering patch until it can be updated
 
- -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 14 Jan 2025 16:17:32 -0500
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 14 Jan 2025 18:05:13 -0500
 
 mutter (47.4-1) unstable; urgency=medium
 
