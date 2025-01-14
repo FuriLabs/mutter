@@ -119,10 +119,10 @@ index 2cfe074..af51ad3 100644
      is_parallel: false,
    )
 diff --git a/src/tests/meson.build b/src/tests/meson.build
-index 7bd5f71..dfdfe0a 100644
+index 563ef43..9ca2c31 100644
 --- a/src/tests/meson.build
 +++ b/src/tests/meson.build
-@@ -429,6 +429,7 @@ test_cases += [
+@@ -469,6 +469,7 @@ test_cases += [
      'name': 'input-capture',
      'suite': 'backends/native',
      'sources': [ 'input-capture-tests.c' ],
@@ -130,7 +130,7 @@ index 7bd5f71..dfdfe0a 100644
    },
    {
      'name': 'thread',
-@@ -722,8 +723,18 @@ foreach test_case: test_cases
+@@ -785,8 +786,18 @@ foreach test_case: test_cases
  
    test_depends = [ default_plugin ] + test_case.get('depends', [])
  
@@ -150,7 +150,7 @@ index 7bd5f71..dfdfe0a 100644
      env: test_env,
      depends: test_depends,
      is_parallel: false,
-@@ -785,7 +796,7 @@ stacking_tests = [
+@@ -848,7 +859,7 @@ stacking_tests = [
  
  foreach stacking_test: stacking_tests
    test(stacking_test, test_runner,
