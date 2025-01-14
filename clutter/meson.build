@@ -17,11 +17,6 @@ if buildtype != 'plain'
     clutter_debug_c_args += [
       '-DCLUTTER_ENABLE_DEBUG',
     ]
-  else
-    clutter_debug_c_args += [
-      '-DG_DISABLE_ASSERT',
-      '-DG_DISABLE_CAST_CHECKS',
-    ]
   endif
 endif
 clutter_debug_c_args = cc.get_supported_arguments(clutter_debug_c_args)
@@ -29,20 +24,25 @@ clutter_c_args += clutter_debug_c_args
 
 clutter_pkg_deps = [
   atk_dep,
-  cairo_dep,
   glib_dep,
   gobject_dep,
   gio_dep,
-  pango_dep,
-  harfbuzz_dep,
 ]
 
 clutter_pkg_private_deps = [
-  fribidi_dep,
   gthread_dep,
   gmodule_no_export_dep,
-  pangocairo_dep,
 ]
+
+if have_fonts
+  clutter_pkg_private_deps += [
+    cairo_dep,
+    fribidi_dep,
+    pangocairo_dep,
+    pango_dep,
+    harfbuzz_dep,
+  ]
+endif
 
 clutter_deps = [
   clutter_pkg_deps,

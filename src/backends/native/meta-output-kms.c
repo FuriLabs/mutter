@@ -47,6 +47,8 @@ struct _MetaOutputKms
 
 G_DEFINE_TYPE (MetaOutputKms, meta_output_kms, META_TYPE_OUTPUT_NATIVE)
 
+static GQuark kms_connector_output_kms_quark;
+
 MetaKmsConnector *
 meta_output_kms_get_kms_connector (MetaOutputKms *output_kms)
 {
@@ -88,6 +90,13 @@ meta_output_kms_can_clone (MetaOutputKms *output_kms,
     return FALSE;
 
   return TRUE;
+}
+
+MetaOutputKms *
+meta_output_kms_from_kms_connector (MetaKmsConnector *connector)
+{
+  return g_object_get_qdata (G_OBJECT (connector),
+                             kms_connector_output_kms_quark);
 }
 
 static GBytes *
@@ -446,42 +455,41 @@ meta_output_kms_new (MetaGpuKms        *gpu_kms,
 
   if (output_info->edid_info)
     {
-      MetaEdidColorimetry edid_colorimetry =
-        output_info->edid_info->colorimetry;
+      struct di_supported_signal_colorimetry *edid_colorimetry =
+        &output_info->edid_info->colorimetry;
       uint64_t connector_colorimetry = connector_state->colorspace.supported;
 
       if (connector_colorimetry & (1 << META_OUTPUT_COLORSPACE_DEFAULT))
         output_info->supported_color_spaces |= (1 << META_OUTPUT_COLORSPACE_DEFAULT);
 
-      if ((edid_colorimetry & META_EDID_COLORIMETRY_BT2020RGB) &&
+      if ((edid_colorimetry->bt2020_rgb) &&
           (connector_colorimetry & (1 << META_OUTPUT_COLORSPACE_BT2020)))
         output_info->supported_color_spaces |= (1 << META_OUTPUT_COLORSPACE_BT2020);
     }
 
   if (connector_state->hdr.supported &&
       output_info->edid_info &&
-      (output_info->edid_info->hdr_static_metadata.sm &
-       META_EDID_STATIC_METADATA_TYPE1))
+      output_info->edid_info->hdr_static_metadata.type1)
     {
-      MetaEdidTransferFunction edid_tf =
-        output_info->edid_info->hdr_static_metadata.tf;
+      struct di_hdr_static_metadata *edid_hdr =
+        &output_info->edid_info->hdr_static_metadata;
 
-      if (edid_tf & META_EDID_TF_TRADITIONAL_GAMMA_SDR)
+      if (edid_hdr->traditional_sdr)
         {
           output_info->supported_hdr_eotfs |=
             (1 << META_OUTPUT_HDR_METADATA_EOTF_TRADITIONAL_GAMMA_SDR);
         }
-      if (edid_tf & META_EDID_TF_TRADITIONAL_GAMMA_HDR)
+      if (edid_hdr->traditional_hdr)
         {
           output_info->supported_hdr_eotfs |=
             (1 << META_OUTPUT_HDR_METADATA_EOTF_TRADITIONAL_GAMMA_HDR);
         }
-      if (edid_tf & META_EDID_TF_PQ)
+      if (edid_hdr->pq)
         {
           output_info->supported_hdr_eotfs |=
             (1 << META_OUTPUT_HDR_METADATA_EOTF_PQ);
         }
-      if (edid_tf & META_EDID_TF_HLG)
+      if (edid_hdr->hlg)
         {
           output_info->supported_hdr_eotfs |=
             (1 << META_OUTPUT_HDR_METADATA_EOTF_HLG);
@@ -534,6 +542,16 @@ meta_output_kms_new (MetaGpuKms        *gpu_kms,
     {
       meta_output_unassign_crtc (output);
     }
+
+  if (!kms_connector_output_kms_quark)
+    {
+      kms_connector_output_kms_quark =
+        g_quark_from_static_string ("kms-connector-output-kms-quark");
+    }
+
+  g_object_set_qdata (G_OBJECT (kms_connector),
+                      kms_connector_output_kms_quark,
+                      output_kms);
 
   return output_kms;
 }

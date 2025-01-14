@@ -35,6 +35,7 @@
 
 #include "cogl/cogl-pixel-format.h"
 #include "cogl/cogl-types.h"
+#include "mtk/mtk.h"
 
 #include <stdio.h>
 
@@ -79,4 +80,24 @@ _cogl_util_one_at_a_time_mix (unsigned int hash)
     hash += ( hash << 15 );
 
     return hash;
+}
+
+static inline void
+cogl_region_to_flipped_array (const MtkRegion *region,
+                              int              height,
+                              int             *rectangles)
+{
+  int n_rectangles = mtk_region_num_rectangles (region);
+  int i;
+
+  for (i = 0; i < n_rectangles; i++)
+    {
+      MtkRectangle rect = mtk_region_get_rectangle (region, i);
+      int *flip_rect = rectangles + 4 * i;
+
+      flip_rect[0] = rect.x;
+      flip_rect[1] = height - rect.y - rect.height;
+      flip_rect[2] = rect.width;
+      flip_rect[3] = rect.height;
+    }
 }

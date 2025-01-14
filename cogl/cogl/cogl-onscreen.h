@@ -58,21 +58,18 @@ struct _CoglOnscreenClass
 
   void (* bind) (CoglOnscreen *onscreen);
 
-  void (* swap_buffers_with_damage) (CoglOnscreen  *onscreen,
-                                     const int     *rectangles,
-                                     int            n_rectangles,
-                                     CoglFrameInfo *info,
-                                     gpointer       user_data);
+  void (* swap_buffers_with_damage) (CoglOnscreen    *onscreen,
+                                     const MtkRegion *region,
+                                     CoglFrameInfo   *info,
+                                     gpointer         user_data);
 
-  void (* swap_region) (CoglOnscreen  *onscreen,
-                        const int     *rectangles,
-                        int            n_rectangles,
-                        CoglFrameInfo *info,
-                        gpointer       user_data);
+  void (* swap_region) (CoglOnscreen    *onscreen,
+                        const MtkRegion *region,
+                        CoglFrameInfo   *info,
+                        gpointer         user_data);
 
-  void (* queue_damage_region) (CoglOnscreen *onscreen,
-                                const int    *rectangles,
-                                int           n_rectangles);
+  void (* queue_damage_region) (CoglOnscreen    *onscreen,
+                                const MtkRegion *region);
 
   gboolean (* direct_scanout) (CoglOnscreen   *onscreen,
                                CoglScanout    *scanout,
@@ -81,6 +78,10 @@ struct _CoglOnscreenClass
                                GError        **error);
 
   int (* get_buffer_age) (CoglOnscreen *onscreen);
+
+  gboolean (* get_window_handles) (CoglOnscreen *onscreen,
+                                   gpointer     *device_out,
+                                   gpointer     *window_out);
 };
 
 /**
@@ -159,9 +160,7 @@ cogl_onscreen_get_buffer_age (CoglOnscreen *onscreen);
 /**
  * cogl_onscreen_queue_damage_region:
  * @onscreen: A #CoglOnscreen framebuffer
- * @rectangles: (array length=n_rectangles): An array of integer 4-tuples
- *              representing damaged rectangles as (x, y, width, height) tuples.
- * @n_rectangles: The number of 4-tuples to be read from @rectangles
+ * @region: A region representing damage
  *
  * Implementation for https://www.khronos.org/registry/EGL/extensions/KHR/EGL_KHR_partial_update.txt
  * This immediately queues state to OpenGL that will be used for the
@@ -172,16 +171,13 @@ cogl_onscreen_get_buffer_age (CoglOnscreen *onscreen);
  * the framebuffer.
  */
 COGL_EXPORT void
-cogl_onscreen_queue_damage_region (CoglOnscreen *onscreen,
-                                   const int    *rectangles,
-                                   int           n_rectangles);
+cogl_onscreen_queue_damage_region (CoglOnscreen    *onscreen,
+                                   const MtkRegion *region);
 
 /**
  * cogl_onscreen_swap_buffers_with_damage:
  * @onscreen: A #CoglOnscreen framebuffer
- * @rectangles: (array length=n_rectangles): An array of integer 4-tuples
- *              representing damaged rectangles as (x, y, width, height) tuples.
- * @n_rectangles: The number of 4-tuples to be read from @rectangles
+ * @region: A region representing damage
  *
  * Swaps the current back buffer being rendered too, to the front for
  * display and provides information to any system compositor about
@@ -190,10 +186,8 @@ cogl_onscreen_queue_damage_region (CoglOnscreen *onscreen,
  *
  * This function has the same semantics as
  * cogl_framebuffer_swap_buffers() except that it additionally allows
- * applications to pass a list of damaged rectangles which may be
- * passed on to a compositor so that it can minimize how much of the
- * screen is redrawn in response to this applications newly swapped
- * front buffer.
+ * applications to pass a damage region which may be used to minimize how much
+ * of the screen is redrawn.
  *
  * For example if your application is only animating a small object in
  * the corner of the screen and everything else is remaining static
@@ -201,7 +195,7 @@ cogl_onscreen_queue_damage_region (CoglOnscreen *onscreen,
  * corner of your newly swapped buffer has really changed with respect
  * to your previously swapped front buffer.
  *
- * If @n_rectangles is 0 then the whole buffer will implicitly be
+ * If @region is NULL then the whole buffer will implicitly be
  * reported as damaged as if cogl_onscreen_swap_buffers() had been
  * called.
  *
@@ -222,11 +216,10 @@ cogl_onscreen_queue_damage_region (CoglOnscreen *onscreen,
  * perform incremental rendering based on old back buffers.
  */
 COGL_EXPORT void
-cogl_onscreen_swap_buffers_with_damage (CoglOnscreen *onscreen,
-                                        const int *rectangles,
-                                        int n_rectangles,
-                                        CoglFrameInfo *info,
-                                        gpointer user_data);
+cogl_onscreen_swap_buffers_with_damage (CoglOnscreen    *onscreen,
+                                        const MtkRegion *region,
+                                        CoglFrameInfo   *info,
+                                        gpointer         user_data);
 
 /**
  * cogl_onscreen_direct_scanout:
@@ -250,13 +243,10 @@ cogl_onscreen_add_frame_info (CoglOnscreen  *onscreen,
 /**
  * cogl_onscreen_swap_region:
  * @onscreen: A #CoglOnscreen framebuffer
- * @rectangles: (array length=n_rectangles): An array of integer 4-tuples
- *              representing rectangles as (x, y, width, height) tuples.
- * @n_rectangles: The number of 4-tuples to be read from @rectangles
+ * @region: A region
  *
  * Swaps a region of the back buffer being rendered too, to the front for
- * display.  @rectangles represents the region as array of @n_rectangles each
- * defined by 4 sequential (x, y, width, height) integers.
+ * display.
  *
  * This function also implicitly discards the contents of the color, depth and
  * stencil buffers as if cogl_framebuffer_discard_buffers() were used. The
@@ -265,11 +255,10 @@ cogl_onscreen_add_frame_info (CoglOnscreen  *onscreen,
  * frame.
  */
 COGL_EXPORT void
-cogl_onscreen_swap_region (CoglOnscreen *onscreen,
-                           const int *rectangles,
-                           int n_rectangles,
-                           CoglFrameInfo *info,
-                           gpointer user_data);
+cogl_onscreen_swap_region (CoglOnscreen    *onscreen,
+                           const MtkRegion *region,
+                           CoglFrameInfo   *info,
+                           gpointer         user_data);
 
 /**
  * CoglFrameEvent:
@@ -416,5 +405,10 @@ cogl_onscreen_remove_frame_callback (CoglOnscreen *onscreen,
  */
 COGL_EXPORT int64_t
 cogl_onscreen_get_frame_counter (CoglOnscreen *onscreen);
+
+COGL_EXPORT gboolean
+cogl_onscreen_get_window_handles (CoglOnscreen *onscreen,
+                                  gpointer     *device_out,
+                                  gpointer     *window_out);
 
 G_END_DECLS

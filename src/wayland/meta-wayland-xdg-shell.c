@@ -27,6 +27,7 @@
 #include "compositor/compositor-private.h"
 #include "core/boxes-private.h"
 #include "core/window-private.h"
+#include "meta/meta-window-config.h"
 #include "wayland/meta-wayland-outputs.h"
 #include "wayland/meta-wayland-popup.h"
 #include "wayland/meta-wayland-private.h"
@@ -161,9 +162,6 @@ meta_wayland_xdg_positioner_to_placement (MetaWaylandXdgPositioner *xdg_position
 
 static struct wl_resource *
 meta_wayland_xdg_surface_get_wm_base_resource (MetaWaylandXdgSurface *xdg_surface);
-
-static MtkRectangle
-meta_wayland_xdg_surface_get_window_geometry (MetaWaylandXdgSurface *xdg_surface);
 
 static void
 meta_wayland_xdg_surface_send_configure (MetaWaylandXdgSurface          *xdg_surface,
@@ -722,7 +720,7 @@ fill_states (MetaWaylandXdgToplevel         *xdg_toplevel,
   window_drag =
     meta_compositor_get_current_window_drag (window->display->compositor);
 
-  if (META_WINDOW_MAXIMIZED (window))
+  if (meta_window_is_maximized (window))
     add_state_value (states, XDG_TOPLEVEL_STATE_MAXIMIZED);
   if (meta_window_is_fullscreen (window))
     add_state_value (states, XDG_TOPLEVEL_STATE_FULLSCREEN);
@@ -877,9 +875,12 @@ meta_wayland_xdg_toplevel_apply_state (MetaWaylandSurfaceRole  *surface_role,
   if (!xdg_surface_priv->configure_sent)
     {
       MetaWaylandWindowConfiguration *configuration;
+      g_autoptr (MetaWindowConfig) window_config = NULL;
       int bounds_width, bounds_height, geometry_scale;
+      MtkRectangle rect;
 
       geometry_scale = meta_window_wayland_get_geometry_scale (window);
+      rect = meta_window_config_get_rect (window->config);
 
       if (!meta_window_calculate_bounds (window, &bounds_width, &bounds_height))
         {
@@ -891,7 +892,7 @@ meta_wayland_xdg_toplevel_apply_state (MetaWaylandSurfaceRole  *surface_role,
         {
           configuration =
             meta_wayland_window_configuration_new (window,
-                                                   window->rect,
+                                                   rect,
                                                    bounds_width,
                                                    bounds_height,
                                                    geometry_scale,
@@ -905,6 +906,14 @@ meta_wayland_xdg_toplevel_apply_state (MetaWaylandSurfaceRole  *surface_role,
                                                          bounds_height,
                                                          geometry_scale);
         }
+
+      window_config =
+        meta_window_config_new_from_wayland_window_configuration (window,
+                                                                  configuration);
+      meta_window_emit_configure (window, window_config);
+      meta_wayland_window_configuration_apply_window_config (window,
+                                                             configuration,
+                                                             window_config);
 
       meta_wayland_xdg_toplevel_send_configure (xdg_toplevel, configuration);
       meta_wayland_window_configuration_free (configuration);
@@ -1684,7 +1693,7 @@ meta_wayland_xdg_surface_get_wm_base_resource (MetaWaylandXdgSurface *xdg_surfac
   return priv->shell_client->resource;
 }
 
-static MtkRectangle
+MtkRectangle
 meta_wayland_xdg_surface_get_window_geometry (MetaWaylandXdgSurface *xdg_surface)
 {
   MetaWaylandXdgSurfacePrivate *priv =

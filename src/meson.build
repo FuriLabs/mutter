@@ -27,17 +27,12 @@ mutter_pkg_private_deps = [
   xkbcommon_dep,
   gdk_pixbuf_dep,
   libeis_dep,
+  libdisplay_info_dep,
 ]
 
 if have_gnome_desktop
   mutter_pkg_private_deps += [
     gnome_desktop_dep,
-  ]
-endif
-
-if have_libdisplay_info
-  mutter_pkg_private_deps += [
-    libdisplay_info_dep,
   ]
 endif
 
@@ -120,6 +115,7 @@ endif
 if have_x11
   mutter_pkg_private_deps += [
     ice_dep,
+    fribidi_dep,
     xcb_randr_dep,
     xkbfile_dep,
     xkbcommon_x11_dep,
@@ -148,10 +144,8 @@ endif
 if have_native_backend
   mutter_pkg_private_deps += [
     libinput_dep,
-    gudev_dep,
     libgbm_dep,
     logind_provider_dep,
-    libudev_dep,
     xkbcommon_dep,
   ]
 endif
@@ -222,6 +216,8 @@ mutter_sources = [
   'backends/meta-dbus-session-manager.h',
   'backends/meta-dbus-session-watcher.c',
   'backends/meta-dbus-session-watcher.h',
+  'backends/meta-dbus-utils.c',
+  'backends/meta-dbus-utils.h',
   'backends/meta-display-config-shared.h',
   'backends/meta-dnd-private.h',
   'backends/meta-fd-source.c',
@@ -245,6 +241,8 @@ mutter_sources = [
   'backends/meta-input-settings-dummy.h',
   'backends/meta-keymap-utils.c',
   'backends/meta-keymap-utils.h',
+  'backends/meta-launcher.c',
+  'backends/meta-launcher.h',
   'backends/meta-logical-monitor.c',
   'backends/meta-logical-monitor.h',
   'backends/meta-monitor.c',
@@ -266,6 +264,8 @@ mutter_sources = [
   'backends/meta-pointer-constraint.h',
   'backends/meta-remote-access-controller-private.h',
   'backends/meta-remote-access-controller.c',
+  'backends/meta-renderdoc.c',
+  'backends/meta-renderdoc.h',
   'backends/meta-renderer.c',
   'backends/meta-renderer.h',
   'backends/meta-renderer-view.c',
@@ -377,6 +377,8 @@ mutter_sources = [
   'core/meta-sound-player.c',
   'core/meta-tablet-action-mapper.c',
   'core/meta-tool-action-mapper.c',
+  'core/meta-window-config.c',
+  'core/meta-window-config-private.h',
   'core/meta-workspace-manager.c',
   'core/meta-workspace-manager-private.h',
   'core/place.c',
@@ -604,6 +606,8 @@ if have_wayland
     'wayland/meta-wayland-client-private.h',
     'wayland/meta-wayland-color-management.c',
     'wayland/meta-wayland-color-management.h',
+    'wayland/meta-wayland-commit-timing.c',
+    'wayland/meta-wayland-fifo.c',
     'wayland/meta-wayland-cursor-surface.c',
     'wayland/meta-wayland-cursor-surface.h',
     'wayland/meta-wayland-data-device.c',
@@ -676,6 +680,8 @@ if have_wayland
     'wayland/meta-wayland-subsurface.h',
     'wayland/meta-wayland-surface.c',
     'wayland/meta-wayland-surface-private.h',
+    'wayland/meta-wayland-system-bell.c',
+    'wayland/meta-wayland-system-bell.h',
     'wayland/meta-wayland-tablet.c',
     'wayland/meta-wayland-tablet-cursor-surface.c',
     'wayland/meta-wayland-tablet-cursor-surface.h',
@@ -696,6 +702,8 @@ if have_wayland
     'wayland/meta-wayland-tablet-tool.h',
     'wayland/meta-wayland-text-input.c',
     'wayland/meta-wayland-text-input.h',
+    'wayland/meta-wayland-toplevel-drag.c',
+    'wayland/meta-wayland-toplevel-drag.h',
     'wayland/meta-wayland-touch.c',
     'wayland/meta-wayland-touch.h',
     'wayland/meta-wayland-transaction.c',
@@ -751,8 +759,6 @@ endif
 
 if have_native_backend
   mutter_sources += [
-    'backends/native/dbus-utils.c',
-    'backends/native/dbus-utils.h',
     'backends/native/meta-backend-native.c',
     'backends/native/meta-backend-native.h',
     'backends/native/meta-backend-native-private.h',
@@ -801,8 +807,6 @@ if have_native_backend
     'backends/native/meta-input-settings-native.h',
     'backends/native/meta-keymap-native.c',
     'backends/native/meta-keymap-native.h',
-    'backends/native/meta-launcher.c',
-    'backends/native/meta-launcher.h',
     'backends/native/meta-monitor-manager-native.c',
     'backends/native/meta-monitor-manager-native.h',
     'backends/native/meta-output-kms.c',
@@ -881,8 +885,6 @@ if have_native_backend
     'backends/native/meta-thread.c',
     'backends/native/meta-thread.h',
     'backends/native/meta-thread-private.h',
-    'backends/native/meta-udev.c',
-    'backends/native/meta-udev.h',
     'backends/native/meta-virtual-input-device-native.c',
     'backends/native/meta-virtual-input-device-native.h',
     'backends/native/meta-virtual-monitor-native.c',
@@ -911,6 +913,13 @@ if have_wayland_eglstream
   mutter_sources += [
     'wayland/meta-wayland-egl-stream.c',
     'wayland/meta-wayland-egl-stream.h',
+  ]
+endif
+
+if have_libgudev
+  mutter_sources += [
+    'backends/meta-udev.c',
+    'backends/meta-udev.h',
   ]
 endif
 
@@ -983,6 +992,11 @@ dbus_interfaces = [
     'interface': 'org.gnome.Mutter.X11.xml',
     'prefix': 'org.gnome.Mutter',
   },
+  {
+    'name': 'meta-dbus-login1',
+    'interface': 'org.freedesktop.login1.xml',
+    'prefix': 'org.freedesktop.',
+  },
 ]
 
 if have_profiler
@@ -1010,14 +1024,6 @@ if have_native_backend
     command: [gen_default_modes, '@OUTPUT@']
   )
   mutter_built_sources += default_modes_h
-
-  dbus_interfaces += [
-    {
-      'name': 'meta-dbus-login1',
-      'interface': 'org.freedesktop.login1.xml',
-      'prefix': 'org.freedesktop.',
-    },
-  ]
 endif
 
 if have_remote_desktop
@@ -1109,6 +1115,7 @@ if have_wayland
     ['primary-selection', 'unstable', 'v1', ],
     ['relative-pointer', 'unstable', 'v1', ],
     ['single-pixel-buffer', 'staging', 'v1', ],
+    ['xdg-system-bell', 'staging', 'v1', ],
     ['tablet', 'unstable', 'v2', ],
     ['text-input', 'unstable', 'v3', ],
     ['viewporter', 'stable', ],
@@ -1118,10 +1125,13 @@ if have_wayland
     ['xdg-foreign', 'unstable', 'v2', ],
     ['xdg-output', 'unstable', 'v1', ],
     ['xdg-shell', 'stable', ],
+    ['xdg-toplevel-drag', 'staging', 'v1'],
     ['xwayland-keyboard-grab', 'unstable', 'v1', ],
     ['linux-drm-syncobj-v1', 'private', ],
     ['color-management-v1', 'private', ],
     ['session-management-v1', 'private', ],
+    ['commit-timing', 'staging', 'v1', ],
+    ['fifo', 'staging', 'v1', ],
   ]
   if have_wayland_eglstream
     wayland_eglstream_protocols_dir = wayland_eglstream_protocols_dep.get_variable('pkgdatadir')
@@ -1308,7 +1318,6 @@ if have_introspection
     'GObject-2.0',
     'GDesktopEnums-3.0',
     libmutter_cogl_gir[0],
-    libmutter_cogl_pango_gir[0],
     libmutter_clutter_gir[0],
     libmutter_mtk_gir[0],
   ]
@@ -1352,6 +1361,7 @@ pkg.generate(libmutter,
     'have_x11=@0@'.format(have_x11),
     'have_x11_client=@0@'.format(have_x11_client),
     'have_wayland=@0@'.format(have_wayland),
+    'have_fonts=@0@'.format(have_fonts),
   ],
   install_dir: pcdir,
 )

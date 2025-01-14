@@ -20,7 +20,10 @@
 
 #include "clutter/clutter-context-private.h"
 
+#ifdef HAVE_FONTS
 #include <hb-glib.h>
+#include <pango/pangocairo.h>
+#endif
 
 #include "clutter/clutter-accessibility-private.h"
 #include "clutter/clutter-backend-private.h"
@@ -30,6 +33,9 @@
 #include "clutter/clutter-private.h"
 #include "clutter/clutter-paint-node-private.h"
 #include "clutter/clutter-settings-private.h"
+#ifdef HAVE_FONTS
+#include "clutter/pango/clutter-pango-private.h"
+#endif
 
 static gboolean clutter_show_fps = FALSE;
 static gboolean clutter_enable_accessibility = TRUE;
@@ -99,6 +105,9 @@ clutter_context_dispose (GObject *object)
   g_clear_pointer (&context->backend, clutter_backend_destroy);
   g_clear_object (&context->stage_manager);
   g_clear_object (&context->settings);
+#ifdef HAVE_FONTS
+  g_clear_object (&context->font_map);
+#endif
 
   G_OBJECT_CLASS (clutter_context_parent_class)->dispose (object);
 }
@@ -135,6 +144,7 @@ clutter_get_text_direction (void)
       else if (strcmp (direction, "ltr") == 0)
         dir = CLUTTER_TEXT_DIRECTION_LTR;
     }
+#ifdef HAVE_FONTS
   else
     {
       PangoLanguage *language;
@@ -160,6 +170,7 @@ clutter_get_text_direction (void)
             continue;
         }
     }
+#endif
 
   CLUTTER_NOTE (MISC, "Text direction: %s",
                 dir == CLUTTER_TEXT_DIRECTION_RTL ? "rtl" : "ltr");
@@ -303,10 +314,12 @@ clutter_context_get_backend (ClutterContext *context)
   return context->backend;
 }
 
-CoglPangoFontMap *
+#ifdef HAVE_FONTS
+PangoFontMap *
 clutter_context_get_pango_fontmap (ClutterContext *context)
 {
-  CoglPangoFontMap *font_map;
+  PangoFontMap *font_map;
+  PangoRenderer *font_renderer;
   gdouble resolution;
   ClutterBackend *backend;
   CoglContext *cogl_context;
@@ -316,15 +329,27 @@ clutter_context_get_pango_fontmap (ClutterContext *context)
 
   backend = clutter_context_get_backend (context);
   cogl_context = clutter_backend_get_cogl_context (backend);
-  font_map = COGL_PANGO_FONT_MAP (cogl_pango_font_map_new (cogl_context));
+  font_map = pango_cairo_font_map_new ();
+  font_renderer = clutter_pango_renderer_new (cogl_context);
 
   resolution = clutter_backend_get_resolution (context->backend);
-  cogl_pango_font_map_set_resolution (font_map, resolution);
+  pango_cairo_font_map_set_resolution (PANGO_CAIRO_FONT_MAP (font_map),
+                                       resolution);
 
   context->font_map = font_map;
+  context->font_renderer = font_renderer;
 
   return context->font_map;
 }
+
+PangoRenderer *
+clutter_context_get_font_renderer (ClutterContext *context)
+{
+  g_return_val_if_fail (CLUTTER_IS_CONTEXT (context), NULL);
+
+  return context->font_renderer;
+}
+#endif
 
 ClutterTextDirection
 clutter_context_get_text_direction (ClutterContext *context)

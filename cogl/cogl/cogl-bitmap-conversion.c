@@ -30,6 +30,7 @@
 
 #include "config.h"
 
+#include "cogl/driver/gl/cogl-driver-gl-private.h"
 #include "cogl/cogl-private.h"
 #include "cogl/cogl-bitmap-private.h"
 #include "cogl/cogl-context-private.h"
@@ -780,6 +781,8 @@ _cogl_bitmap_convert_for_upload (CoglBitmap *src_bmp,
 {
   CoglContext *ctx = _cogl_bitmap_get_context (src_bmp);
   CoglPixelFormat src_format = cogl_bitmap_get_format (src_bmp);
+  CoglDriverGL *driver = COGL_DRIVER_GL (ctx->driver);
+  CoglDriverGLClass *driver_klass = COGL_DRIVER_GL_GET_CLASS (driver);
   CoglBitmap *dst_bmp;
 
   g_return_val_if_fail (internal_format != COGL_PIXEL_FORMAT_ANY, NULL);
@@ -813,11 +816,12 @@ _cogl_bitmap_convert_for_upload (CoglBitmap *src_bmp,
       CoglPixelFormat closest_format;
 
       closest_format =
-        ctx->driver_vtable->pixel_format_to_gl (ctx,
-                                                internal_format,
-                                                NULL, /* ignore gl intformat */
-                                                NULL, /* ignore gl format */
-                                                NULL); /* ignore gl type */
+        driver_klass->pixel_format_to_gl (driver,
+                                          ctx,
+                                          internal_format,
+                                          NULL, /* ignore gl intformat */
+                                          NULL, /* ignore gl format */
+                                          NULL); /* ignore gl type */
 
       if (closest_format != src_format)
         dst_bmp = _cogl_bitmap_convert (src_bmp, closest_format, error);

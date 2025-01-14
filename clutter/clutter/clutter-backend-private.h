@@ -21,6 +21,10 @@
 
 #pragma once
 
+#ifdef HAVE_FONTS
+#include <cairo.h>
+#endif
+
 #include "clutter/clutter-backend.h"
 #include "clutter/clutter-seat.h"
 #include "clutter/clutter-stage-window.h"
@@ -47,9 +51,9 @@ struct _ClutterBackend
 
   CoglOnscreen *dummy_onscreen;
 
+#ifdef HAVE_FONTS
   cairo_font_options_t *font_options;
-
-  gchar *font_name;
+#endif
 
   float fallback_resource_scale;
 

@@ -39,6 +39,8 @@
 #include "wayland/meta-wayland-actor-surface.h"
 #include "wayland/meta-wayland-private.h"
 #include "wayland/meta-wayland-surface-private.h"
+#include "wayland/meta-wayland-toplevel-drag.h"
+#include "wayland/meta-wayland-transaction.h"
 #include "wayland/meta-wayland-window-configuration.h"
 #include "wayland/meta-wayland-xdg-shell.h"
 
@@ -263,6 +265,7 @@ meta_window_wayland_move_resize_internal (MetaWindow                *window,
   MetaWindowWayland *wl_window = META_WINDOW_WAYLAND (window);
   gboolean can_move_now = FALSE;
   MtkRectangle configured_rect;
+  MtkRectangle frame_rect;
   int geometry_scale;
   int new_x;
   int new_y;
@@ -281,6 +284,7 @@ meta_window_wayland_move_resize_internal (MetaWindow                *window,
    * coordinate space so that we can have a scale independent size to pass
    * to the Wayland surface. */
   geometry_scale = meta_window_wayland_get_geometry_scale (window);
+  frame_rect = meta_window_config_get_rect (window->config);
 
   configured_rect.width = constrained_rect.width;
   configured_rect.height = constrained_rect.height;
@@ -314,20 +318,21 @@ meta_window_wayland_move_resize_internal (MetaWindow                *window,
           new_width = unconstrained_rect.width;
           new_height = unconstrained_rect.height;
         }
-      if (window->rect.width != new_width ||
-          window->rect.height != new_height)
+      if (frame_rect.width != new_width ||
+          frame_rect.height != new_height)
         {
           *result |= META_MOVE_RESIZE_RESULT_RESIZED;
-          window->rect.width = new_width;
-          window->rect.height = new_height;
+          meta_window_config_set_size (window->config,
+                                       new_width, new_height);
         }
 
+      frame_rect = meta_window_config_get_rect (window->config);
       window->buffer_rect.width =
-        window->rect.width +
+        frame_rect.width +
         window->custom_frame_extents.left +
         window->custom_frame_extents.right;
       window->buffer_rect.height =
-        window->rect.height +
+        frame_rect.height +
         window->custom_frame_extents.top +
         window->custom_frame_extents.bottom;
 
@@ -353,8 +358,8 @@ meta_window_wayland_move_resize_internal (MetaWindow                *window,
                 if (flags & META_MOVE_RESIZE_PLACEMENT_CHANGED ||
                     rel_x != wl_window->last_sent_rel_x ||
                     rel_y != wl_window->last_sent_rel_y ||
-                    constrained_rect.width != window->rect.width ||
-                    constrained_rect.height != window->rect.height)
+                    constrained_rect.width != frame_rect.width ||
+                    constrained_rect.height != frame_rect.height)
                   {
                     MetaWaylandWindowConfiguration *configuration;
 
@@ -388,8 +393,8 @@ meta_window_wayland_move_resize_internal (MetaWindow                *window,
               break;
             }
         }
-      else if (constrained_rect.width != window->rect.width ||
-               constrained_rect.height != window->rect.height ||
+      else if (constrained_rect.width != frame_rect.width ||
+               constrained_rect.height != frame_rect.height ||
                flags & META_MOVE_RESIZE_STATE_CHANGED)
         {
           MetaWaylandWindowConfiguration *configuration;
@@ -397,7 +402,7 @@ meta_window_wayland_move_resize_internal (MetaWindow                *window,
           int bounds_height;
 
           if (!meta_wayland_surface_get_buffer (wl_window->surface) &&
-              !META_WINDOW_MAXIMIZED (window) &&
+              !meta_window_is_maximized (window) &&
               window->tile_mode == META_TILE_NONE &&
               !meta_window_is_fullscreen (window))
             return;
@@ -445,11 +450,10 @@ meta_window_wayland_move_resize_internal (MetaWindow                *window,
         !!(flags & META_MOVE_RESIZE_STATE_CHANGED);
     }
 
-  if (new_x != window->rect.x || new_y != window->rect.y)
+  if (new_x != frame_rect.x || new_y != frame_rect.y)
     {
       *result |= META_MOVE_RESIZE_RESULT_MOVED;
-      window->rect.x = new_x;
-      window->rect.y = new_y;
+      meta_window_config_set_position (window->config, new_x, new_y);
     }
 
   if (window->placement.rule &&
@@ -526,7 +530,7 @@ meta_window_wayland_update_main_monitor (MetaWindow                   *window,
   MetaLogicalMonitor *scaled_new;
   float from_scale, to_scale;
   float scale;
-  MtkRectangle rect;
+  MtkRectangle frame_rect;
 
   from = window->monitor;
 
@@ -540,7 +544,8 @@ meta_window_wayland_update_main_monitor (MetaWindow                   *window,
       return;
     }
 
-  if (window->rect.width == 0 || window->rect.height == 0)
+  frame_rect = meta_window_config_get_rect (window->config);
+  if (frame_rect.width == 0 || frame_rect.height == 0)
     {
       window->monitor = meta_window_find_monitor_from_id (window);
       return;
@@ -587,10 +592,9 @@ meta_window_wayland_update_main_monitor (MetaWindow                   *window,
    * changes the main monitor, wait until both the current and the new scale
    * will result in the same main monitor. */
   scale = to_scale / from_scale;
-  rect = window->rect;
-  scale_rect_size (&rect, scale);
+  scale_rect_size (&frame_rect, scale);
   scaled_new =
-    meta_monitor_manager_get_logical_monitor_from_rect (monitor_manager, &rect);
+    meta_monitor_manager_get_logical_monitor_from_rect (monitor_manager, &frame_rect);
   if (to != scaled_new)
     return;
 
@@ -606,6 +610,7 @@ meta_window_wayland_main_monitor_changed (MetaWindow               *window,
   int geometry_scale;
   float scale_factor;
   MetaWaylandSurface *surface;
+  MtkRectangle frame_rect;
 
   if (!window->monitor)
     return;
@@ -629,7 +634,8 @@ meta_window_wayland_main_monitor_changed (MetaWindow               *window,
   scale_factor = (float) geometry_scale / old_geometry_scale;
 
   /* Window size. */
-  scale_rect_size (&window->rect, scale_factor);
+  frame_rect = meta_window_config_get_rect (window->config);
+  scale_rect_size (&frame_rect, scale_factor);
   scale_rect_size (&window->unconstrained_rect, scale_factor);
   scale_rect_size (&window->saved_rect, scale_factor);
   scale_size (&window->size_hints.min_width, &window->size_hints.min_height, scale_factor);
@@ -649,9 +655,9 @@ meta_window_wayland_main_monitor_changed (MetaWindow               *window,
   /* Buffer rect. */
   scale_rect_size (&window->buffer_rect, scale_factor);
   window->buffer_rect.x =
-    window->rect.x - window->custom_frame_extents.left;
+    frame_rect.x - window->custom_frame_extents.left;
   window->buffer_rect.y =
-    window->rect.y - window->custom_frame_extents.top;
+    frame_rect.y - window->custom_frame_extents.top;
 
   meta_compositor_sync_window_geometry (window->display->compositor,
                                         window,
@@ -726,6 +732,21 @@ on_window_shown (MetaWindow *window)
 
   if (!has_been_shown)
     meta_compositor_sync_updates_frozen (window->display->compositor, window);
+}
+
+static MetaWaylandToplevelDrag *
+get_toplevel_drag (MetaWindow *window)
+{
+  MetaWaylandToplevelDrag *toplevel_drag;
+  MetaWindowWayland *wl_window = META_WINDOW_WAYLAND (window);
+  MetaDisplay *display = meta_window_get_display (window);
+  MetaContext *context = meta_display_get_context (display);
+  MetaWaylandCompositor *compositor = meta_context_get_wayland_compositor (context);
+
+  toplevel_drag = meta_wayland_data_device_get_toplevel_drag (&compositor->seat->data_device);
+  if (!toplevel_drag || toplevel_drag->dragged_surface != wl_window->surface)
+    return NULL;
+  return toplevel_drag;
 }
 
 static void
@@ -861,10 +882,6 @@ meta_window_wayland_constructed (GObject *object)
   window->client_type = META_WINDOW_CLIENT_TYPE_WAYLAND;
 
   window->override_redirect = FALSE;
-  window->rect.x = 0;
-  window->rect.y = 0;
-  window->rect.width = 0;
-  window->rect.height = 0;
   /* size_hints are the "request" */
   window->size_hints.x = 0;
   window->size_hints.y = 0;
@@ -877,6 +894,8 @@ meta_window_wayland_constructed (GObject *object)
 
   window->decorated = FALSE;
   window->hidden = TRUE;
+
+  window->config = meta_window_config_new ();
 
   G_OBJECT_CLASS (meta_window_wayland_parent_class)->constructed (object);
 }
@@ -1105,9 +1124,7 @@ meta_window_wayland_is_resize (MetaWindowWayland *wl_window,
   else
     {
       MetaWindow *window = META_WINDOW (wl_window);
-
-      old_width = window->rect.width;
-      old_height = window->rect.height;
+      meta_window_config_get_size (window->config, &old_width, &old_height);
     }
 
   return !wl_window->has_last_sent_configuration ||
@@ -1178,6 +1195,9 @@ meta_window_wayland_finish_move_resize (MetaWindow              *window,
   gboolean is_window_being_resized;
   gboolean is_client_resize;
   MetaWindowDrag *window_drag;
+  MtkRectangle frame_rect;
+  MetaWindowActor *window_actor;
+  MetaWaylandToplevelDrag *toplevel_drag;
 
   /* new_geom is in the logical pixel coordinate space, but MetaWindow wants its
    * rects to represent what in turn will end up on the stage, i.e. we need to
@@ -1225,9 +1245,10 @@ meta_window_wayland_finish_move_resize (MetaWindow              *window,
      meta_grab_op_is_resizing (meta_window_drag_get_grab_op (window_drag)) &&
      meta_window_drag_get_window (window_drag) == window);
 
+  frame_rect = meta_window_config_get_rect (window->config);
   rect = (MtkRectangle) {
-    .x = window->rect.x,
-    .y = window->rect.y,
+    .x = frame_rect.x,
+    .y = frame_rect.y,
     .width = new_geom.width,
     .height = new_geom.height
   };
@@ -1239,10 +1260,12 @@ meta_window_wayland_finish_move_resize (MetaWindow              *window,
           if (window->placement.rule)
             {
               MetaWindow *parent;
+              MtkRectangle parent_rect;
 
               parent = meta_window_get_transient_for (window);
-              rect.x = parent->rect.x + acked_configuration->rel_x;
-              rect.y = parent->rect.y + acked_configuration->rel_y;
+              parent_rect = meta_window_config_get_rect (parent->config);
+              rect.x = parent_rect.x + acked_configuration->rel_x;
+              rect.y = parent_rect.y + acked_configuration->rel_y;
             }
           else
             {
@@ -1259,10 +1282,18 @@ meta_window_wayland_finish_move_resize (MetaWindow              *window,
         calculate_position (acked_configuration, &new_geom, &rect);
     }
 
+  toplevel_drag = get_toplevel_drag (window);
+  if (toplevel_drag && !is_window_being_resized && !window->mapped &&
+      rect.width > 0 && rect.height > 0)
+    {
+      meta_wayland_toplevel_drag_calc_origin_for_dragged_window (toplevel_drag,
+                                                                 &rect);
+    }
+
   rect.x += dx;
   rect.y += dy;
 
-  if (rect.x != window->rect.x || rect.y != window->rect.y)
+  if (rect.x != frame_rect.x || rect.y != frame_rect.y)
     flags |= META_MOVE_RESIZE_MOVE_ACTION;
 
   if (wl_window->has_pending_state_change && acked_configuration)
@@ -1271,7 +1302,7 @@ meta_window_wayland_finish_move_resize (MetaWindow              *window,
       wl_window->has_pending_state_change = FALSE;
     }
 
-  if (rect.width != window->rect.width || rect.height != window->rect.height)
+  if (rect.width != frame_rect.width || rect.height != frame_rect.height)
     {
       flags |= META_MOVE_RESIZE_RESIZE_ACTION;
 
@@ -1291,6 +1322,15 @@ meta_window_wayland_finish_move_resize (MetaWindow              *window,
     gravity = meta_resize_gravity_from_grab_op (meta_window_drag_get_grab_op (window_drag));
   else
     gravity = META_GRAVITY_STATIC;
+
+  /* Force unconstrained move + northwest gravity when running toplevel drags */
+  if (toplevel_drag && surface == toplevel_drag->dragged_surface)
+    {
+      gravity = META_GRAVITY_NORTH_WEST;
+      window_actor = meta_window_actor_from_window (window);
+      meta_window_actor_set_tied_to_drag (window_actor, TRUE);
+    }
+
   meta_window_move_resize_internal (window,
                                     flags,
                                     META_PLACE_FLAG_NONE,
@@ -1310,8 +1350,9 @@ meta_window_place_with_placement_rule (MetaWindow        *window,
   window->placement.rule = g_new0 (MetaPlacementRule, 1);
   *window->placement.rule = *placement_rule;
 
-  window->unconstrained_rect.x = window->rect.x;
-  window->unconstrained_rect.y = window->rect.y;
+  meta_window_config_get_position (window->config,
+                                   &window->unconstrained_rect.x,
+                                   &window->unconstrained_rect.y);
   window->unconstrained_rect.width = placement_rule->width;
   window->unconstrained_rect.height = placement_rule->height;
 

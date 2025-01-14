@@ -96,3 +96,9 @@ void meta_backend_unfreeze_keyboard (MetaBackend *backend,
 
 META_EXPORT
 MetaBackendCapabilities meta_backend_get_capabilities (MetaBackend *backend);
+
+META_EXPORT
+void meta_backend_renderdoc_capture (MetaBackend *backend);
+
+META_EXPORT
+MetaCursorTracker * meta_backend_get_cursor_tracker (MetaBackend *backend);

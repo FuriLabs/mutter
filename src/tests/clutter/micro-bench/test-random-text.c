@@ -1,5 +1,6 @@
 #include <gmodule.h>
 #include <clutter/clutter.h>
+#include <clutter/clutter-pango.h>
 #include <stdlib.h>
 
 #include "tests/clutter-test-utils.h"
@@ -94,7 +95,7 @@ main (int argc, char *argv[])
 
   clutter_actor_show (stage);
 
-  clutter_threads_add_idle (on_idle, stage);
+  g_idle_add (on_idle, stage);
 
   clutter_test_main ();
 

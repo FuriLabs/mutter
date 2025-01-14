@@ -448,6 +448,12 @@ handle_registry_global (void               *user_data,
         wl_registry_bind (registry, id,
                           &wp_single_pixel_buffer_manager_v1_interface, 1);
     }
+  else if (strcmp (interface, xx_color_manager_v4_interface.name) == 0)
+    {
+      display->color_management_mgr =
+        wl_registry_bind (registry, id,
+                          &xx_color_manager_v4_interface, 1);
+    }
   else if (strcmp (interface, wp_viewporter_interface.name) == 0)
     {
       display->viewporter = wl_registry_bind (registry, id,
@@ -1309,7 +1315,7 @@ wayland_buffer_shm_mmap_plane (WaylandBuffer *buffer,
                                size_t        *stride_out)
 {
   WaylandBufferShm *shm = WAYLAND_BUFFER_SHM (buffer);
-  g_assert (plane < shm->n_planes);
+  g_assert_true (plane < shm->n_planes);
 
   if (stride_out)
     *stride_out = shm->stride[plane];
@@ -1606,7 +1612,7 @@ wayland_buffer_dmabuf_mmap_plane (WaylandBuffer *buffer,
                                   size_t        *stride_out)
 {
   WaylandBufferDmabuf *dmabuf = WAYLAND_BUFFER_DMABUF (buffer);
-  g_assert (plane < dmabuf->n_planes);
+  g_assert_true (plane < dmabuf->n_planes);
 
   if (stride_out)
     *stride_out = dmabuf->map_stride[plane];

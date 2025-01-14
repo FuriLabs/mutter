@@ -51,7 +51,6 @@
 #include "backends/native/meta-gpu-kms.h"
 #include "backends/native/meta-kms-device.h"
 #include "backends/native/meta-kms.h"
-#include "backends/native/meta-launcher.h"
 #include "backends/native/meta-output-kms.h"
 #include "backends/native/meta-renderer-native.h"
 #include "backends/native/meta-virtual-monitor-native.h"
@@ -156,6 +155,7 @@ meta_monitor_manager_native_ensure_initial_config (MetaMonitorManager *manager)
   config = meta_monitor_manager_ensure_configured (manager);
 
   meta_monitor_manager_update_logical_state (manager, config);
+  meta_monitor_manager_update_for_lease_state (manager, config);
 }
 
 static void
@@ -557,7 +557,7 @@ allocate_virtual_monitor_id (MetaMonitorManagerNative *manager_native)
     }
 }
 
-static gboolean
+static void
 rebuild_virtual_idle_cb (gpointer user_data)
 {
   MetaMonitorManager *manager = user_data;
@@ -569,8 +569,6 @@ rebuild_virtual_idle_cb (gpointer user_data)
   priv->rebuild_virtual_idle_id = 0;
 
   meta_monitor_manager_reconfigure (manager);
-
-  return G_SOURCE_REMOVE;
 }
 
 static void
@@ -586,7 +584,7 @@ on_virtual_monitor_mode_changed (MetaVirtualMonitor *virtual_monitor,
   if (priv->rebuild_virtual_idle_id)
     return;
 
-  priv->rebuild_virtual_idle_id = g_idle_add (rebuild_virtual_idle_cb, manager);
+  priv->rebuild_virtual_idle_id = g_idle_add_once (rebuild_virtual_idle_cb, manager);
 }
 
 static MetaVirtualMonitor *

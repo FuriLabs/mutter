@@ -1359,6 +1359,50 @@ arm_crtc_frame_deadline_timer (CrtcFrame *crtc_frame,
   crtc_frame->deadline.armed = TRUE;
 }
 
+static gboolean
+ensure_deadline_timer_armed (MetaKmsImplDevice *impl_device,
+                             CrtcFrame         *crtc_frame)
+{
+  int64_t next_deadline_us;
+  int64_t next_presentation_us;
+  g_autoptr (GError) local_error = NULL;
+
+  if (crtc_frame->deadline.armed)
+    return TRUE;
+
+  if (!meta_kms_crtc_determine_deadline (crtc_frame->crtc,
+                                         &next_deadline_us,
+                                         &next_presentation_us,
+                                         &local_error))
+    {
+      MetaKmsImplDevicePrivate *priv =
+        meta_kms_impl_device_get_instance_private (impl_device);
+
+      if (g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_PERMISSION_DENIED))
+        {
+          meta_topic (META_DEBUG_KMS, "Could not determine deadline: %s",
+                      local_error->message);
+
+          priv->deadline_timer_state = META_DEADLINE_TIMER_STATE_INHIBITED;
+        }
+      else
+        {
+          if (!g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+            g_warning ("Failed to determine deadline: %s", local_error->message);
+
+          priv->deadline_timer_state = META_DEADLINE_TIMER_STATE_DISABLED;
+        }
+
+      return FALSE;
+    }
+
+  arm_crtc_frame_deadline_timer (crtc_frame,
+                                 next_deadline_us,
+                                 next_presentation_us);
+
+  return TRUE;
+}
+
 static void
 notify_crtc_frame_ready (CrtcFrame *crtc_frame)
 {
@@ -1796,6 +1840,7 @@ meta_kms_impl_device_update_ready (MetaThreadImpl  *impl,
   MetaKmsImplDevice *impl_device = meta_kms_device_get_impl_device (device);
   MetaKmsImplDevicePrivate *priv =
     meta_kms_impl_device_get_instance_private (impl_device);
+  gboolean want_deadline_timer;
   MetaKmsUpdate *update;
   MetaKmsCrtc *latch_crtc;
   MetaKmsFeedback *feedback;
@@ -1809,24 +1854,39 @@ meta_kms_impl_device_update_ready (MetaThreadImpl  *impl,
 
   latch_crtc = g_steal_pointer (&crtc_frame->submitted_update.latch_crtc);
 
-  if (crtc_frame->pending_page_flip &&
+  want_deadline_timer =
+    !crtc_frame->await_flush &&
+    is_using_deadline_timer (impl_device) &&
+    !meta_kms_crtc_get_current_state (crtc_frame->crtc)->vrr.enabled;
+
+  if ((want_deadline_timer || crtc_frame->pending_page_flip) &&
       !meta_kms_update_get_mode_sets (update))
     {
-      g_assert (latch_crtc);
+      if (crtc_frame->pending_page_flip)
+        {
+          g_assert (latch_crtc);
 
-      meta_topic (META_DEBUG_KMS,
-                  "Queuing update on CRTC %u (%s): pending page flip",
-                  meta_kms_crtc_get_id (latch_crtc),
-                  priv->path);
+          meta_topic (META_DEBUG_KMS,
+                      "Queuing update on CRTC %u (%s): pending page flip",
+                      meta_kms_crtc_get_id (latch_crtc),
+                      priv->path);
+        }
 
       queue_update (impl_device, crtc_frame, update);
-      return GINT_TO_POINTER (TRUE);
+
+      if (crtc_frame->pending_page_flip ||
+          ensure_deadline_timer_armed (impl_device, crtc_frame))
+        return GINT_TO_POINTER (TRUE);
     }
 
   if (crtc_frame->pending_update)
     {
-      meta_kms_update_merge_from (crtc_frame->pending_update, update);
-      meta_kms_update_free (update);
+      if (update != crtc_frame->pending_update)
+        {
+          meta_kms_update_merge_from (crtc_frame->pending_update, update);
+          meta_kms_update_free (update);
+        }
+
       update = g_steal_pointer (&crtc_frame->pending_update);
       disarm_crtc_frame_deadline_timer (crtc_frame);
     }
@@ -1975,71 +2035,46 @@ meta_kms_impl_device_await_flush (MetaKmsImplDevice *impl_device,
     disarm_crtc_frame_deadline_timer (crtc_frame);
 }
 
-static gboolean
-ensure_deadline_timer_armed (MetaKmsImplDevice  *impl_device,
-                             CrtcFrame          *crtc_frame,
-                             GError            **error)
-{
-  int64_t next_deadline_us;
-  int64_t next_presentation_us;
-
-  if (crtc_frame->deadline.armed)
-    return TRUE;
-
-  if (!meta_kms_crtc_determine_deadline (crtc_frame->crtc,
-                                         &next_deadline_us,
-                                         &next_presentation_us,
-                                         error))
-    return FALSE;
-
-  arm_crtc_frame_deadline_timer (crtc_frame,
-                                 next_deadline_us,
-                                 next_presentation_us);
-
-  return TRUE;
-}
-
 void
 meta_kms_impl_device_schedule_process (MetaKmsImplDevice *impl_device,
                                        MetaKmsCrtc       *crtc)
 {
   CrtcFrame *crtc_frame;
-  g_autoptr (GError) error = NULL;
-  MetaKmsImplDevicePrivate *priv;
 
   crtc_frame = ensure_crtc_frame (impl_device, crtc);
 
   if (crtc_frame->await_flush)
     return;
 
-  if (!is_using_deadline_timer (impl_device))
-    goto needs_flush;
-
-  if (crtc_frame->pending_page_flip)
-    return;
-
-  if (ensure_deadline_timer_armed (impl_device, crtc_frame, &error))
-    return;
-
-  priv = meta_kms_impl_device_get_instance_private (impl_device);
-
-  if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_PERMISSION_DENIED))
+  if (is_using_deadline_timer (impl_device))
     {
-      meta_topic (META_DEBUG_KMS, "Could not determine deadline: %s",
-                  error->message);
+      if (crtc_frame->pending_page_flip)
+        return;
 
-      priv->deadline_timer_state = META_DEADLINE_TIMER_STATE_INHIBITED;
-    }
-  else
-    {
-      if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
-        g_warning ("Failed to determine deadline: %s", error->message);
-
-      priv->deadline_timer_state = META_DEADLINE_TIMER_STATE_DISABLED;
+      if (ensure_deadline_timer_armed (impl_device, crtc_frame))
+        return;
     }
 
-needs_flush:
   meta_kms_device_set_needs_flush (meta_kms_crtc_get_device (crtc), crtc);
+}
+
+static void
+discard_update (MetaKmsImplDevice  *impl_device,
+                MetaKmsUpdate     **update)
+{
+  MetaKmsFeedback *feedback = NULL;
+  GError *error;
+
+  if (!*update)
+    return;
+
+  error = g_error_new (META_KMS_ERROR,
+                       META_KMS_ERROR_DISCARDED,
+                       "Timer disarmed");
+  feedback = meta_kms_feedback_new_failed (NULL, g_steal_pointer (&error));
+  queue_result_feedback (impl_device, *update, feedback);
+  meta_kms_feedback_unref (feedback);
+  g_clear_pointer (update, meta_kms_update_free);
 }
 
 static void
@@ -2053,29 +2088,13 @@ disarm_all_frame_sources (MetaKmsImplDevice *impl_device)
   g_hash_table_iter_init (&iter, priv->crtc_frames);
   while (g_hash_table_iter_next (&iter, NULL, (gpointer *) &crtc_frame))
     {
-      MetaKmsUpdate *submitted_update;
-
       crtc_frame->deadline.is_deadline_page_flip = FALSE;
       crtc_frame->await_flush = FALSE;
       crtc_frame->pending_page_flip = FALSE;
-      g_clear_pointer (&crtc_frame->pending_update, meta_kms_update_free);
       disarm_crtc_frame_deadline_timer (crtc_frame);
 
-      submitted_update =
-        g_steal_pointer (&crtc_frame->submitted_update.kms_update);
-      if (submitted_update)
-        {
-          MetaKmsFeedback *feedback = NULL;
-          GError *error;
-
-          error = g_error_new (META_KMS_ERROR,
-                               META_KMS_ERROR_DISCARDED,
-                               "Timer disarmed");
-          feedback = meta_kms_feedback_new_failed (NULL, error);
-          queue_result_feedback (impl_device, submitted_update, feedback);
-          meta_kms_feedback_unref (feedback);
-          g_clear_pointer (&submitted_update, meta_kms_update_free);
-        }
+      discard_update (impl_device, &crtc_frame->pending_update);
+      discard_update (impl_device, &crtc_frame->submitted_update.kms_update);
       g_clear_pointer (&crtc_frame->submitted_update.source, g_source_destroy);
     }
 }
@@ -2091,27 +2110,6 @@ process_mode_set_update (MetaKmsImplDevice *impl_device,
   MetaThreadImpl *thread_impl = META_THREAD_IMPL (kms_impl);
   MetaThread *thread = meta_thread_impl_get_thread (thread_impl);
   MetaKmsFeedback *feedback;
-  GHashTableIter iter;
-  CrtcFrame *crtc_frame;
-
-  g_hash_table_iter_init (&iter, priv->crtc_frames);
-  while (g_hash_table_iter_next (&iter, NULL, (gpointer *) &crtc_frame))
-    {
-      if (crtc_frame->submitted_update.kms_update)
-        {
-          meta_kms_update_merge_from (crtc_frame->submitted_update.kms_update,
-                                      update);
-          meta_kms_update_free (update);
-          update = g_steal_pointer (&crtc_frame->submitted_update.kms_update);
-        }
-
-      if (crtc_frame->pending_update)
-        {
-          meta_kms_update_merge_from (crtc_frame->pending_update, update);
-          meta_kms_update_free (update);
-          update = g_steal_pointer (&crtc_frame->pending_update);
-        }
-    }
 
   disarm_all_frame_sources (impl_device);
 

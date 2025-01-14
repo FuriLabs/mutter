@@ -42,8 +42,8 @@
  * There's two containers in the stage that are used to place window actors, here
  * are listed in the order in which they are painted:
  *
- * - window group, accessible with meta_get_window_group_for_display()
- * - top window group, accessible with meta_get_top_window_group_for_display()
+ * - window group, accessible with [method@Meta.Compositor.get_window_group]
+ * - top window group, accessible with [method@Meta.Compositor.get_top_window_group]
  *
  * Mutter will place actors representing windows in the window group, except for
  * override-redirect windows (ie. popups and menus) which will be placed in the
@@ -62,7 +62,6 @@
 #include "compositor/meta-window-group-private.h"
 #include "core/util-private.h"
 #include "core/window-private.h"
-#include "meta/compositor-mutter.h"
 #include "meta/main.h"
 #include "meta/meta-backend.h"
 #include "meta/meta-background-actor.h"
@@ -201,70 +200,35 @@ meta_compositor_destroy (MetaCompositor *compositor)
   g_object_unref (compositor);
 }
 
-/* compat helper */
-static MetaCompositor *
-get_compositor_for_display (MetaDisplay *display)
-{
-  return display->compositor;
-}
-
 /**
- * meta_get_stage_for_display:
- * @display: a #MetaDisplay
+ * meta_compositor_get_window_group:
+ * @compositor: a #MetaCompositor
  *
- * Returns: (transfer none): The #ClutterStage for the display
+ * Returns: (transfer none): The window group corresponding to @compositor
  */
 ClutterActor *
-meta_get_stage_for_display (MetaDisplay *display)
+meta_compositor_get_window_group (MetaCompositor *compositor)
 {
-  MetaCompositor *compositor;
   MetaCompositorPrivate *priv;
 
-  g_return_val_if_fail (display, NULL);
-
-  compositor = get_compositor_for_display (display);
   g_return_val_if_fail (compositor, NULL);
-  priv = meta_compositor_get_instance_private (compositor);
 
-  return meta_backend_get_stage (priv->backend);
-}
-
-/**
- * meta_get_window_group_for_display:
- * @display: a #MetaDisplay
- *
- * Returns: (transfer none): The window group corresponding to @display
- */
-ClutterActor *
-meta_get_window_group_for_display (MetaDisplay *display)
-{
-  MetaCompositor *compositor;
-  MetaCompositorPrivate *priv;
-
-  g_return_val_if_fail (display, NULL);
-
-  compositor = get_compositor_for_display (display);
-  g_return_val_if_fail (compositor, NULL);
   priv = meta_compositor_get_instance_private (compositor);
 
   return priv->window_group;
 }
 
 /**
- * meta_get_top_window_group_for_display:
- * @display: a #MetaDisplay
+ * meta_compositor_get_top_window_group:
+ * @compositor: a #MetaCompositor
  *
- * Returns: (transfer none): The top window group corresponding to @display
+ * Returns: (transfer none): The top window group corresponding to @compositor
  */
 ClutterActor *
-meta_get_top_window_group_for_display (MetaDisplay *display)
+meta_compositor_get_top_window_group (MetaCompositor *compositor)
 {
-  MetaCompositor *compositor;
   MetaCompositorPrivate *priv;
 
-  g_return_val_if_fail (display, NULL);
-
-  compositor = get_compositor_for_display (display);
   g_return_val_if_fail (compositor, NULL);
   priv = meta_compositor_get_instance_private (compositor);
 
@@ -289,20 +253,16 @@ meta_compositor_get_feedback_group (MetaCompositor *compositor)
 }
 
 /**
- * meta_get_window_actors:
- * @display: a #MetaDisplay
+ * meta_compositor_get_window_actors:
+ * @compositor: a #MetaCompositor
  *
- * Returns: (transfer none) (element-type Clutter.Actor): The set of #MetaWindowActor on @display
+ * Returns: (transfer none) (element-type Clutter.Actor): The set of #MetaWindowActor on @compositor
  */
 GList *
-meta_get_window_actors (MetaDisplay *display)
+meta_compositor_get_window_actors (MetaCompositor *compositor)
 {
-  MetaCompositor *compositor;
   MetaCompositorPrivate *priv;
 
-  g_return_val_if_fail (display, NULL);
-
-  compositor = get_compositor_for_display (display);
   g_return_val_if_fail (compositor, NULL);
   priv = meta_compositor_get_instance_private (compositor);
 
@@ -1258,46 +1218,40 @@ meta_compositor_class_init (MetaCompositorClass *klass)
 }
 
 /**
- * meta_disable_unredirect_for_display:
- * @display: a #MetaDisplay
+ * meta_compositor_disable_unredirect:
+ * @compositor: a #MetaCompositor
  *
  * Disables unredirection, can be useful in situations where having
  * unredirected windows is undesirable like when recording a video.
  *
  */
 void
-meta_disable_unredirect_for_display (MetaDisplay *display)
+meta_compositor_disable_unredirect (MetaCompositor *compositor)
 {
-  MetaCompositor *compositor;
   MetaCompositorPrivate *priv;
 
-  if (display->closing)
-    return;
-
-  compositor = get_compositor_for_display (display);
   priv = meta_compositor_get_instance_private (compositor);
+  if (priv->display->closing)
+    return;
 
   priv->disable_unredirect_count++;
 }
 
 /**
- * meta_enable_unredirect_for_display:
- * @display: a #MetaDisplay
+ * meta_compositor_enable_unredirect:
+ * @compositor: a #MetaCompositor
  *
  * Enables unredirection which reduces the overhead for apps like games.
  *
  */
 void
-meta_enable_unredirect_for_display (MetaDisplay *display)
+meta_compositor_enable_unredirect (MetaCompositor *compositor)
 {
-  MetaCompositor *compositor;
-  MetaCompositorPrivate *priv;
+  MetaCompositorPrivate *priv =
+    meta_compositor_get_instance_private (compositor);
 
-  if (display->closing)
+  if (priv->display->closing)
     return;
-
-  compositor = get_compositor_for_display (display);
-  priv = meta_compositor_get_instance_private (compositor);
 
   if (priv->disable_unredirect_count == 0)
     g_warning ("Called enable_unredirect_for_display while unredirection is enabled.");
@@ -1329,12 +1283,14 @@ void
 meta_compositor_flash_display (MetaCompositor *compositor,
                                MetaDisplay    *display)
 {
+  MetaBackend *backend;
   ClutterActor *stage;
   ClutterActor *flash;
   ClutterTransition *transition;
   gfloat width, height;
 
-  stage = meta_get_stage_for_display (display);
+  backend = meta_compositor_get_backend (compositor);
+  stage = meta_backend_get_stage (backend);
   clutter_actor_get_size (stage, &width, &height);
 
   flash = clutter_actor_new ();
@@ -1376,11 +1332,13 @@ meta_compositor_flash_window (MetaCompositor *compositor,
     CLUTTER_ACTOR (meta_window_actor_from_window (window));
   ClutterActor *flash;
   ClutterTransition *transition;
+  int width, height;
 
   flash = clutter_actor_new ();
   clutter_actor_set_accessible_name (flash, "Flash actor");
   clutter_actor_set_background_color (flash, &COGL_COLOR_INIT (0, 0, 0, 255));
-  clutter_actor_set_size (flash, window->rect.width, window->rect.height);
+  meta_window_config_get_size (window->config, &width, &height);
+  clutter_actor_set_size (flash, width, height);
   clutter_actor_set_position (flash,
                               window->custom_frame_extents.left,
                               window->custom_frame_extents.top);
@@ -1515,6 +1473,12 @@ meta_compositor_get_display (MetaCompositor *compositor)
   return priv->display;
 }
 
+/**
+ * meta_compositor_get_stage:
+ * @compositor: a #MetaCompositor
+ *
+ * Returns: (transfer none): The stage corresponding to @compositor
+ */
 ClutterStage *
 meta_compositor_get_stage (MetaCompositor *compositor)
 {
@@ -1524,6 +1488,12 @@ meta_compositor_get_stage (MetaCompositor *compositor)
   return CLUTTER_STAGE (meta_backend_get_stage (priv->backend));
 }
 
+/**
+ * meta_compositor_get_backend:
+ * @compositor: a #MetaCompositor
+ *
+ * Returns: (transfer none): The backend corresponding to @compositor
+ */
 MetaBackend *
 meta_compositor_get_backend (MetaCompositor *compositor)
 {
@@ -1586,7 +1556,8 @@ meta_compositor_drag_window (MetaCompositor       *compositor,
                              ClutterInputDevice   *device,
                              ClutterEventSequence *sequence,
                              uint32_t              timestamp,
-                             graphene_point_t     *pos_hint)
+                             graphene_point_t     *pos_hint,
+                             ClutterActor         *grab_actor)
 {
   MetaCompositorPrivate *priv =
     meta_compositor_get_instance_private (compositor);
@@ -1602,7 +1573,8 @@ meta_compositor_drag_window (MetaCompositor       *compositor,
 
   priv->current_drag = g_steal_pointer (&window_drag);
 
-  if (!meta_window_drag_begin (priv->current_drag, device, sequence, timestamp))
+  if (!meta_window_drag_begin (priv->current_drag, device,
+                               sequence, timestamp, grab_actor))
     {
       g_clear_object (&priv->current_drag);
       return FALSE;

@@ -44,7 +44,6 @@
 #include "cogl/cogl-primitives-private.h"
 #include "cogl/cogl-private.h"
 #include "cogl/cogl-attribute-private.h"
-#include "cogl/cogl-primitive-private.h"
 #include "cogl/cogl-offscreen.h"
 #include "cogl/cogl-matrix-stack.h"
 #include "mtk/mtk.h"
@@ -110,7 +109,7 @@ _cogl_clip_stack_entry_set_bounds (CoglClipStack *entry,
 
 /* Transform a homogeneous vertex position from model space to Cogl
  * window coordinates (with 0,0 being top left) */
-void
+static void
 _cogl_transform_point (const graphene_matrix_t *matrix_mv,
                        const graphene_matrix_t *matrix_p,
                        const float             *viewport,
@@ -357,6 +356,8 @@ _cogl_clip_stack_flush (CoglClipStack *stack,
                         CoglFramebuffer *framebuffer)
 {
   CoglContext *ctx = cogl_framebuffer_get_context (framebuffer);
+  CoglDriverClass *driver_klass = COGL_DRIVER_GET_CLASS (ctx->driver);
 
-  ctx->driver_vtable->clip_stack_flush (stack, framebuffer);
+  if (driver_klass->clip_stack_flush)
+    driver_klass->clip_stack_flush (ctx->driver, stack, framebuffer);
 }

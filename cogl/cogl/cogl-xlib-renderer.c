@@ -46,9 +46,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-static char *_cogl_x11_display_name = NULL;
-static GList *_cogl_xlib_renderers = NULL;
-
 static void
 _xlib_renderer_data_free (CoglXlibRenderer *data)
 {
@@ -68,51 +65,6 @@ _cogl_xlib_renderer_get_data (CoglRenderer *renderer)
     renderer->custom_winsys_user_data = g_new0 (CoglXlibRenderer, 1);
 
   return renderer->custom_winsys_user_data;
-}
-
-static void
-register_xlib_renderer (CoglRenderer *renderer)
-{
-  GList *l;
-
-  for (l = _cogl_xlib_renderers; l; l = l->next)
-    if (l->data == renderer)
-      return;
-
-  _cogl_xlib_renderers = g_list_prepend (_cogl_xlib_renderers, renderer);
-}
-
-static void
-unregister_xlib_renderer (CoglRenderer *renderer)
-{
-  _cogl_xlib_renderers = g_list_remove (_cogl_xlib_renderers, renderer);
-}
-
-static Display *
-assert_xlib_display (CoglRenderer *renderer, GError **error)
-{
-  Display *xdpy = renderer->foreign_xdpy;
-  CoglXlibRenderer *xlib_renderer = _cogl_xlib_renderer_get_data (renderer);
-
-  /* A foreign display may have already been set... */
-  if (xdpy)
-    {
-      xlib_renderer->xdpy = xdpy;
-      return xdpy;
-    }
-
-  xdpy = XOpenDisplay (_cogl_x11_display_name);
-  if (xdpy == NULL)
-    {
-      g_set_error (error,
-                   COGL_RENDERER_ERROR,
-                   COGL_RENDERER_ERROR_XLIB_DISPLAY_OPEN,
-                   "Failed to open X Display %s", _cogl_x11_display_name);
-      return NULL;
-    }
-
-  xlib_renderer->xdpy = xdpy;
-  return xdpy;
 }
 
 static void
@@ -380,12 +332,10 @@ randr_filter (XEvent *event,
   CoglRenderer *renderer = data;
   CoglXlibRenderer *xlib_renderer =
     _cogl_xlib_renderer_get_data (renderer);
-  CoglX11Renderer *x11_renderer =
-    (CoglX11Renderer *) xlib_renderer;
 
-  if (x11_renderer->randr_base != -1 &&
-      (event->xany.type == x11_renderer->randr_base + RRScreenChangeNotify ||
-       event->xany.type == x11_renderer->randr_base + RRNotify) &&
+  if (xlib_renderer->randr_base != -1 &&
+      (event->xany.type == xlib_renderer->randr_base + RRScreenChangeNotify ||
+       event->xany.type == xlib_renderer->randr_base + RRNotify) &&
       event->xany.serial >= xlib_renderer->outputs_update_serial)
     update_outputs (renderer, TRUE);
 
@@ -397,28 +347,22 @@ _cogl_xlib_renderer_connect (CoglRenderer *renderer, GError **error)
 {
   CoglXlibRenderer *xlib_renderer =
     _cogl_xlib_renderer_get_data (renderer);
-  CoglX11Renderer *x11_renderer =
-    (CoglX11Renderer *) xlib_renderer;
   int damage_error;
   int randr_error;
 
-  if (!assert_xlib_display (renderer, error))
-    return FALSE;
-
-  if (getenv ("COGL_X11_SYNC"))
-    XSynchronize (xlib_renderer->xdpy, TRUE);
+  g_return_val_if_fail (xlib_renderer->xdpy != NULL, FALSE);
 
   /* Check whether damage events are supported on this display */
   if (!XDamageQueryExtension (xlib_renderer->xdpy,
-                              &x11_renderer->damage_base,
+                              &xlib_renderer->damage_base,
                               &damage_error))
-    x11_renderer->damage_base = -1;
+    xlib_renderer->damage_base = -1;
 
   /* Check whether randr is supported on this display */
   if (!XRRQueryExtension (xlib_renderer->xdpy,
-                          &x11_renderer->randr_base,
+                          &xlib_renderer->randr_base,
                           &randr_error))
-    x11_renderer->randr_base = -1;
+    xlib_renderer->randr_base = -1;
 
   XRRSelectInput(xlib_renderer->xdpy,
                  DefaultRootWindow (xlib_renderer->xdpy),
@@ -426,8 +370,6 @@ _cogl_xlib_renderer_connect (CoglRenderer *renderer, GError **error)
                  | RRCrtcChangeNotifyMask
                  | RROutputPropertyNotifyMask);
   update_outputs (renderer, FALSE);
-
-  register_xlib_renderer (renderer);
 
   _cogl_renderer_add_native_filter (renderer,
                                     (CoglNativeFilterFunc)randr_filter,
@@ -445,12 +387,7 @@ _cogl_xlib_renderer_disconnect (CoglRenderer *renderer)
   g_list_free_full (xlib_renderer->outputs, (GDestroyNotify) free_xlib_output);
   xlib_renderer->outputs = NULL;
 
-  if (!renderer->foreign_xdpy && xlib_renderer->xdpy)
-    XCloseDisplay (xlib_renderer->xdpy);
-
   g_clear_pointer (&renderer->custom_winsys_user_data, _xlib_renderer_data_free);
-
-  unregister_xlib_renderer (renderer);
 }
 
 Display *

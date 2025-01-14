@@ -193,7 +193,7 @@ set_auto_mipmap_cb (CoglTexture *sub_texture,
                     const float *meta_coords,
                     void        *user_data)
 {
-  cogl_texture_set_auto_mipmap (sub_texture, FALSE);
+  cogl_texture_2d_set_auto_mipmap (COGL_TEXTURE_2D (sub_texture), FALSE);
 }
 
 CoglTexture *
@@ -237,12 +237,12 @@ test_utils_texture_new_with_size (CoglContext           *ctx,
        * need to ensure the texture is allocated... */
       cogl_texture_allocate (tex, NULL); /* don't catch exceptions */
 
-      cogl_meta_texture_foreach_in_region (tex,
-                                           0, 0, 1, 1,
-                                           COGL_PIPELINE_WRAP_MODE_CLAMP_TO_EDGE,
-                                           COGL_PIPELINE_WRAP_MODE_CLAMP_TO_EDGE,
-                                           set_auto_mipmap_cb,
-                                           NULL); /* don't catch exceptions */
+      cogl_texture_foreach_in_region (tex,
+                                      0, 0, 1, 1,
+                                      COGL_PIPELINE_WRAP_MODE_CLAMP_TO_EDGE,
+                                      COGL_PIPELINE_WRAP_MODE_CLAMP_TO_EDGE,
+                                      set_auto_mipmap_cb,
+                                      NULL); /* don't catch exceptions */
     }
 
   cogl_texture_allocate (tex, NULL);
@@ -302,12 +302,12 @@ test_utils_texture_new_from_bitmap (CoglBitmap            *bitmap,
 
   if (flags & TEST_UTILS_TEXTURE_NO_AUTO_MIPMAP)
     {
-      cogl_meta_texture_foreach_in_region (tex,
-                                           0, 0, 1, 1,
-                                           COGL_PIPELINE_WRAP_MODE_CLAMP_TO_EDGE,
-                                           COGL_PIPELINE_WRAP_MODE_CLAMP_TO_EDGE,
-                                           set_auto_mipmap_cb,
-                                           NULL); /* don't catch exceptions */
+      cogl_texture_foreach_in_region (tex,
+                                      0, 0, 1, 1,
+                                      COGL_PIPELINE_WRAP_MODE_CLAMP_TO_EDGE,
+                                      COGL_PIPELINE_WRAP_MODE_CLAMP_TO_EDGE,
+                                      set_auto_mipmap_cb,
+                                      NULL); /* don't catch exceptions */
     }
 
   cogl_texture_allocate (tex, NULL);
@@ -328,7 +328,7 @@ test_utils_texture_new_from_data (CoglContext           *ctx,
   CoglTexture *tex;
 
   g_assert_cmpint (format, !=, COGL_PIXEL_FORMAT_ANY);
-  g_assert (data != NULL);
+  g_assert_nonnull (data);
 
   /* Wrap the data into a bitmap */
   bmp = cogl_bitmap_new_for_data (ctx,
@@ -391,7 +391,7 @@ meta_create_cogl_test_context (int    argc,
 
   context = meta_create_test_context (META_CONTEXT_TEST_TYPE_HEADLESS,
                                       META_CONTEXT_TEST_FLAG_NO_X11);
-  g_assert (meta_context_configure (context, &argc, &argv, NULL));
+  g_assert_true (meta_context_configure (context, &argc, &argv, NULL));
 
   if (g_strcmp0 ("COGL_TEST_VERBOSE", "1") == 0)
     cogl_test_is_verbose = TRUE;

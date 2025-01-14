@@ -42,9 +42,9 @@
  * that may internally be comprised of multiple 2D textures
  * with power-of-two sizes.
  *
- * These functions allow high-level meta textures (See the
- * #CoglMetaTexture interface) to be allocated that may internally be
- * comprised of multiple 2D texture "slices" with power-of-two sizes.
+ * These functions allow high-level meta textures to be allocated
+ * that may internally be comprised of multiple 2D texture
+ * "slices" with power-of-two sizes.
  *
  * This API can be useful when working with GPUs that don't have
  * native support for non-power-of-two textures or if you want to load
@@ -75,7 +75,6 @@
 #define COGL_TEXTURE_2D_SLICED_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj),  COGL_TYPE_TEXTURE_2D_SLICED, CoglTexture2DSlicedClass))
 
 typedef struct _CoglTexture2DSlicedClass CoglTexture2DSlicedClass;
-typedef struct _CoglTexture2DSliced CoglTexture2DSliced;
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (CoglTexture2DSliced, g_object_unref)
 

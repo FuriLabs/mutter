@@ -128,9 +128,9 @@ _cogl_winsys_renderer_disconnect (CoglRenderer *renderer)
 static void
 _cogl_winsys_renderer_bind_api (CoglRenderer *renderer)
 {
-  if (renderer->driver == COGL_DRIVER_GL3)
+  if (renderer->driver_id == COGL_DRIVER_ID_GL3)
     eglBindAPI (EGL_OPENGL_API);
-  else if (renderer->driver == COGL_DRIVER_GLES2)
+  else if (renderer->driver_id == COGL_DRIVER_ID_GLES2)
     eglBindAPI (EGL_OPENGL_ES_API);
 }
 
@@ -152,7 +152,7 @@ check_egl_extensions (CoglRenderer *renderer)
   for (i = 0; i < G_N_ELEMENTS (winsys_feature_data); i++)
     if (_cogl_feature_check (renderer,
                              "EGL", winsys_feature_data + i, 0, 0,
-                             COGL_DRIVER_GL3, /* the driver isn't used */
+                             COGL_DRIVER_ID_GL3, /* the driver isn't used */
                              split_extensions,
                              egl_renderer))
       {
@@ -226,7 +226,7 @@ cogl_display_egl_determine_attributes (CoglDisplay *display,
   attributes[i++] = EGL_DONT_CARE;
 
   attributes[i++] = EGL_RENDERABLE_TYPE;
-  attributes[i++] = (renderer->driver == COGL_DRIVER_GL3 ?
+  attributes[i++] = (renderer->driver_id == COGL_DRIVER_ID_GL3 ?
                      EGL_OPENGL_BIT :
                      EGL_OPENGL_ES2_BIT);
 
@@ -337,7 +337,7 @@ try_create_context (CoglDisplay *display,
       egl_display->egl_config = config;
     }
 
-  if (display->renderer->driver == COGL_DRIVER_GL3)
+  if (display->renderer->driver_id == COGL_DRIVER_ID_GL3)
     {
       if (!(egl_renderer->private_features &
             COGL_EGL_WINSYS_FEATURE_CREATE_CONTEXT))
@@ -356,7 +356,7 @@ try_create_context (CoglDisplay *display,
       attribs[i++] = EGL_CONTEXT_OPENGL_PROFILE_MASK_KHR;
       attribs[i++] = EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT_KHR;
     }
-  else if (display->renderer->driver == COGL_DRIVER_GLES2)
+  else if (display->renderer->driver_id == COGL_DRIVER_ID_GLES2)
     {
       attribs[i++] = EGL_CONTEXT_CLIENT_VERSION;
       attribs[i++] = 2;
@@ -465,8 +465,6 @@ _cogl_winsys_display_setup (CoglDisplay *display,
 
   if (!try_create_context (display, error))
     goto error;
-
-  egl_display->found_egl_config = TRUE;
 
   return TRUE;
 
@@ -651,24 +649,6 @@ _cogl_egl_destroy_image (CoglContext *ctx,
   g_return_if_fail (egl_renderer->pf_eglDestroyImage);
 
   egl_renderer->pf_eglDestroyImage (egl_renderer->edpy, image);
-}
-#endif
-
-#ifdef EGL_WL_bind_wayland_display
-gboolean
-_cogl_egl_query_wayland_buffer (CoglContext *ctx,
-                                struct wl_resource *buffer,
-                                int attribute,
-                                int *value)
-{
-  CoglRendererEGL *egl_renderer = ctx->display->renderer->winsys;
-
-  g_return_val_if_fail (egl_renderer->pf_eglQueryWaylandBuffer, FALSE);
-
-  return egl_renderer->pf_eglQueryWaylandBuffer (egl_renderer->edpy,
-                                                 buffer,
-                                                 attribute,
-                                                 value);
 }
 #endif
 
