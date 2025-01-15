@@ -1,4 +1,3 @@
-window-x11-Use-g_autoslist-MetaStrut-in-meta_window_x11_u.patch
 workarounds/tests-Mark-view-verification-tests-as-incomplete-in-big-e.patch
 debian/tests-Do-not-run-screencast-tests.patch
 debian/Support-Dynamic-triple-double-buffering.patch
@@ -9,7 +8,4 @@ workarounds/Mark-several-additional-tests-as-flaky.patch
 workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
 ubuntu/x11-Add-support-for-fractional-scaling-using-Randr.patch
 ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
-ubuntu/cogl-Restore-support-for-EGL-1.4-and-GLES-2.0.patch
-ubuntu/cogl-gles-Use-unsized-internal-formats-for-RGB8-RGBA8-in-.patch
 workarounds/seat-impl-Initialize-the-impl-reverse-pointer-slightly-ea.patch
-ubuntu/Use-access-instead-of-checking-permission-modes-for-tmp-..patch
