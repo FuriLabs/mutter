@@ -9,9 +9,11 @@ current user.
 C.f. https://gitlab.gnome.org/GNOME/gnome-shell/-/issues/7857,
      https://launchpad.net/bugs/2069564.
 ---
- src/wayland/meta-xwayland.c | 9 ++++++---
- 1 file changed, 6 insertions(+), 3 deletions(-)
+ src/wayland/meta-xwayland.c | 14 +++++++++++---
+ 1 file changed, 11 insertions(+), 3 deletions(-)
 
+diff --git a/src/wayland/meta-xwayland.c b/src/wayland/meta-xwayland.c
+index 4a0fe4f..681b2ad 100644
 --- a/src/wayland/meta-xwayland.c
 +++ b/src/wayland/meta-xwayland.c
 @@ -545,14 +545,22 @@ ensure_x11_unix_perms (GError **error)
