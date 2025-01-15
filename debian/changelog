@@ -1,3 +1,17 @@
+mutter (47.4-1ubuntu1) plucky; urgency=medium
+
+  * Merge with Debian (LP: #2091159, LP: #2089843, LP: #1966635).
+  * Remaining changes:
+    - Add x11-Add-support-for-fractional-scaling-using-Randr.patch
+    - Add window-Add-ability-to-override-the-edge-constraints.patch
+      + Make possible for extensions (such as Tiling Assistant) to override
+        window constraints
+    - Add seat-impl-Initialize-the-impl-reverse-pointer-slightly-ea.patch
+      to avoid crashing when mousekeys or keyboard a11y features are
+      enabled
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 14 Jan 2025 19:26:13 -0500
+
 mutter (47.4-1) unstable; urgency=medium
 
   * New upstream release
