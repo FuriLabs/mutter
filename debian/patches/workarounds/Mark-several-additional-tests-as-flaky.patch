@@ -13,10 +13,11 @@ one in a separate suite so that we don't need to run it at all.
 Signed-off-by: Simon McVittie <smcv@debian.org>
 Forwarded: no
 ---
- src/tests/clutter/conform/gesture.c | 24 ++++++++++++++++++++++++
- src/tests/clutter/conform/grab.c    |  6 ++++++
- src/tests/meson.build               | 15 +++++++++++++--
- 3 files changed, 43 insertions(+), 2 deletions(-)
+ src/tests/clutter/conform/gesture.c   | 24 ++++++++++++++++++++++++
+ src/tests/clutter/conform/grab.c      |  6 ++++++
+ src/tests/clutter/conform/meson.build |  8 +++++++-
+ src/tests/meson.build                 | 15 +++++++++++++--
+ 4 files changed, 50 insertions(+), 3 deletions(-)
 
 diff --git a/src/tests/clutter/conform/gesture.c b/src/tests/clutter/conform/gesture.c
 index f3901a2..c0affef 100644
@@ -91,11 +92,37 @@ index 93a8cf4..9018a53 100644
    seat = clutter_test_get_default_seat ();
    pointer = clutter_seat_create_virtual_device (seat, CLUTTER_POINTER_DEVICE);
  
+diff --git a/src/tests/clutter/conform/meson.build b/src/tests/clutter/conform/meson.build
+index 2cfe074..af51ad3 100644
+--- a/src/tests/clutter/conform/meson.build
++++ b/src/tests/clutter/conform/meson.build
+@@ -60,6 +60,12 @@ test_env.set('CLUTTER_ENABLE_DIAGNOSTIC', '0')
+ test_env.set('GSETTINGS_SCHEMA_DIR', locally_compiled_schemas_dir)
+ 
+ foreach test : clutter_conform_tests
++  extra_suites = []
++
++  if test == 'timeline' or test == 'timeline-interpolate'
++    extra_suites += 'flaky'
++  endif
++
+   test_executable = executable('@0@'.format(test),
+     sources: [
+       '@0@.c'.format(test),
+@@ -75,7 +81,7 @@ foreach test : clutter_conform_tests
+   )
+ 
+   test(test, test_executable,
+-    suite: ['clutter', 'clutter/conform'],
++    suite: ['clutter', 'clutter/conform'] + extra_suites,
+     env: test_env,
+     is_parallel: false,
+   )
 diff --git a/src/tests/meson.build b/src/tests/meson.build
-index a505aa5..cd78efe 100644
+index 563ef43..9ca2c31 100644
 --- a/src/tests/meson.build
 +++ b/src/tests/meson.build
-@@ -424,6 +424,7 @@ test_cases += [
+@@ -469,6 +469,7 @@ test_cases += [
      'name': 'input-capture',
      'suite': 'backends/native',
      'sources': [ 'input-capture-tests.c' ],
@@ -103,7 +130,7 @@ index a505aa5..cd78efe 100644
    },
    {
      'name': 'thread',
-@@ -717,8 +718,18 @@ foreach test_case: test_cases
+@@ -785,8 +786,18 @@ foreach test_case: test_cases
  
    test_depends = [ default_plugin ] + test_case.get('depends', [])
  
@@ -123,7 +150,7 @@ index a505aa5..cd78efe 100644
      env: test_env,
      depends: test_depends,
      is_parallel: false,
-@@ -780,7 +791,7 @@ stacking_tests = [
+@@ -848,7 +859,7 @@ stacking_tests = [
  
  foreach stacking_test: stacking_tests
    test(stacking_test, test_runner,

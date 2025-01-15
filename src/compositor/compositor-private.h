@@ -45,6 +45,7 @@ void meta_compositor_window_actor_stage_views_changed (MetaCompositor *composito
 
 void meta_switch_workspace_completed (MetaCompositor *compositor);
 
+META_EXPORT_TEST
 MetaPluginManager * meta_compositor_get_plugin_manager (MetaCompositor *compositor);
 
 int64_t meta_compositor_monotonic_to_high_res_xserver_time (MetaCompositor *compositor,
@@ -90,6 +91,7 @@ void meta_compositor_grab_end (MetaCompositor *compositor);
 void meta_compositor_destroy (MetaCompositor *compositor);
 
 gboolean meta_compositor_manage (MetaCompositor  *compositor,
+                                 GVariant        *plugin_options,
                                  GError         **error);
 
 void meta_compositor_unmanage (MetaCompositor *compositor);

@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eux
+
+ls -al /tmp/.X11-unix || true
+mkdir -v -p -m1777 /tmp/.X11-unix
+ls -al /tmp/.X11-unix || true

@@ -64,7 +64,7 @@ typedef struct _MetaThreadImplPrivate
   GSource *impl_source;
   GAsyncQueue *task_queue;
 
-  gboolean is_realtime;
+  MetaSchedulingPriority scheduling_priority;
 } MetaThreadImplPrivate;
 
 struct _MetaThreadTask
@@ -579,7 +579,7 @@ meta_thread_impl_setup (MetaThreadImpl *thread_impl)
 
 void
 meta_thread_impl_run (MetaThreadImpl         *thread_impl,
-                      MetaThreadImplRunFlags  flags)
+                      MetaSchedulingPriority  scheduling_priority)
 {
   MetaThreadImplPrivate *priv =
     meta_thread_impl_get_instance_private (thread_impl);
@@ -587,9 +587,8 @@ meta_thread_impl_run (MetaThreadImpl         *thread_impl,
   meta_assert_in_thread_impl (priv->thread);
 
   priv->loop = g_main_loop_new (priv->thread_context, FALSE);
-  priv->is_realtime = !!(flags & META_THREAD_IMPL_RUN_FLAG_REALTIME);
+  priv->scheduling_priority = scheduling_priority;
   g_main_loop_run (priv->loop);
-  priv->is_realtime = FALSE;
 }
 
 void
@@ -599,15 +598,18 @@ meta_thread_impl_queue_task (MetaThreadImpl *thread_impl,
   MetaThreadImplPrivate *priv =
     meta_thread_impl_get_instance_private (thread_impl);
 
-  g_async_queue_push (priv->task_queue, task);
-  g_main_context_wakeup (priv->thread_context);
+  g_async_queue_lock (priv->task_queue);
+  g_async_queue_push_unlocked (priv->task_queue, task);
+  if (g_async_queue_length_unlocked (priv->task_queue) == 1)
+    g_main_context_wakeup (priv->thread_context);
+  g_async_queue_unlock (priv->task_queue);
 }
 
-gboolean
-meta_thread_impl_is_realtime (MetaThreadImpl *thread_impl)
+MetaSchedulingPriority
+meta_thread_impl_get_scheduling_priority (MetaThreadImpl *thread_impl)
 {
   MetaThreadImplPrivate *priv =
     meta_thread_impl_get_instance_private (thread_impl);
 
-  return priv->is_realtime;
+  return priv->scheduling_priority;
 }

@@ -104,7 +104,7 @@ Copyright:
 License: WRF-BSD-variant
 
 Files:
- src/tests/share/icc/vx239-calibrated.icc
+ src/tests/icc-profiles/vx239-calibrated.icc
 Copyright: none
 License: free-of-known-restrictions
  This profile is free of known copyright restrictions

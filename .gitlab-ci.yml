@@ -1,8 +1,11 @@
 include:
-  - remote: 'https://gitlab.freedesktop.org/freedesktop/ci-templates/-/raw/145b1bc7ef1702d2bd71584010d7113c6786a506/templates/fedora.yml'
-  - remote: 'https://gitlab.freedesktop.org/freedesktop/ci-templates/-/raw/34f4ade99434043f88e164933f570301fd18b125/templates/ci-fairy.yml'
-  - project: 'Infrastructure/openshift-images/gnome-release-service'
-    file: '/ci-templates/release-module.yml'
+  - remote: 'https://gitlab.gnome.org/Infrastructure/freedesktop-ci-templates/-/raw/145b1bc7ef1702d2bd71584010d7113c6786a506/templates/fedora.yml'
+  - remote: 'https://gitlab.gnome.org/Infrastructure/freedesktop-ci-templates/-/raw/34f4ade99434043f88e164933f570301fd18b125/templates/ci-fairy.yml'
+  - component: gitlab.gnome.org/GNOME/citemplates/release-service@master
+    inputs:
+      job-stage: deploy
+      dist-job-name: "dist-mutter-tarball"
+      tarball-artifact-path: $TARBALL_ARTIFACT_PATH
   - component: gitlab.gnome.org/GNOME/citemplates/gnomeos-build-sysext@1.0.0-alpha.1
     inputs:
       meson-options:
@@ -30,6 +33,7 @@ stages:
 
 variables:
   FDO_UPSTREAM_REPO: GNOME/mutter
+  TARBALL_ARTIFACT_PATH: build/meson-dist/$CI_PROJECT_NAME-$CI_COMMIT_TAG.tar.xz
 
 .skip-git-clone:
   variables:
@@ -100,8 +104,8 @@ variables:
   extends:
     - .skip-git-clone
   variables:
-    FDO_DISTRIBUTION_VERSION: 40
-    BASE_TAG: '2024-08-29.2'
+    FDO_DISTRIBUTION_VERSION: 41
+    BASE_TAG: '2024-09-20.2'
     MUTTER_USER: 'meta-user'
     FDO_DISTRIBUTION_PACKAGES:
       clang
@@ -113,6 +117,7 @@ variables:
       uncrustify
       xorg-x11-server-Xvfb
       mesa-dri-drivers
+      mesa-vulkan-drivers
       xorg-x11-proto-devel
       qemu-system-x86-core
       busybox
@@ -129,6 +134,10 @@ variables:
       # Enable sudo for $MUTTER_USER
       echo "%$MUTTER_USER ALL = (ALL) NOPASSWD: ALL" > /etc/sudoers.d/99_mutter-user
 
+      # Drop problematic vulkan driver that interferes with CI;
+      # see https://gitlab.gnome.org/GNOME/gtk/-/commit/7814d1fd75911
+      rm /usr/share/vulkan/icd.d/powervr_mesa_icd.x86_64.json
+
       dnf install -y 'dnf-command(builddep)'
 
       dnf builddep -y mutter --setopt=install_weak_deps=False
@@ -136,16 +145,6 @@ variables:
       dnf builddep -y kernel --setopt=install_weak_deps=False
       dnf builddep -y gi-docgen --setopt=install_weak_deps=False
       dnf builddep -y wayland --setopt=install_weak_deps=False
-
-      # FIXME: we downgrade xlib to 1.8.7 because somewhere on the way to
-      # version 1.8.10, a bug was introdcued
-      # https://gitlab.freedesktop.org/xorg/lib/libx11/-/merge_requests/264
-      # Remove when we have a fixed version!
-      dnf install -y libX11-common-1.8.7
-
-      ./.gitlab-ci/install-meson-project.sh \
-        https://gitlab.gnome.org/GNOME/glib.git \
-        2.81.1
 
       ./.gitlab-ci/install-meson-project.sh \
         https://gitlab.gnome.org/jadahl/catch.git \
@@ -160,12 +159,7 @@ variables:
       rpm -e --nodeps gnome-bluetooth-libs-devel \
                       mutter mutter-devel \
                       gnome-shell \
-                      gtk3
-
-      # Contains fixes needed for tests not included in 3.24.33
-      ./.gitlab-ci/install-meson-project.sh \
-        https://gitlab.gnome.org/GNOME/gtk.git \
-        gtk-3-24 46fe3224dd771b91e6976d5a632b452e2179a4f0
+                      $(NULL)
 
       # Work-around for podman-push aborting on permission issue
       # https://gitlab.gnome.org/Infrastructure/Infrastructure/-/issues/1247
@@ -177,6 +171,9 @@ variables:
       git config --system --add safe.directory "$CI_PROJECT_DIR"
 
       if [[ x"$(uname -m )" = "xx86_64" ]] ; then
+        # deprecated header no longer included in openssl-devel
+        dnf install -y openssl-devel-engine
+
         if [ -n "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME" ]; then
           git clone --depth $MUTTER_CLONE_DEPTH \
             $CI_MERGE_REQUEST_SOURCE_PROJECT_URL.git mutter-src \
@@ -686,27 +683,6 @@ test-mutter-coverity:
     paths:
       - coverity
 
-distinfo:
-  extends:
-    - .fdo.distribution-image@fedora
-    - .mutter.fedora@x86_64
-    - .build-mutter-base
-    - .test-setup
-  stage: deploy
-  needs:
-    - job: build-fedora-container@x86_64
-      artifacts: false
-  script:
-    - meson setup . build
-    - .gitlab-ci/export-artifact-path build > dist.env
-  artifacts:
-    reports:
-      dotenv: dist.env
-    paths:
-      - dist.env
-  rules:
-    - if: '$CI_COMMIT_TAG'
-
 dist-mutter:
   extends:
     - .fdo.distribution-image@fedora
@@ -779,22 +755,12 @@ installed-tests-mutter@x86_64:
 
 dist-mutter-tarball:
   extends: dist-mutter
-  needs:
-    - distinfo
   artifacts:
     expose_as: 'Get tarball here'
+    name: "${CI_JOB_NAME}-${CI_COMMIT_REF_NAME}"
+    when: always
     paths:
       - $TARBALL_ARTIFACT_PATH
-    reports:
-      dotenv: dist.env
-  rules:
-    - if: '$CI_COMMIT_TAG'
-
-release-module:
-  stage: deploy
-  needs:
-    - dist-mutter-tarball
-  extends: .release-module
   rules:
     - if: '$CI_COMMIT_TAG'
 

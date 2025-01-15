@@ -26,6 +26,9 @@
 #include <gio/gsettingsbackend.h>
 #include <fcntl.h>
 
+#include "compositor/compositor-private.h"
+#include "compositor/meta-plugin-manager.h"
+#include "core/display-private.h"
 #include "core/meta-context-private.h"
 #include "meta/meta-x11-display.h"
 #include "tests/meta-backend-test.h"
@@ -53,6 +56,7 @@ typedef struct _MetaContextTestPrivate
   MetaContextTestType type;
   MetaContextTestFlag flags;
   MetaSessionManager *session_manager;
+  CoglColor *background_color;
 } MetaContextTestPrivate;
 
 struct _MetaContextTestClass
@@ -85,6 +89,7 @@ meta_context_test_finalize (GObject *object)
   MetaContextTestPrivate *priv =
     meta_context_test_get_instance_private (context_test);
 
+  g_clear_pointer (&priv->background_color, cogl_color_free);
   g_clear_object (&priv->session_manager);
 
   G_OBJECT_CLASS (meta_context_test_parent_class)->finalize (object);
@@ -307,6 +312,12 @@ meta_context_test_run_tests (MetaContextTest  *context_test,
                              MetaTestRunFlags  flags)
 {
   MetaContext *context = META_CONTEXT (context_test);
+  MetaContextTestPrivate *priv =
+    meta_context_test_get_instance_private (context_test);
+  MetaDisplay *display;
+  MetaCompositor *compositor;
+  MetaPluginManager *plugin_manager;
+  MetaPlugin *plugin;
   g_autoptr (GError) error = NULL;
 
   if (!meta_context_setup (context, &error))
@@ -334,6 +345,20 @@ meta_context_test_run_tests (MetaContextTest  *context_test,
       g_printerr ("Test case failed to start: %s\n", error->message);
       return EXIT_FAILURE;
     }
+
+  display = meta_context_get_display (context);
+  compositor = display->compositor;
+  plugin_manager = meta_compositor_get_plugin_manager (compositor);
+  plugin = meta_plugin_manager_get_plugin (plugin_manager);
+
+  if (priv->background_color)
+    {
+      meta_test_shell_set_background_color (META_TEST_SHELL (plugin),
+                                            *priv->background_color);
+    }
+
+  if (priv->flags & META_CONTEXT_TEST_FLAG_NO_ANIMATIONS)
+    meta_test_shell_disable_animations (META_TEST_SHELL (plugin));
 
   g_idle_add (run_tests_idle, context_test);
 
@@ -458,4 +483,15 @@ meta_context_test_init (MetaContextTest *context_test)
                                 &error);
   if (ret == NULL)
     g_warning ("Failed to clear mocked color devices: %s", error->message);
+}
+
+void
+meta_context_test_set_background_color (MetaContextTest *context_test,
+                                        CoglColor        color)
+{
+  MetaContextTestPrivate *priv =
+    meta_context_test_get_instance_private (context_test);
+
+  g_clear_pointer (&priv->background_color, cogl_color_free);
+  priv->background_color = cogl_color_copy (&color);
 }

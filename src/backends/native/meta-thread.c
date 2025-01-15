@@ -36,7 +36,7 @@ enum
   PROP_BACKEND,
   PROP_NAME,
   PROP_THREAD_TYPE,
-  PROP_WANTS_REALTIME,
+  PROP_PREFERED_SCHEDULING_PRIORITY,
 
   N_PROPS
 };
@@ -71,7 +71,7 @@ typedef struct _MetaThreadPrivate
   GMainContext *main_context;
 
   MetaThreadImpl *impl;
-  gboolean wants_realtime;
+  MetaSchedulingPriority preferred_scheduling_priority;
   gboolean waiting_for_impl_task;
   GSource *wrapper_source;
 
@@ -88,7 +88,7 @@ typedef struct _MetaThreadPrivate
     pid_t thread_id;
     GMutex init_mutex;
     int realtime_inhibit_count;
-    gboolean is_realtime;
+    MetaSchedulingPriority scheduling_priority;
   } kernel;
 } MetaThreadPrivate;
 
@@ -105,6 +105,22 @@ G_DEFINE_TYPE_WITH_CODE (MetaThread, meta_thread, G_TYPE_OBJECT,
                                                 initable_iface_init)
                          g_type_add_class_private (g_define_type_id,
                                                    sizeof (MetaThreadClassPrivate)))
+
+static const char *
+meta_scheduling_priority_to_string (MetaSchedulingPriority priority)
+{
+  switch (priority)
+    {
+    case META_SCHEDULING_PRIORITY_NORMAL:
+      return "normal";
+    case META_SCHEDULING_PRIORITY_REALTIME:
+      return "realtime";
+    case META_SCHEDULING_PRIORITY_HIGH_PRIORITY:
+      return "high priority";
+    }
+
+  g_assert_not_reached ();
+}
 
 static void
 meta_thread_callback_data_free (MetaThreadCallbackData *callback_data)
@@ -134,8 +150,8 @@ meta_thread_get_property (GObject    *object,
     case PROP_THREAD_TYPE:
       g_value_set_enum (value, priv->thread_type);
       break;
-    case PROP_WANTS_REALTIME:
-      g_value_set_boolean (value, priv->wants_realtime);
+    case PROP_PREFERED_SCHEDULING_PRIORITY:
+      g_value_set_enum (value, priv->preferred_scheduling_priority);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -163,8 +179,8 @@ meta_thread_set_property (GObject      *object,
     case PROP_THREAD_TYPE:
       priv->thread_type = g_value_get_enum (value);
       break;
-    case PROP_WANTS_REALTIME:
-      priv->wants_realtime = g_value_get_boolean (value);
+    case PROP_PREFERED_SCHEDULING_PRIORITY:
+      priv->preferred_scheduling_priority = g_value_get_enum (value);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -232,6 +248,54 @@ ensure_realtime_kit_proxy (MetaThread  *thread,
     }
 
   priv->kernel.rtkit_proxy = g_steal_pointer (&rtkit_proxy);
+  return TRUE;
+}
+
+static gboolean
+request_high_priority_scheduling (MetaThread  *thread,
+                                  GError     **error)
+{
+  MetaThreadPrivate *priv = meta_thread_get_instance_private (thread);
+  g_autoptr (GError) local_error = NULL;
+  uint32_t nice_level;
+
+  if (!ensure_realtime_kit_proxy (thread, error))
+    return FALSE;
+
+  nice_level = meta_dbus_realtime_kit1_get_min_nice_level (priv->kernel.rtkit_proxy);
+  if (nice_level == 0)
+    {
+      g_autoptr (GVariant) nice_level_variant = NULL;
+
+      nice_level_variant = get_rtkit_property (priv->kernel.rtkit_proxy,
+                                               "MinNiceLevel",
+                                               error);
+      if (!nice_level_variant)
+        return FALSE;
+
+      nice_level = g_variant_get_int32 (nice_level_variant);
+    }
+
+  if (nice_level == 0)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Minimum real time scheduling nice_level is 0");
+      return FALSE;
+    }
+
+  meta_topic (META_DEBUG_BACKEND, "Setting '%s' thread nice level to %d",
+              priv->name, nice_level);
+  if (!meta_dbus_realtime_kit1_call_make_thread_high_priority_sync (priv->kernel.rtkit_proxy,
+                                                                    priv->kernel.thread_id,
+                                                                    nice_level,
+                                                                    NULL,
+                                                                    &local_error))
+    {
+      g_dbus_error_strip_remote_error (local_error);
+      g_propagate_error (error, g_steal_pointer (&local_error));
+      return FALSE;
+    }
+
   return TRUE;
 }
 
@@ -342,7 +406,8 @@ can_use_realtime_scheduling_in_impl (MetaThread *thread)
     case META_THREAD_TYPE_USER:
       return FALSE;
     case META_THREAD_TYPE_KERNEL:
-      return priv->wants_realtime;
+      return (priv->preferred_scheduling_priority ==
+              META_SCHEDULING_PRIORITY_REALTIME);
     }
 
   g_assert_not_reached ();
@@ -357,20 +422,43 @@ should_use_realtime_scheduling_in_impl (MetaThread *thread)
           priv->kernel.realtime_inhibit_count == 0);
 }
 
+static gboolean
+should_use_high_priority_scheduling_in_impl (MetaThread *thread)
+{
+  MetaThreadPrivate *priv = meta_thread_get_instance_private (thread);
+
+  switch (priv->thread_type)
+    {
+    case META_THREAD_TYPE_USER:
+      return FALSE;
+    case META_THREAD_TYPE_KERNEL:
+      return (priv->preferred_scheduling_priority ==
+              META_SCHEDULING_PRIORITY_HIGH_PRIORITY);
+    }
+
+  g_assert_not_reached ();
+}
+
 static void
-sync_realtime_scheduling_in_impl (MetaThread *thread)
+sync_scheduling_priority_in_impl (MetaThread *thread)
 {
   MetaThreadPrivate *priv = meta_thread_get_instance_private (thread);
   g_autoptr (GError) error = NULL;
-  gboolean should_be_realtime;
+  MetaSchedulingPriority scheduling_priority;
 
-  should_be_realtime = should_use_realtime_scheduling_in_impl (thread);
+  if (should_use_realtime_scheduling_in_impl (thread))
+    scheduling_priority = META_SCHEDULING_PRIORITY_REALTIME;
+  else if (should_use_high_priority_scheduling_in_impl (thread))
+    scheduling_priority = META_SCHEDULING_PRIORITY_HIGH_PRIORITY;
+  else
+    scheduling_priority = META_SCHEDULING_PRIORITY_NORMAL;
 
-  if (should_be_realtime == priv->kernel.is_realtime)
+  if (scheduling_priority == priv->kernel.scheduling_priority)
     return;
 
-  if (should_be_realtime)
+  switch (scheduling_priority)
     {
+    case META_SCHEDULING_PRIORITY_REALTIME:
       if (!request_realtime_scheduling (thread, &error))
         {
           g_warning ("Failed to make thread '%s' realtime scheduled: %s",
@@ -378,12 +466,25 @@ sync_realtime_scheduling_in_impl (MetaThread *thread)
         }
       else
         {
-          meta_topic (META_DEBUG_BACKEND, "Made thread '%s' real-time scheduled", priv->name);
-          priv->kernel.is_realtime = TRUE;
+          meta_topic (META_DEBUG_BACKEND,
+                      "Made thread '%s' real-time scheduled", priv->name);
+          priv->kernel.scheduling_priority = scheduling_priority;
         }
-    }
-  else
-    {
+      break;
+    case META_SCHEDULING_PRIORITY_HIGH_PRIORITY:
+      if (!request_high_priority_scheduling (thread, &error))
+        {
+          g_warning ("Failed to make thread '%s' high priority scheduled: %s",
+                     priv->name, error->message);
+        }
+      else
+        {
+          meta_topic (META_DEBUG_BACKEND,
+                      "Made thread '%s' high priority scheduled", priv->name);
+          priv->kernel.scheduling_priority = scheduling_priority;
+        }
+      break;
+    case META_SCHEDULING_PRIORITY_NORMAL:
       if (!request_normal_scheduling (thread, &error))
         {
           g_warning ("Failed to make thread '%s' normally scheduled: %s",
@@ -392,9 +493,25 @@ sync_realtime_scheduling_in_impl (MetaThread *thread)
       else
         {
           meta_topic (META_DEBUG_BACKEND, "Made thread '%s' normally scheduled", priv->name);
-          priv->kernel.is_realtime = FALSE;
+          priv->kernel.scheduling_priority = scheduling_priority;
         }
     }
+}
+
+static MetaSchedulingPriority
+determine_effective_thread_priority (MetaThread *thread)
+{
+  MetaThreadPrivate *priv = meta_thread_get_instance_private (thread);
+
+  switch (priv->thread_type)
+    {
+    case META_THREAD_TYPE_USER:
+      return META_SCHEDULING_PRIORITY_NORMAL;
+    case META_THREAD_TYPE_KERNEL:
+      return priv->preferred_scheduling_priority;
+    }
+
+  g_assert_not_reached ();
 }
 
 static gpointer
@@ -403,7 +520,7 @@ thread_impl_func (gpointer user_data)
   MetaThread *thread = META_THREAD (user_data);
   MetaThreadPrivate *priv = meta_thread_get_instance_private (thread);
   MetaThreadImpl *impl = priv->impl;
-  MetaThreadImplRunFlags run_flags = META_THREAD_IMPL_RUN_FLAG_NONE;
+  MetaSchedulingPriority effective_scheduling_priority;
   GMainContext *thread_context = meta_thread_impl_get_main_context (impl);
 #ifdef HAVE_PROFILER
   MetaContext *context = meta_backend_get_context (priv->backend);
@@ -421,19 +538,18 @@ thread_impl_func (gpointer user_data)
 
   priv->kernel.thread_id = gettid ();
   priv->kernel.realtime_inhibit_count = 0;
-  priv->kernel.is_realtime = FALSE;
 
   meta_thread_impl_setup (impl);
 
-  sync_realtime_scheduling_in_impl (thread);
+  sync_scheduling_priority_in_impl (thread);
 
-  if (can_use_realtime_scheduling_in_impl (thread))
-    {
-      g_message ("Thread '%s' will be using real time scheduling", priv->name);
-      run_flags |= META_THREAD_IMPL_RUN_FLAG_REALTIME;
-    }
+  effective_scheduling_priority = determine_effective_thread_priority (thread);
 
-  meta_thread_impl_run (impl, run_flags);
+  g_message ("Thread '%s' will be using %s scheduling",
+             priv->name,
+             meta_scheduling_priority_to_string (effective_scheduling_priority));
+
+  meta_thread_impl_run (impl, effective_scheduling_priority);
 
 #ifdef HAVE_PROFILER
   meta_profiler_unregister_thread (profiler, thread_context);
@@ -737,12 +853,13 @@ meta_thread_class_init (MetaThreadClass *klass)
                        G_PARAM_CONSTRUCT_ONLY |
                        G_PARAM_STATIC_STRINGS);
 
-  obj_props[PROP_WANTS_REALTIME] =
-    g_param_spec_boolean ("wants-realtime", NULL, NULL,
-                          FALSE,
-                          G_PARAM_READWRITE |
-                          G_PARAM_CONSTRUCT_ONLY |
-                          G_PARAM_STATIC_STRINGS);
+  obj_props[PROP_PREFERED_SCHEDULING_PRIORITY] =
+    g_param_spec_enum ("preferred-scheduling-priority", NULL, NULL,
+                       META_TYPE_SCHEDULING_PRIORITY,
+                       META_SCHEDULING_PRIORITY_NORMAL,
+                       G_PARAM_READWRITE |
+                       G_PARAM_CONSTRUCT_ONLY |
+                       G_PARAM_STATIC_STRINGS);
 
   g_object_class_install_properties (object_class, N_PROPS, obj_props);
 }
@@ -1285,7 +1402,7 @@ meta_thread_inhibit_realtime_in_impl (MetaThread *thread)
       priv->kernel.realtime_inhibit_count++;
 
       if (priv->kernel.realtime_inhibit_count == 1)
-        sync_realtime_scheduling_in_impl (thread);
+        sync_scheduling_priority_in_impl (thread);
       break;
     case META_THREAD_TYPE_USER:
       break;
@@ -1303,7 +1420,7 @@ meta_thread_uninhibit_realtime_in_impl (MetaThread *thread)
       priv->kernel.realtime_inhibit_count--;
 
       if (priv->kernel.realtime_inhibit_count == 0)
-        sync_realtime_scheduling_in_impl (thread);
+        sync_scheduling_priority_in_impl (thread);
       break;
     case META_THREAD_TYPE_USER:
       break;

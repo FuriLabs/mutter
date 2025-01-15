@@ -509,6 +509,11 @@ meta_kms_crtc_new (MetaKmsImplDevice  *impl_device,
   crtc->id = drm_crtc->crtc_id;
   crtc->idx = idx;
 
+  meta_topic (META_DEBUG_KMS,
+              "Adding CRTC %u (%s)",
+              crtc->id,
+              meta_kms_impl_device_get_path (impl_device));
+
   init_properties (crtc, impl_device, drm_crtc);
 
   meta_kms_crtc_read_state (crtc, impl_device, drm_crtc, drm_props);
@@ -694,6 +699,8 @@ meta_kms_crtc_update_shortterm_max_dispatch_duration (MetaKmsCrtc *crtc,
                                                       int64_t      duration_us)
 {
   int64_t refresh_interval_us;
+
+  g_return_if_fail (crtc->current_state.is_drm_mode_valid);
 
   /* meta_kms_crtc_determine_deadline doesn't use deadline evasion with VRR */
   if (crtc->current_state.vrr.enabled)

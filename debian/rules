@@ -47,7 +47,8 @@ TEST_COMMAND_BASE=env \
 	GIO_USE_VFS=local \
 	GIO_USE_VOLUME_MONITOR=unix \
 	GVFS_DISABLE_FUSE=1 \
-	dbus-run-session -- xvfb-run -s '+iglx -noreset' -a \
+	dbus-run-session -- \
+	xvfb-run -e /proc/self/fd/2 -s '+iglx -noreset -screen 0 1280x1024x24' -a \
 	dh_auto_test -- -C $(BUILDDIR) --no-rebuild --verbose --timeout-multiplier 6 \
 	           --no-stdsplit --print-errorlogs
 TEST_COMMAND=$(TEST_COMMAND_BASE) --no-suite flaky --no-suite broken --no-suite mutter/x11
@@ -64,7 +65,8 @@ TEST_COMMAND_FLAKY=env DEB_ALLOW_FLAKY_TESTS=1 $(TEST_COMMAND_BASE) --suite flak
 # https://discourse.ubuntu.com/t/33807
 #
 # Please keep this list in sync with debian/tests/installed-tests
-override_dh_auto_test:
+override_dh_auto_test-arch:
+	debian/tests/ensure-x11-dir
 ifeq (,$(filter mips64el riscv64 s390x,$(DEB_HOST_ARCH)))
 	$(TEST_COMMAND)
 	-$(TEST_COMMAND_FLAKY) --logbase flaky-tests
@@ -72,6 +74,9 @@ else
 	-$(TEST_COMMAND)
 	-$(TEST_COMMAND_FLAKY) --logbase flaky-tests
 endif
+
+# Don't re-run the tests if we are only building Architecture: all
+override_dh_auto_test-indep:
 
 # debhelper >= 13.4 makes all of /usr/libexec executable, which is not
 # quite right for installed-tests

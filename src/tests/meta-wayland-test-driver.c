@@ -329,7 +329,29 @@ bind_test_driver (struct wl_client *client,
 
   g_hash_table_iter_init (&iter, test_driver->properties);
   while (g_hash_table_iter_next (&iter, &key, &value))
-    test_driver_send_property (resource, key, value);
+    {
+      GVariant *variant = value;
+
+      if (g_variant_is_of_type (value, G_VARIANT_TYPE_STRING))
+        {
+          test_driver_send_property (resource,
+                                     key,
+                                     g_variant_get_string (variant, NULL));
+        }
+      else if (g_variant_is_of_type (value, G_VARIANT_TYPE_INT32))
+        {
+          test_driver_send_property_int (resource,
+                                         key,
+                                         g_variant_get_int32 (variant));
+        }
+      else
+        {
+          g_autofree char *variant_string = NULL;
+
+          variant_string = g_variant_print (variant, TRUE);
+          g_warning ("Unhandled test driver variant '%s'", variant_string);
+        }
+    }
 }
 
 static void
@@ -375,7 +397,8 @@ static void
 meta_wayland_test_driver_init (MetaWaylandTestDriver *test_driver)
 {
   test_driver->properties = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                                   g_free, g_free);
+                                                   g_free,
+                                                   (GDestroyNotify) g_variant_unref);
 }
 
 MetaWaylandTestDriver *
@@ -416,7 +439,17 @@ meta_wayland_test_driver_set_property (MetaWaylandTestDriver *test_driver,
 {
   g_hash_table_replace (test_driver->properties,
                         g_strdup (name),
-                        g_strdup (value));
+                        g_variant_new_string (value));
+}
+
+void
+meta_wayland_test_driver_set_property_int (MetaWaylandTestDriver *test_driver,
+                                           const char            *name,
+                                           int32_t                value)
+{
+  g_hash_table_replace (test_driver->properties,
+                        g_strdup (name),
+                        g_variant_new_int32 (value));
 }
 
 static void

@@ -29,6 +29,7 @@
 
 #include "backends/native/meta-onscreen-native.h"
 
+#include <glib/gstdio.h>
 #include <drm_fourcc.h>
 
 #include "backends/meta-egl-ext.h"
@@ -49,6 +50,7 @@
 #include "backends/native/meta-render-device.h"
 #include "backends/native/meta-renderer-native-gles3.h"
 #include "backends/native/meta-renderer-native-private.h"
+#include "backends/native/meta-egl-gbm.h"
 #include "cogl/cogl.h"
 #include "common/meta-cogl-drm-formats.h"
 #include "common/meta-drm-format-helpers.h"
@@ -343,10 +345,7 @@ page_flip_feedback_discarded (MetaKmsCrtc  *kms_crtc,
   if (error &&
       !g_error_matches (error,
                         G_IO_ERROR,
-                        G_IO_ERROR_PERMISSION_DENIED) &&
-      !g_error_matches (error,
-                        META_KMS_ERROR,
-                        META_KMS_ERROR_DISCARDED))
+                        G_IO_ERROR_PERMISSION_DENIED))
 
     g_warning ("Page flip discarded: %s", error->message);
 
@@ -463,6 +462,32 @@ apply_transform (MetaCrtcKms            *crtc_kms,
                                       hw_transform);
 }
 
+static void
+apply_color_encoding (MetaKmsPlaneAssignment *kms_plane_assignment,
+                      MetaKmsPlane           *kms_plane)
+{
+  if (!meta_kms_plane_is_color_encoding_handled (kms_plane,
+                                                 META_KMS_PLANE_YCBCR_COLOR_ENCODING_BT709))
+    return;
+
+  meta_kms_plane_update_set_color_encoding (kms_plane,
+                                            kms_plane_assignment,
+                                            META_KMS_PLANE_YCBCR_COLOR_ENCODING_BT709);
+}
+
+static void
+apply_color_range (MetaKmsPlaneAssignment *kms_plane_assignment,
+                   MetaKmsPlane           *kms_plane)
+{
+  if (!meta_kms_plane_is_color_range_handled (kms_plane,
+                                              META_KMS_PLANE_YCBCR_COLOR_RANGE_LIMITED))
+    return;
+
+  meta_kms_plane_update_set_color_range (kms_plane,
+                                         kms_plane_assignment,
+                                         META_KMS_PLANE_YCBCR_COLOR_RANGE_LIMITED);
+}
+
 static MetaKmsPlaneAssignment *
 assign_primary_plane (MetaCrtcKms            *crtc_kms,
                       MetaDrmBuffer          *buffer,
@@ -502,6 +527,8 @@ assign_primary_plane (MetaCrtcKms            *crtc_kms,
                                                    *dst_rect,
                                                    flags);
   apply_transform (crtc_kms, plane_assignment, primary_kms_plane);
+  apply_color_encoding (plane_assignment, primary_kms_plane);
+  apply_color_range (plane_assignment, primary_kms_plane);
 
   return plane_assignment;
 }
@@ -851,12 +878,15 @@ copy_shared_framebuffer_gpu (CoglOnscreen                         *onscreen,
   MetaDrmBufferFlags flags;
   MetaDrmBufferGbm *buffer_gbm = NULL;
   struct gbm_bo *bo;
+  EGLSync egl_sync = EGL_NO_SYNC;
+  g_autofd int sync_fd = -1;
+  EGLImageKHR egl_image;
 
   COGL_TRACE_BEGIN_SCOPED (CopySharedFramebufferSecondaryGpu,
                            "copy_shared_framebuffer_gpu()");
 
   if (renderer_gpu_data->secondary.needs_explicit_sync)
-    cogl_framebuffer_finish (COGL_FRAMEBUFFER (onscreen));
+    sync_fd = cogl_context_get_latest_sync_fd (cogl_context);
 
   render_device = renderer_gpu_data->render_device;
   egl_display = meta_render_device_get_egl_display (render_device);
@@ -872,13 +902,51 @@ copy_shared_framebuffer_gpu (CoglOnscreen                         *onscreen,
       goto done;
     }
 
+  if (sync_fd >= 0)
+    {
+      EGLAttrib attribs[3];
+
+      attribs[0] = EGL_SYNC_NATIVE_FENCE_FD_ANDROID;
+      attribs[1] = g_steal_fd (&sync_fd);
+      attribs[2] = EGL_NONE;
+
+      if (!meta_egl_create_sync (egl,
+                                 egl_display,
+                                 EGL_SYNC_NATIVE_FENCE_ANDROID,
+                                 attribs,
+                                 &egl_sync,
+                                 error))
+        {
+          g_prefix_error (error, "Failed to create EGLSync on secondary GPU: ");
+          goto done;
+        }
+
+      if (!meta_egl_wait_sync (egl,
+                               egl_display,
+                               egl_sync,
+                               0,
+                               error))
+        {
+          g_prefix_error (error, "Failed to wait for EGLSync on secondary GPU: ");
+          goto done;
+        }
+    }
+
   buffer_gbm = META_DRM_BUFFER_GBM (primary_gpu_fb);
   bo = meta_drm_buffer_gbm_get_bo (buffer_gbm);
+  egl_image = meta_egl_ensure_gbm_bo_egl_image (egl, egl_display, bo, error);
+
+  if (!egl_image)
+    {
+      g_prefix_error (error, "Failed to create EGL image from buffer object for secondary GPU: ");
+      goto done;
+    }
+
   if (!meta_renderer_native_gles3_blit_shared_bo (egl,
                                                   gles3,
                                                   egl_display,
                                                   renderer_gpu_data->secondary.egl_context,
-                                                  secondary_gpu_state->egl_surface,
+                                                  egl_image,
                                                   bo,
                                                   error))
     {
@@ -919,6 +987,17 @@ copy_shared_framebuffer_gpu (CoglOnscreen                         *onscreen,
                            g_object_unref);
 
 done:
+  if (egl_sync != EGL_NO_SYNC)
+    {
+      g_autoptr (GError) local_error = NULL;
+
+      if (!meta_egl_destroy_sync (egl,
+                                  egl_display,
+                                  egl_sync,
+                                  &local_error))
+        g_warning ("Failed to destroy secondary GPU EGLSync: %s", local_error->message);
+    }
+
   _cogl_winsys_egl_ensure_current (cogl_display);
 
   return buffer_gbm ? META_DRM_BUFFER (buffer_gbm) : NULL;
@@ -984,7 +1063,7 @@ copy_shared_framebuffer_primary_gpu (CoglOnscreen                        *onscre
   g_assert (format_info);
 
   dmabuf_fd = meta_drm_buffer_dumb_ensure_dmabuf_fd (buffer_dumb, &error);
-  if (!dmabuf_fd)
+  if (dmabuf_fd < 0)
     {
       meta_topic (META_DEBUG_KMS,
                   "Failed to create DMA buffer: %s", error->message);
@@ -1264,6 +1343,9 @@ swap_buffer_result_feedback (const MetaKmsFeedback *kms_feedback,
     return;
 
   if (!g_error_matches (error,
+                        META_KMS_ERROR,
+                        META_KMS_ERROR_DISCARDED) &&
+      !g_error_matches (error,
                         G_IO_ERROR,
                         G_IO_ERROR_PERMISSION_DENIED))
     g_warning ("Page flip failed: %s", error->message);
@@ -1304,7 +1386,7 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
   MetaFrameNative *frame_native = meta_frame_native_from_frame (frame);
   MetaKmsUpdate *kms_update;
   CoglOnscreenClass *parent_class;
-  gboolean create_timestamp_query = TRUE;
+  gboolean secondary_gpu_used = FALSE;
   MetaPowerSave power_save_mode;
   g_autoptr (GError) error = NULL;
   MetaDrmBufferFlags buffer_flags;
@@ -1314,7 +1396,6 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
   g_autoptr (MetaDrmBuffer) buffer = NULL;
   MetaKmsCrtc *kms_crtc;
   MetaKmsDevice *kms_device;
-  int sync_fd;
 
   COGL_TRACE_SCOPED_ANCHOR (MetaRendererNativePostKmsUpdate);
 
@@ -1334,12 +1415,12 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
       secondary_gpu_data =
         meta_renderer_native_get_gpu_data (renderer_native,
                                            secondary_gpu_state->gpu_kms);
-      if (secondary_gpu_data->secondary.copy_mode ==
-          META_SHARED_FRAMEBUFFER_COPY_MODE_SECONDARY_GPU)
-        create_timestamp_query = FALSE;
+      secondary_gpu_used =
+        secondary_gpu_data->secondary.copy_mode ==
+        META_SHARED_FRAMEBUFFER_COPY_MODE_SECONDARY_GPU;
     }
 
-  if (create_timestamp_query)
+  if (!secondary_gpu_used)
     cogl_onscreen_egl_maybe_create_timestamp_query (onscreen, frame_info);
 
   parent_class = COGL_ONSCREEN_CLASS (meta_onscreen_native_parent_class);
@@ -1499,8 +1580,15 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
               meta_kms_device_get_path (kms_device));
 
   kms_update = meta_frame_native_steal_kms_update (frame_native);
-  sync_fd = cogl_context_get_latest_sync_fd (cogl_context);
-  meta_kms_update_set_sync_fd (kms_update, sync_fd);
+
+  if (!secondary_gpu_used)
+    {
+      int sync_fd;
+
+      sync_fd = cogl_context_get_latest_sync_fd (cogl_context);
+      meta_kms_update_set_sync_fd (kms_update, g_steal_fd (&sync_fd));
+    }
+
   meta_kms_device_post_update (kms_device, kms_update,
                                META_KMS_UPDATE_FLAG_NONE);
   clutter_frame_set_result (frame, CLUTTER_FRAME_RESULT_PENDING_PRESENTED);
@@ -1978,9 +2066,7 @@ get_supported_kms_modifiers (MetaCrtcKms *crtc_kms,
                              uint32_t     format)
 {
   MetaKmsPlane *plane = meta_crtc_kms_get_assigned_primary_plane (crtc_kms);
-  GArray *modifiers;
   GArray *crtc_mods;
-  unsigned int i;
 
   g_return_val_if_fail (plane, NULL);
 
@@ -1988,26 +2074,7 @@ get_supported_kms_modifiers (MetaCrtcKms *crtc_kms,
   if (!crtc_mods)
     return NULL;
 
-  modifiers = g_array_new (FALSE, FALSE, sizeof (uint64_t));
-
-  /*
-   * For each modifier from base_crtc, check if it's available on all other
-   * CRTCs.
-   */
-  for (i = 0; i < crtc_mods->len; i++)
-    {
-      uint64_t modifier = g_array_index (crtc_mods, uint64_t, i);
-
-      g_array_append_val (modifiers, modifier);
-    }
-
-  if (modifiers->len == 0)
-    {
-      g_array_free (modifiers, TRUE);
-      return NULL;
-    }
-
-  return modifiers;
+  return g_array_copy (crtc_mods);
 }
 
 static GArray *
@@ -2115,6 +2182,12 @@ choose_onscreen_egl_config (CoglOnscreen  *onscreen,
     GBM_FORMAT_ABGR2101010,
     GBM_FORMAT_RGBA1010102,
     GBM_FORMAT_BGRA1010102,
+    GBM_FORMAT_XBGR8888,
+    GBM_FORMAT_ABGR8888,
+    GBM_FORMAT_RGBX8888,
+    GBM_FORMAT_RGBA8888,
+    GBM_FORMAT_BGRX8888,
+    GBM_FORMAT_BGRA8888,
     GBM_FORMAT_XRGB8888,
     GBM_FORMAT_ARGB8888,
   };

@@ -33,6 +33,17 @@
 #include "meta/util.h"
 #include "meta/window.h"
 
+enum
+{
+  PROP_0,
+
+  PROP_OPTIONS,
+
+  N_PROPS
+};
+
+static GParamSpec *obj_props[N_PROPS];
+
 typedef enum
 {
   ANIMATION_DESTROY,
@@ -64,10 +75,15 @@ struct _MetaTestShell
 
   MetaPluginInfo info;
 
+  CoglColor *background_color;
+  gboolean disable_animations;
+
   struct {
     ClutterGrab *grab;
     ClutterActor *prev_focus;
   } overview;
+
+  gboolean show_stage;
 };
 
 typedef struct _ActorPrivate
@@ -129,36 +145,19 @@ get_actor_private (MetaWindowActor *actor)
   return actor_priv;
 }
 
-static gboolean
-is_animations_disabled (void)
-{
-  static gboolean is_animations_disabled_set;
-  static gboolean is_animations_disabled;
-
-  if (!is_animations_disabled_set)
-    {
-      if (g_strcmp0 (getenv ("MUTTER_DEBUG_DISABLE_ANIMATIONS"), "1") == 0)
-        is_animations_disabled = TRUE;
-      else
-        is_animations_disabled = FALSE;
-
-      is_animations_disabled_set = TRUE;
-    }
-
-  return is_animations_disabled;
-}
-
 static unsigned int
-get_animation_duration (Animation animation)
+get_animation_duration (MetaTestShell *test_shell,
+                        Animation      animation)
 {
-  if (is_animations_disabled ())
+  if (test_shell->disable_animations)
     return 0;
 
   return animation_durations[animation];
 }
 
 static ClutterTimeline *
-actor_animate (ClutterActor         *actor,
+actor_animate (MetaTestShell        *test_shell,
+               ClutterActor         *actor,
                ClutterAnimationMode  mode,
                Animation             animation,
                const char           *first_property,
@@ -169,7 +168,8 @@ actor_animate (ClutterActor         *actor,
 
   clutter_actor_save_easing_state (actor);
   clutter_actor_set_easing_mode (actor, mode);
-  clutter_actor_set_easing_duration (actor, get_animation_duration (animation));
+  clutter_actor_set_easing_duration (actor, get_animation_duration (test_shell,
+                                                                    animation));
 
   va_start (args, first_property);
   g_object_set_valist (G_OBJECT (actor), first_property, args);
@@ -246,11 +246,9 @@ on_switch_workspace_effect_stopped (ClutterTimeline *timeline,
 }
 
 static void
-on_monitors_changed (MetaMonitorManager *monitor_manager,
-                     MetaPlugin         *plugin)
+reload_backgrounds (MetaTestShell *test_shell)
 {
-  MetaTestShell *test_shell = META_TEST_SHELL (plugin);
-  MetaDisplay *display = meta_plugin_get_display (plugin);
+  MetaDisplay *display = meta_plugin_get_display (META_PLUGIN (test_shell));
   GRand *rand;
   int i, n;
 
@@ -264,10 +262,6 @@ on_monitors_changed (MetaMonitorManager *monitor_manager,
       ClutterContent *content;
       MtkRectangle rect;
       ClutterActor *background_actor;
-      MetaBackground *background;
-      uint8_t red;
-      uint8_t green;
-      uint8_t blue;
 
       meta_display_get_monitor_geometry (display, i, &rect);
 
@@ -278,22 +272,47 @@ on_monitors_changed (MetaMonitorManager *monitor_manager,
       clutter_actor_set_position (background_actor, rect.x, rect.y);
       clutter_actor_set_size (background_actor, rect.width, rect.height);
 
-      blue = g_rand_int_range (rand, 0, 255);
-      green = g_rand_int_range (rand, 0, 255);
-      red = g_rand_int_range (rand, 0, 255);
+      if (test_shell->background_color)
+        {
+          g_autoptr (MetaBackground) background = NULL;
 
-      background = meta_background_new (display);
-      meta_background_set_color (background,
-                                 &COGL_COLOR_INIT (red, green, blue, 255));
-      meta_background_content_set_background (background_content, background);
-      g_object_unref (background);
+          background = meta_background_new (display);
+          meta_background_set_color (background, test_shell->background_color);
+          meta_background_content_set_background (background_content, background);
+        }
+      else
+        {
+          g_autoptr (MetaBackground) background = NULL;
+          uint8_t red;
+          uint8_t green;
+          uint8_t blue;
 
-      meta_background_content_set_vignette (background_content, TRUE, 0.5, 0.5);
+          blue = g_rand_int_range (rand, 0, 255);
+          green = g_rand_int_range (rand, 0, 255);
+          red = g_rand_int_range (rand, 0, 255);
+
+          background = meta_background_new (display);
+          meta_background_set_color (background,
+                                     &COGL_COLOR_INIT (red, green, blue, 255));
+          meta_background_content_set_background (background_content, background);
+
+          meta_background_content_set_vignette (background_content,
+                                                TRUE, 0.5, 0.5);
+        }
 
       clutter_actor_add_child (test_shell->background_group, background_actor);
     }
 
   g_rand_free (rand);
+}
+
+static void
+on_monitors_changed (MetaMonitorManager *monitor_manager,
+                     MetaPlugin         *plugin)
+{
+  MetaTestShell *test_shell = META_TEST_SHELL (plugin);
+
+  reload_backgrounds (test_shell);
 }
 
 static void
@@ -350,7 +369,8 @@ meta_test_shell_start (MetaPlugin *plugin)
                     G_CALLBACK (prepare_shutdown),
                     test_shell);
 
-  clutter_actor_show (meta_get_stage_for_display (display));
+  if (test_shell->show_stage)
+    clutter_actor_show (meta_get_stage_for_display (display));
 }
 
 static void
@@ -445,7 +465,8 @@ meta_test_shell_switch_workspace (MetaPlugin          *plugin,
   test_shell->desktop2 = workspace2;
 
   test_shell->switch_workspace1_timeline =
-    actor_animate (workspace1, CLUTTER_EASE_IN_SINE,
+    actor_animate (test_shell,
+                   workspace1, CLUTTER_EASE_IN_SINE,
                    ANIMATION_SWITCH,
                    "scale-x", 1.0,
                    "scale-y", 1.0,
@@ -456,7 +477,8 @@ meta_test_shell_switch_workspace (MetaPlugin          *plugin,
                     plugin);
 
   test_shell->switch_workspace2_timeline =
-    actor_animate (workspace2, CLUTTER_EASE_IN_SINE,
+    actor_animate (test_shell,
+                   workspace2, CLUTTER_EASE_IN_SINE,
                    ANIMATION_SWITCH,
                    "scale-x", 0.0,
                    "scale-y", 0.0,
@@ -502,6 +524,7 @@ static void
 meta_test_shell_minimize (MetaPlugin      *plugin,
                           MetaWindowActor *window_actor)
 {
+  MetaTestShell *test_shell = META_TEST_SHELL (plugin);
   MetaWindowType type;
   MetaWindow *window = meta_window_actor_get_meta_window (window_actor);
   ClutterTimeline *timeline = NULL;
@@ -511,7 +534,8 @@ meta_test_shell_minimize (MetaPlugin      *plugin,
 
   if (type == META_WINDOW_NORMAL)
     {
-      timeline = actor_animate (actor,
+      timeline = actor_animate (test_shell,
+                                actor,
                                 CLUTTER_EASE_IN_SINE,
                                 ANIMATION_MINIMIZE,
                                 "scale-x", 0.0,
@@ -566,6 +590,7 @@ static void
 meta_test_shell_map (MetaPlugin      *plugin,
                      MetaWindowActor *window_actor)
 {
+  MetaTestShell *test_shell = META_TEST_SHELL (plugin);
   ClutterActor *actor = CLUTTER_ACTOR (window_actor);
   MetaWindow *window = meta_window_actor_get_meta_window (window_actor);
   MetaWindowType type;
@@ -582,7 +607,8 @@ meta_test_shell_map (MetaPlugin      *plugin,
       clutter_actor_set_scale (actor, 0.5, 0.5);
       clutter_actor_show (actor);
 
-      actor_priv->map_timeline = actor_animate (actor,
+      actor_priv->map_timeline = actor_animate (test_shell,
+                                                actor,
                                                 CLUTTER_EASE_OUT_QUAD,
                                                 ANIMATION_MAP,
                                                 "opacity", 255,
@@ -627,6 +653,7 @@ static void
 meta_test_shell_destroy (MetaPlugin      *plugin,
                          MetaWindowActor *window_actor)
 {
+  MetaTestShell *test_shell = META_TEST_SHELL (plugin);
   ClutterActor *actor = CLUTTER_ACTOR (window_actor);
   MetaWindow *window = meta_window_actor_get_meta_window (window_actor);
   MetaWindowType type;
@@ -636,7 +663,8 @@ meta_test_shell_destroy (MetaPlugin      *plugin,
 
   if (type == META_WINDOW_NORMAL)
     {
-      timeline = actor_animate (actor,
+      timeline = actor_animate (test_shell,
+                                actor,
                                 CLUTTER_EASE_OUT_QUAD,
                                 ANIMATION_DESTROY,
                                 "opacity", 0,
@@ -790,9 +818,55 @@ meta_test_shell_plugin_info (MetaPlugin *plugin)
 }
 
 static void
+process_options (MetaTestShell *test_shell,
+                 GVariant      *options)
+{
+  gboolean show_stage;
+
+  if (!options)
+    return;
+
+  if (g_variant_lookup (options, "show-stage", "b", &show_stage))
+    test_shell->show_stage = show_stage;
+}
+
+static void
+meta_test_shell_set_property (GObject      *object,
+                              guint         prop_id,
+                              const GValue *value,
+                              GParamSpec   *pspec)
+{
+  MetaTestShell *test_shell = META_TEST_SHELL (object);
+
+  switch (prop_id)
+    {
+    case PROP_OPTIONS:
+      process_options (test_shell, g_value_get_variant (value));
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+    }
+}
+
+static void
+meta_test_shell_finalize (GObject *object)
+{
+  MetaTestShell *test_shell = META_TEST_SHELL (object);
+
+  g_clear_pointer (&test_shell->background_color, cogl_color_free);
+
+  G_OBJECT_CLASS (meta_test_shell_parent_class)->finalize (object);
+}
+
+static void
 meta_test_shell_class_init (MetaTestShellClass *klass)
 {
+  GObjectClass *object_class = G_OBJECT_CLASS (klass);
   MetaPluginClass *plugin_class  = META_PLUGIN_CLASS (klass);
+
+  object_class->set_property = meta_test_shell_set_property;
+  object_class->finalize = meta_test_shell_finalize;
 
   plugin_class->start = meta_test_shell_start;
   plugin_class->map = meta_test_shell_map;
@@ -804,6 +878,15 @@ meta_test_shell_class_init (MetaTestShellClass *klass)
   plugin_class->kill_window_effects = meta_test_shell_kill_window_effects;
   plugin_class->kill_switch_workspace = meta_test_shell_kill_switch_workspace;
   plugin_class->plugin_info = meta_test_shell_plugin_info;
+
+  obj_props[PROP_OPTIONS] =
+    g_param_spec_variant ("options", NULL, NULL,
+                          G_VARIANT_TYPE_VARDICT,
+                          NULL,
+                          G_PARAM_CONSTRUCT_ONLY |
+                          G_PARAM_WRITABLE |
+                          G_PARAM_STATIC_STRINGS);
+  g_object_class_install_properties (object_class, N_PROPS, obj_props);
 }
 
 static void
@@ -814,4 +897,25 @@ meta_test_shell_init (MetaTestShell *test_shell)
   test_shell->info.author = "Mutter developers";
   test_shell->info.license = "GPL";
   test_shell->info.description = "This is test shell plugin implementation.";
+
+  test_shell->show_stage = TRUE;
+}
+
+void
+meta_test_shell_set_background_color (MetaTestShell *test_shell,
+                                      CoglColor      color)
+{
+  if (test_shell->background_color &&
+      cogl_color_equal (test_shell->background_color, &color))
+    return;
+
+  g_clear_pointer (&test_shell->background_color, cogl_color_free);
+  test_shell->background_color = cogl_color_copy (&color);
+  reload_backgrounds (test_shell);
+}
+
+void
+meta_test_shell_disable_animations (MetaTestShell *test_shell)
+{
+  test_shell->disable_animations = TRUE;
 }

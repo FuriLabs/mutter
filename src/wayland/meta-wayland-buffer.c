@@ -726,9 +726,10 @@ meta_wayland_buffer_dec_use_count (MetaWaylandBuffer *buffer)
 
   buffer->use_count--;
 
-  if (buffer->use_count == 0 && buffer->resource)
+  if (buffer->use_count == 0)
     {
-      wl_buffer_send_release (buffer->resource);
+      if (buffer->resource)
+        wl_buffer_send_release (buffer->resource);
 
       sync_fd = cogl_context_get_latest_sync_fd (cogl_context);
       if (sync_fd < 0)
@@ -882,8 +883,10 @@ meta_wayland_buffer_process_damage (MetaWaylandBuffer *buffer,
 }
 
 static CoglScanout *
-try_acquire_egl_image_scanout (MetaWaylandBuffer *buffer,
-                               CoglOnscreen      *onscreen)
+try_acquire_egl_image_scanout (MetaWaylandBuffer     *buffer,
+                               CoglOnscreen          *onscreen,
+                               const graphene_rect_t *src_rect,
+                               const MtkRectangle    *dst_rect)
 {
 #ifdef HAVE_NATIVE_BACKEND
   MetaContext *context =
@@ -922,7 +925,9 @@ try_acquire_egl_image_scanout (MetaWaylandBuffer *buffer,
       return NULL;
     }
 
-  scanout = cogl_scanout_new (COGL_SCANOUT_BUFFER (g_steal_pointer (&fb)));
+  scanout = cogl_scanout_new (COGL_SCANOUT_BUFFER (g_steal_pointer (&fb)),
+                              dst_rect);
+  cogl_scanout_set_src_rect (scanout, src_rect);
   if (!meta_onscreen_native_is_buffer_scanout_compatible (onscreen, scanout))
     return NULL;
 
@@ -977,7 +982,10 @@ meta_wayland_buffer_try_acquire_scanout (MetaWaylandBuffer     *buffer,
                       "Buffer type does not support scaling operations");
           return NULL;
         }
-      scanout = try_acquire_egl_image_scanout (buffer, onscreen);
+      scanout = try_acquire_egl_image_scanout (buffer,
+                                               onscreen,
+                                               src_rect,
+                                               dst_rect);
       break;
     case META_WAYLAND_BUFFER_TYPE_DMA_BUF:
       {

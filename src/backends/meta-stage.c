@@ -47,8 +47,7 @@ struct _MetaOverlay
   CoglPipeline *pipeline;
   CoglTexture *texture;
 
-  MtkMonitorTransform buffer_transform;
-
+  graphene_matrix_t transform;
   graphene_rect_t current_rect;
   graphene_rect_t previous_rect;
   gboolean previous_is_valid;
@@ -92,10 +91,10 @@ meta_overlay_free (MetaOverlay *overlay)
 }
 
 static void
-meta_overlay_set (MetaOverlay         *overlay,
-                  CoglTexture         *texture,
-                  graphene_rect_t     *rect,
-                  MtkMonitorTransform  buffer_transform)
+meta_overlay_set (MetaOverlay             *overlay,
+                  CoglTexture             *texture,
+                  const graphene_matrix_t *matrix,
+                  const graphene_rect_t   *dst_rect)
 {
   if (overlay->texture != texture)
     {
@@ -107,19 +106,13 @@ meta_overlay_set (MetaOverlay         *overlay,
         cogl_pipeline_set_layer_texture (overlay->pipeline, 0, NULL);
     }
 
-  if (overlay->buffer_transform != buffer_transform)
+  if (!graphene_matrix_equal_fast (matrix, &overlay->transform))
     {
-      graphene_matrix_t matrix;
-
-      graphene_matrix_init_identity (&matrix);
-      mtk_monitor_transform_transform_matrix (buffer_transform,
-                                              &matrix);
-      cogl_pipeline_set_layer_matrix (overlay->pipeline, 0, &matrix);
-
-      overlay->buffer_transform = buffer_transform;
+      cogl_pipeline_set_layer_matrix (overlay->pipeline, 0, matrix);
+      graphene_matrix_init_from_matrix (&overlay->transform, matrix);
     }
 
-  overlay->current_rect = *rect;
+  overlay->current_rect = *dst_rect;
 }
 
 static void
@@ -350,9 +343,9 @@ meta_stage_new (MetaBackend *backend)
 }
 
 static void
-queue_redraw_clutter_rect (MetaStage       *stage,
-                           MetaOverlay     *overlay,
-                           graphene_rect_t *rect)
+queue_cursor_overlay_redraw_clutter_rect (MetaStage       *stage,
+                                          MetaOverlay     *overlay,
+                                          graphene_rect_t *rect)
 {
   MtkRectangle clip = {
     .x = (int) floorf (rect->origin.x),
@@ -379,6 +372,9 @@ queue_redraw_clutter_rect (MetaStage       *stage,
           CLUTTER_PAINT_FLAG_NO_CURSORS)
         continue;
 
+      if (meta_stage_view_is_cursor_overlay_inhibited (META_STAGE_VIEW (view)))
+        return;
+
       clutter_stage_view_get_layout (view, &view_layout);
 
       if (mtk_rectangle_intersect (&clip, &view_layout, &view_clip))
@@ -390,19 +386,25 @@ queue_redraw_clutter_rect (MetaStage       *stage,
 }
 
 static void
-queue_redraw_for_overlay (MetaStage   *stage,
-                          MetaOverlay *overlay)
+queue_redraw_for_cursor_overlay (MetaStage   *stage,
+                                 MetaOverlay *overlay)
 {
   /* Clear the location the overlay was at before, if we need to. */
   if (overlay->previous_is_valid)
     {
-      queue_redraw_clutter_rect (stage, overlay, &overlay->previous_rect);
+      queue_cursor_overlay_redraw_clutter_rect (stage,
+                                                overlay,
+                                                &overlay->previous_rect);
       overlay->previous_is_valid = FALSE;
     }
 
   /* Draw the overlay at the new position */
   if (overlay->is_visible && overlay->texture)
-    queue_redraw_clutter_rect (stage, overlay, &overlay->current_rect);
+    {
+      queue_cursor_overlay_redraw_clutter_rect (stage,
+                                                overlay,
+                                                &overlay->current_rect);
+    }
 }
 
 MetaOverlay *
@@ -431,14 +433,14 @@ meta_stage_remove_cursor_overlay (MetaStage   *stage,
 }
 
 void
-meta_stage_update_cursor_overlay (MetaStage           *stage,
-                                  MetaOverlay         *overlay,
-                                  CoglTexture         *texture,
-                                  graphene_rect_t     *rect,
-                                  MtkMonitorTransform  buffer_transform)
+meta_stage_update_cursor_overlay (MetaStage               *stage,
+                                  MetaOverlay             *overlay,
+                                  CoglTexture             *texture,
+                                  const graphene_matrix_t *matrix,
+                                  const graphene_rect_t   *dst_rect)
 {
-  meta_overlay_set (overlay, texture, rect, buffer_transform);
-  queue_redraw_for_overlay (stage, overlay);
+  meta_overlay_set (overlay, texture, matrix, dst_rect);
+  queue_redraw_for_cursor_overlay (stage, overlay);
 }
 
 void
@@ -449,7 +451,7 @@ meta_overlay_set_visible (MetaOverlay *overlay,
     return;
 
   overlay->is_visible = is_visible;
-  queue_redraw_for_overlay (overlay->stage, overlay);
+  queue_redraw_for_cursor_overlay (overlay->stage, overlay);
 }
 
 MetaStageWatch *

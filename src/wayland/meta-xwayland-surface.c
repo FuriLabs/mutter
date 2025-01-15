@@ -43,6 +43,7 @@ struct _MetaXwaylandSurface
   MetaWindow *window;
 
   gulong unmanaging_handler_id;
+  gulong highest_scale_monitor_handler_id;
 };
 
 G_DEFINE_TYPE (MetaXwaylandSurface,
@@ -63,6 +64,8 @@ clear_window (MetaXwaylandSurface *xwayland_surface)
     return;
 
   g_clear_signal_handler (&xwayland_surface->unmanaging_handler_id,
+                          xwayland_surface->window);
+  g_clear_signal_handler (&xwayland_surface->highest_scale_monitor_handler_id,
                           xwayland_surface->window);
   xwayland_window = META_WINDOW_XWAYLAND (xwayland_surface->window);
   meta_window_xwayland_set_surface (xwayland_window, NULL);
@@ -126,6 +129,12 @@ meta_xwayland_surface_associate_with_window (MetaXwaylandSurface *xwayland_surfa
   window_actor = meta_window_actor_from_window (window);
   if (window_actor)
     meta_window_actor_assign_surface_actor (window_actor, surface_actor);
+
+  xwayland_surface->highest_scale_monitor_handler_id =
+    g_signal_connect_swapped (window, "highest-scale-monitor-changed",
+                              G_CALLBACK (meta_wayland_surface_notify_preferred_scale_monitor),
+                              surface);
+  meta_wayland_surface_notify_preferred_scale_monitor (surface);
 }
 
 static void
@@ -192,6 +201,20 @@ meta_xwayland_surface_get_window (MetaWaylandSurfaceRole *surface_role)
   return xwayland_surface->window;
 }
 
+static MetaLogicalMonitor *
+meta_xwayland_surface_get_preferred_scale_monitor (MetaWaylandSurfaceRole *surface_role)
+{
+  MetaWaylandSurface *surface =
+    meta_wayland_surface_role_get_surface (surface_role);
+  MetaWindow *window;
+
+  window = meta_wayland_surface_get_window (surface);
+  if (!window)
+    return NULL;
+
+  return meta_window_get_highest_scale_monitor (window);
+}
+
 static int
 meta_xwayland_surface_get_geometry_scale (MetaWaylandActorSurface *actor_surface)
 {
@@ -249,6 +272,8 @@ meta_xwayland_surface_class_init (MetaXwaylandSurfaceClass *klass)
     meta_xwayland_surface_get_relative_coordinates;
   surface_role_class->get_toplevel = meta_xwayland_surface_get_toplevel;
   surface_role_class->get_window = meta_xwayland_surface_get_window;
+  surface_role_class->get_preferred_scale_monitor =
+    meta_xwayland_surface_get_preferred_scale_monitor;
 
   actor_surface_class->get_geometry_scale =
     meta_xwayland_surface_get_geometry_scale;

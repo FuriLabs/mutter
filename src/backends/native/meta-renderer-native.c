@@ -428,13 +428,23 @@ meta_renderer_native_choose_gbm_format (MetaKmsPlane    *kms_plane,
 
   for (i = 0; i < num_formats; i++)
     {
+      g_autoptr (GError) local_error = NULL;
+      MetaDrmFormatBuf format_string;
+
+      meta_drm_format_to_string (&format_string, formats[i]);
+
       g_clear_error (error);
 
       if (kms_plane &&
           !meta_kms_plane_is_format_supported (kms_plane, formats[i]))
         {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+          g_set_error (&local_error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "KMS CRTC doesn't support format");
+          meta_topic (META_DEBUG_RENDER,
+                      "Not using format %s: %s",
+                      format_string.s,
+                      local_error->message);
+          g_propagate_error (error, g_steal_pointer (&local_error));
           continue;
         }
 
@@ -443,16 +453,21 @@ meta_renderer_native_choose_gbm_format (MetaKmsPlane    *kms_plane,
                                              attributes,
                                              formats[i],
                                              out_config,
-                                             error))
+                                             &local_error))
         {
-          MetaDrmFormatBuf format_string;
-
-          meta_drm_format_to_string (&format_string, formats[i]);
-          meta_topic (META_DEBUG_KMS,
+          meta_topic (META_DEBUG_RENDER,
                       "Using GBM format %s for primary GPU EGL %s",
                       format_string.s, purpose);
 
           return TRUE;
+        }
+      else
+        {
+          meta_topic (META_DEBUG_RENDER,
+                      "Not using format %s: %s",
+                      format_string.s,
+                      local_error->message);
+          g_propagate_error (error, g_steal_pointer (&local_error));
         }
     }
 
@@ -1718,23 +1733,69 @@ create_secondary_egl_config (MetaEgl                    *egl,
   return FALSE;
 }
 
+static const char *
+egl_context_priority_to_string (EGLint priority)
+{
+  switch (priority)
+    {
+    case EGL_CONTEXT_PRIORITY_HIGH_IMG:
+      return "high";
+    case EGL_CONTEXT_PRIORITY_MEDIUM_IMG:
+      return "medium";
+    case EGL_CONTEXT_PRIORITY_LOW_IMG:
+      return "low";
+    default:
+      return "unknown";
+    }
+}
+
 static EGLContext
 create_secondary_egl_context (MetaEgl   *egl,
                               EGLDisplay egl_display,
                               EGLConfig  egl_config,
                               GError   **error)
 {
-  EGLint attributes[] = {
-    EGL_CONTEXT_CLIENT_VERSION, 3,
-    EGL_NONE
-  };
+  EGLint attributes[5];
+  int i = 0;
+  EGLContext egl_context;
+  gboolean supports_priority = FALSE;
 
-  return meta_egl_create_context (egl,
-                                  egl_display,
-                                  egl_config,
-                                  EGL_NO_CONTEXT,
-                                  attributes,
-                                  error);
+  attributes[i++] = EGL_CONTEXT_CLIENT_VERSION;
+  attributes[i++] = 3;
+
+  if (meta_egl_has_extensions (egl, egl_display,
+                               NULL,
+                               "EGL_IMG_context_priority", NULL))
+    {
+      attributes[i++] = EGL_CONTEXT_PRIORITY_LEVEL_IMG;
+      attributes[i++] = EGL_CONTEXT_PRIORITY_HIGH_IMG;
+
+      supports_priority = TRUE;
+    }
+
+  attributes[i++] = EGL_NONE;
+
+  egl_context = meta_egl_create_context (egl,
+                                         egl_display,
+                                         egl_config,
+                                         EGL_NO_CONTEXT,
+                                         attributes,
+                                         error);
+
+  if (supports_priority)
+    {
+      EGLint value = EGL_CONTEXT_PRIORITY_MEDIUM_IMG;
+
+      eglQueryContext (egl_display, egl_context,
+                       EGL_CONTEXT_PRIORITY_LEVEL_IMG,
+                       &value);
+
+      meta_topic (META_DEBUG_RENDER,
+                  "Created secondary EGL context with priority %s",
+                  egl_context_priority_to_string (value));
+    }
+
+  return egl_context;
 }
 
 static void
@@ -2178,66 +2239,82 @@ choose_primary_gpu_unchecked (MetaBackend        *backend,
    * then software rendering devices.
    */
   for (allow_sw = 0; allow_sw < 2; allow_sw++)
-  {
-    /* First check if one was explicitly configured. */
-    for (l = gpus; l; l = l->next)
-      {
-        MetaGpuKms *gpu_kms = META_GPU_KMS (l->data);
-        MetaKmsDevice *kms_device = meta_gpu_kms_get_kms_device (gpu_kms);
+    {
+      /* First check if one was explicitly configured. */
+      for (l = gpus; l; l = l->next)
+        {
+          MetaGpuKms *gpu_kms = META_GPU_KMS (l->data);
+          MetaKmsDevice *kms_device = meta_gpu_kms_get_kms_device (gpu_kms);
 
-        if (meta_kms_device_get_flags (kms_device) &
-            META_KMS_DEVICE_FLAG_PREFERRED_PRIMARY)
-          {
-            g_message ("GPU %s selected primary given udev rule",
-                       meta_gpu_kms_get_file_path (gpu_kms));
-            return gpu_kms;
-          }
-      }
+          if (meta_kms_device_get_flags (kms_device) &
+              META_KMS_DEVICE_FLAG_PREFERRED_PRIMARY)
+            {
+              g_message ("GPU %s selected primary given udev rule",
+                         meta_gpu_kms_get_file_path (gpu_kms));
+              return gpu_kms;
+            }
+        }
 
-    /* Prefer a platform device */
-    for (l = gpus; l; l = l->next)
-      {
-        MetaGpuKms *gpu_kms = META_GPU_KMS (l->data);
+      /* Then prefer a GPU with a builtin panel connected to it. */
+      for (l = gpus; l; l = l->next)
+        {
+          MetaGpuKms *gpu_kms = META_GPU_KMS (l->data);
+          MetaKmsDevice *kms_device = meta_gpu_kms_get_kms_device (gpu_kms);
 
-        if (meta_gpu_kms_is_platform_device (gpu_kms) &&
-            (allow_sw == 1 ||
-             gpu_kms_is_hardware_rendering (renderer_native, gpu_kms)))
-          {
-            g_message ("Integrated GPU %s selected as primary",
-                       meta_gpu_kms_get_file_path (gpu_kms));
-            return gpu_kms;
-          }
-      }
+          if (meta_kms_device_has_connected_builtin_panel (kms_device) &&
+              (allow_sw == 1 ||
+               gpu_kms_is_hardware_rendering (renderer_native, gpu_kms)))
+            {
+              g_message ("GPU %s selected primary from builtin panel presence",
+                         meta_gpu_kms_get_file_path (gpu_kms));
+              return gpu_kms;
+            }
+        }
 
-    /* Otherwise a device we booted with */
-    for (l = gpus; l; l = l->next)
-      {
-        MetaGpuKms *gpu_kms = META_GPU_KMS (l->data);
+      /* Prefer a platform device */
+      for (l = gpus; l; l = l->next)
+        {
+          MetaGpuKms *gpu_kms = META_GPU_KMS (l->data);
 
-        if (meta_gpu_kms_is_boot_vga (gpu_kms) &&
-            (allow_sw == 1 ||
-             gpu_kms_is_hardware_rendering (renderer_native, gpu_kms)))
-          {
-            g_message ("Boot VGA GPU %s selected as primary",
-                       meta_gpu_kms_get_file_path (gpu_kms));
-            return gpu_kms;
-          }
-      }
+          if (meta_gpu_kms_is_platform_device (gpu_kms) &&
+              (allow_sw == 1 ||
+               gpu_kms_is_hardware_rendering (renderer_native, gpu_kms)))
+            {
+              g_message ("Integrated GPU %s selected as primary",
+                         meta_gpu_kms_get_file_path (gpu_kms));
+              return gpu_kms;
+            }
+        }
 
-    /* Fall back to any device */
-    for (l = gpus; l; l = l->next)
-      {
-        MetaGpuKms *gpu_kms = META_GPU_KMS (l->data);
+      /* Otherwise a device we booted with */
+      for (l = gpus; l; l = l->next)
+        {
+          MetaGpuKms *gpu_kms = META_GPU_KMS (l->data);
 
-        if (allow_sw == 1 ||
-            gpu_kms_is_hardware_rendering (renderer_native, gpu_kms))
-          {
-            g_message ("GPU %s selected as primary",
-                       meta_gpu_kms_get_file_path (gpu_kms));
-            return gpu_kms;
-          }
-      }
-  }
+          if (meta_gpu_kms_is_boot_vga (gpu_kms) &&
+              (allow_sw == 1 ||
+               gpu_kms_is_hardware_rendering (renderer_native, gpu_kms)))
+            {
+              g_message ("Boot VGA GPU %s selected as primary",
+                         meta_gpu_kms_get_file_path (gpu_kms));
+              return gpu_kms;
+            }
+        }
+
+      /* Fall back to any device */
+      for (l = gpus; l; l = l->next)
+        {
+          MetaGpuKms *gpu_kms = META_GPU_KMS (l->data);
+
+          if (allow_sw == 1 ||
+              gpu_kms_is_hardware_rendering (renderer_native, gpu_kms))
+            {
+              g_message ("GPU %s selected as primary",
+                         meta_gpu_kms_get_file_path (gpu_kms));
+              return gpu_kms;
+            }
+        }
+    }
 
   g_assert_not_reached ();
   return NULL;

@@ -1,5 +1,5 @@
 project('mutter', 'c',
-  version: '47.0',
+  version: '47.4',
   meson_version: '>= 1.3.0',
   license: 'GPLv2+'
 )
@@ -42,7 +42,7 @@ libei_req = '>= 1.0.901'
 
 # optional version requirements
 udev_req = '>= 228'
-gudev_req = '>= 232'
+gudev_req = '>= 238'
 
 # wayland version requirements
 wayland_server_req = '>= 1.23'

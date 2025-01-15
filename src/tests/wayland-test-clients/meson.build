@@ -96,6 +96,19 @@ wayland_test_clients = [
   {
     'name': 'ycbcr',
   },
+  {
+    'name': 'cursor-tests-client',
+    'extra_deps': [
+      wayland_cursor_dep,
+      libmutter_mtk_dep,
+    ],
+  },
+  {
+    'name': 'surface-scale-client',
+    'extra_deps': [
+      wayland_cursor_dep,
+    ],
+  },
 ]
 
 test_client_executables = {}
@@ -129,6 +142,7 @@ foreach test : wayland_test_clients
     dependencies: deps,
     install: have_installed_tests,
     install_dir: wayland_test_client_installed_tests_libexecdir,
+    install_rpath: pkglibdir,
   )
 
   test_client_executables += { test['name']: test_executable }

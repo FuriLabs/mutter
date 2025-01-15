@@ -1,3 +1,86 @@
+47.4
+====
+* Use BT709 coefficients and limited range for YUV conversion by defaults
+  [Robert; !4204]
+* Also request high priority secondary EGL context [Jonas; !2973]
+* Fix Xwayland DND coordinates when using fractional scaling [Jonas; !4169]
+* Fix applying initial _NET_WM_WINDOW_OPACITY on Xwayland [Olivier; !4170]
+* Implement wp_viewport support for cursor surfaces [Jonas, Robert; !3859]
+* Improve input → output latency of cursor movements [Michel; !3964]
+* Improve frame rate on monitors attached to secondary GPUs in copy mode
+  [Gert-dev; !4027]
+* Send preferred scales to all surface roles [Jonas; !4205]
+* Misc. bug fixes and cleanups [Bilal, Bartłomiej, Sebastian W., Michel, José,
+  Robert; !4176, !4199, !4157, !4158, !4168, !4149, !4093, !4031, !4196]
+
+Contributors:
+  Michel Dänzer, Bilal Elmoussaoui, José Expósito, Olivier Fourdan, Gert-dev,
+  Robert Mader, Bartłomiej Piotrowski, Sebastian Wick, Jonas Ådahl
+
+Translators:
+  Cas Pascal [vi]
+
+47.3
+====
+* Fix maximized X11 when using native xwayland scaling [Jonas; !4147]
+* Fix blank screen in remote headless sessions [Jonas; !4152]
+* Fix touch-triggered popups being cancelled too early [Carlos; !4166]
+* Fix pointer cursor during compositor grabs [Carlos; !4166]
+* Fixed crash [Michel; !4148]
+
+Contributors:
+  Michel Dänzer, Jonas Ådahl, Carlos Garnacho
+
+47.2
+====
+* Fix warping pointer after releasing pointer constraints [Sebastian K.; !4098]
+* Default to high thread instead of realtime priority for KMS thread
+  [Jonas Å.; !4124]
+* Avoid CPU stalls with NVIDIA secondary GPUs with directly-attached monitors
+  [Gert-dev; !4015]
+* Fix updating cursor immediately when starting window drag [Olivier; !3639]
+* Add pipeline hooks to user program pipelines [Sebastian W.; !4037]
+* Prefer GPUs with built-in panels connected as primary GPU [Mario; !4114]
+* Fix cursor glitches when using virtual monitors [Jonas Å.; !4066]
+* Ensure frame events are sent for cursor surfaces [Michel; !4113]
+* Allow BGRX8888 format on big endian [Jocelyn; !4088]
+* Fix touchscreen drag-and-drop on wayland [Alessandro; !4091]
+* Fixed crashes [Robert, Jonas D., Peter, Michel; !3176, !3650, !4117, !4136]
+* Misc. bug fixes and cleanups [Bilal, Michel, José, Sebastian W., Jonas Å.,
+  Takao; !4087, !4057, !4109, !4116, !4123, !4064, !4065, !4128, !3604]
+
+Contributors:
+  Alessandro Astone, Jonas Dreßler, Michel Dänzer, Bilal Elmoussaoui,
+  José Expósito, Jocelyn Falempe, Olivier Fourdan, Takao Fujiwara, Gert-dev,
+  Peter Hutterer, Sebastian Keller, Mario Limonciello, Robert Obkircher,
+  Sebastian Wick, Jonas Ådahl
+
+Translators:
+  Christian Kirbach [de], Nathan Follens [nl], Danial Behzadi [fa],
+  Марко Костић [sr]
+
+47.1
+====
+* gwakeup: Reduce wake-ups to only first item in queue [Christian; !4007]
+* x11: Reduce chances XPending does recvmsg() syscall [Christian; !4006]
+* Fix grabbing tablet devices [Jonas; !4033]
+* Fix misplaced windows and random resizes on scaled monitors [Jonas; !4041]
+* Fix explicit sync with virtual monitors w/o pipewire streams [Doğukan; !4056]
+* Improve detecting preferred primary devices [Kamil; !4055]
+* Fixed crashes [Michel, Jonas, Daniel, José, Jason, Bilal; !4028, !4032,
+  !4019, !4030, !4029, !4059, !4070, !4034]
+* Misc. bug fixes and cleanups [Sebastian, Florian, Jonas, José, Michel;
+  !4036, !4040, !4016, !3926, !4031, !4047, !4058, !4068, !3980, !3980]
+
+Contributors:
+  Jonas Ådahl, Michel Dänzer, Bilal Elmoussaoui, José Expósito, Jason Gerecke,
+  Christian Hergert, Doğukan Korkmaztürk, Florian Müllner, Kamil Szczęk,
+  Joan Torres, Daniel van Vugt, Sebastian Wick
+
+Translators:
+  Vincent Chatelain [fr], Jordi Mas i Hernandez [ca], Daniel Mustieles [es],
+  Jürgen Benvenuti [de]
+
 47.0
 ====
 * Fix resizing of electron windows [Jonas; !3997]

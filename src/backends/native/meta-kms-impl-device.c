@@ -440,7 +440,12 @@ meta_kms_impl_device_list_lessees (MetaKmsImplDevice  *impl_device,
 
   meta_assert_in_kms_impl (meta_kms_impl_get_kms (priv->impl));
 
+  if (!ensure_device_file (impl_device, error))
+    return FALSE;
+
+  meta_kms_impl_device_hold_fd (impl_device);
   list = drmModeListLessees (meta_kms_impl_device_get_fd (impl_device));
+  meta_kms_impl_device_unhold_fd (impl_device);
 
   if (!list)
     {
@@ -1039,6 +1044,7 @@ init_planes (MetaKmsImplDevice *impl_device)
       drmModeFreePlane (drm_plane);
     }
   priv->planes = g_list_reverse (priv->planes);
+  drmModeFreePlaneResources (drm_planes);
 }
 
 static void
@@ -1691,7 +1697,16 @@ is_using_deadline_timer (MetaKmsImplDevice *impl_device)
       MetaKmsImpl *impl = meta_kms_impl_device_get_impl (impl_device);
       MetaThreadImpl *thread_impl = META_THREAD_IMPL (impl);
 
-      return meta_thread_impl_is_realtime (thread_impl);
+      switch (meta_thread_impl_get_scheduling_priority (thread_impl))
+        {
+        case META_SCHEDULING_PRIORITY_NORMAL:
+          return FALSE;
+        case META_SCHEDULING_PRIORITY_REALTIME:
+        case META_SCHEDULING_PRIORITY_HIGH_PRIORITY:
+          return TRUE;
+        }
+
+      g_assert_not_reached ();
     }
 }
 

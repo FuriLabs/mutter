@@ -48,7 +48,7 @@ Build-Depends: debhelper-compat (= 13),
                libgraphene-1.0-dev,
                libgtk-3-dev <!nocheck>,
                libgtk-4-dev,
-               libgudev-1.0-dev,
+               libgudev-1.0-dev (>= 238),
                libice-dev,
                libinput-dev (>= 1.26.0),
                libjson-glib-dev,
@@ -91,6 +91,7 @@ Build-Depends: debhelper-compat (= 13),
                sysprof [amd64 arm64 armel armhf mips64el ppc64el riscv64 s390x],
                systemd-dev,
                wayland-protocols (>= 1.36),
+               wireplumber <!nocheck>,
                xauth <!nocheck>,
                xcvt:native,
                xkb-data,
@@ -144,6 +145,7 @@ Depends: at-spi2-core,
          python3,
          python3-dbus,
          python3-dbusmock,
+         wireplumber,
          xauth,
          xvfb,
          xwayland (>= 2:23.1.0),
@@ -290,6 +292,7 @@ Description: shared files for the Mutter window manager
 Package: mutter-common-bin
 Section: misc
 Architecture: linux-any
+Multi-Arch: foreign
 Depends: ${misc:Depends},
          ${shlibs:Depends}
 Breaks: mutter (<< 44~)

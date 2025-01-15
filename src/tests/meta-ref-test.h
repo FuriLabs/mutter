@@ -21,12 +21,7 @@
 
 #include "clutter/clutter/clutter.h"
 #include "meta/boxes.h"
-
-typedef enum _MetaReftestFlag
-{
-  META_REFTEST_FLAG_NONE = 0,
-  META_REFTEST_FLAG_UPDATE_REF = 1 << 0,
-} MetaReftestFlag;
+#include "tests/meta-ref-test-utils.h"
 
 META_EXPORT
 void meta_ref_test_verify_view (ClutterStageView *view,

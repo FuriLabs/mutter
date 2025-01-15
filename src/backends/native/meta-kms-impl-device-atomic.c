@@ -535,17 +535,7 @@ add_plane_property (MetaKmsImplDevice  *impl_device,
 static const char *
 get_plane_type_string (MetaKmsPlane *plane)
 {
-  switch (meta_kms_plane_get_plane_type (plane))
-    {
-    case META_KMS_PLANE_TYPE_PRIMARY:
-      return "primary";
-    case META_KMS_PLANE_TYPE_CURSOR:
-      return "cursor";
-    case META_KMS_PLANE_TYPE_OVERLAY:
-      return "overlay";
-    }
-
-  g_assert_not_reached ();
+  return meta_kms_plane_type_to_string (meta_kms_plane_get_plane_type (plane));
 }
 
 static gboolean
@@ -767,6 +757,39 @@ process_plane_assignment (MetaKmsImplDevice  *impl_device,
                                error))
         return FALSE;
     }
+
+  if (plane_assignment->color_encoding.has_update)
+    {
+      meta_topic (META_DEBUG_KMS,
+                  "[atomic] Setting plane (%u, %s) color encoding to %u",
+                  meta_kms_plane_get_id (plane),
+                  meta_kms_impl_device_get_path (impl_device),
+                  plane_assignment->color_encoding.value);
+
+      if (!add_plane_property (impl_device,
+                               plane, req,
+                               META_KMS_PLANE_PROP_YCBCR_COLOR_ENCODING,
+                               plane_assignment->color_encoding.value,
+                               error))
+        return FALSE;
+    }
+
+  if (plane_assignment->color_range.has_update)
+    {
+      meta_topic (META_DEBUG_KMS,
+                  "[atomic] Setting plane (%u, %s) color range to %u",
+                  meta_kms_plane_get_id (plane),
+                  meta_kms_impl_device_get_path (impl_device),
+                  plane_assignment->color_range.value);
+
+      if (!add_plane_property (impl_device,
+                               plane, req,
+                               META_KMS_PLANE_PROP_YCBCR_COLOR_RANGE,
+                               plane_assignment->color_range.value,
+                               error))
+        return FALSE;
+    }
+
   return TRUE;
 }
 

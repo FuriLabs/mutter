@@ -1044,12 +1044,13 @@ meta_wayland_surface_commit (MetaWaylandSurface *surface)
               wl_client_get_credentials (wl_resource_get_client (resource), &pid, NULL,
                                          NULL);
 
-              g_warning ("Bug in client with pid %ld: Cursor buffer size (%dx%d) is "
-                         "not an integer multiple of the buffer_scale (%d).",
-                         (long) pid,
-                         meta_multi_texture_get_width (committed_texture),
-                         meta_multi_texture_get_height (committed_texture),
-                         committed_scale);
+              meta_topic (META_DEBUG_WAYLAND,
+                          "Bug in client with pid %ld: Cursor buffer size (%dx%d) is "
+                          "not an integer multiple of the buffer_scale (%d).",
+                          (long) pid,
+                          meta_multi_texture_get_width (committed_texture),
+                          meta_multi_texture_get_height (committed_texture),
+                          committed_scale);
             }
         }
     }
@@ -1478,27 +1479,6 @@ surface_output_disconnect_signals (gpointer key,
   g_signal_handlers_disconnect_by_func (wayland_output,
                                         G_CALLBACK (handle_output_bound),
                                         surface);
-}
-
-double
-meta_wayland_surface_get_highest_output_scale (MetaWaylandSurface *surface)
-{
-  double scale = 0.0;
-  MetaWindow *window;
-  MetaLogicalMonitor *logical_monitor;
-
-  window = meta_wayland_surface_get_window (surface);
-  if (!window)
-    goto out;
-
-  logical_monitor = meta_window_get_highest_scale_monitor (window);
-  if (!logical_monitor)
-    goto out;
-
-  scale = meta_logical_monitor_get_scale (logical_monitor);
-
-out:
-  return scale;
 }
 
 static MtkMonitorTransform
@@ -2409,14 +2389,13 @@ meta_wayland_surface_try_acquire_scanout (MetaWaylandSurface *surface,
   MetaSurfaceActor *surface_actor;
   MtkMonitorTransform view_transform;
   ClutterActorBox actor_box;
-  MtkRectangle *dst_rect_ptr = NULL;
-  MtkRectangle dst_rect;
+  MtkRectangle crtc_dst_rect;
   graphene_rect_t *src_rect_ptr = NULL;
   graphene_rect_t src_rect;
   MtkRectangle view_rect;
   float view_scale;
-  int untransformed_view_width;
-  int untransformed_view_height;
+  int view_crtc_width;
+  int view_crtc_height;
 
   if (!surface->buffer)
     return NULL;
@@ -2441,7 +2420,7 @@ meta_wayland_surface_try_acquire_scanout (MetaWaylandSurface *surface,
   clutter_stage_view_get_layout (stage_view, &view_rect);
   view_scale = clutter_stage_view_get_scale (stage_view);
 
-  dst_rect = (MtkRectangle) {
+  crtc_dst_rect = (MtkRectangle) {
     .x = (int) roundf ((actor_box.x1 - view_rect.x) * view_scale),
     .y = (int) roundf ((actor_box.y1 - view_rect.y) * view_scale),
     .width = (int) roundf ((actor_box.x2 - actor_box.x1) * view_scale),
@@ -2450,27 +2429,20 @@ meta_wayland_surface_try_acquire_scanout (MetaWaylandSurface *surface,
 
   if (mtk_monitor_transform_is_rotated (view_transform))
     {
-      untransformed_view_width = view_rect.height;
-      untransformed_view_height = view_rect.width;
+      view_crtc_width = (int) roundf (view_rect.height * view_scale);
+      view_crtc_height = (int) roundf (view_rect.width * view_scale);
     }
   else
     {
-      untransformed_view_width = view_rect.width;
-      untransformed_view_height = view_rect.height;
+      view_crtc_width = (int) roundf (view_rect.width * view_scale);
+      view_crtc_height = (int) roundf (view_rect.height * view_scale);
     }
 
-  mtk_rectangle_transform (&dst_rect,
+  mtk_rectangle_transform (&crtc_dst_rect,
                            view_transform,
-                           untransformed_view_width,
-                           untransformed_view_height,
-                           &dst_rect);
-
-  /* Use an implicit destination rect when possible */
-  if (surface->viewport.has_dst_size ||
-      dst_rect.x != 0 || dst_rect.y != 0 ||
-      dst_rect.width != untransformed_view_width ||
-      dst_rect.height != untransformed_view_height)
-    dst_rect_ptr = &dst_rect;
+                           view_crtc_width,
+                           view_crtc_height,
+                           &crtc_dst_rect);
 
   if (surface->viewport.has_src_rect)
     {
@@ -2481,7 +2453,7 @@ meta_wayland_surface_try_acquire_scanout (MetaWaylandSurface *surface,
   return meta_wayland_buffer_try_acquire_scanout (surface->buffer,
                                                   onscreen,
                                                   src_rect_ptr,
-                                                  dst_rect_ptr);
+                                                  &crtc_dst_rect);
 }
 
 MetaCrtc *
@@ -2540,17 +2512,21 @@ meta_wayland_surface_is_xwayland (MetaWaylandSurface *surface)
 }
 
 static void
-committed_state_handle_highest_scale_monitor (MetaWaylandSurface *surface)
+committed_state_handle_preferred_scale_monitor (MetaWaylandSurface *surface)
 {
   MetaWaylandSurface *subsurface_surface;
+  MetaLogicalMonitor *logical_monitor;
   double scale;
 
   /* Nothing to do if the client already destroyed the wl_surface */
   if (!surface->resource)
     return;
 
-  scale = meta_wayland_surface_get_highest_output_scale (surface);
+  logical_monitor = meta_wayland_surface_get_preferred_scale_monitor (surface);
+  if (!logical_monitor)
+    return;
 
+  scale = meta_logical_monitor_get_scale (logical_monitor);
   meta_wayland_fractional_scale_maybe_send_preferred_scale (surface, scale);
 
   if (wl_resource_get_version (surface->resource) >=
@@ -2576,11 +2552,11 @@ committed_state_handle_highest_scale_monitor (MetaWaylandSurface *surface)
 
   META_WAYLAND_SURFACE_FOREACH_SUBSURFACE (&surface->committed_state,
                                            subsurface_surface)
-    committed_state_handle_highest_scale_monitor (subsurface_surface);
+    committed_state_handle_preferred_scale_monitor (subsurface_surface);
 }
 
 static void
-applied_state_handle_highest_scale_monitor (MetaWaylandSurface *surface)
+applied_state_handle_preferred_scale_monitor (MetaWaylandSurface *surface)
 {
   MetaWaylandSurface *subsurface_surface;
   MetaSurfaceActor *actor = meta_wayland_surface_get_actor (surface);
@@ -2590,14 +2566,14 @@ applied_state_handle_highest_scale_monitor (MetaWaylandSurface *surface)
 
   META_WAYLAND_SURFACE_FOREACH_SUBSURFACE (&surface->applied_state,
                                            subsurface_surface)
-    applied_state_handle_highest_scale_monitor (subsurface_surface);
+    applied_state_handle_preferred_scale_monitor (subsurface_surface);
 }
 
 void
-meta_wayland_surface_notify_highest_scale_monitor (MetaWaylandSurface *surface)
+meta_wayland_surface_notify_preferred_scale_monitor (MetaWaylandSurface *surface)
 {
-  applied_state_handle_highest_scale_monitor (surface);
-  committed_state_handle_highest_scale_monitor (surface);
+  applied_state_handle_preferred_scale_monitor (surface);
+  committed_state_handle_preferred_scale_monitor (surface);
 }
 
 void
@@ -2660,6 +2636,18 @@ MetaLogicalMonitor *
 meta_wayland_surface_get_main_monitor (MetaWaylandSurface *surface)
 {
   return surface->main_monitor;
+}
+
+MetaLogicalMonitor *
+meta_wayland_surface_get_preferred_scale_monitor (MetaWaylandSurface *surface)
+{
+  MetaWaylandSurfaceRoleClass *surface_role_class;
+
+  if (!surface->role)
+    return NULL;
+
+  surface_role_class = META_WAYLAND_SURFACE_ROLE_GET_CLASS (surface->role);
+  return surface_role_class->get_preferred_scale_monitor (surface->role);
 }
 
 gboolean

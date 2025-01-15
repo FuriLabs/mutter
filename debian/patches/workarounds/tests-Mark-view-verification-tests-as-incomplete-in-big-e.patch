@@ -10,15 +10,15 @@ the contents.
 Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/1850
 Applied-upstream: no, this is a workaround
 ---
- src/tests/meta-ref-test.c   | 5 +++++
- src/tests/ref-test-sanity.c | 5 +++++
+ src/tests/meta-ref-test-utils.c | 5 +++++
+ src/tests/ref-test-sanity.c     | 5 +++++
  2 files changed, 10 insertions(+)
 
-diff --git a/src/tests/meta-ref-test.c b/src/tests/meta-ref-test.c
-index 2dffc63..1da51cf 100644
---- a/src/tests/meta-ref-test.c
-+++ b/src/tests/meta-ref-test.c
-@@ -524,6 +524,11 @@ meta_ref_test_verify_view (ClutterStageView *view,
+diff --git a/src/tests/meta-ref-test-utils.c b/src/tests/meta-ref-test-utils.c
+index ed9beb9..b0bfcb8 100644
+--- a/src/tests/meta-ref-test-utils.c
++++ b/src/tests/meta-ref-test-utils.c
+@@ -374,6 +374,11 @@ meta_ref_test_verify (MetaRefTestAdaptor  adaptor,
        g_assert_cmpint (ref_status, ==, CAIRO_STATUS_SUCCESS);
        ensure_expected_format (&ref_image);
  
@@ -27,7 +27,7 @@ index 2dffc63..1da51cf 100644
 +  return;
 +#endif
 +
-       if (!compare_images (ref_image, view_image, &gl_fuzz,
+       if (!compare_images (ref_image, image, &gl_fuzz,
                             &diff_stat))
          {
 diff --git a/src/tests/ref-test-sanity.c b/src/tests/ref-test-sanity.c

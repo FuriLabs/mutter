@@ -1,3 +1,136 @@
+mutter (47.4-1) unstable; urgency=medium
+
+  * New upstream release
+  * Add Build-Depends: wireplumber for build tests
+  * debian/*.symbols: Update symbols files
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 14 Jan 2025 15:39:17 -0500
+
+mutter (47.3-2) unstable; urgency=medium
+
+  * Release to unstable (LP: #2077216)
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Mon, 09 Dec 2024 16:05:28 -0500
+
+mutter (47.3-1) experimental; urgency=medium
+
+  * Team upload
+  * New upstream release 47.2
+    - Fix warping pointer after releasing pointer constraints
+    - Default to high thread instead of realtime priority for KMS thread
+    - Avoid CPU stalls with NVIDIA secondary GPUs with directly-attached
+      monitors
+    - Fix updating cursor immediately when starting window drag
+    - Add pipeline hooks to user program pipelines
+    - Prefer GPUs with built-in panels connected as primary GPU
+    - Fix cursor glitches when using virtual monitors
+    - Ensure frame events are sent for cursor surfaces
+    - Allow BGRX8888 format on big endian
+    - Fix touchscreen drag-and-drop on wayland
+    - Fix several crashes
+    - Misc. bug fixes and cleanups
+    - Translation updates
+  * New upstream release 47.3
+    - Fix maximized X11 when using native xwayland scaling
+    - Fix blank screen in remote headless sessions
+    - Fix touch-triggered popups being cancelled too early
+    - Fix pointer cursor during compositor grabs
+    - Fix a crash
+  * Refresh patch series
+  * d/salsa-ci.yml: Remove for now.
+    The build fails in the Salsa-CI environment, so it is not useful to have
+    this CI integration until someone can investigate why.
+  * d/libmutter-15-0.symbols: Update.
+    Ignore removal of meta_thread_impl_is_realtime() and
+    cogl_scanout_set_dst_rect(), not used outside this source package
+    according to codesearch.debian.net.
+
+ -- Simon McVittie <smcv@debian.org>  Sun, 08 Dec 2024 20:47:08 +0000
+
+mutter (47.1-4) unstable; urgency=medium
+
+  * Team upload
+  * Release to unstable
+
+ -- Simon McVittie <smcv@debian.org>  Wed, 06 Nov 2024 15:06:02 +0000
+
+mutter (47.1-3) experimental; urgency=medium
+
+  * Team upload
+  * d/p/workarounds/Mark-several-additional-tests-as-flaky.patch:
+    Treat timeline and timeline-interpolate tests as flaky.
+    Both of these tests make assertions about frame deadlines that are
+    not reliable on the buildds.
+    - d/p/workarounds/tests-Don-t-check-for-missed-frames-during-automated-buil.patch:
+      Drop, no longer necessary with the above change
+  * d/libmutter-15-0.symbols: Remove unnecessary revision from a symbol.
+    meta_session_manager_new_for_fd() is present in the upstream codebase,
+    therefore in any package based on 47.0.
+  * d/copyright: Update filename of vx239-calibrated.icc
+  * d/control: Make mutter-common-bin Multi-Arch: foreign.
+    Its only interface is via running executables.
+
+ -- Simon McVittie <smcv@debian.org>  Tue, 05 Nov 2024 20:23:56 +0000
+
+mutter (47.1-2) experimental; urgency=medium
+
+  * Team upload
+
+  [ Daniel van Vugt ]
+  * d/p/debian/Support-Dynamic-triple-double-buffering.patch:
+    Update the triple buffering patch for 47.1, using the official
+    maintenance branch
+
+  [ Simon McVittie ]
+  * d/p/workarounds/tests-Don-t-check-for-missed-frames-during-automated-buil.patch:
+    Don't assume that autobuilders will meet frame deadlines.
+    The upstream test suite assumes a reasonably low-latency system with
+    a GPU, but that doesn't describe an autobuilder. (Closes: #1086552)
+  * d/rules: Only run the test-suite for architecture-specific builds
+  * d/rules: Use /proc/self/fd/2 in preference to /dev/stderr.
+    Not all container technologies provide the latter.
+  * d/rules: Treat x11-test.sh as flaky.
+    It doesn't seem to add a lot of test coverage, and is intermittently
+    failing for me when run under sbuild in a bookworm VM.
+
+ -- Simon McVittie <smcv@debian.org>  Tue, 05 Nov 2024 12:25:13 +0000
+
+mutter (47.1-1) experimental; urgency=medium
+
+  * Team upload
+  * New upstream release
+  * Rebase patch series
+  * d/control: Bump libgudev-1.0-dev dependency as per meson.build
+
+ -- Simon McVittie <smcv@debian.org>  Wed, 30 Oct 2024 10:52:38 +0000
+
+mutter (47.0-3) unstable; urgency=medium
+
+  * Team upload
+  * d/rules: Send xvfb-run error messages to stderr, not to /dev/null.
+    This would have told us that it's crashing on armhf (#1082659).
+  * d/rules: Explicitly set a screen size for xvfb-run.
+    For some reason, this works around a regression where Xvfb crashes
+    on armhf since the update to libunwind 1.7.x.
+    (Mitigates: #1082659)
+  * d/rules, d/tests/ensure-x11-dir: Explicitly create /tmp/.X11-unix.
+    mutter's test suite requires this directory, so create it explicitly
+    instead of relying on xvfb-run to have created it. If creating
+    it fails for whatever reason, this will at least give us better
+    diagnostic information.
+    We cannot create it with its canonical ownership (root:root) because
+    the build isn't running as root, but we can at least make sure it
+    has its canonical permissions.
+    (Closes: #1084133)
+
+ -- Simon McVittie <smcv@debian.org>  Sun, 06 Oct 2024 23:51:55 +0100
+
+mutter (47.0-2) unstable; urgency=medium
+
+  * Release to unstable
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Fri, 04 Oct 2024 19:12:22 -0400
+
 mutter (47.0-1ubuntu7) plucky; urgency=medium
 
   [ Nathan Pratta Teodosio ]

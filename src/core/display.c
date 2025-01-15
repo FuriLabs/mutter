@@ -938,6 +938,7 @@ meta_display_shutdown_x11 (MetaDisplay *display)
 
 MetaDisplay *
 meta_display_new (MetaContext  *context,
+                  GVariant     *plugin_options,
                   GError      **error)
 {
   MetaBackend *backend = meta_context_get_backend (context);
@@ -1063,7 +1064,7 @@ meta_display_new (MetaContext  *context,
   display->last_focus_time = timestamp;
   display->last_user_time = timestamp;
 
-  if (!meta_compositor_manage (display->compositor, error))
+  if (!meta_compositor_manage (display->compositor, plugin_options, error))
     {
       g_object_unref (display);
       return NULL;
@@ -1696,12 +1697,19 @@ root_cursor_prepare_at (MetaCursorSpriteXcursor *sprite_xcursor,
       if (best_scale != 0.0f)
         {
           float ceiled_scale;
+          int cursor_width, cursor_height;
 
           ceiled_scale = ceilf (best_scale);
           meta_cursor_sprite_xcursor_set_theme_scale (sprite_xcursor,
                                                       (int) ceiled_scale);
-          meta_cursor_sprite_set_texture_scale (cursor_sprite,
-                                                1.0f / ceiled_scale);
+
+          meta_cursor_sprite_realize_texture (cursor_sprite);
+          meta_cursor_sprite_xcursor_get_scaled_image_size (sprite_xcursor,
+                                                            &cursor_width,
+                                                            &cursor_height);
+          meta_cursor_sprite_set_viewport_dst_size (cursor_sprite,
+                                                    cursor_width,
+                                                    cursor_height);
         }
     }
   else
@@ -2709,7 +2717,8 @@ meta_display_request_pad_osd (MetaDisplay        *display,
         meta_input_mapper_get_device_logical_monitor (input_mapper, pad);
 #ifdef HAVE_LIBWACOM
       wacom_device = meta_input_device_get_wacom_device (META_INPUT_DEVICE (pad));
-      layout_path = libwacom_get_layout_filename (wacom_device);
+      if (wacom_device)
+        layout_path = libwacom_get_layout_filename (wacom_device);
 #endif
     }
 

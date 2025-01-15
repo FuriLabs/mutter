@@ -44,7 +44,11 @@ typedef struct _WaylandDisplay
   struct wp_single_pixel_buffer_manager_v1 *single_pixel_mgr;
   struct wp_viewporter *viewporter;
   struct xdg_wm_base *xdg_wm_base;
+  struct wl_seat *wl_seat;
+  struct wl_pointer *wl_pointer;
   struct test_driver *test_driver;
+
+  gboolean needs_roundtrip;
 
   uint32_t sync_event_serial_next;
 
@@ -84,6 +88,8 @@ typedef struct _WaylandSurface
 
   uint32_t color;
   gboolean is_opaque;
+
+  int32_t preferred_buffer_scale;
 } WaylandSurface;
 
 #define WAYLAND_TYPE_SURFACE (wayland_surface_get_type ())
@@ -111,6 +117,8 @@ WaylandSurface * wayland_surface_new (WaylandDisplay *display,
                                       int             default_height,
                                       uint32_t        color);
 
+WaylandSurface * wayland_surface_new_unassigned (WaylandDisplay *display);
+
 gboolean wayland_surface_has_state (WaylandSurface          *surface,
                                     enum xdg_toplevel_state  state);
 
@@ -122,8 +130,11 @@ void draw_surface (WaylandDisplay    *display,
                    int                height,
                    uint32_t           color);
 
-const char * lookup_property_value (WaylandDisplay *display,
-                                    const char     *name);
+const char * lookup_property_string (WaylandDisplay *display,
+                                     const char     *name);
+
+int32_t lookup_property_int (WaylandDisplay *display,
+                             const char     *name);
 
 void wait_for_effects_completed (WaylandDisplay    *display,
                                  struct wl_surface *surface);

@@ -255,10 +255,10 @@ meta_wayland_text_input_focus_delete_surrounding (ClutterInputFocus *focus,
   cursor = start + text_input->surrounding.cursor;
 
   before = g_utf8_offset_to_pointer (cursor, offset);
-  g_assert (before >= start);
+  g_return_if_fail (before >= start);
 
   after = g_utf8_offset_to_pointer (cursor, offset + len);
-  g_assert (after <= end);
+  g_return_if_fail (after <= end);
 
   before_length = cursor - before;
   after_length = after - cursor;
@@ -418,6 +418,13 @@ meta_wayland_text_input_set_focus (MetaWaylandTextInput *text_input,
 
       wl_list_remove (&text_input->surface_listener.link);
       text_input->surface = NULL;
+      /* Wayland set_surrounding_text() does not support to set null string
+       * for applications with the non-supported surrounding text feature
+       * and reset the values here with focus changes.
+       */
+      g_clear_pointer (&text_input->surrounding.text, g_free);
+      text_input->surrounding.cursor = 0;
+      text_input->surrounding.anchor = 0;
     }
 
   if (surface && surface->resource)
@@ -505,9 +512,17 @@ text_input_set_surrounding_text (struct wl_client   *client,
                                  int32_t             anchor)
 {
   MetaWaylandTextInput *text_input = wl_resource_get_user_data (resource);
+  size_t text_len = strlen (text);
 
   if (!client_matches_focus (text_input, client))
     return;
+
+  if (cursor < 0 || anchor < 0 || cursor > text_len || anchor > text_len)
+    {
+      g_warning ("Client sent invalid surrounding text (text_len=%lu, cursor=%d, "
+                 "anchor=%d), ignoring", text_len, cursor, anchor);
+      return;
+    }
 
   g_free (text_input->pending_surrounding.text);
   text_input->pending_surrounding.text = g_strdup (text);
