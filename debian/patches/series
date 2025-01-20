@@ -29,3 +29,4 @@ wayland-Lock-touch-sequence-info-on-first-entered-surface.patch
 clutter-Add-API-to-create-inactive-ClutterGrabs-and-activ.patch
 wayland-Invalidate-focus-from-all-touch-inputs-too.patch
 wayland-Handle-reentrancy-invalidating-touch-foci.patch
+synchronize-touchscreen-enabled-state-on-add.patch
