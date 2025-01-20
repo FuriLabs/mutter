@@ -1,0 +1,45 @@
+From: =?utf-8?b?IllhbyBXZWkgKOmtj+mKmOW7tyki?= <yao.wei@canonical.com>
+Date: Mon, 20 Jan 2025 09:53:16 +0800
+Subject: backends/input-mapper: Synchronize device enabled state when adding device
+
+When device is added to the mapper, the device may not be in a
+desirable state. This changeset updates the device state when
+the device is added to the input-mapper.
+
+Closes: https://gitlab.gnome.org/GNOME/mutter/-/issues/3834
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4188>
+
+Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/xserver-xorg-input-libinput/+bug/2087831
+Origin: upstream, https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4188.patch
+---
+ src/backends/meta-input-mapper.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+--- a/src/backends/meta-input-mapper.c
++++ b/src/backends/meta-input-mapper.c
+@@ -991,6 +991,9 @@
+                               ClutterInputDevice *device)
+ {
+   MetaMapperInputInfo *info;
++  ClutterInputDeviceType type;
++  MetaPowerSave power_save_mode;
++  gboolean on;
+ 
+   g_return_if_fail (mapper != NULL);
+   g_return_if_fail (device != NULL);
+@@ -1001,6 +1004,15 @@
+   info = mapper_input_info_new (device, mapper);
+   g_hash_table_insert (mapper->input_devices, device, info);
+   mapper_recalculate_input (mapper, info);
++
++  type = clutter_input_device_get_device_type (device);
++  if (type == CLUTTER_TOUCHSCREEN_DEVICE)
++    {
++      power_save_mode =
++        meta_monitor_manager_get_power_save_mode (mapper->monitor_manager);
++      on = power_save_mode == META_POWER_SAVE_ON;
++      g_signal_emit (mapper, signals[DEVICE_ENABLED], 0, device, on);
++    }
+ }
+ 
+ void

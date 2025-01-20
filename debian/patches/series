@@ -17,3 +17,4 @@ wayland-Invalidate-focus-from-all-touch-inputs-too.patch
 wayland-Handle-reentrancy-invalidating-touch-foci.patch
 wayland-Lock-touch-sequence-info-on-first-entered-surface.patch
 wayland-Emit-wl_touch.cancel-in-seat-focus-handling.patch
+synchronize-touchscreen-enabled-state-on-add.patch

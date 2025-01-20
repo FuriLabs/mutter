@@ -1,3 +1,10 @@
+mutter (47.0-1ubuntu4.3) oracular; urgency=medium
+
+  * debian/patches: Synchronize touchscreen enabled state when adding it to
+    device mapper, which fixes suspend/resume related issue (LP: #2087831)
+
+ -- Yao Wei (魏銘廷) <yao.wei@canonical.com>  Mon, 20 Jan 2025 13:06:41 +0800
+
 mutter (47.0-1ubuntu4.2) oracular; urgency=medium
 
   [ Nathan Teodosio ]
