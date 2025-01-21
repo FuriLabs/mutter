@@ -1,0 +1,30 @@
+From: Alessandro Astone <alessandro.astone@canonical.com>
+Date: Tue, 21 Jan 2025 18:17:42 +0100
+Subject: tests/cursor: Set cursor theme to Adwaita
+
+The reference images were generated using the Adwaita theme, so make sure that
+the test client also draws a cursrom from the Adwaita theme rather than reading the
+default theme from the environment.
+
+Ideally the test suite would embed the cursor theme and point XCURSOR_PATH to
+it, so that even if the Adwaita icon theme changes in the future the test
+wouldn't suddently break; I did not implement this yet.
+
+Forwarded: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4225
+---
+ src/tests/wayland-test-clients/cursor-tests-client.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/tests/wayland-test-clients/cursor-tests-client.c b/src/tests/wayland-test-clients/cursor-tests-client.c
+index c5d743e..2a425bb 100644
+--- a/src/tests/wayland-test-clients/cursor-tests-client.c
++++ b/src/tests/wayland-test-clients/cursor-tests-client.c
+@@ -127,7 +127,7 @@ on_pointer_enter (WaylandSurface    *surface,
+            "and actual scale %f",
+            effective_theme_size, theme_size, scale);
+ 
+-  cursor_theme = wl_cursor_theme_load (NULL,
++  cursor_theme = wl_cursor_theme_load ("Adwaita",
+                                        effective_theme_size,
+                                        display->shm);
+   cursor = wl_cursor_theme_get_cursor (cursor_theme, cursor_name);
