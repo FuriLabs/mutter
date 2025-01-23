@@ -30,3 +30,6 @@ clutter-Add-API-to-create-inactive-ClutterGrabs-and-activ.patch
 wayland-Invalidate-focus-from-all-touch-inputs-too.patch
 wayland-Handle-reentrancy-invalidating-touch-foci.patch
 synchronize-touchscreen-enabled-state-on-add.patch
+compositor-Make-surface-actors-unreactive-after-losing-th.patch
+wayland-Make-subsurface-actors-unreactive-early-during-de.patch
+wayland-Double-check-surface-window-before-looking-for-mo.patch

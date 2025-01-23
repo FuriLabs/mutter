@@ -1,0 +1,41 @@
+From: Carlos Garnacho <carlosg@gnome.org>
+Date: Thu, 2 May 2024 13:21:21 +0200
+Subject: wayland: Make subsurface actors unreactive early during destruction
+
+When unmapping a subsurface, it does lose early its connection to the
+parent surface. This is however a deciding factor in determining whether
+the surface (role) has a window.
+
+Make the subsurface actor unreactive if its connection to the parent
+MetaWindow was severed, since it should not be eligible for picking anymore.
+
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3729>
+
+Origin: upstream, https://gitlab.gnome.org/GNOME/mutter/-/commit/66e23b009c23b87886139f83b64a506798900ed2
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/3393
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/2093237
+---
+ src/wayland/meta-wayland-subsurface.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/wayland/meta-wayland-subsurface.c b/src/wayland/meta-wayland-subsurface.c
+index 8d40eb0..ba8946d 100644
+--- a/src/wayland/meta-wayland-subsurface.c
++++ b/src/wayland/meta-wayland-subsurface.c
+@@ -412,6 +412,7 @@ permanently_unmap_subsurface (MetaWaylandSurface *surface)
+ {
+   MetaWaylandSubsurfacePlacementOp *op;
+   MetaWaylandTransaction *transaction;
++  MetaSurfaceActor *surface_actor;
+ 
+   op = get_subsurface_placement_op (surface, NULL,
+                                     META_WAYLAND_SUBSURFACE_PLACEMENT_BELOW);
+@@ -422,6 +423,8 @@ permanently_unmap_subsurface (MetaWaylandSurface *surface)
+   meta_wayland_transaction_add_subsurface_position (transaction, surface, 0, 0);
+   meta_wayland_transaction_commit (transaction);
+ 
++  surface_actor = meta_wayland_surface_get_actor (surface);
++  clutter_actor_set_reactive (CLUTTER_ACTOR (surface_actor), FALSE);
+   surface->committed_state.parent = NULL;
+ }
+ 

@@ -1,0 +1,65 @@
+From: Carlos Garnacho <carlosg@gnome.org>
+Date: Thu, 2 May 2024 13:15:31 +0200
+Subject: compositor: Make surface actors unreactive after losing their
+ surface
+
+These actors are expected to be destroyed along with their surface, this
+however happens later in the process, so there is a moment where actors
+are eligible for picking, but do not have a surface anymore.
+
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3729>
+
+Origin: upstream, https://gitlab.gnome.org/GNOME/mutter/-/commit/17dc9393e06519ee8ece4d9a3e24f51af4a24a59
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/3393
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/2093237
+---
+ src/compositor/meta-surface-actor-wayland.c | 22 ++++++++++++++++++----
+ 1 file changed, 18 insertions(+), 4 deletions(-)
+
+diff --git a/src/compositor/meta-surface-actor-wayland.c b/src/compositor/meta-surface-actor-wayland.c
+index 819672c..d20ed55 100644
+--- a/src/compositor/meta-surface-actor-wayland.c
++++ b/src/compositor/meta-surface-actor-wayland.c
+@@ -260,6 +260,18 @@ out:
+   parent_class->apply_transform (actor, matrix);
+ }
+ 
++static void
++on_surface_disposed (gpointer user_data,
++                     GObject *destroyed_object)
++{
++  MetaSurfaceActorWayland *self = user_data;
++
++  g_assert (destroyed_object == (GObject *) self->surface);
++
++  clutter_actor_set_reactive (CLUTTER_ACTOR (self), FALSE);
++  self->surface = NULL;
++}
++
+ static void
+ meta_surface_actor_wayland_dispose (GObject *object)
+ {
+@@ -272,8 +284,9 @@ meta_surface_actor_wayland_dispose (GObject *object)
+ 
+   if (self->surface)
+     {
+-      g_object_remove_weak_pointer (G_OBJECT (self->surface),
+-                                    (gpointer *) &self->surface);
++      g_object_weak_unref (G_OBJECT (self->surface),
++                           on_surface_disposed,
++                           self);
+       self->surface = NULL;
+     }
+ 
+@@ -308,8 +321,9 @@ meta_surface_actor_wayland_new (MetaWaylandSurface *surface)
+   g_assert (meta_is_wayland_compositor ());
+ 
+   self->surface = surface;
+-  g_object_add_weak_pointer (G_OBJECT (self->surface),
+-                             (gpointer *) &self->surface);
++  g_object_weak_ref (G_OBJECT (self->surface),
++                     on_surface_disposed,
++                     self);
+ 
+   return META_SURFACE_ACTOR (self);
+ }

@@ -1,0 +1,43 @@
+From: Carlos Garnacho <carlosg@gnome.org>
+Date: Thu, 2 May 2024 13:23:54 +0200
+Subject: wayland: Double check surface/window before looking for modals
+
+While it should not be expected that we pick the pointer into a
+MetaSurfaceActor that is disembodied of its MetaWaylandSurface/MetaWindow,
+the paths where this should be enforced are somewhat scattered.
+
+So account for the situation in picking code, and prefer a NULL surface
+over a crash. This operates on the assumption that this inconsistent state
+where Mutter didn't know better to pick a correct surface actor will be fixed
+by later crossing events resolving the intermediate state, and that no
+other input events will be received meanwhile.
+
+Closes: https://gitlab.gnome.org/GNOME/mutter/-/issues/3393
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3729>
+
+Origin: upstream, https://gitlab.gnome.org/GNOME/mutter/-/commit/e731f2a05522fb06caa4ee989718acacfa0dbc10
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/3393
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/2093237
+---
+ src/wayland/meta-wayland-pointer.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/src/wayland/meta-wayland-pointer.c b/src/wayland/meta-wayland-pointer.c
+index 88b27f8..cf60080 100644
+--- a/src/wayland/meta-wayland-pointer.c
++++ b/src/wayland/meta-wayland-pointer.c
+@@ -600,10 +600,13 @@ repick_for_event (MetaWaylandPointer *pointer,
+     {
+       MetaSurfaceActorWayland *actor_wayland =
+         META_SURFACE_ACTOR_WAYLAND (actor);
++      MetaWindow *window = NULL;
+ 
+       surface = meta_surface_actor_wayland_get_surface (actor_wayland);
++      if (surface)
++        window = meta_wayland_surface_get_window (surface);
+ 
+-      if (surface && meta_window_has_modals (meta_wayland_surface_get_window (surface)))
++      if (window && meta_window_has_modals (window))
+         surface = NULL;
+     }
+   else
