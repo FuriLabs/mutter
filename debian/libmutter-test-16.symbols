@@ -55,6 +55,7 @@ libmutter-test-16.so libmutter-test-16 #MINVER#
  meta_test_monitor_destroy@Base 44~beta
  meta_test_monitor_get_type@Base 44~beta
  meta_test_monitor_new@Base 44~beta
+ meta_test_process_watch_commands@Base 48~beta
  meta_test_shell_disable_animations@Base 47.4
  meta_test_shell_get_type@Base 44.3-4~
  meta_test_shell_set_background_color@Base 47.4

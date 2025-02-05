@@ -27,6 +27,7 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_backend_get_monitor_manager@Base 43.0
  meta_backend_get_orientation_manager@Base 43.0
  meta_backend_get_remote_access_controller@Base 43.0
+ meta_backend_get_remote_desktop@Base 48~beta
  meta_backend_get_renderer@Base 43.0
  meta_backend_get_settings@Base 43.0
  meta_backend_get_stage@Base 43.0
@@ -180,6 +181,9 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_cursor_tracker_get_type@Base 43.0
  meta_cursor_tracker_has_window_cursor@Base 47.4
  meta_cursor_tracker_set_pointer_visible@Base 43.0
+ meta_dbus_session_manager_get_num_sessions@Base 48~beta
+ meta_dbus_session_manager_get_session@Base 48~beta
+ meta_dbus_session_manager_get_type@Base 48~beta
  meta_debug_control_get_type@Base 47~beta
  meta_debug_control_set_exported@Base 47~beta
  meta_debug_paint_flag_get_type@Base 43.0
@@ -439,6 +443,7 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_monitor_get_product@Base 43.0
  meta_monitor_get_serial@Base 43.0
  meta_monitor_get_suggested_position@Base 43.0
+ meta_monitor_get_supported_color_modes@Base 48~beta
  meta_monitor_get_type@Base 43.0
  meta_monitor_get_vendor@Base 43.0
  meta_monitor_is_active@Base 43.0
@@ -621,6 +626,9 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_remote_access_handle_get_disable_animations@Base 43.0
  meta_remote_access_handle_get_type@Base 43.0
  meta_remote_access_handle_stop@Base 43.0
+ meta_remote_desktop_session_get_eis@Base 48~beta
+ meta_remote_desktop_session_get_type@Base 48~beta
+ meta_remote_desktop_session_request_transfer@Base 48~beta
  meta_remove_debug_paint_flag@Base 43.0
  meta_remove_verbose_topic@Base 43.0
  meta_renderer_get_view_for_crtc@Base 43.0
@@ -718,7 +726,6 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_virtual_monitor_info_free@Base 43.0
  meta_virtual_monitor_info_new@Base 43.0
  meta_virtual_monitor_set_mode@Base 43.0
- meta_warning@Base 43.0
  meta_wayland_actor_surface_get_actor@Base 43.0
  meta_wayland_client_get_type@Base 43.0
  meta_wayland_client_hide_from_window_list@Base 43.0
@@ -950,6 +957,7 @@ libmutter-clutter-16.so.0 libmutter-16-0 #MINVER#
  _clutter_stage_window_get_geometry@Base 43.0
  clutter_action_get_type@Base 43.0
  clutter_actor_accessible_get_type@Base 47~rc
+ clutter_actor_add_accessible_state@Base 48~beta
  clutter_actor_add_action@Base 43.0
  clutter_actor_add_action_full@Base 43.0
  clutter_actor_add_action_with_name@Base 43.0
@@ -1144,6 +1152,7 @@ libmutter-clutter-16.so.0 libmutter-16-0 #MINVER#
  clutter_actor_queue_redraw_with_clip@Base 43.0
  clutter_actor_queue_relayout@Base 43.0
  clutter_actor_realize@Base 43.0
+ clutter_actor_remove_accessible_state@Base 48~beta
  clutter_actor_remove_action@Base 43.0
  clutter_actor_remove_action_by_name@Base 43.0
  clutter_actor_remove_all_children@Base 43.0
