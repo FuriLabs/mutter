@@ -1,13 +1,18 @@
-mutter (48~beta-1) UNRELEASED; urgency=medium
+mutter (48~beta-1) experimental; urgency=medium
 
   [ Jeremy Bícha ]
   * New upstream release
+  * debian/*.symbols: Update
+  * Bump minimum libei
+  * Add Build-Depends: bash-completion, python3-argcomplete, python3-docutils
+  * Have mutter binary package install bash-completion & manpages
+  * Have mutter binary package depend on python3 for new gdctl utility
 
   [ Daniel van Vugt ]
   * d/p/debian/Support-Dynamic-triple-double-buffering.patch:
     Update the triple buffering patch for 48 Beta
 
- -- Jeremy Bícha <jbicha@ubuntu.com>  Wed, 05 Feb 2025 07:47:41 -0500
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Wed, 05 Feb 2025 07:38:59 -0500
 
 mutter (48~alpha-1) experimental; urgency=medium
 
