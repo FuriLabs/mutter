@@ -111,6 +111,7 @@ Architecture: linux-any
 Depends: adwaita-icon-theme,
          gnome-settings-daemon-common,
          gsettings-desktop-schemas (>= 40~alpha),
+         python3,
          mutter-common (>= ${source:Version}),
          zenity,
          ${misc:Depends},
