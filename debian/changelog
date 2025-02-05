@@ -1,6 +1,11 @@
 mutter (48~beta-1) UNRELEASED; urgency=medium
 
+  [ Jeremy Bícha ]
   * New upstream release
+
+  [ Daniel van Vugt ]
+  * d/p/debian/Support-Dynamic-triple-double-buffering.patch:
+    Update the triple buffering patch for 48 Beta
 
  -- Jeremy Bícha <jbicha@ubuntu.com>  Wed, 05 Feb 2025 07:47:41 -0500
 
