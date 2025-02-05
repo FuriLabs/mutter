@@ -1482,14 +1482,17 @@ libmutter-clutter-16.so.0 libmutter-16-0 #MINVER#
  clutter_frame_clock_uninhibit@Base 43.0
  clutter_frame_get_count@Base 44~beta
  clutter_frame_get_frame_deadline@Base 46~beta
+ (optional=triplebuffer)clutter_frame_get_hints@Base 43.0
  clutter_frame_get_result@Base 46~beta
  clutter_frame_get_target_presentation_time@Base 44~beta
  clutter_frame_get_type@Base 44~beta
  clutter_frame_has_result@Base 43.0
+ (optional=triplebuffer)clutter_frame_hint_get_type@Base 43.0
  clutter_frame_info_flag_get_type@Base 43.0
  clutter_frame_new@Base 44~beta
  clutter_frame_ref@Base 44~beta
  clutter_frame_result_get_type@Base 43.0
+ (optional=triplebuffer)clutter_frame_set_hint@Base 43.0
  clutter_frame_set_result@Base 43.0
  clutter_frame_unref@Base 44~beta
  clutter_gesture_action_cancel@Base 43.0
