@@ -118,6 +118,8 @@ Depends: adwaita-icon-theme,
 Provides: x-window-manager
 Suggests: gnome-control-center,
           xdg-user-dirs
+Breaks: mutter-common (<< 48~beta)
+Replaces: mutter-common (<< 48~beta)
 Description: Example window manager using GNOME's window manager library
  Mutter is a Wayland display server and X11 window manager and
  compositor library. It contains functionality related to, among other
