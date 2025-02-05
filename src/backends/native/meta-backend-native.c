@@ -124,26 +124,6 @@ meta_backend_native_create_clutter_backend (MetaBackend    *backend,
   return CLUTTER_BACKEND (meta_clutter_backend_native_new (backend, context));
 }
 
-static const char *
-get_seat_id (MetaBackendNative *backend_native)
-{
-  MetaBackendNativePrivate *priv =
-    meta_backend_native_get_instance_private (backend_native);
-  MetaLauncher *launcher =
-    meta_backend_get_launcher (META_BACKEND (backend_native));
-
-  switch (priv->mode)
-    {
-    case META_BACKEND_NATIVE_MODE_DEFAULT:
-    case META_BACKEND_NATIVE_MODE_TEST_VKMS:
-      return meta_launcher_get_seat_id (launcher);
-    case META_BACKEND_NATIVE_MODE_HEADLESS:
-    case META_BACKEND_NATIVE_MODE_TEST_HEADLESS:
-      return "seat0";
-    }
-  g_assert_not_reached ();
-}
-
 static ClutterSeat *
 meta_backend_native_create_default_seat (MetaBackend  *backend,
                                          GError      **error)
@@ -153,25 +133,24 @@ meta_backend_native_create_default_seat (MetaBackend  *backend,
     meta_backend_native_get_instance_private (backend_native);
   ClutterContext *clutter_context =
     meta_backend_get_clutter_context (backend);
+  MetaLauncher *launcher = meta_backend_get_launcher (backend);
   const char *seat_id = NULL;
-  MetaSeatNativeFlag flags;
+  MetaSeatNativeFlag flags = META_SEAT_NATIVE_FLAG_NONE;
 
   switch (priv->mode)
     {
     case META_BACKEND_NATIVE_MODE_DEFAULT:
+      seat_id = meta_launcher_get_seat_id (launcher);
+      break;
     case META_BACKEND_NATIVE_MODE_HEADLESS:
     case META_BACKEND_NATIVE_MODE_TEST_HEADLESS:
-      seat_id = get_seat_id (backend_native);
+      seat_id = META_BACKEND_HEADLESS_INPUT_SEAT;
+      flags = META_SEAT_NATIVE_FLAG_NO_LIBINPUT;
       break;
     case META_BACKEND_NATIVE_MODE_TEST_VKMS:
       seat_id = META_BACKEND_TEST_INPUT_SEAT;
       break;
     }
-
-  if (meta_backend_is_headless (backend))
-    flags = META_SEAT_NATIVE_FLAG_NO_LIBINPUT;
-  else
-    flags = META_SEAT_NATIVE_FLAG_NONE;
 
   return CLUTTER_SEAT (g_object_new (META_TYPE_SEAT_NATIVE,
                                      "backend", backend,
@@ -745,29 +724,14 @@ meta_backend_native_create_launcher (MetaBackend   *backend,
   MetaBackendNativePrivate *priv =
     meta_backend_native_get_instance_private (native);
   g_autoptr (MetaLauncher) launcher = NULL;
-  const char *session_id = NULL;
-  const char *seat_id = NULL;
 
   *launcher_out = NULL;
-
-  switch (priv->mode)
-    {
-    case META_BACKEND_NATIVE_MODE_DEFAULT:
-      break;
-    case META_BACKEND_NATIVE_MODE_HEADLESS:
-    case META_BACKEND_NATIVE_MODE_TEST_HEADLESS:
-      break;
-    case META_BACKEND_NATIVE_MODE_TEST_VKMS:
-      session_id = "dummy";
-      seat_id = "seat0";
-      break;
-    }
 
   if (priv->mode == META_BACKEND_NATIVE_MODE_HEADLESS ||
       priv->mode == META_BACKEND_NATIVE_MODE_TEST_HEADLESS)
     return TRUE;
 
-  launcher = meta_launcher_new (backend, session_id, seat_id, error);
+  launcher = meta_launcher_new (backend, error);
   if (!launcher)
     return FALSE;
 

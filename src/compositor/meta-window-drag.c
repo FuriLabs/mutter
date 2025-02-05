@@ -1088,11 +1088,10 @@ process_keyboard_resize_grab (MetaWindowDrag  *window_drag,
                                                    gravity,
                                                    flags);
 
-      meta_window_resize_frame_with_gravity (window,
-                                             TRUE,
-                                             width,
-                                             height,
-                                             gravity);
+      meta_window_resize_frame (window,
+				TRUE,
+				width,
+				height);
 
       update_keyboard_resize (window_drag, FALSE);
     }
@@ -1223,13 +1222,14 @@ update_move (MetaWindowDrag          *window_drag,
   new_x = (int) (x - (frame_rect.width * window_drag->anchor_rel_x));
   new_y = (int) (y - (frame_rect.height * window_drag->anchor_rel_y));
 
-  meta_verbose ("x,y = %d,%d anchor ptr %d,%d rel anchor pos %f,%f dx,dy %d,%d",
-                x, y,
-                window_drag->anchor_root_x,
-                window_drag->anchor_root_y,
-                window_drag->anchor_rel_x,
-                window_drag->anchor_rel_y,
-                dx, dy);
+  meta_topic (META_DEBUG_RENDER,
+              "x,y = %d,%d anchor ptr %d,%d rel anchor pos %f,%f dx,dy %d,%d",
+              x, y,
+              window_drag->anchor_root_x,
+              window_drag->anchor_root_y,
+              window_drag->anchor_rel_x,
+              window_drag->anchor_rel_y,
+              dx, dy);
 
   /* Don't bother doing anything if no move has been specified.  (This
    * happens often, even in keyboard moving, due to the warping of the
@@ -1552,9 +1552,8 @@ update_resize (MetaWindowDrag          *window_drag,
                                                gravity,
                                                flags);
 
-  meta_window_resize_frame_with_gravity (window, TRUE,
-                                         new_rect.width, new_rect.height,
-                                         gravity);
+  meta_window_resize_frame (window, TRUE,
+			    new_rect.width, new_rect.height);
 }
 
 static gboolean

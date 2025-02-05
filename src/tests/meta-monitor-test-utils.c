@@ -238,6 +238,12 @@ check_logical_monitor (MetaMonitorManager             *monitor_manager,
   GList *l;
   int i;
 
+  g_debug ("Checking logical monitor with layout %dx%d+%d+%d",
+           test_logical_monitor->layout.width,
+           test_logical_monitor->layout.height,
+           test_logical_monitor->layout.x,
+           test_logical_monitor->layout.y);
+
   logical_monitor = logical_monitor_from_layout (monitor_manager,
                                                  &test_logical_monitor->layout);
   g_assert_nonnull (logical_monitor);
@@ -791,6 +797,10 @@ meta_create_monitor_test_setup (MetaBackend          *backend,
                                          (uint8_t *) &setup->outputs[i].edid_info,
                                          sizeof (setup->outputs[i].edid_info));
         }
+      output_info->supported_color_spaces =
+        setup->outputs[i].supported_color_spaces;
+      output_info->supported_hdr_eotfs =
+        setup->outputs[i].supported_hdr_eotfs;
 
       output = g_object_new (META_TYPE_OUTPUT_TEST,
                              "id", (uint64_t) i,

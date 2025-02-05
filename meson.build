@@ -1,5 +1,5 @@
 project('mutter', 'c',
-  version: '48.alpha',
+  version: '48.beta',
   meson_version: '>= 1.3.0',
   license: 'GPL-2.0-or-later',
 )
@@ -38,7 +38,7 @@ libcanberra_req = '>= 0.26'
 libwacom_req = '>= 0.13'
 atk_req = '>= 2.5.3'
 harfbuzz_req = '>= 2.6'
-libei_req = '>= 1.0.901'
+libei_req = '>= 1.3.901'
 libdisplay_info_req = '>= 0.2'
 
 # optional version requirements
@@ -89,6 +89,7 @@ libdir = prefix / get_option('libdir')
 libexecdir = prefix / get_option('libexecdir')
 includedir = prefix / get_option('includedir')
 sysconfdir = get_option('sysconfdir')
+mandir = prefix / get_option('mandir')
 
 pkgname = '@0@-@1@'.format(meson.project_name(), libmutter_api_version)
 
@@ -239,8 +240,25 @@ if have_wayland
   endif
 endif
 
+have_logind = get_option('logind')
+if have_logind
+  logind_dep = dependency('libsystemd', required: false)
+
+  if not logind_dep.found()
+    logind_dep = dependency('libelogind', required: false)
+  endif
+
+  if not logind_dep.found()
+    error('No logind provider dependency found: tried libsystemd and libelogind')
+  endif
+endif
+
 have_libgudev = get_option('udev')
 if have_libgudev
+  if not have_logind
+    error('The udev support requires logind')
+  endif
+
   libudev_dep = dependency('libudev', version: udev_req)
   gudev_dep = dependency('gudev-1.0', version: gudev_req)
   udev_dep = dependency('udev')
@@ -251,18 +269,13 @@ if have_libgudev
   endif
 endif
 
-have_libsystemd = get_option('systemd')
-libsystemd_dep = dependency('libsystemd', required: have_libsystemd)
-
 have_native_backend = get_option('native_backend')
 if have_native_backend
   libgbm_dep = dependency('gbm', version: gbm_req)
   libinput_dep = dependency('libinput', version: libinput_req)
 
-  if libsystemd_dep.found()
-    logind_provider_dep = libsystemd_dep
-  else
-    logind_provider_dep = dependency('libelogind')
+  if not have_logind
+    error('The native backend requires logind to be enabled')
   endif
 
   if not have_egl
@@ -365,6 +378,7 @@ have_kvm_tests = false
 have_tty_tests = false
 have_installed_tests = false
 have_x11_tests = false
+have_bash_completion = get_option('bash_completion')
 
 if have_tests
   gtk3_dep = dependency('gtk+-3.0', version: gtk3_req)
@@ -557,7 +571,7 @@ cdata.set('HAVE_WAYLAND', have_wayland)
 cdata.set('HAVE_XWAYLAND', have_xwayland)
 cdata.set('HAVE_X11', have_x11)
 cdata.set('HAVE_X11_CLIENT', have_x11_client)
-cdata.set('HAVE_LIBSYSTEMD', have_libsystemd)
+cdata.set('HAVE_LOGIND', have_logind)
 cdata.set('HAVE_NATIVE_BACKEND', have_native_backend)
 cdata.set('HAVE_REMOTE_DESKTOP', have_remote_desktop)
 cdata.set('HAVE_GNOME_DESKTOP', have_gnome_desktop)
@@ -726,9 +740,12 @@ meson.add_dist_script('meson/check-version.py', meson.project_version(), 'NEWS')
 summary('prefix', prefix, section: 'Directories')
 summary('libexecdir', libexecdir, section: 'Directories')
 summary('pkgdatadir', pkgdatadir, section: 'Directories')
+summary('mandir', mandir, section: 'Directories')
 
 summary('buildtype', get_option('buildtype'), section: 'Build Configuration')
 summary('debug', get_option('debug'), section: 'Build Configuration')
+
+summary('Bash completion', have_bash_completion, section: 'Shell integration')
 
 summary('OpenGL', have_gl, section: 'Rendering APIs')
 summary('GLES2', have_gles2, section: 'Rendering APIs')

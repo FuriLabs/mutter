@@ -109,7 +109,7 @@
 #include "wayland/meta-window-xwayland.h"
 #endif
 
-#ifdef HAVE_LIBSYSTEMD
+#ifdef HAVE_LOGIND
 #include <systemd/sd-login.h>
 #endif
 
@@ -177,6 +177,11 @@ static void update_edge_constraints (MetaWindow *window);
 static void set_hidden_suspended_state (MetaWindow *window);
 
 static void initable_iface_init (GInitableIface *initable_iface);
+
+static void meta_window_move_resize_internal (MetaWindow          *window,
+                                              MetaMoveResizeFlags  flags,
+                                              MetaPlaceFlag        place_flags,
+                                              MtkRectangle         frame_rect);
 
 typedef struct _MetaWindowPrivate
 {
@@ -317,6 +322,27 @@ static pid_t
 meta_window_real_get_client_pid (MetaWindow *window)
 {
   return 0;
+}
+
+static MetaGravity
+meta_window_real_get_gravity (MetaWindow *window)
+{
+  MetaWindowDrag *window_drag = NULL;
+
+  if (window->display && window->display->compositor)
+    window_drag = meta_compositor_get_current_window_drag (window->display->compositor);
+
+  if (window_drag &&
+      meta_window_drag_get_window (window_drag) == window)
+    {
+      MetaGrabOp grab_op;
+
+      grab_op = meta_window_drag_get_grab_op (window_drag);
+
+      return meta_resize_gravity_from_grab_op (grab_op);
+    }
+
+  return META_GRAVITY_NONE;
 }
 
 static void
@@ -497,6 +523,7 @@ meta_window_class_init (MetaWindowClass *klass)
   klass->update_struts = meta_window_real_update_struts;
   klass->get_default_skip_hints = meta_window_real_get_default_skip_hints;
   klass->get_client_pid = meta_window_real_get_client_pid;
+  klass->get_gravity = meta_window_real_get_gravity;
 
   obj_props[PROP_TITLE] =
     g_param_spec_string ("title", NULL, NULL,
@@ -1197,7 +1224,8 @@ meta_window_constructed (GObject *object)
     {
       /* WM_HINTS said minimized */
       window->minimized = TRUE;
-      meta_verbose ("Window %s asked to start out minimized", window->desc);
+      meta_topic (META_DEBUG_WINDOW_STATE,
+                  "Window %s asked to start out minimized", window->desc);
     }
 
   /* Apply any window attributes such as initial workspace
@@ -1437,7 +1465,7 @@ meta_window_unmanage (MetaWindow  *window,
   MetaWorkspaceManager *workspace_manager = window->display->workspace_manager;
   GList *tmp;
 
-  meta_verbose ("Unmanaging %s", window->desc);
+  meta_topic (META_DEBUG_WINDOW_STATE, "Unmanaging %s", window->desc);
   window->unmanaging = TRUE;
 
   g_clear_handle_id (&priv->suspend_timoeut_id, g_source_remove);
@@ -1699,8 +1727,10 @@ meta_window_showing_on_its_workspace (MetaWindow *window)
       workspace_of_window && workspace_of_window->showing_desktop &&
       !is_desktop_or_dock)
     {
-      meta_verbose ("We're showing the desktop on the workspace(s) that window %s is on",
-                    window->desc);
+      meta_topic (META_DEBUG_WINDOW_STATE,
+                  "We're showing the desktop on the workspace(s) that window "
+                  "%s is on",
+                  window->desc);
       showing = FALSE;
     }
 
@@ -2151,7 +2181,6 @@ meta_window_force_placement (MetaWindow    *window,
   meta_window_move_resize_internal (window,
                                     flags,
                                     place_flags,
-                                    META_GRAVITY_NORTH_WEST,
                                     window->unconstrained_rect);
   window->calc_placement = FALSE;
 
@@ -2255,8 +2284,9 @@ implement_showing (MetaWindow *window,
                    gboolean    showing)
 {
   /* Actually show/hide the window */
-  meta_verbose ("Implement showing = %d for window %s",
-                showing, window->desc);
+  meta_topic (META_DEBUG_WINDOW_STATE,
+              "Implement showing = %d for window %s",
+              showing, window->desc);
 
   /* Some windows are not stackable until being showed, so add those now. */
   if (meta_window_is_stackable (window) && !meta_window_is_in_stack (window))
@@ -3947,11 +3977,10 @@ meta_window_update_monitor (MetaWindow                   *window,
     g_signal_emit (window, window_signals[HIGHEST_SCALE_MONITOR_CHANGED], 0);
 }
 
-void
+static void
 meta_window_move_resize_internal (MetaWindow          *window,
                                   MetaMoveResizeFlags  flags,
                                   MetaPlaceFlag        place_flags,
-                                  MetaGravity          gravity,
                                   MtkRectangle         frame_rect)
 {
   /* The rectangle here that's passed in *always* in "frame rect"
@@ -3984,6 +4013,7 @@ meta_window_move_resize_internal (MetaWindow          *window,
   MetaMoveResizeResultFlags result = 0;
   gboolean moved_or_resized = FALSE;
   MetaWindowUpdateMonitorFlags update_monitor_flags;
+  MetaGravity gravity;
 
   g_return_if_fail (!window->override_redirect);
 
@@ -3995,6 +4025,8 @@ meta_window_move_resize_internal (MetaWindow          *window,
                      META_MOVE_RESIZE_WAYLAND_FINISH_MOVE_RESIZE));
 
   did_placement = !window->placed && window->calc_placement;
+
+  gravity = meta_window_get_gravity (window);
 
   /* We don't need it in the idle queue anymore. */
   meta_window_unqueue (window, META_QUEUE_MOVE_RESIZE);
@@ -4073,7 +4105,6 @@ meta_window_move_resize_internal (MetaWindow          *window,
 
   /* Do the protocol-specific move/resize logic */
   META_WINDOW_GET_CLASS (window)->move_resize_internal (window,
-                                                        gravity,
                                                         unconstrained_rect,
                                                         constrained_rect,
                                                         temporary_rect,
@@ -4162,7 +4193,6 @@ meta_window_move_resize (MetaWindow          *window,
   meta_window_move_resize_internal (window,
                                     flags,
                                     META_PLACE_FLAG_NONE,
-                                    META_GRAVITY_NORTH_WEST,
                                     rect);
 }
 
@@ -4374,11 +4404,10 @@ adjust_size_for_tile_match (MetaWindow *window,
 }
 
 void
-meta_window_resize_frame_with_gravity (MetaWindow  *window,
-                                       gboolean     user_op,
-                                       int          w,
-                                       int          h,
-                                       MetaGravity  gravity)
+meta_window_resize_frame (MetaWindow *window,
+                          gboolean    user_op,
+                          int         w,
+                          int         h)
 {
   MetaMoveResizeFlags flags;
   MtkRectangle rect = { 0, };
@@ -4408,7 +4437,6 @@ meta_window_resize_frame_with_gravity (MetaWindow  *window,
   meta_window_move_resize_internal (window,
                                     flags,
                                     META_PLACE_FLAG_NONE,
-                                    gravity,
                                     rect);
 }
 
@@ -4997,8 +5025,9 @@ meta_window_change_workspace (MetaWindow    *window,
 static void
 window_stick_impl (MetaWindow  *window)
 {
-  meta_verbose ("Sticking window %s current on_all_workspaces = %d",
-                window->desc, window->on_all_workspaces);
+  meta_topic (META_DEBUG_WINDOW_STATE,
+              "Sticking window %s current on_all_workspaces = %d",
+              window->desc, window->on_all_workspaces);
 
   if (window->on_all_workspaces_requested)
     return;
@@ -5146,21 +5175,7 @@ meta_window_raise (MetaWindow  *window)
    * constraints in stack.c then magically take care of raising all
    * the child windows appropriately.
    */
-  if (window->display->stack == ancestor->display->stack)
-    {
-      meta_stack_raise (window->display->stack, ancestor);
-    }
-  else
-    {
-      meta_warning (
-                    "Either stacks aren't per screen or some window has a weird "
-                    "transient_for hint; window->display->stack != "
-                    "ancestor->screen->stack.  window = %s, ancestor = %s.",
-                    window->desc, ancestor->desc);
-      /* We could raise the window here, but don't want to do that twice and
-       * so we let the case below handle that.
-       */
-    }
+  meta_stack_raise (window->display->stack, ancestor);
 
   /* Okay, so stacking constraints misses one case: If a window has
    * two children and we want to raise one of those children, then
@@ -5718,12 +5733,15 @@ meta_window_recalc_features (MetaWindow *window)
        * about these apps but make them work.
        */
 
-      meta_warning ("Window %s sets an MWM hint indicating it isn't resizable, but sets min size %d x %d and max size %d x %d; this doesn't make much sense.",
-                    window->desc,
-                    window->size_hints.min_width,
-                    window->size_hints.min_height,
-                    window->size_hints.max_width,
-                    window->size_hints.max_height);
+      meta_topic (META_DEBUG_X11,
+                  "Window %s sets an MWM hint indicating it isn't resizable, "
+                  "but sets min size %d x %d and max size %d x %d; "
+                  "this doesn't make much sense.",
+                  window->desc,
+                  window->size_hints.min_width,
+                  window->size_hints.min_height,
+                  window->size_hints.max_width,
+                  window->size_hints.max_height);
     }
 
   window->has_fullscreen_func = TRUE;
@@ -5991,7 +6009,8 @@ meta_window_get_current_tile_monitor_number (MetaWindow *window)
 
   if (tile_monitor_number < 0)
     {
-      meta_warning ("%s called with an invalid monitor number; using 0 instead", G_STRFUNC);
+      g_warning ("%s called with an invalid monitor number; "
+                 "using 0 instead", G_STRFUNC);
       tile_monitor_number = 0;
     }
 
@@ -6818,7 +6837,7 @@ meta_window_get_pid (MetaWindow *window)
 GFile *
 meta_window_get_unit_cgroup (MetaWindow *window)
 {
-#ifdef HAVE_LIBSYSTEMD
+#ifdef HAVE_LOGIND
   g_autofree char *contents = NULL;
   g_autofree char *complete_path = NULL;
   g_autofree char *unit_name = NULL;
@@ -7288,8 +7307,8 @@ meta_window_set_transient_for (MetaWindow *window,
 
   if (check_transient_for_loop (window, parent))
     {
-      meta_warning ("Setting %s transient for %s would create a loop.",
-                    window->desc, parent->desc);
+      g_warning ("Setting %s transient for %s would create a loop.",
+                 window->desc, parent->desc);
       return;
     }
 
@@ -8265,4 +8284,17 @@ meta_window_new_window_config (MetaWindow *window)
     return meta_window_config_initial_new ();
   else
     return meta_window_config_new ();
+}
+
+MetaGravity
+meta_window_get_gravity (MetaWindow *window)
+{
+  MetaGravity gravity;
+
+  gravity = META_WINDOW_GET_CLASS (window)->get_gravity (window);
+
+  if (gravity == META_GRAVITY_NONE)
+    gravity = META_GRAVITY_NORTH_WEST;
+
+  return gravity;
 }

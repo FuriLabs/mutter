@@ -162,8 +162,10 @@ MetaIdleManager * meta_backend_get_idle_manager (MetaBackend *backend);
 META_EXPORT_TEST
 MetaColorManager * meta_backend_get_color_manager (MetaBackend *backend);
 
+#ifdef HAVE_LOGIND
 META_EXPORT_TEST
 MetaLauncher * meta_backend_get_launcher (MetaBackend *backend);
+#endif
 
 #ifdef HAVE_LIBGUDEV
 META_EXPORT_TEST
@@ -181,6 +183,7 @@ MetaEgl * meta_backend_get_egl (MetaBackend *backend);
 MetaDbusSessionWatcher * meta_backend_get_dbus_session_watcher (MetaBackend *backend);
 
 #ifdef HAVE_REMOTE_DESKTOP
+META_EXPORT_TEST
 MetaRemoteDesktop * meta_backend_get_remote_desktop (MetaBackend *backend);
 
 MetaScreenCast * meta_backend_get_screen_cast (MetaBackend *backend);

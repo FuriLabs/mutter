@@ -128,10 +128,8 @@ struct _MetaOnscreenNative
     struct {
       KmsProperty gamma_lut;
       KmsProperty privacy_screen;
-      KmsProperty color_space;
-      KmsProperty hdr_metadata;
     } property;
-    KmsProperty properties[4];
+    KmsProperty properties[2];
   };
 };
 
@@ -722,6 +720,26 @@ set_rgb_range (MetaOutputKms *output_kms,
 }
 
 static void
+set_color_mode (MetaOutputKms *output_kms,
+                MetaKmsUpdate *kms_update)
+{
+  MetaOutput *output = META_OUTPUT (output_kms);
+  MetaKmsConnector *kms_connector =
+    meta_output_kms_get_kms_connector (output_kms);
+  MetaOutputHdrMetadata hdr_metadata;
+  MetaOutputColorspace color_space;
+
+
+  meta_output_get_color_metadata (output, &hdr_metadata, &color_space);
+
+  if (meta_kms_connector_supports_colorspace (kms_connector))
+    meta_kms_update_set_color_space (kms_update, kms_connector, color_space);
+
+  if (meta_kms_connector_supports_hdr_metadata (kms_connector))
+    meta_kms_update_set_hdr_metadata (kms_update, kms_connector, &hdr_metadata);
+}
+
+static void
 meta_onscreen_native_set_crtc_mode (CoglOnscreen              *onscreen,
                                     MetaKmsUpdate             *kms_update,
                                     MetaRendererNativeGpuData *renderer_gpu_data)
@@ -777,6 +795,7 @@ meta_onscreen_native_set_crtc_mode (CoglOnscreen              *onscreen,
   set_underscan (META_OUTPUT_KMS (onscreen_native->output), kms_update);
   set_max_bpc (META_OUTPUT_KMS (onscreen_native->output), kms_update);
   set_rgb_range (META_OUTPUT_KMS (onscreen_native->output), kms_update);
+  set_color_mode (META_OUTPUT_KMS (onscreen_native->output), kms_update);
 }
 
 static void
@@ -1927,40 +1946,6 @@ meta_onscreen_native_prepare_frame (CoglOnscreen *onscreen,
       onscreen_native->property.privacy_screen.target_frame_counter =
         target_frame_counter;
     }
-
-  if (onscreen_native->property.color_space.invalidated)
-    {
-      MetaKmsConnector *kms_connector =
-        meta_output_kms_get_kms_connector (output_kms);
-      MetaKmsUpdate *kms_update;
-      MetaOutputColorspace color_space;
-
-      kms_update = meta_frame_native_ensure_kms_update (frame_native,
-                                                        kms_device);
-
-      color_space = meta_output_peek_color_space (onscreen_native->output);
-      meta_kms_update_set_color_space (kms_update, kms_connector, color_space);
-      onscreen_native->property.color_space.invalidated = FALSE;
-      onscreen_native->property.color_space.target_frame_counter =
-        target_frame_counter;
-    }
-
-  if (onscreen_native->property.hdr_metadata.invalidated)
-    {
-      MetaKmsConnector *kms_connector =
-        meta_output_kms_get_kms_connector (output_kms);
-      MetaKmsUpdate *kms_update;
-      MetaOutputHdrMetadata *metadata;
-
-      kms_update = meta_frame_native_ensure_kms_update (frame_native,
-                                                        kms_device);
-
-      metadata = meta_output_peek_hdr_metadata (onscreen_native->output);
-      meta_kms_update_set_hdr_metadata (kms_update, kms_connector, metadata);
-      onscreen_native->property.hdr_metadata.invalidated = FALSE;
-      onscreen_native->property.hdr_metadata.target_frame_counter =
-        target_frame_counter;
-    }
 }
 
 static void
@@ -2250,6 +2235,7 @@ create_surfaces_gbm (CoglOnscreen        *onscreen,
   struct gbm_device *gbm_device;
   struct gbm_surface *new_gbm_surface = NULL;
   EGLNativeWindowType egl_native_window;
+  gboolean should_be_sharable;
   EGLSurface new_egl_surface;
   EGLConfig egl_config;
   uint32_t format;
@@ -2261,6 +2247,8 @@ create_surfaces_gbm (CoglOnscreen        *onscreen,
   render_device_gbm = META_RENDER_DEVICE_GBM (renderer_gpu_data->render_device);
   gbm_device = meta_render_device_gbm_get_gbm_device (render_device_gbm);
 
+  should_be_sharable = should_surface_be_sharable (onscreen);
+
   if (!(cogl_renderer_egl->private_features &
         COGL_EGL_WINSYS_FEATURE_NO_CONFIG_CONTEXT) ||
       !choose_onscreen_egl_config (onscreen, &egl_config, error))
@@ -2270,7 +2258,8 @@ create_surfaces_gbm (CoglOnscreen        *onscreen,
                                     cogl_renderer_egl->edpy,
                                     egl_config);
 
-  if (meta_renderer_native_use_modifiers (renderer_native))
+  if (!should_be_sharable &&
+      meta_renderer_native_use_modifiers (renderer_native))
     modifiers = get_supported_modifiers (onscreen, format);
   else
     modifiers = NULL;
@@ -2289,7 +2278,7 @@ create_surfaces_gbm (CoglOnscreen        *onscreen,
     {
       uint32_t flags = GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING;
 
-      if (should_surface_be_sharable (onscreen))
+      if (should_be_sharable)
         flags |= GBM_BO_USE_LINEAR;
 
       new_gbm_surface = gbm_surface_create (gbm_device,
@@ -2773,12 +2762,6 @@ meta_onscreen_native_invalidate (MetaOnscreenNative *onscreen_native)
     onscreen_native->property.gamma_lut.invalidated = TRUE;
   if (output_info->supports_privacy_screen)
     onscreen_native->property.privacy_screen.invalidated = TRUE;
-  if (output_info->supported_color_spaces &
-      (1 << META_OUTPUT_COLORSPACE_DEFAULT))
-    onscreen_native->property.color_space.invalidated = TRUE;
-  if (output_info->supported_hdr_eotfs &
-      (1 << META_OUTPUT_HDR_METADATA_EOTF_TRADITIONAL_GAMMA_SDR))
-    onscreen_native->property.hdr_metadata.invalidated = TRUE;
 }
 
 static void
@@ -2799,26 +2782,6 @@ on_privacy_screen_enabled_changed (MetaOutput         *output,
   ClutterStageView *stage_view = CLUTTER_STAGE_VIEW (onscreen_native->view);
 
   onscreen_native->property.privacy_screen.invalidated = TRUE;
-  clutter_stage_view_schedule_update (stage_view);
-}
-
-static void
-on_color_space_changed (MetaOutput         *output,
-                        MetaOnscreenNative *onscreen_native)
-{
-  ClutterStageView *stage_view = CLUTTER_STAGE_VIEW (onscreen_native->view);
-
-  onscreen_native->property.color_space.invalidated = TRUE;
-  clutter_stage_view_schedule_update (stage_view);
-}
-
-static void
-on_hdr_metadata_changed (MetaOutput         *output,
-                         MetaOnscreenNative *onscreen_native)
-{
-  ClutterStageView *stage_view = CLUTTER_STAGE_VIEW (onscreen_native->view);
-
-  onscreen_native->property.hdr_metadata.invalidated = TRUE;
   clutter_stage_view_schedule_update (stage_view);
 }
 
@@ -2869,26 +2832,6 @@ meta_onscreen_native_new (MetaRendererNative *renderer_native,
                           onscreen_native);
     }
 
-  if (output_info->supported_color_spaces &
-      (1 << META_OUTPUT_COLORSPACE_DEFAULT))
-    {
-      onscreen_native->property.color_space.invalidated = TRUE;
-      onscreen_native->property.color_space.signal_handler_id =
-        g_signal_connect (output, "color-space-changed",
-                          G_CALLBACK (on_color_space_changed),
-                          onscreen_native);
-    }
-
-  if (output_info->supported_hdr_eotfs &
-      (1 << META_OUTPUT_HDR_METADATA_EOTF_TRADITIONAL_GAMMA_SDR))
-    {
-      onscreen_native->property.hdr_metadata.invalidated = TRUE;
-      onscreen_native->property.hdr_metadata.signal_handler_id =
-        g_signal_connect (output, "hdr-metadata-changed",
-                          G_CALLBACK (on_hdr_metadata_changed),
-                          onscreen_native);
-    }
-
   return onscreen_native;
 }
 
@@ -2898,10 +2841,6 @@ clear_invalidation_handlers (MetaOnscreenNative *onscreen_native)
   g_clear_signal_handler (&onscreen_native->property.gamma_lut.signal_handler_id,
                           onscreen_native->crtc);
   g_clear_signal_handler (&onscreen_native->property.privacy_screen.signal_handler_id,
-                          onscreen_native->output);
-  g_clear_signal_handler (&onscreen_native->property.color_space.signal_handler_id,
-                          onscreen_native->output);
-  g_clear_signal_handler (&onscreen_native->property.hdr_metadata.signal_handler_id,
                           onscreen_native->output);
 }
 

@@ -29,8 +29,6 @@
 #include "meta/meta-monitor-manager.h"
 #include "meta/util.h"
 
-#define N_WATCH_MODES 4
-
 struct _MetaStageWatch
 {
   ClutterStageView *view;
@@ -59,7 +57,7 @@ struct _MetaStage
 
   MetaBackend *backend;
 
-  GPtrArray *watchers[N_WATCH_MODES];
+  GPtrArray *watchers[META_N_WATCH_MODES];
 
   GList *overlays;
 };
@@ -160,7 +158,7 @@ meta_stage_finalize (GObject *object)
       l = g_list_delete_link (l, l);
     }
 
-  for (i = 0; i < N_WATCH_MODES; i++)
+  for (i = 0; i < META_N_WATCH_MODES; i++)
     g_clear_pointer (&stage->watchers[i], g_ptr_array_unref);
 
   G_OBJECT_CLASS (meta_stage_parent_class)->finalize (object);
@@ -198,6 +196,17 @@ meta_stage_before_paint (ClutterStage     *stage,
 
   notify_watchers_for_mode (meta_stage, view, NULL, frame,
                             META_STAGE_WATCH_BEFORE_PAINT);
+}
+
+static void
+meta_stage_skipped_paint (ClutterStage     *stage,
+                          ClutterStageView *view,
+                          ClutterFrame     *frame)
+{
+  MetaStage *meta_stage = META_STAGE (stage);
+
+  notify_watchers_for_mode (meta_stage, view, NULL, frame,
+                            META_STAGE_WATCH_SKIPPED_PAINT);
 }
 
 static void
@@ -287,6 +296,7 @@ meta_stage_class_init (MetaStageClass *klass)
   actor_class->paint = meta_stage_paint;
 
   stage_class->before_paint = meta_stage_before_paint;
+  stage_class->skipped_paint = meta_stage_skipped_paint;
   stage_class->paint_view = meta_stage_paint_view;
 }
 
@@ -311,7 +321,7 @@ meta_stage_init (MetaStage *stage)
 {
   int i;
 
-  for (i = 0; i < N_WATCH_MODES; i++)
+  for (i = 0; i < META_N_WATCH_MODES; i++)
     stage->watchers[i] = g_ptr_array_new_with_free_func (g_free);
 
   if (meta_is_wayland_compositor ())
@@ -483,7 +493,7 @@ meta_stage_remove_watch (MetaStage      *stage,
   gboolean removed = FALSE;
   int i;
 
-  for (i = 0; i < N_WATCH_MODES; i++)
+  for (i = 0; i < META_N_WATCH_MODES; i++)
     {
       watchers = stage->watchers[i];
       removed = g_ptr_array_remove_fast (watchers, watch);
