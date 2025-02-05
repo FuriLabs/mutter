@@ -11,6 +11,7 @@ include:
       meson-options:
         -Dxwayland_initfd=enabled
         -Dprofiler=true
+        -Dbash_completion=false
 
 build-sysext:
   before_script:
@@ -105,13 +106,14 @@ variables:
     - .skip-git-clone
   variables:
     FDO_DISTRIBUTION_VERSION: 41
-    BASE_TAG: '2024-12-18.0'
+    BASE_TAG: '2025-02-04.1'
     MUTTER_USER: 'meta-user'
     FDO_DISTRIBUTION_PACKAGES:
+      accountsservice-devel
       clang
       gcovr
-      gdm
       gnome-shell
+      itstool
       python3-docutils
       sassc
       uncrustify
@@ -124,6 +126,7 @@ variables:
       zenity
       python3-dbusmock
       gnome-desktop-testing
+      ruff
 
     FDO_DISTRIBUTION_EXEC: |
       set -e
@@ -163,7 +166,7 @@ variables:
       rpm -e --nodeps gnome-bluetooth-libs-devel \
                       mutter mutter-devel \
                       gnome-shell \
-                      $(NULL)
+                      $NULL
 
       # Work-around for podman-push aborting on permission issue
       # https://gitlab.gnome.org/Infrastructure/Infrastructure/-/issues/1247
@@ -192,8 +195,6 @@ variables:
         ninja -C build src/tests/kvm/bzImage
         mkdir -p /opt/mutter
         cp build/src/tests/kvm/bzImage /opt/mutter/bzImage
-
-        dnf install -y python3-argcomplete
 
         git clone https://github.com/arighi/virtme-ng.git
         cd virtme-ng
@@ -347,7 +348,7 @@ build-fedora-container@aarch64:
     - !reference [.pipeline-guard, rules]
   when: manual
 
-check-code-style:
+check-c-code-style:
   extends:
     - .mutter.distribution-image
     - .mutter.fedora@x86_64
@@ -364,6 +365,25 @@ check-code-style:
       export common_parent_sha=$(diff --old-line-format='' --new-line-format='' <(git rev-list --first-parent "target/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME") <(git rev-list --first-parent HEAD) | head -1) ;
       python3 -u ./check-style.py --dry-run --sha $common_parent_sha ;
   allow_failure: true
+  rules:
+    - !reference [.only-merge-requests, rules]
+
+check-python-code-style:
+  extends:
+    - .mutter.distribution-image
+    - .mutter.fedora@x86_64
+  variables:
+    PYTHON_FILES:
+      tools/gdctl
+      clutter/clutter/gen-keyname-table.py
+      clutter/clutter/clutter-keysyms-update.py
+  stage: code-review
+  needs:
+    - job: build-fedora-container@x86_64
+      artifacts: false
+  script:
+    - ruff format --line-length 80 --check $PYTHON_FILES
+    - ruff check $PYTHON_FILES
   rules:
     - !reference [.only-merge-requests, rules]
 

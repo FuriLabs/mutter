@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include <libei.h>
 #include <pipewire/pipewire.h>
 #include <spa/param/video/format-utils.h>
 
@@ -64,6 +65,16 @@ typedef struct _Session
 {
   MetaDBusScreenCastSession *screen_cast_session_proxy;
   MetaDBusRemoteDesktopSession *remote_desktop_session_proxy;
+
+  GArray *seat_caps;
+
+  struct ei *ei;
+  GSource *ei_source;
+  struct ei_seat *ei_seat;
+  struct ei_device *keyboard;
+  struct ei_device *pointer;
+  uint32_t ei_sequence;
+  struct ei_ping *ping;
 } Session;
 
 typedef struct _RemoteDesktop
@@ -112,6 +123,16 @@ void session_notify_absolute_pointer (Session *session,
                                       double   x,
                                       double   y);
 
+void session_add_seat_capability (Session                   *session,
+                                  enum ei_device_capability  cap);
+
+void session_remove_seat_capability (Session                   *session,
+                                     enum ei_device_capability  cap);
+
+void session_connect_to_eis (Session *session);
+
+void session_ei_roundtrip (Session *session);
+
 void session_start (Session *session);
 
 void session_stop (Session *session);
@@ -124,6 +145,8 @@ Stream * session_record_virtual (Session    *session,
 Stream * session_record_monitor (Session    *session,
                                  const char *connector,
                                  CursorMode  cursor_mode);
+
+const char * session_get_id (Session *session);
 
 Session * session_new (MetaDBusRemoteDesktopSession *remote_desktop_session_proxy,
                        MetaDBusScreenCastSession    *screen_cast_session_proxy);

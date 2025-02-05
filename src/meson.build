@@ -135,9 +135,9 @@ if have_wayland
   ]
 endif
 
-if have_libsystemd
+if have_logind
   mutter_pkg_private_deps += [
-    libsystemd_dep,
+    logind_dep,
   ]
 endif
 
@@ -145,7 +145,6 @@ if have_native_backend
   mutter_pkg_private_deps += [
     libinput_dep,
     libgbm_dep,
-    logind_provider_dep,
     xkbcommon_dep,
   ]
 endif
@@ -241,8 +240,6 @@ mutter_sources = [
   'backends/meta-input-settings-dummy.h',
   'backends/meta-keymap-utils.c',
   'backends/meta-keymap-utils.h',
-  'backends/meta-launcher.c',
-  'backends/meta-launcher.h',
   'backends/meta-logical-monitor.c',
   'backends/meta-logical-monitor.h',
   'backends/meta-monitor.c',
@@ -920,6 +917,13 @@ if have_libgudev
   mutter_sources += [
     'backends/meta-udev.c',
     'backends/meta-udev.h',
+  ]
+endif
+
+if have_logind
+  mutter_sources += [
+    'backends/meta-launcher.c',
+    'backends/meta-launcher.h',
   ]
 endif
 

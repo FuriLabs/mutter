@@ -1831,7 +1831,7 @@ meta_display_ping_timeout (gpointer data)
 
   ping_data->ping_timeout_id = 0;
 
-  meta_topic (META_DEBUG_PING,
+  meta_topic (META_DEBUG_DISPLAY,
               "Ping %u on window %s timed out",
               ping_data->serial, ping_data->window->desc);
 
@@ -1872,8 +1872,8 @@ meta_display_ping_window (MetaWindow *window,
 
   if (serial == 0)
     {
-      meta_warning ("Tried to ping window %s with a bad serial! Not allowed.",
-                    window->desc);
+      g_warning ("Tried to ping window %s with a bad serial! Not allowed.",
+                 window->desc);
       return;
     }
 
@@ -1886,7 +1886,7 @@ meta_display_ping_window (MetaWindow *window,
 
       if (window == pending_ping_data->window)
         {
-          meta_topic (META_DEBUG_PING,
+          meta_topic (META_DEBUG_DISPLAY,
                       "Window %s already is being pinged with serial %u",
                       window->desc, pending_ping_data->serial);
           return;
@@ -1894,9 +1894,10 @@ meta_display_ping_window (MetaWindow *window,
 
       if (serial == pending_ping_data->serial)
         {
-          meta_warning ("Ping serial %u was reused for window %s, "
-                        "previous use was for window %s.",
-                        serial, window->desc, pending_ping_data->window->desc);
+          meta_topic (META_DEBUG_DISPLAY,
+                      "Ping serial %u was reused for window %s, "
+                      "previous use was for window %s.",
+                      serial, window->desc, pending_ping_data->window->desc);
           return;
         }
     }
@@ -1912,7 +1913,7 @@ meta_display_ping_window (MetaWindow *window,
 
   display->pending_pings = g_slist_prepend (display->pending_pings, ping_data);
 
-  meta_topic (META_DEBUG_PING,
+  meta_topic (META_DEBUG_DISPLAY,
               "Sending ping with serial %u to window %s",
               serial, window->desc);
 
@@ -1936,7 +1937,7 @@ meta_display_pong_for_serial (MetaDisplay    *display,
 {
   GSList *tmp;
 
-  meta_topic (META_DEBUG_PING, "Received a pong with serial %u", serial);
+  meta_topic (META_DEBUG_DISPLAY, "Received a pong with serial %u", serial);
 
   for (tmp = display->pending_pings; tmp; tmp = tmp->next)
     {
@@ -1944,7 +1945,7 @@ meta_display_pong_for_serial (MetaDisplay    *display,
 
       if (serial == ping_data->serial)
         {
-          meta_topic (META_DEBUG_PING,
+          meta_topic (META_DEBUG_DISPLAY,
                       "Matching ping found for pong %u",
                       ping_data->serial);
 
@@ -2446,11 +2447,12 @@ meta_display_sanity_check_timestamps (MetaDisplay *display,
 {
   if (XSERVER_TIME_IS_BEFORE (timestamp, display->last_focus_time))
     {
-      meta_warning ("last_focus_time (%u) is greater than comparison "
-                    "timestamp (%u).  This most likely represents a buggy "
-                    "client sending inaccurate timestamps in messages such as "
-                    "_NET_ACTIVE_WINDOW.  Trying to work around...",
-                    display->last_focus_time, timestamp);
+      meta_topic (META_DEBUG_X11,
+                  "last_focus_time (%u) is greater than comparison "
+                  "timestamp (%u).  This most likely represents a buggy "
+                  "client sending inaccurate timestamps in messages such as "
+                  "_NET_ACTIVE_WINDOW.  Trying to work around...",
+                  display->last_focus_time, timestamp);
       display->last_focus_time = timestamp;
     }
   if (XSERVER_TIME_IS_BEFORE (timestamp, display->last_user_time))
@@ -2458,11 +2460,12 @@ meta_display_sanity_check_timestamps (MetaDisplay *display,
       GSList *windows;
       GSList *tmp;
 
-      meta_warning ("last_user_time (%u) is greater than comparison "
-                    "timestamp (%u).  This most likely represents a buggy "
-                    "client sending inaccurate timestamps in messages such as "
-                    "_NET_ACTIVE_WINDOW.  Trying to work around...",
-                    display->last_user_time, timestamp);
+      meta_topic (META_DEBUG_X11,
+                  "last_user_time (%u) is greater than comparison "
+                  "timestamp (%u).  This most likely represents a buggy "
+                  "client sending inaccurate timestamps in messages such as "
+                  "_NET_ACTIVE_WINDOW.  Trying to work around...",
+                  display->last_user_time, timestamp);
       display->last_user_time = timestamp;
 
       windows = meta_display_list_windows (display, META_LIST_DEFAULT);
@@ -2473,9 +2476,10 @@ meta_display_sanity_check_timestamps (MetaDisplay *display,
 
           if (XSERVER_TIME_IS_BEFORE (timestamp, window->net_wm_user_time))
             {
-              meta_warning ("%s appears to be one of the offending windows "
-                            "with a timestamp of %u.  Working around...",
-                            window->desc, window->net_wm_user_time);
+              meta_topic (META_DEBUG_X11,
+                          "%s appears to be one of the offending windows "
+                          "with a timestamp of %u.  Working around...",
+                          window->desc, window->net_wm_user_time);
               window->net_wm_user_time_set = FALSE;
               meta_window_set_user_time (window, timestamp);
             }
