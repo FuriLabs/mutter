@@ -6,3 +6,4 @@ workarounds/tests-Skip-thread-priority-test.patch
 workarounds/place-Always-center-initial-setup.patch
 workarounds/Mark-several-additional-tests-as-flaky.patch
 workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
+tests-cursor-Embed-a-copy-of-the-Adwaita-cursor-theme.patch
