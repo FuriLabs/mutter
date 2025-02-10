@@ -2,7 +2,7 @@
 
 set -eu
 
-namespace="mutter-15/stacking mutter-15/thread.test"
+namespace="mutter-16/stacking mutter-16/thread.test"
 
 if [ -z "${HOME-}" ] || ! [ -w "${HOME}" ]; then
     export HOME="${AUTOPKGTEST_TMP}"

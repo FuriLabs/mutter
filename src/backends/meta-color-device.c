@@ -24,6 +24,7 @@
 
 #include <colord.h>
 
+#include "backends/meta-backend-private.h"
 #include "backends/meta-color-device.h"
 #include "backends/meta-color-manager-private.h"
 #include "backends/meta-color-profile.h"
@@ -625,41 +626,24 @@ on_manager_ready (MetaColorManager *color_manager,
   create_cd_device (color_device);
 }
 
-static ClutterColorspace
-get_color_space_from_monitor (MetaMonitor *monitor)
+static void
+get_color_metadata_from_monitor (MetaMonitor        *monitor,
+                                 ClutterColorimetry *colorimetry,
+                                 ClutterEOTF        *eotf)
 {
-  switch (meta_monitor_get_color_space (monitor))
+  colorimetry->type = CLUTTER_COLORIMETRY_TYPE_COLORSPACE;
+  eotf->type = CLUTTER_EOTF_TYPE_NAMED;
+
+  switch (meta_monitor_get_color_mode (monitor))
     {
-    case META_OUTPUT_COLORSPACE_DEFAULT:
-    case META_OUTPUT_COLORSPACE_UNKNOWN:
-      return CLUTTER_COLORSPACE_DEFAULT;
-    case META_OUTPUT_COLORSPACE_BT2020:
-      return CLUTTER_COLORSPACE_BT2020;
-    }
-  g_assert_not_reached ();
-}
-
-static ClutterTransferFunction
-get_transfer_function_from_monitor (MetaMonitor *monitor)
-{
-  const MetaOutputHdrMetadata *hdr_metadata =
-    meta_monitor_get_hdr_metadata (monitor);
-
-  if (!hdr_metadata->active)
-    return CLUTTER_TRANSFER_FUNCTION_DEFAULT;
-
-  switch (hdr_metadata->eotf)
-    {
-    case META_OUTPUT_HDR_METADATA_EOTF_PQ:
-      return CLUTTER_TRANSFER_FUNCTION_PQ;
-    case META_OUTPUT_HDR_METADATA_EOTF_TRADITIONAL_GAMMA_SDR:
-      return CLUTTER_TRANSFER_FUNCTION_DEFAULT;
-    case META_OUTPUT_HDR_METADATA_EOTF_TRADITIONAL_GAMMA_HDR:
-      g_warning ("Unhandled HDR EOTF (traditional gamma hdr)");
-      return CLUTTER_TRANSFER_FUNCTION_DEFAULT;
-    case META_OUTPUT_HDR_METADATA_EOTF_HLG:
-      g_warning ("Unhandled HDR EOTF (HLG)");
-      return CLUTTER_TRANSFER_FUNCTION_DEFAULT;
+    case META_COLOR_MODE_DEFAULT:
+      colorimetry->colorspace = CLUTTER_COLORSPACE_SRGB;
+      eotf->tf_name = CLUTTER_TRANSFER_FUNCTION_SRGB;
+      return;
+    case META_COLOR_MODE_BT2100:
+      colorimetry->colorspace = CLUTTER_COLORSPACE_BT2020;
+      eotf->tf_name = CLUTTER_TRANSFER_FUNCTION_PQ;
+      return;
     }
 
   g_assert_not_reached ();
@@ -675,28 +659,32 @@ update_color_state (MetaColorDevice *color_device)
   MetaDebugControl *debug_control = meta_context_get_debug_control (context);
   ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
   g_autoptr (ClutterColorState) color_state = NULL;
-  ClutterColorspace colorspace;
-  ClutterTransferFunction transfer_function;
-  float min_lum, max_lum, ref_lum;
+  ClutterColorimetry colorimetry;
+  ClutterEOTF eotf;
+  ClutterLuminance luminance;
   float reference_luminance_factor;
   UpdateResult result = 0;
 
-  colorspace = get_color_space_from_monitor (monitor);
-  transfer_function = get_transfer_function_from_monitor (monitor);
+  get_color_metadata_from_monitor (monitor, &colorimetry, &eotf);
 
-  clutter_transfer_function_get_default_luminances (transfer_function,
-                                                    &min_lum,
-                                                    &max_lum,
-                                                    &ref_lum);
+  if (meta_debug_control_is_hdr_forced (debug_control))
+    {
+      colorimetry.type = CLUTTER_COLORIMETRY_TYPE_COLORSPACE;
+      colorimetry.colorspace = CLUTTER_COLORSPACE_BT2020;
+      eotf.type = CLUTTER_EOTF_TYPE_NAMED;
+      eotf.tf_name = CLUTTER_TRANSFER_FUNCTION_PQ;
+    }
+
+  luminance = *clutter_eotf_get_default_luminance (eotf);
 
   reference_luminance_factor =
     meta_debug_control_get_luminance_percentage (debug_control) / 100.0f;
-  ref_lum = ref_lum * reference_luminance_factor;
+  luminance.ref = luminance.ref * reference_luminance_factor;
 
-  color_state = clutter_color_state_new_full (clutter_context,
-                                              colorspace,
-                                              transfer_function,
-                                              min_lum, max_lum, ref_lum);
+  color_state = clutter_color_state_params_new_from_primitives (clutter_context,
+                                                                colorimetry,
+                                                                eotf,
+                                                                luminance);
 
   if (!color_device->color_state ||
       !clutter_color_state_equals (color_device->color_state, color_state))
@@ -965,15 +953,17 @@ create_icc_profile_from_edid (MetaColorDevice     *color_device,
   const char *serial;
   g_autofree char *vendor_name = NULL;
   cmsHPROFILE lcms_profile;
+  const struct di_color_primaries *primaries =
+    &edid_info->default_color_primaries;
 
-  if (G_APPROX_VALUE (edid_info->red_x, 0.0, FLT_EPSILON) ||
-      G_APPROX_VALUE (edid_info->red_y, 0.0, FLT_EPSILON) ||
-      G_APPROX_VALUE (edid_info->green_x, 0.0, FLT_EPSILON) ||
-      G_APPROX_VALUE (edid_info->green_y, 0.0, FLT_EPSILON) ||
-      G_APPROX_VALUE (edid_info->blue_x, 0.0, FLT_EPSILON) ||
-      G_APPROX_VALUE (edid_info->blue_y, 0.0, FLT_EPSILON) ||
-      G_APPROX_VALUE (edid_info->white_x, 0.0, FLT_EPSILON) ||
-      G_APPROX_VALUE (edid_info->white_y, 0.0, FLT_EPSILON))
+  if (G_APPROX_VALUE (primaries->primary[0].x, 0.0, FLT_EPSILON) ||
+      G_APPROX_VALUE (primaries->primary[0].y, 0.0, FLT_EPSILON) ||
+      G_APPROX_VALUE (primaries->primary[1].x, 0.0, FLT_EPSILON) ||
+      G_APPROX_VALUE (primaries->primary[1].y, 0.0, FLT_EPSILON) ||
+      G_APPROX_VALUE (primaries->primary[2].x, 0.0, FLT_EPSILON) ||
+      G_APPROX_VALUE (primaries->primary[2].y, 0.0, FLT_EPSILON) ||
+      G_APPROX_VALUE (primaries->default_white.x, 0.0, FLT_EPSILON) ||
+      G_APPROX_VALUE (primaries->default_white.y, 0.0, FLT_EPSILON))
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "EDID for %s contains bogus Color Characteristics",
@@ -981,8 +971,8 @@ create_icc_profile_from_edid (MetaColorDevice     *color_device,
       return NULL;
     }
 
-  if (edid_info->gamma + FLT_EPSILON < 1.0 ||
-      edid_info->gamma > 4.0)
+  if (edid_info->default_gamma + FLT_EPSILON < 1.0 ||
+      edid_info->default_gamma > 4.0)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "EDID for %s contains bogus Display Transfer "
@@ -1001,18 +991,18 @@ create_icc_profile_from_edid (MetaColorDevice     *color_device,
 
   cd_icc = cd_icc_new ();
 
-  chroma.Red.x = edid_info->red_x;
-  chroma.Red.y = edid_info->red_y;
-  chroma.Green.x = edid_info->green_x;
-  chroma.Green.y = edid_info->green_y;
-  chroma.Blue.x = edid_info->blue_x;
-  chroma.Blue.y = edid_info->blue_y;
-  white_point.x = edid_info->white_x;
-  white_point.y = edid_info->white_y;
+  chroma.Red.x = primaries->primary[0].x;
+  chroma.Red.y = primaries->primary[0].y;
+  chroma.Green.x = primaries->primary[1].x;
+  chroma.Green.y = primaries->primary[1].y;
+  chroma.Blue.x = primaries->primary[2].x;
+  chroma.Blue.y = primaries->primary[2].y;
+  white_point.x = primaries->default_white.x;
+  white_point.y = primaries->default_white.y;
   white_point.Y = 1.0;
 
   /* Estimate the transfer function for the gamma */
-  transfer_curve[0] = cmsBuildGamma (NULL, edid_info->gamma);
+  transfer_curve[0] = cmsBuildGamma (NULL, edid_info->default_gamma);
   transfer_curve[1] = transfer_curve[0];
   transfer_curve[2] = transfer_curve[0];
 
@@ -1376,127 +1366,6 @@ meta_color_device_get_assigned_profile (MetaColorDevice *color_device)
   return color_device->assigned_profile;
 }
 
-static void
-set_color_space_and_hdr_metadata (MetaMonitor           *monitor,
-                                  gboolean               enable,
-                                  MetaOutputColorspace  *color_space,
-                                  MetaOutputHdrMetadata *hdr_metadata)
-{
-  MetaBackend *backend = meta_monitor_get_backend (monitor);
-  ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
-  CoglContext *cogl_context = clutter_backend_get_cogl_context (clutter_backend);
-
-  if (enable &&
-      !cogl_context_has_feature (cogl_context, COGL_FEATURE_ID_TEXTURE_HALF_FLOAT))
-    {
-      g_warning ("Tried to enable HDR without half float rendering support, ignoring");
-      enable = FALSE;
-    }
-
-  if (enable)
-    {
-      *color_space = META_OUTPUT_COLORSPACE_BT2020;
-      *hdr_metadata = (MetaOutputHdrMetadata) {
-        .active = TRUE,
-        .eotf = META_OUTPUT_HDR_METADATA_EOTF_PQ,
-      };
-
-      meta_topic (META_DEBUG_COLOR,
-                  "ColorDevice: Trying to enabling HDR mode "
-                  "(Colorimetry: bt.2020, TF: PQ, HDR Metadata: Minimal):");
-    }
-  else
-    {
-      *color_space = META_OUTPUT_COLORSPACE_DEFAULT;
-      *hdr_metadata = (MetaOutputHdrMetadata) {
-        .active = FALSE,
-      };
-
-      meta_topic (META_DEBUG_COLOR,
-                  "ColorDevice: Trying to enable default mode "
-                  "(Colorimetry: default, TF: default, HDR Metadata: None):");
-    }
-}
-
-static UpdateResult
-update_hdr (MetaColorDevice *color_device)
-{
-  MetaMonitor *monitor = color_device->monitor;
-  MetaBackend *backend = meta_monitor_get_backend (monitor);
-  MetaContext *context = meta_backend_get_context (backend);
-  MetaDebugControl *debug_control = meta_context_get_debug_control (context);
-  MetaOutputColorspace color_space;
-  MetaOutputHdrMetadata hdr_metadata;
-  gboolean hdr_enabled;
-  g_autoptr (GError) error = NULL;
-
-  hdr_enabled = meta_debug_control_is_hdr_enabled (debug_control);
-  set_color_space_and_hdr_metadata (monitor, hdr_enabled,
-                                    &color_space, &hdr_metadata);
-
-  if (meta_monitor_get_color_space (monitor) == color_space &&
-      meta_output_hdr_metadata_equal (meta_monitor_get_hdr_metadata (monitor),
-                                      &hdr_metadata))
-    return 0;
-
-  if (!meta_monitor_set_color_space (monitor, color_space, &error))
-    {
-      meta_monitor_set_color_space (monitor,
-                                    META_OUTPUT_COLORSPACE_DEFAULT,
-                                    NULL);
-      meta_monitor_set_hdr_metadata (monitor, &(MetaOutputHdrMetadata) {
-                                       .active = FALSE,
-                                     }, NULL);
-
-      if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED))
-        {
-          meta_topic (META_DEBUG_COLOR,
-                      "ColorDevice: Colorimetry not supported "
-                      "on monitor %s",
-                      meta_monitor_get_display_name (monitor));
-        }
-      else
-        {
-          g_warning ("Failed to set color space on monitor %s: %s",
-                     meta_monitor_get_display_name (monitor), error->message);
-        }
-
-      return 0;
-    }
-
-  if (!meta_monitor_set_hdr_metadata (monitor, &hdr_metadata, &error))
-    {
-      meta_monitor_set_color_space (monitor,
-                                    META_OUTPUT_COLORSPACE_DEFAULT,
-                                    NULL);
-      meta_monitor_set_hdr_metadata (monitor, &(MetaOutputHdrMetadata) {
-                                       .active = FALSE,
-                                     }, NULL);
-
-      if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED))
-        {
-          meta_topic (META_DEBUG_COLOR,
-                      "ColorDevice: HDR Metadata not supported "
-                      "on monitor %s",
-                      meta_monitor_get_display_name (monitor));
-        }
-      else
-        {
-          g_warning ("Failed to set HDR metadata on monitor %s: %s",
-                     meta_monitor_get_display_name (monitor),
-                     error->message);
-        }
-
-      return 0;
-    }
-
-    meta_topic (META_DEBUG_COLOR,
-                "ColorDevice: successfully set on monitor %s",
-                meta_monitor_get_display_name (monitor));
-
-  return UPDATE_RESULT_CALIBRATION;
-}
-
 static UpdateResult
 update_white_point (MetaColorDevice *color_device)
 {
@@ -1563,7 +1432,6 @@ meta_color_device_update (MetaColorDevice *color_device)
   if (!meta_monitor_is_active (monitor))
     return;
 
-  result |= update_hdr (color_device);
   result |= update_white_point (color_device);
   result |= update_color_state (color_device);
 

@@ -27,8 +27,6 @@
 
 #include "clutter/clutter-paint-node-private.h"
 
-#include <pango/pango.h>
-
 #include "cogl/cogl.h"
 #include "clutter/clutter-actor-private.h"
 #include "clutter/clutter-blur-private.h"
@@ -85,6 +83,8 @@ struct _ClutterRootNode
 {
   ClutterPaintNode parent_instance;
 
+  ClutterColorState *color_state;
+
   CoglFramebuffer *framebuffer;
 
   CoglBufferBit clear_flags;
@@ -99,6 +99,7 @@ clutter_root_node_pre_draw (ClutterPaintNode    *node,
 {
   ClutterRootNode *rnode = (ClutterRootNode *) node;
 
+  clutter_paint_context_push_color_state (paint_context, rnode->color_state);
   clutter_paint_context_push_framebuffer (paint_context, rnode->framebuffer);
 
   cogl_framebuffer_clear (rnode->framebuffer,
@@ -112,6 +113,7 @@ static void
 clutter_root_node_post_draw (ClutterPaintNode    *node,
                              ClutterPaintContext *paint_context)
 {
+  clutter_paint_context_pop_color_state (paint_context);
   clutter_paint_context_pop_framebuffer (paint_context);
 }
 
@@ -120,7 +122,8 @@ clutter_root_node_finalize (ClutterPaintNode *node)
 {
   ClutterRootNode *rnode = (ClutterRootNode *) node;
 
-  g_object_unref (rnode->framebuffer);
+  g_clear_object (&rnode->color_state);
+  g_clear_object (&rnode->framebuffer);
 
   CLUTTER_PAINT_NODE_CLASS (clutter_root_node_parent_class)->finalize (node);
 }
@@ -150,13 +153,15 @@ clutter_root_node_init (ClutterRootNode *self)
 }
 
 ClutterPaintNode *
-clutter_root_node_new (CoglFramebuffer *framebuffer,
-                       const CoglColor *clear_color,
-                       CoglBufferBit    clear_flags)
+clutter_root_node_new (CoglFramebuffer   *framebuffer,
+                       ClutterColorState *color_state,
+                       const CoglColor   *clear_color,
+                       CoglBufferBit      clear_flags)
 {
   ClutterRootNode *res;
 
   g_return_val_if_fail (framebuffer, NULL);
+  g_return_val_if_fail (CLUTTER_IS_COLOR_STATE (color_state), NULL);
 
   res = _clutter_paint_node_create (CLUTTER_TYPE_ROOT_NODE);
 
@@ -165,6 +170,7 @@ clutter_root_node_new (CoglFramebuffer *framebuffer,
 
   res->framebuffer = g_object_ref (framebuffer);
   res->clear_flags = clear_flags;
+  res->color_state = g_object_ref (color_state);
 
   return (ClutterPaintNode *) res;
 }
@@ -692,197 +698,6 @@ clutter_texture_node_new (CoglTexture          *texture,
   return (ClutterPaintNode *) tnode;
 }
 
-
-/**
- * ClutterTextNode:
- */
-struct _ClutterTextNode
-{
-  ClutterPaintNode parent_instance;
-
-  PangoLayout *layout;
-  CoglColor color;
-};
-
-/**
- * ClutterTextNodeClass:
- *
- * The `ClutterTextNodeClass` structure is an opaque
- * type whose contents cannot be directly accessed.
- */
-struct _ClutterTextNodeClass
-{
-  ClutterPaintNodeClass parent_class;
-};
-
-G_DEFINE_TYPE (ClutterTextNode, clutter_text_node, CLUTTER_TYPE_PAINT_NODE)
-
-static void
-clutter_text_node_finalize (ClutterPaintNode *node)
-{
-  ClutterTextNode *tnode = CLUTTER_TEXT_NODE (node);
-
-  g_clear_object (&tnode->layout);
-
-  CLUTTER_PAINT_NODE_CLASS (clutter_text_node_parent_class)->finalize (node);
-}
-
-static gboolean
-clutter_text_node_pre_draw (ClutterPaintNode    *node,
-                            ClutterPaintContext *paint_context)
-{
-  ClutterTextNode *tnode = CLUTTER_TEXT_NODE (node);
-
-  return tnode->layout != NULL;
-}
-
-typedef struct
-{
-  ClutterColorState *color_state;
-  ClutterColorState *target_color_state;
-} PangoPipelineData;
-
-static void
-setup_pango_pipeline (CoglPipeline *pipeline,
-                      gpointer      user_data)
-{
-  PangoPipelineData *pango_pipeline_data = user_data;
-  ClutterColorState *color_state =
-    pango_pipeline_data->color_state;
-  ClutterColorState *target_color_state =
-    pango_pipeline_data->target_color_state;
-
-  clutter_color_state_add_pipeline_transform (color_state,
-                                              target_color_state,
-                                              pipeline);
-}
-
-static void
-clutter_text_node_draw (ClutterPaintNode    *node,
-                        ClutterPaintContext *paint_context)
-{
-  ClutterTextNode *tnode = CLUTTER_TEXT_NODE (node);
-  ClutterColorState *color_state =
-    clutter_paint_context_get_color_state (paint_context);
-  ClutterColorState *target_color_state =
-    clutter_paint_context_get_target_color_state (paint_context);
-  PangoRectangle extents;
-  CoglFramebuffer *fb;
-  guint i;
-  PangoPipelineData pango_pipeline_data = {};
-
-  if (node->operations == NULL)
-    return;
-
-  pango_pipeline_data = (PangoPipelineData) {
-    .color_state = color_state,
-    .target_color_state = target_color_state,
-  };
-
-  fb = get_target_framebuffer (node, paint_context);
-
-  pango_layout_get_pixel_extents (tnode->layout, NULL, &extents);
-
-  for (i = 0; i < node->operations->len; i++)
-    {
-      const ClutterPaintOperation *op;
-      float op_width, op_height;
-      gboolean clipped = FALSE;
-
-      op = &g_array_index (node->operations, ClutterPaintOperation, i);
-
-      switch (op->opcode)
-        {
-        case PAINT_OP_TEX_RECT:
-          op_width = op->op.texrect[2] - op->op.texrect[0];
-          op_height = op->op.texrect[3] - op->op.texrect[1];
-
-          /* if the primitive size was smaller than the layout,
-           * we clip the layout when drawin, to avoid spilling
-           * it out
-           */
-          if (extents.width > op_width ||
-              extents.height > op_height)
-            {
-              cogl_framebuffer_push_rectangle_clip (fb,
-                                                    op->op.texrect[0],
-                                                    op->op.texrect[1],
-                                                    op->op.texrect[2],
-                                                    op->op.texrect[3]);
-              clipped = TRUE;
-            }
-
-          cogl_pango_show_layout (fb,
-                                  tnode->layout,
-                                  op->op.texrect[0],
-                                  op->op.texrect[1],
-                                  &tnode->color,
-                                  setup_pango_pipeline,
-                                  &pango_pipeline_data);
-
-          if (clipped)
-            cogl_framebuffer_pop_clip (fb);
-          break;
-
-        case PAINT_OP_TEX_RECTS:
-        case PAINT_OP_MULTITEX_RECT:
-        case PAINT_OP_PRIMITIVE:
-        case PAINT_OP_INVALID:
-          break;
-        }
-    }
-}
-
-static void
-clutter_text_node_class_init (ClutterTextNodeClass *klass)
-{
-  ClutterPaintNodeClass *node_class = CLUTTER_PAINT_NODE_CLASS (klass);
-
-  node_class->pre_draw = clutter_text_node_pre_draw;
-  node_class->draw = clutter_text_node_draw;
-  node_class->finalize = clutter_text_node_finalize;
-}
-
-static void
-clutter_text_node_init (ClutterTextNode *self)
-{
-  cogl_color_init_from_4f (&self->color, 0.0, 0.0, 0.0, 1.0);
-}
-
-/**
- * clutter_text_node_new:
- * @layout: (allow-none): a #PangoLayout, or %NULL
- * @color: (allow-none): the color used to paint the layout,
- *   or %NULL
- *
- * Creates a new #ClutterPaintNode that will paint a #PangoLayout
- * with the given color.
- *
- * This function takes a reference on the passed @layout, so it
- * is safe to call g_object_unref() after it returns.
- *
- * Return value: (transfer full): the newly created #ClutterPaintNode.
- *   Use clutter_paint_node_unref() when done
- */
-ClutterPaintNode *
-clutter_text_node_new (PangoLayout     *layout,
-                       const CoglColor *color)
-{
-  ClutterTextNode *res;
-
-  g_return_val_if_fail (layout == NULL || PANGO_IS_LAYOUT (layout), NULL);
-
-  res = _clutter_paint_node_create (CLUTTER_TYPE_TEXT_NODE);
-
-  if (layout != NULL)
-    res->layout = g_object_ref (layout);
-
-  if (color != NULL)
-    res->color = *color;
-
-  return (ClutterPaintNode *) res;
-}
-
 /**
  * ClutterClipNode:
  */
@@ -1033,6 +848,7 @@ clutter_actor_node_pre_draw (ClutterPaintNode    *node,
                              ClutterPaintContext *paint_context)
 {
   ClutterActorNode *actor_node = CLUTTER_ACTOR_NODE (node);
+  ClutterColorState *color_state;
 
   if (actor_node->opacity_override != -1)
     {
@@ -1043,6 +859,9 @@ clutter_actor_node_pre_draw (ClutterPaintNode    *node,
     }
 
   CLUTTER_SET_PRIVATE_FLAGS (actor_node->actor, CLUTTER_IN_PAINT);
+
+  color_state = clutter_actor_get_color_state (actor_node->actor);
+  clutter_paint_context_push_color_state (paint_context, color_state);
 
   return TRUE;
 }
@@ -1061,6 +880,8 @@ clutter_actor_node_post_draw (ClutterPaintNode    *node,
                               ClutterPaintContext *paint_context)
 {
   ClutterActorNode *actor_node = CLUTTER_ACTOR_NODE (node);
+
+  clutter_paint_context_pop_color_state (paint_context);
 
   CLUTTER_UNSET_PRIVATE_FLAGS (actor_node->actor, CLUTTER_IN_PAINT);
 
@@ -1424,7 +1245,7 @@ clutter_blit_node_draw (ClutterPaintNode    *node,
           op_width = op->op.texrect[6] - op->op.texrect[4];
           op_height = op->op.texrect[7] - op->op.texrect[5];
 
-          cogl_blit_framebuffer (blit_node->src,
+          cogl_framebuffer_blit (blit_node->src,
                                  framebuffer,
                                  (int) op->op.texrect[0],
                                  (int) op->op.texrect[1],
@@ -1511,7 +1332,7 @@ clutter_blit_node_new (CoglFramebuffer *src)
  * @height: Height of region to copy
  *
  * Adds a new blit rectangle to the stack of rectangles. All the
- * constraints of [func@Cogl.blit_framebuffer] apply here.
+ * constraints of [method@Cogl.Framebuffer.blit] apply here.
  */
 void
 clutter_blit_node_add_blit_rectangle (ClutterBlitNode *blit_node,
@@ -1608,23 +1429,26 @@ clutter_blur_node_new (unsigned int width,
                        float        radius)
 {
   g_autoptr (CoglOffscreen) offscreen = NULL;
+  g_autoptr (CoglTexture) texture = NULL;
   g_autoptr (GError) error = NULL;
   ClutterLayerNode *layer_node;
   ClutterBlurNode *blur_node;
-  CoglContext *context;
-  CoglTexture *texture;
+  ClutterContext *context;
+  ClutterBackend *backend;
+  CoglContext *cogl_context;
   ClutterBlur *blur;
 
   g_return_val_if_fail (radius >= 0.0, NULL);
 
+  context = _clutter_context_get_default ();
+  backend = clutter_context_get_backend (context);
+  cogl_context = clutter_backend_get_cogl_context (backend);
   blur_node = _clutter_paint_node_create (CLUTTER_TYPE_BLUR_NODE);
-  context = clutter_backend_get_cogl_context (clutter_get_default_backend ());
-  texture = cogl_texture_2d_new_with_size (context, width, height);
+  texture = cogl_texture_2d_new_with_size (cogl_context, width, height);
 
   cogl_texture_set_premultiplied (texture, TRUE);
 
   offscreen = cogl_offscreen_new_with_texture (texture);
-  g_object_unref (texture);
   if (!cogl_framebuffer_allocate (COGL_FRAMEBUFFER (offscreen), &error))
     {
       g_warning ("Unable to allocate paint node offscreen: %s",

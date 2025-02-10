@@ -38,13 +38,13 @@ documentation and API references below first.
 - [Building and Running](doc/building-and-running.md)
 - [Debugging](doc/debugging.md)
 - [Monitor configuration](doc/monitor-configuration.md)
+- [Multi-GPU](doc/multi-gpu.md)
 
 ## API Reference
 
 - Meta: <https://mutter.gnome.org/meta/>
 - Clutter: <https://mutter.gnome.org/clutter/>
 - Cogl: <https://mutter.gnome.org/cogl/>
-- CoglPango: <https://mutter.gnome.org/cogl-pango/>
 - Mtk: <https://mutter.gnome.org/mtk/>
 
 ## Meetings

@@ -1,13 +1,13 @@
 project('mutter', 'c',
-  version: '47.4',
+  version: '48.beta',
   meson_version: '>= 1.3.0',
-  license: 'GPLv2+'
+  license: 'GPL-2.0-or-later',
 )
 
 split_version = meson.project_version().split('.')
 
 # API version, bump each development cycle
-libmutter_api_version = '15'
+libmutter_api_version = '16'
 
 mutter_srcdir = meson.current_source_dir()
 mutter_builddir = meson.current_build_dir()
@@ -38,7 +38,8 @@ libcanberra_req = '>= 0.26'
 libwacom_req = '>= 0.13'
 atk_req = '>= 2.5.3'
 harfbuzz_req = '>= 2.6'
-libei_req = '>= 1.0.901'
+libei_req = '>= 1.3.901'
+libdisplay_info_req = '>= 0.2'
 
 # optional version requirements
 udev_req = '>= 228'
@@ -46,7 +47,7 @@ gudev_req = '>= 238'
 
 # wayland version requirements
 wayland_server_req = '>= 1.23'
-wayland_protocols_req = '>= 1.36'
+wayland_protocols_req = '>= 1.38'
 
 # native backend version requirements
 libinput_req = '>= 1.26.0'
@@ -88,6 +89,7 @@ libdir = prefix / get_option('libdir')
 libexecdir = prefix / get_option('libexecdir')
 includedir = prefix / get_option('includedir')
 sysconfdir = get_option('sysconfdir')
+mandir = prefix / get_option('mandir')
 
 pkgname = '@0@-@1@'.format(meson.project_name(), libmutter_api_version)
 
@@ -105,14 +107,13 @@ libmutter_name = 'mutter-' + libmutter_api_version
 mutter_installed_tests_datadir = datadir / 'installed-tests' / libmutter_name
 mutter_installed_tests_libexecdir = libexecdir / 'installed-tests' / libmutter_name
 
+subproject('gvdb')
+
 m_dep = cc.find_library('m', required: true)
 graphene_dep = dependency('graphene-gobject-1.0', version: graphene_req)
 gdk_pixbuf_dep = dependency('gdk-pixbuf-2.0', version: gdk_pixbuf_req)
-pango_dep = dependency('pango', version: pango_req)
 cairo_dep = dependency('cairo', version: cairo_req)
-pangocairo_dep = dependency('pangocairo', version: pangocairo_req)
 pixman_dep = dependency('pixman-1', version: pixman_req)
-fribidi_dep = dependency('fribidi', version: fribidi_req)
 gsettings_desktop_schemas_dep = dependency('gsettings-desktop-schemas',
                                            version: gsettings_desktop_schemas_req)
 glib_dep = dependency('glib-2.0', version: glib_req)
@@ -126,10 +127,10 @@ xkbcommon_dep = dependency('xkbcommon', version: xkbcommon_req)
 atk_dep = dependency('atk', version: atk_req)
 colord_dep = dependency('colord', version: colord_req)
 lcms2_dep = dependency('lcms2', version: lcms2_req)
-harfbuzz_dep = dependency('harfbuzz', version: harfbuzz_req)
 libeis_dep = dependency('libeis-1.0', version: libei_req)
 libei_dep = dependency('libei-1.0', version: libei_req)
 gvdb_dep = dependency('gvdb')
+libdisplay_info_dep = dependency('libdisplay-info', version: libdisplay_info_req)
 
 have_wayland = get_option('wayland')
 have_x11 = get_option('x11')
@@ -142,6 +143,18 @@ endif
 
 if not have_wayland and not have_x11
   error('A Wayland/X11 backend must be enabled')
+endif
+
+have_fonts = get_option('fonts')
+
+if have_fonts
+  pango_dep = dependency('pango', version: pango_req)
+  pangocairo_dep = dependency('pangocairo', version: pangocairo_req)
+  harfbuzz_dep = dependency('harfbuzz', version: harfbuzz_req)
+endif
+
+if have_fonts or have_x11
+  fribidi_dep = dependency('fribidi', version: fribidi_req)
 endif
 
 if have_x11_client
@@ -169,10 +182,6 @@ if have_x11_client
     xtst_dep = dependency('xtst')
   endif
 endif
-
-use_libdisplay_info = get_option('libdisplay_info')
-libdisplay_info_dep = dependency('libdisplay-info', required: use_libdisplay_info)
-have_libdisplay_info = libdisplay_info_dep.found()
 
 have_gnome_desktop = get_option('libgnome_desktop')
 if have_gnome_desktop
@@ -231,8 +240,25 @@ if have_wayland
   endif
 endif
 
+have_logind = get_option('logind')
+if have_logind
+  logind_dep = dependency('libsystemd', required: false)
+
+  if not logind_dep.found()
+    logind_dep = dependency('libelogind', required: false)
+  endif
+
+  if not logind_dep.found()
+    error('No logind provider dependency found: tried libsystemd and libelogind')
+  endif
+endif
+
 have_libgudev = get_option('udev')
 if have_libgudev
+  if not have_logind
+    error('The udev support requires logind')
+  endif
+
   libudev_dep = dependency('libudev', version: udev_req)
   gudev_dep = dependency('gudev-1.0', version: gudev_req)
   udev_dep = dependency('udev')
@@ -243,18 +269,13 @@ if have_libgudev
   endif
 endif
 
-have_libsystemd = get_option('systemd')
-libsystemd_dep = dependency('libsystemd', required: have_libsystemd)
-
 have_native_backend = get_option('native_backend')
 if have_native_backend
   libgbm_dep = dependency('gbm', version: gbm_req)
   libinput_dep = dependency('libinput', version: libinput_req)
 
-  if libsystemd_dep.found()
-    logind_provider_dep = libsystemd_dep
-  else
-    logind_provider_dep = dependency('libelogind')
+  if not have_logind
+    error('The native backend requires logind to be enabled')
   endif
 
   if not have_egl
@@ -357,6 +378,7 @@ have_kvm_tests = false
 have_tty_tests = false
 have_installed_tests = false
 have_x11_tests = false
+have_bash_completion = get_option('bash_completion')
 
 if have_tests
   gtk3_dep = dependency('gtk+-3.0', version: gtk3_req)
@@ -519,6 +541,11 @@ if buildtype != 'plain'
     mutter_c_args += [
       '-DG_ENABLE_DEBUG',
     ]
+  else
+    mutter_c_args += [
+      '-DG_DISABLE_ASSERT',
+      '-DG_DISABLE_CAST_CHECKS',
+    ]
   endif
 
   supported_mutter_c_args = cc.get_supported_arguments(mutter_c_args)
@@ -544,7 +571,7 @@ cdata.set('HAVE_WAYLAND', have_wayland)
 cdata.set('HAVE_XWAYLAND', have_xwayland)
 cdata.set('HAVE_X11', have_x11)
 cdata.set('HAVE_X11_CLIENT', have_x11_client)
-cdata.set('HAVE_LIBSYSTEMD', have_libsystemd)
+cdata.set('HAVE_LOGIND', have_logind)
 cdata.set('HAVE_NATIVE_BACKEND', have_native_backend)
 cdata.set('HAVE_REMOTE_DESKTOP', have_remote_desktop)
 cdata.set('HAVE_GNOME_DESKTOP', have_gnome_desktop)
@@ -558,10 +585,10 @@ cdata.set('HAVE_SM', have_sm)
 cdata.set('HAVE_STARTUP_NOTIFICATION', have_startup_notification)
 cdata.set('HAVE_INTROSPECTION', have_introspection)
 cdata.set('HAVE_PROFILER', have_profiler)
-cdata.set('HAVE_LIBDISPLAY_INFO', have_libdisplay_info)
 cdata.set('HAVE_TIMERFD', have_timerfd)
 cdata.set('HAVE_MALLOC_TRIM', have_malloc_trim)
 cdata.set('HAVE_EVENTFD', have_eventfd)
+cdata.set('HAVE_FONTS', have_fonts)
 cdata.set('HAVE_DRM_PLANE_SIZE_HINT', have_drm_plane_size_hint)
 
 if have_x11_client
@@ -713,9 +740,12 @@ meson.add_dist_script('meson/check-version.py', meson.project_version(), 'NEWS')
 summary('prefix', prefix, section: 'Directories')
 summary('libexecdir', libexecdir, section: 'Directories')
 summary('pkgdatadir', pkgdatadir, section: 'Directories')
+summary('mandir', mandir, section: 'Directories')
 
 summary('buildtype', get_option('buildtype'), section: 'Build Configuration')
 summary('debug', get_option('debug'), section: 'Build Configuration')
+
+summary('Bash completion', have_bash_completion, section: 'Shell integration')
 
 summary('OpenGL', have_gl, section: 'Rendering APIs')
 summary('GLES2', have_gles2, section: 'Rendering APIs')
@@ -730,11 +760,11 @@ summary('Native Backend', have_native_backend, section: 'Options')
 summary('EGL Device', have_egl_device, section: 'Options')
 summary('Remote desktop', have_remote_desktop, section: 'Options')
 summary('libgnome-desktop', have_gnome_desktop, section: 'Options')
-summary('libdisplay-info', have_libdisplay_info, section: 'Options')
 summary('Sound player', have_sound_player, section: 'Options')
 summary('gudev', have_libgudev, section: 'Options')
 summary('Wacom', have_libwacom, section: 'Options')
 summary('SM', have_sm, section: 'Options')
+summary('Fonts', have_fonts, section: 'Options')
 summary('Startup notification', have_startup_notification, section: 'Options')
 summary('Introspection', have_introspection, section: 'Options')
 summary('Documentation', have_documentation, section: 'Options')

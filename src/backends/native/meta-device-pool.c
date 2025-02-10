@@ -25,8 +25,8 @@
 #include <sys/sysmacros.h>
 #include <sys/types.h>
 
+#include "backends/meta-launcher.h"
 #include "backends/native/meta-backend-native.h"
-#include "backends/native/meta-launcher.h"
 #include "meta/meta-backend.h"
 #include "meta/util.h"
 
@@ -362,7 +362,7 @@ meta_device_pool_new (MetaBackendNative *backend_native)
 
   pool->backend = META_BACKEND (backend_native);
 
-  launcher = meta_backend_native_get_launcher (backend_native);
+  launcher = meta_backend_get_launcher (pool->backend);
   if (launcher)
     pool->session_proxy = meta_launcher_get_session_proxy (launcher);
 

@@ -329,10 +329,10 @@ meta_test_monitor_config_store_set_current_on_empty (void)
 
   meta_monitor_config_manager_set_current (config_manager, linear_config);
 
-  g_assert (meta_monitor_config_manager_get_current (config_manager) ==
-            linear_config);
-  g_assert (meta_monitor_config_manager_get_current (config_manager) !=
-            old_current);
+  g_assert_true (meta_monitor_config_manager_get_current (config_manager) ==
+                 linear_config);
+  g_assert_true (meta_monitor_config_manager_get_current (config_manager) !=
+                 old_current);
   g_assert_null (meta_monitor_config_manager_get_previous (config_manager));
   g_assert_null (meta_monitor_config_manager_pop_previous (config_manager));
 }
@@ -363,25 +363,25 @@ meta_test_monitor_config_store_set_current_with_parent_on_empty (void)
 
   meta_monitor_config_manager_set_current (config_manager, child_config1);
 
-  g_assert (meta_monitor_config_manager_get_current (config_manager) ==
-            child_config1);
-  g_assert (meta_monitor_config_manager_get_current (config_manager) !=
-            old_current);
+  g_assert_true (meta_monitor_config_manager_get_current (config_manager) ==
+                 child_config1);
+  g_assert_true (meta_monitor_config_manager_get_current (config_manager) !=
+                 old_current);
   g_assert_null (meta_monitor_config_manager_get_previous (config_manager));
   g_assert_null (meta_monitor_config_manager_pop_previous (config_manager));
 
   child_config2 = meta_monitor_config_manager_create_linear (config_manager);
   meta_monitors_config_set_parent_config (child_config2, parent_config);
-  g_assert (child_config2->parent_config == parent_config);
+  g_assert_true (child_config2->parent_config == parent_config);
 
   old_current = meta_monitor_config_manager_get_current (config_manager);
   g_assert_nonnull (old_current->parent_config);
   meta_monitor_config_manager_set_current (config_manager, child_config2);
 
-  g_assert (meta_monitor_config_manager_get_current (config_manager) ==
-            child_config2);
-  g_assert (meta_monitor_config_manager_get_current (config_manager) !=
-            old_current);
+  g_assert_true (meta_monitor_config_manager_get_current (config_manager) ==
+                 child_config2);
+  g_assert_true (meta_monitor_config_manager_get_current (config_manager) !=
+                 old_current);
   g_assert_null (meta_monitor_config_manager_get_previous (config_manager));
   g_assert_null (meta_monitor_config_manager_pop_previous (config_manager));
 
@@ -392,10 +392,10 @@ meta_test_monitor_config_store_set_current_with_parent_on_empty (void)
   g_assert_nonnull (old_current->parent_config);
   meta_monitor_config_manager_set_current (config_manager, child_config3);
 
-  g_assert (meta_monitor_config_manager_get_current (config_manager) ==
-            child_config3);
-  g_assert (meta_monitor_config_manager_get_current (config_manager) !=
-            old_current);
+  g_assert_true (meta_monitor_config_manager_get_current (config_manager) ==
+                 child_config3);
+  g_assert_true (meta_monitor_config_manager_get_current (config_manager) !=
+                 old_current);
   g_assert_null (meta_monitor_config_manager_get_previous (config_manager));
   g_assert_null (meta_monitor_config_manager_pop_previous (config_manager));
 
@@ -406,12 +406,12 @@ meta_test_monitor_config_store_set_current_with_parent_on_empty (void)
   g_assert_nonnull (old_current->parent_config);
   meta_monitor_config_manager_set_current (config_manager, linear_config);
 
-  g_assert (meta_monitor_config_manager_get_current (config_manager) ==
-            linear_config);
-  g_assert (meta_monitor_config_manager_get_current (config_manager) !=
-            old_current);
-  g_assert (meta_monitor_config_manager_get_previous (config_manager) ==
-            child_config3);
+  g_assert_true (meta_monitor_config_manager_get_current (config_manager) ==
+                 linear_config);
+  g_assert_true (meta_monitor_config_manager_get_current (config_manager) !=
+                 old_current);
+  g_assert_true (meta_monitor_config_manager_get_previous (config_manager) ==
+                 child_config3);
 
   fallback_config =
     meta_monitor_config_manager_create_fallback (config_manager);
@@ -421,19 +421,19 @@ meta_test_monitor_config_store_set_current_with_parent_on_empty (void)
   g_assert_null (old_current->parent_config);
   meta_monitor_config_manager_set_current (config_manager, fallback_config);
 
-  g_assert (meta_monitor_config_manager_get_current (config_manager) ==
-            fallback_config);
-  g_assert (meta_monitor_config_manager_get_current (config_manager) !=
-            old_current);
+  g_assert_true (meta_monitor_config_manager_get_current (config_manager) ==
+                 fallback_config);
+  g_assert_true (meta_monitor_config_manager_get_current (config_manager) !=
+                 old_current);
 
-  g_assert (meta_monitor_config_manager_get_previous (config_manager) ==
-            linear_config);
-  g_assert (meta_monitor_config_manager_pop_previous (config_manager) ==
-            linear_config);
-  g_assert (meta_monitor_config_manager_get_previous (config_manager) ==
-            child_config3);
-  g_assert (meta_monitor_config_manager_pop_previous (config_manager) ==
-            child_config3);
+  g_assert_true (meta_monitor_config_manager_get_previous (config_manager) ==
+                 linear_config);
+  g_assert_true (meta_monitor_config_manager_pop_previous (config_manager) ==
+                 linear_config);
+  g_assert_true (meta_monitor_config_manager_get_previous (config_manager) ==
+                 child_config3);
+  g_assert_true (meta_monitor_config_manager_pop_previous (config_manager) ==
+                 child_config3);
   g_assert_null (meta_monitor_config_manager_get_previous (config_manager));
   g_assert_null (meta_monitor_config_manager_pop_previous (config_manager));
 }
@@ -457,20 +457,20 @@ meta_test_monitor_config_store_set_current (void)
   g_assert_nonnull (fallback_config);
 
   meta_monitor_config_manager_set_current (config_manager, fallback_config);
-  g_assert (meta_monitor_config_manager_get_current (config_manager) ==
-            fallback_config);
+  g_assert_true (meta_monitor_config_manager_get_current (config_manager) ==
+                 fallback_config);
 
   old_current = meta_monitor_config_manager_get_current (config_manager);
   meta_monitor_config_manager_set_current (config_manager, linear_config);
 
-  g_assert (old_current != linear_config);
+  g_assert_true (old_current != linear_config);
   g_assert_nonnull (old_current);
-  g_assert (meta_monitor_config_manager_get_current (config_manager) ==
-            linear_config);
-  g_assert (meta_monitor_config_manager_get_previous (config_manager) ==
-            old_current);
-  g_assert (meta_monitor_config_manager_pop_previous (config_manager) ==
-            old_current);
+  g_assert_true (meta_monitor_config_manager_get_current (config_manager) ==
+                 linear_config);
+  g_assert_true (meta_monitor_config_manager_get_previous (config_manager) ==
+                 old_current);
+  g_assert_true (meta_monitor_config_manager_pop_previous (config_manager) ==
+                 old_current);
 
   g_assert_null (meta_monitor_config_manager_get_previous (config_manager));
   g_assert_null (meta_monitor_config_manager_pop_previous (config_manager));
@@ -496,10 +496,10 @@ meta_test_monitor_config_store_set_current_with_parent (void)
   g_assert_null (old_current);
   meta_monitor_config_manager_set_current (config_manager, linear_config);
 
-  g_assert (meta_monitor_config_manager_get_current (config_manager) ==
-            linear_config);
-  g_assert (meta_monitor_config_manager_get_current (config_manager) !=
-            old_current);
+  g_assert_true (meta_monitor_config_manager_get_current (config_manager) ==
+                 linear_config);
+  g_assert_true (meta_monitor_config_manager_get_current (config_manager) !=
+                 old_current);
   g_assert_null (meta_monitor_config_manager_get_previous (config_manager));
   g_assert_null (meta_monitor_config_manager_pop_previous (config_manager));
 
@@ -512,12 +512,12 @@ meta_test_monitor_config_store_set_current_with_parent (void)
   g_assert_null (old_current->parent_config);
   meta_monitor_config_manager_set_current (config_manager, fallback_config);
 
-  g_assert (meta_monitor_config_manager_get_current (config_manager) ==
-            fallback_config);
-  g_assert (meta_monitor_config_manager_get_current (config_manager) !=
-            old_current);
-  g_assert (meta_monitor_config_manager_get_previous (config_manager) ==
-            old_current);
+  g_assert_true (meta_monitor_config_manager_get_current (config_manager) ==
+                 fallback_config);
+  g_assert_true (meta_monitor_config_manager_get_current (config_manager) !=
+                 old_current);
+  g_assert_true (meta_monitor_config_manager_get_previous (config_manager) ==
+                 old_current);
 
   child_config = meta_monitor_config_manager_create_linear (config_manager);
   old_current = meta_monitor_config_manager_get_current (config_manager);
@@ -525,34 +525,34 @@ meta_test_monitor_config_store_set_current_with_parent (void)
 
   g_assert_nonnull (child_config);
   g_assert_nonnull (old_current);
-  g_assert (old_current == fallback_config);
+  g_assert_true (old_current == fallback_config);
   g_assert_null (old_current->parent_config);
 
   meta_monitor_config_manager_set_current (config_manager, child_config);
 
-  g_assert (meta_monitor_config_manager_get_current (config_manager) ==
-            child_config);
-  g_assert (meta_monitor_config_manager_get_current (config_manager) !=
-            old_current);
-  g_assert (meta_monitor_config_manager_get_previous (config_manager) ==
-            linear_config);
+  g_assert_true (meta_monitor_config_manager_get_current (config_manager) ==
+                 child_config);
+  g_assert_true (meta_monitor_config_manager_get_current (config_manager) !=
+                 old_current);
+  g_assert_true (meta_monitor_config_manager_get_previous (config_manager) ==
+                 linear_config);
 
   other_child = meta_monitor_config_manager_create_linear (config_manager);
   meta_monitors_config_set_parent_config (other_child, old_current);
 
   old_current = meta_monitor_config_manager_get_current (config_manager);
   g_assert_nonnull (old_current->parent_config);
-  g_assert (old_current == child_config);
+  g_assert_true (old_current == child_config);
   meta_monitor_config_manager_set_current (config_manager, other_child);
 
-  g_assert (meta_monitor_config_manager_get_current (config_manager) ==
-            other_child);
-  g_assert (meta_monitor_config_manager_get_current (config_manager) !=
-            old_current);
-  g_assert (meta_monitor_config_manager_get_previous (config_manager) ==
-            linear_config);
-  g_assert (meta_monitor_config_manager_pop_previous (config_manager) ==
-            linear_config);
+  g_assert_true (meta_monitor_config_manager_get_current (config_manager) ==
+                 other_child);
+  g_assert_true (meta_monitor_config_manager_get_current (config_manager) !=
+                 old_current);
+  g_assert_true (meta_monitor_config_manager_get_previous (config_manager) ==
+                 linear_config);
+  g_assert_true (meta_monitor_config_manager_pop_previous (config_manager) ==
+                 linear_config);
 
   g_assert_null (meta_monitor_config_manager_get_previous (config_manager));
   g_assert_null (meta_monitor_config_manager_pop_previous (config_manager));
@@ -578,23 +578,23 @@ meta_test_monitor_config_store_set_current_max_size (void)
 
       linear_config = meta_monitor_config_manager_create_linear (config_manager);
       g_assert_nonnull (linear_config);
-      g_assert (!g_list_find (added, linear_config));
+      g_assert_false (g_list_find (added, linear_config));
 
       if (i > 0)
         {
-          g_assert (previous !=
-                    meta_monitor_config_manager_get_current (config_manager));
+          g_assert_true (previous !=
+                         meta_monitor_config_manager_get_current (config_manager));
         }
 
       previous = meta_monitor_config_manager_get_current (config_manager);
       meta_monitor_config_manager_set_current (config_manager, linear_config);
       added = g_list_prepend (added, g_object_ref (linear_config));
 
-      g_assert (meta_monitor_config_manager_get_current (config_manager)
-                == linear_config);
+      g_assert_true (meta_monitor_config_manager_get_current (config_manager)
+                     == linear_config);
 
-      g_assert (meta_monitor_config_manager_get_previous (config_manager)
-                == previous);
+      g_assert_true (meta_monitor_config_manager_get_previous (config_manager)
+                     == previous);
     }
 
   for (i = 0; i < config_history_max_size - 1; i++)
@@ -611,21 +611,21 @@ meta_test_monitor_config_store_set_current_max_size (void)
   g_assert_cmpuint (g_list_length (added), >, config_history_max_size);
 
   config = meta_monitor_config_manager_get_current (config_manager);
-  g_assert (config == g_list_nth_data (added, 0));
+  g_assert_true (config == g_list_nth_data (added, 0));
 
   for (i = 0; i < config_history_max_size; i++)
     {
       config = meta_monitor_config_manager_get_previous (config_manager);
       g_assert_nonnull (config);
-      g_assert (meta_monitor_config_manager_pop_previous (config_manager)
-                == config);
-      g_assert (config == g_list_nth_data (added, i + 1));
+      g_assert_true (meta_monitor_config_manager_pop_previous (config_manager)
+                     == config);
+      g_assert_true (config == g_list_nth_data (added, i + 1));
     }
 
   config = meta_monitor_config_manager_get_previous (config_manager);
   g_assert_null (config);
   g_assert_null (meta_monitor_config_manager_pop_previous (config_manager));
-  g_assert (config != g_list_nth_data (added, config_history_max_size));
+  g_assert_true (config != g_list_nth_data (added, config_history_max_size));
   g_assert_nonnull (g_list_nth_data (added, config_history_max_size + 1));
 }
 
@@ -4387,6 +4387,143 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (ClutterAutoRemoveInputDevice,
                                input_device_test_remove)
 
 static void
+meta_test_monitor_orientation_initial_portrait_mode_workaround (void)
+{
+  MonitorTestCase test_case = {
+    .setup = {
+      .modes = {
+        {
+          .width = 1080,
+          .height = 1920,
+          .refresh_rate = 60.000495910644531
+        }
+      },
+      .n_modes = 1,
+      .outputs = {
+        {
+          .crtc = 0,
+          .modes = { 0 },
+          .n_modes = 1,
+          .preferred_mode = 0,
+          .possible_crtcs = { 0 },
+          .n_possible_crtcs = 1,
+          .width_mm = 125,
+          .height_mm = 222,
+          .is_laptop_panel = TRUE,
+          .serial = "0x123456",
+        },
+      },
+      .n_outputs = 1,
+      .crtcs = {
+        {
+          .current_mode = 0
+        },
+      },
+      .n_crtcs = 1
+    },
+
+    .expect = {
+      .monitors = {
+        {
+          .outputs = { 0 },
+          .n_outputs = 1,
+          .modes = {
+            {
+              .width = 1080,
+              .height = 1920,
+              .refresh_rate = 60.000495910644531,
+              .crtc_modes = {
+                {
+                  .output = 0,
+                  .crtc_mode = 0
+                }
+              }
+            }
+          },
+          .n_modes = 1,
+          .current_mode = 0,
+          .width_mm = 125,
+          .height_mm = 222,
+        }
+      },
+      .n_monitors = 1,
+      .logical_monitors = {
+        {
+          .monitors = { 0 },
+          .n_monitors = 1,
+          .layout = { .x = 0, .y = 0, .width = 1080, .height = 1920 },
+          .scale = 1
+        }
+      },
+      .n_logical_monitors = 1,
+      .primary_logical_monitor = 0,
+      .n_outputs = 1,
+      .crtcs = {
+        {
+          .current_mode = 0,
+        }
+      },
+      .n_crtcs = 1,
+      .n_tiled_monitors = 0,
+      .screen_width = 1080,
+      .screen_height = 1920
+    }
+  };
+  MetaMonitorTestSetup *test_setup;
+  MetaBackend *backend = meta_context_get_backend (test_context);
+  g_autoptr (MetaSensorsProxyAutoResetMock) orientation_mock = NULL;
+  g_autoptr (ClutterAutoRemoveInputDevice) touch_device = NULL;
+  g_autoptr (ClutterAutoRemoveInputDevice) pointer_device = NULL;
+  ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
+  ClutterSeat *seat = clutter_backend_get_default_seat (clutter_backend);
+  MetaOrientationManager *orientation_manager =
+    meta_backend_get_orientation_manager (backend);
+
+  g_test_message ("%s", G_STRFUNC);
+
+  orientation_mock = meta_sensors_proxy_mock_get ();
+
+  /* Add a touch device *and* a pointer device. This means a touchscreen is
+   * present, but touch mode is disabled. That should be enough to trigger the
+   * initial-orientation workaround.
+   */
+  touch_device =
+    meta_backend_test_add_test_device (META_BACKEND_TEST (backend),
+                                       CLUTTER_TOUCHSCREEN_DEVICE, 1);
+  pointer_device =
+    meta_backend_test_add_test_device (META_BACKEND_TEST (backend),
+                                       CLUTTER_POINTER_DEVICE, 1);
+
+  test_setup = meta_create_monitor_test_setup (test_backend,
+                                               &test_case.setup,
+                                               MONITOR_TEST_FLAG_NO_STORED);
+  emulate_hotplug (test_setup);
+
+  g_assert_false (clutter_seat_get_touch_mode (seat));
+
+  meta_sensors_proxy_mock_set_orientation (orientation_mock,
+                                           META_ORIENTATION_RIGHT_UP);
+  meta_wait_for_orientation (orientation_manager, META_ORIENTATION_RIGHT_UP, NULL);
+
+  META_TEST_LOG_CALL ("Checking configuration per orientation",
+                      check_monitor_configuration_per_orientation (
+                        &test_case, 0, META_ORIENTATION_RIGHT_UP,
+                        1080, 1920));
+
+  /* Change the orientation to portrait and the orientation change should
+   * now be ignored, because it's no longer the initial one.
+   */
+  meta_sensors_proxy_mock_set_orientation (orientation_mock,
+                                           META_ORIENTATION_NORMAL);
+  meta_wait_for_orientation (orientation_manager, META_ORIENTATION_NORMAL, NULL);
+
+  META_TEST_LOG_CALL ("Checking configuration per orientation",
+                      check_monitor_configuration_per_orientation (
+                        &test_case, 0, META_ORIENTATION_RIGHT_UP,
+                        1080, 1920));
+}
+
+static void
 meta_test_monitor_orientation_is_managed (void)
 {
   MonitorTestCase test_case = {
@@ -5221,8 +5358,8 @@ meta_test_monitor_orientation_changes (void)
       previous = meta_monitor_config_manager_get_previous (config_manager);
 
       g_assert_true (got_monitors_changed);
-      g_assert (previous == previous_config);
-      g_assert (current != initial_config);
+      g_assert_true (previous == previous_config);
+      g_assert_true (current != initial_config);
       g_assert_true (meta_monitors_config_key_equal (current->key,
                                                      initial_config->key));
     }
@@ -5248,8 +5385,8 @@ meta_test_monitor_orientation_changes (void)
                         1024, 768));
 
   g_assert_false (got_monitors_changed);
-  g_assert (meta_monitor_config_manager_get_current (config_manager) ==
-            initial_config);
+  g_assert_true (meta_monitor_config_manager_get_current (config_manager) ==
+                 initial_config);
 
   /* When no touch device is available, the orientation changes are ignored */
   g_test_message ("Removing touch device");
@@ -5275,8 +5412,8 @@ meta_test_monitor_orientation_changes (void)
       current = meta_monitor_config_manager_get_current (config_manager);
       previous = meta_monitor_config_manager_get_previous (config_manager);
 
-      g_assert (previous == previous_config);
-      g_assert (current == initial_config);
+      g_assert_true (previous == previous_config);
+      g_assert_true (current == initial_config);
       g_assert_false (got_monitors_changed);
     }
 
@@ -5422,8 +5559,8 @@ meta_test_monitor_orientation_changes_for_transformed_panel (void)
       previous = meta_monitor_config_manager_get_previous (config_manager);
 
       g_assert_true (got_monitors_changed);
-      g_assert (previous == previous_config);
-      g_assert (current != initial_config);
+      g_assert_true (previous == previous_config);
+      g_assert_true (current != initial_config);
       g_assert_true (meta_monitors_config_key_equal (current->key,
                                                      initial_config->key));
     }
@@ -5449,8 +5586,8 @@ meta_test_monitor_orientation_changes_for_transformed_panel (void)
                         1024, 768));
 
   g_assert_false (got_monitors_changed);
-  g_assert (meta_monitor_config_manager_get_current (config_manager) ==
-            initial_config);
+  g_assert_true (meta_monitor_config_manager_get_current (config_manager) ==
+                 initial_config);
 
   /* When no touch device is available, the orientation changes are ignored */
   g_test_message ("Removing touch device");
@@ -5476,8 +5613,8 @@ meta_test_monitor_orientation_changes_for_transformed_panel (void)
       current = meta_monitor_config_manager_get_current (config_manager);
       previous = meta_monitor_config_manager_get_previous (config_manager);
 
-      g_assert (previous == previous_config);
-      g_assert (current == initial_config);
+      g_assert_true (previous == previous_config);
+      g_assert_true (current == initial_config);
       g_assert_false (got_monitors_changed);
     }
 
@@ -8870,7 +9007,7 @@ meta_test_monitor_migrated_rotated (void)
   g_assert_nonnull (expected_data);
   g_assert_nonnull (migrated_data);
 
-  g_assert (strcmp (expected_data, migrated_data) == 0);
+  g_assert_cmpint (strcmp (expected_data, migrated_data), ==, 0);
 
   migrated_file = g_file_new_for_path (migrated_path);
   if (!g_file_delete (migrated_file, NULL, &error))
@@ -9148,7 +9285,7 @@ meta_test_monitor_migrated_horizontal_strip (void)
   g_assert_nonnull (expected_data);
   g_assert_nonnull (migrated_data);
 
-  g_assert (strcmp (expected_data, migrated_data) == 0);
+  g_assert_cmpint (strcmp (expected_data, migrated_data), ==, 0);
 
   migrated_file = g_file_new_for_path (migrated_path);
   if (!g_file_delete (migrated_file, NULL, &error))
@@ -9174,6 +9311,441 @@ meta_test_monitor_custom_detached_groups (void)
                                         &error);
   g_assert_nonnull (error);
   g_assert_cmpstr (error->message, ==, "Logical monitors not adjacent");
+}
+
+static void
+meta_test_monitor_custom_for_lease_config (void)
+{
+  MonitorTestCase test_case = {
+    .setup = {
+      .modes = {
+        {
+          .width = 800,
+          .height = 600,
+          .refresh_rate = 60.0
+        }
+      },
+      .n_modes = 1,
+      .outputs = {
+        {
+          .crtc = -1,
+          .modes = { 0 },
+          .n_modes = 1,
+          .preferred_mode = 0,
+          .possible_crtcs = { 0, 1 },
+          .n_possible_crtcs = 2,
+          .width_mm = 222,
+          .height_mm = 125,
+          .serial = "0x123456",
+        },
+        {
+          .crtc = -1,
+          .modes = { 0 },
+          .n_modes = 1,
+          .preferred_mode = 0,
+          .possible_crtcs = { 0, 1 },
+          .n_possible_crtcs = 2,
+          .width_mm = 222,
+          .height_mm = 125,
+          .serial = "0x654321"
+        }
+      },
+      .n_outputs = 2,
+      .crtcs = {
+        {
+          .current_mode = -1
+        },
+        {
+          .current_mode = -1
+        }
+      },
+      .n_crtcs = 2
+    },
+
+    .expect = {
+      .monitors = {
+        {
+          .outputs = { 0 },
+          .n_outputs = 1,
+          .modes = {
+            {
+              .width = 800,
+              .height = 600,
+              .refresh_rate = 60.0,
+              .crtc_modes = {
+                {
+                  .output = 0,
+                  .crtc_mode = 0
+                }
+              }
+            }
+          },
+          .n_modes = 1,
+          .current_mode = 0,
+          .width_mm = 222,
+          .height_mm = 125
+        },
+        {
+          .outputs = { 1 },
+          .n_outputs = 1,
+          .modes = {
+            {
+              .width = 800,
+              .height = 600,
+              .refresh_rate = 60.0,
+              .crtc_modes = {
+                {
+                  .output = 1,
+                  .crtc_mode = 0
+                }
+              }
+            }
+          },
+          .n_modes = 1,
+          .current_mode = -1,
+          .width_mm = 222,
+          .height_mm = 125
+        }
+      },
+      .n_monitors = 2,
+      .logical_monitors = {
+        {
+          .monitors = { 0 },
+          .n_monitors = 1,
+          .layout = { .x = 0, .y = 0, .width = 800, .height = 600 },
+          .scale = 1,
+          .transform = MTK_MONITOR_TRANSFORM_NORMAL
+        },
+      },
+      .n_logical_monitors = 1,
+      .primary_logical_monitor = 0,
+      .n_outputs = 2,
+      .crtcs = {
+        {
+          .current_mode = 0,
+        },
+        {
+          .current_mode = -1,
+        }
+      },
+      .n_crtcs = 2,
+      .screen_width = 800,
+      .screen_height = 600,
+    }
+  };
+  MetaMonitorTestSetup *test_setup;
+  MetaBackend *backend = meta_context_get_backend (test_context);
+  MetaMonitorManager *monitor_manager =
+    meta_backend_get_monitor_manager (backend);
+  GList *monitors;
+  MetaMonitor *first_monitor;
+  MetaMonitor *second_monitor;
+
+  test_setup = meta_create_monitor_test_setup (test_backend,
+                                               &test_case.setup,
+                                               MONITOR_TEST_FLAG_NONE);
+  meta_set_custom_monitor_config (test_context, "forlease.xml");
+  emulate_hotplug (test_setup);
+
+  META_TEST_LOG_CALL ("Checking monitor configuration",
+                      meta_check_monitor_configuration (test_context,
+                                                        &test_case.expect));
+  check_monitor_test_clients_state ();
+
+  monitors = meta_monitor_manager_get_monitors (monitor_manager);
+  g_assert_cmpuint (g_list_length (monitors), ==, 2);
+
+  first_monitor = g_list_nth_data (monitors, 0);
+  second_monitor = g_list_nth_data (monitors, 1);
+
+  g_assert_true (meta_monitor_is_active (first_monitor));
+  g_assert_false (meta_monitor_is_for_lease (first_monitor));
+
+  g_assert_false (meta_monitor_is_active (second_monitor));
+  g_assert_true (meta_monitor_is_for_lease (second_monitor));
+}
+
+static void
+meta_test_monitor_custom_for_lease_invalid_config (void)
+{
+  g_test_expect_message ("libmutter-test", G_LOG_LEVEL_WARNING,
+                         "*For lease monitor must be explicitly disabled");
+  meta_set_custom_monitor_config (test_context, "forlease-invalid.xml");
+  g_test_assert_expected_messages ();
+}
+
+static void
+on_proxy_call_cb (GObject      *object,
+                  GAsyncResult *res,
+                  gpointer      user_data)
+{
+  g_autoptr (GError) error = NULL;
+  GVariant **ret = user_data;
+
+  *ret = g_dbus_proxy_call_finish (G_DBUS_PROXY (object), res, &error);
+  g_assert_no_error (error);
+  g_assert_nonnull (ret);
+}
+
+static void
+assert_monitor_state (GVariant   *state,
+                      guint       monitor_index,
+                      const char *connector,
+                      gboolean    is_for_lease)
+{
+  g_autoptr (GVariant) monitors = NULL;
+  g_autoptr (GVariant) monitor = NULL;
+  g_autoptr (GVariant) monitor_spec = NULL;
+  g_autoptr (GVariant) spec_connector = NULL;
+  g_autoptr (GVariant) monitor_properties = NULL;
+  g_autoptr (GVariant) for_lease_property = NULL;
+
+  monitors = g_variant_get_child_value (state, 1);
+  monitor = g_variant_get_child_value (monitors, monitor_index);
+
+  monitor_spec = g_variant_get_child_value (monitor, 0);
+  spec_connector = g_variant_get_child_value (monitor_spec, 0);
+  g_assert_cmpstr (g_variant_get_string (spec_connector, NULL), ==, connector);
+
+  monitor_properties = g_variant_get_child_value (monitor, 2);
+  for_lease_property = g_variant_lookup_value (monitor_properties,
+                                               "is-for-lease",
+                                               G_VARIANT_TYPE_BOOLEAN);
+  g_assert (g_variant_get_boolean (for_lease_property) == is_for_lease);
+}
+
+static void
+meta_test_monitor_custom_for_lease_config_dbus (void)
+{
+  MonitorTestCaseSetup test_case_setup = {
+    .modes = {
+      {
+        .width = 800,
+        .height = 600,
+        .refresh_rate = 60.0
+      }
+    },
+    .n_modes = 1,
+    .outputs = {
+      {
+        .crtc = -1,
+        .modes = { 0 },
+        .n_modes = 1,
+        .preferred_mode = 0,
+        .possible_crtcs = { 0, 1 },
+        .n_possible_crtcs = 2,
+        .width_mm = 222,
+        .height_mm = 125,
+        .serial = "0x123456",
+      },
+      {
+        .crtc = -1,
+        .modes = { 0 },
+        .n_modes = 1,
+        .preferred_mode = 0,
+        .possible_crtcs = { 0, 1 },
+        .n_possible_crtcs = 2,
+        .width_mm = 222,
+        .height_mm = 125,
+        .serial = "0x654321"
+      }
+    },
+    .n_outputs = 2,
+    .crtcs = {
+      {
+        .current_mode = -1
+      },
+      {
+        .current_mode = -1
+      }
+    },
+    .n_crtcs = 2
+  };
+  MetaMonitorTestSetup *test_setup;
+  g_autoptr (GDBusProxy) display_config_proxy = NULL;
+  g_autoptr (GVariant) state = NULL;
+  uint32_t serial;
+  GVariantBuilder b;
+  g_autoptr (GVariant) apply_config_ret = NULL;
+  g_autoptr (GVariant) new_state = NULL;
+
+  test_setup = meta_create_monitor_test_setup (test_backend,
+                                               &test_case_setup,
+                                               MONITOR_TEST_FLAG_NONE);
+  meta_set_custom_monitor_config (test_context, "forlease.xml");
+  emulate_hotplug (test_setup);
+  check_monitor_test_clients_state ();
+
+  g_dbus_proxy_new_for_bus (G_BUS_TYPE_SESSION,
+                            G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
+                            NULL,
+                            "org.gnome.Mutter.DisplayConfig",
+                            "/org/gnome/Mutter/DisplayConfig",
+                            "org.gnome.Mutter.DisplayConfig",
+                            NULL,
+                            proxy_ready_cb,
+                            &display_config_proxy);
+  while (!display_config_proxy)
+    g_main_context_iteration (NULL, TRUE);
+
+  g_dbus_proxy_call (display_config_proxy,
+                     "GetCurrentState",
+                     NULL,
+                     G_DBUS_CALL_FLAGS_NO_AUTO_START,
+                     -1,
+                     NULL,
+                     on_proxy_call_cb,
+                     &state);
+  while (!state)
+    g_main_context_iteration (NULL, TRUE);
+
+  assert_monitor_state (state, 0, "DP-1", FALSE);
+  assert_monitor_state (state, 1, "DP-2", TRUE);
+
+  /* Swap monitor for lease */
+  serial = g_variant_get_uint32 (g_variant_get_child_value (state, 0));
+
+  g_variant_builder_init (&b, G_VARIANT_TYPE ("(uua(iiduba(ssa{sv}))a{sv})"));
+  g_variant_builder_add (&b, "u", serial); /* Serial from GetCurrentState */
+  g_variant_builder_add (&b, "u", 1);      /* Method: Temporary */
+
+  /* Logical monitors */
+  g_variant_builder_open (&b, G_VARIANT_TYPE ("a(iiduba(ssa{sv}))"));
+  g_variant_builder_open (&b, G_VARIANT_TYPE ("(iiduba(ssa{sv}))"));
+  g_variant_builder_add (&b, "i", 0);                        /* x */
+  g_variant_builder_add (&b, "i", 0);                        /* y */
+  g_variant_builder_add (&b, "d", 1.0);                      /* Scale */
+  g_variant_builder_add (&b, "u", 0);                        /* Transform */
+  g_variant_builder_add (&b, "b", TRUE);                     /* Primary */
+  g_variant_builder_add_parsed (&b, "[(%s, %s, @a{sv} {})]", /* Monitors */
+                                "DP-2",
+                                "800x600@60.000");
+  g_variant_builder_close (&b);
+  g_variant_builder_close (&b);
+
+  /* Properties */
+  g_variant_builder_open (&b, G_VARIANT_TYPE ("a{sv}"));
+  g_variant_builder_add_parsed (&b, "{'monitors-for-lease', <[(%s, %s, %s, %s)]>}",
+                                "DP-1",
+                                "MetaProduct\'s Inc.",
+                                "MetaMonitor",
+                                "0x123456");
+  g_variant_builder_close (&b);
+
+  g_dbus_proxy_call (display_config_proxy,
+                     "ApplyMonitorsConfig",
+                     g_variant_builder_end (&b),
+                     G_DBUS_CALL_FLAGS_NO_AUTO_START,
+                     -1,
+                     NULL,
+                     on_proxy_call_cb,
+                     &apply_config_ret);
+  while (!apply_config_ret)
+    g_main_context_iteration (NULL, TRUE);
+
+  /* Check that monitors changed */
+  g_dbus_proxy_call (display_config_proxy,
+                     "GetCurrentState",
+                     NULL,
+                     G_DBUS_CALL_FLAGS_NO_AUTO_START,
+                     -1,
+                     NULL,
+                     on_proxy_call_cb,
+                     &new_state);
+  while (!new_state)
+    g_main_context_iteration (NULL, TRUE);
+
+  assert_monitor_state (new_state, 0, "DP-1", TRUE);
+  assert_monitor_state (new_state, 1, "DP-2", FALSE);
+}
+
+static void
+meta_test_monitor_color_modes (void)
+{
+  MonitorTestCaseSetup test_case_setup = {
+    .modes = {
+      {
+        .width = 800,
+        .height = 600,
+        .refresh_rate = 60.0
+      }
+    },
+    .n_modes = 1,
+    .outputs = {
+      {
+        .crtc = -1,
+        .modes = { 0 },
+        .n_modes = 1,
+        .preferred_mode = 0,
+        .possible_crtcs = { 0 },
+        .n_possible_crtcs = 1,
+        .width_mm = 222,
+        .height_mm = 125,
+        .serial = "0x123456",
+        .supported_color_spaces = ((1 << META_OUTPUT_COLORSPACE_DEFAULT) |
+                                   (1 << META_OUTPUT_COLORSPACE_BT2020)),
+        .supported_hdr_eotfs =
+          ((1 << META_OUTPUT_HDR_METADATA_EOTF_TRADITIONAL_GAMMA_SDR) |
+           (1 << META_OUTPUT_HDR_METADATA_EOTF_PQ)),
+      },
+      {
+        .crtc = -1,
+        .modes = { 0 },
+        .n_modes = 1,
+        .preferred_mode = 0,
+        .possible_crtcs = { 1 },
+        .n_possible_crtcs = 1,
+        .width_mm = 222,
+        .height_mm = 125,
+        .serial = "0x654321",
+        .supported_color_spaces = 1 << META_OUTPUT_COLORSPACE_DEFAULT,
+        .supported_hdr_eotfs =
+          1 << META_OUTPUT_HDR_METADATA_EOTF_TRADITIONAL_GAMMA_SDR,
+      }
+    },
+    .n_outputs = 2,
+    .crtcs = {
+      {
+        .current_mode = -1
+      },
+      {
+        .current_mode = -1
+      }
+    },
+    .n_crtcs = 2
+  };
+  MetaBackend *backend = meta_context_get_backend (test_context);
+  MetaMonitorManager *monitor_manager =
+    meta_backend_get_monitor_manager (backend);
+  GList *monitors;
+  MetaMonitor *first_monitor;
+  MetaMonitor *second_monitor;
+  GList *color_modes;
+  MetaMonitorTestSetup *test_setup;
+
+  test_setup = meta_create_monitor_test_setup (test_backend,
+                                               &test_case_setup,
+                                               MONITOR_TEST_FLAG_NONE);
+  emulate_hotplug (test_setup);
+  check_monitor_test_clients_state ();
+
+  monitors = meta_monitor_manager_get_monitors (monitor_manager);
+  g_assert_cmpuint (g_list_length (monitors), ==, 2);
+
+  first_monitor = g_list_nth_data (monitors, 0);
+  second_monitor = g_list_nth_data (monitors, 1);
+
+  color_modes = meta_monitor_get_supported_color_modes (first_monitor);
+  g_assert_cmpuint (g_list_length (color_modes), ==, 2);
+  g_assert_nonnull (g_list_find (color_modes,
+                                 GINT_TO_POINTER (META_COLOR_MODE_DEFAULT)));
+  g_assert_nonnull (g_list_find (color_modes,
+                                 GINT_TO_POINTER (META_COLOR_MODE_BT2100)));
+
+  color_modes = meta_monitor_get_supported_color_modes (second_monitor);
+  g_assert_cmpuint (g_list_length (color_modes), ==, 1);
+  g_assert_nonnull (g_list_find (color_modes,
+                                 GINT_TO_POINTER (META_COLOR_MODE_DEFAULT)));
 }
 
 static gboolean
@@ -10341,6 +10913,8 @@ init_monitor_tests (void)
   add_monitor_test ("/backends/monitor/has-external-monitor",
                     meta_test_monitor_has_external_monitor);
 
+  add_monitor_test ("/backends/monitor/orientation/initial-portrait-mode-workaround",
+                    meta_test_monitor_orientation_initial_portrait_mode_workaround);
   add_monitor_test ("/backends/monitor/orientation/is-managed",
                     meta_test_monitor_orientation_is_managed);
   add_monitor_test ("/backends/monitor/orientation/initial-rotated",
@@ -10400,6 +10974,15 @@ init_monitor_tests (void)
                     meta_test_monitor_custom_lid_switch_config);
   add_monitor_test ("/backends/monitor/custom/detached-groups",
                     meta_test_monitor_custom_detached_groups);
+  add_monitor_test ("/backends/monitor/custom/for-lease-config",
+                    meta_test_monitor_custom_for_lease_config);
+  add_monitor_test ("/backends/monitor/custom/for-lease-invalid-config",
+                    meta_test_monitor_custom_for_lease_invalid_config);
+  add_monitor_test ("/backends/monitor/custom/for-lease-config-dbus",
+                    meta_test_monitor_custom_for_lease_config_dbus);
+
+  add_monitor_test ("/backends/monitor/color-modes",
+                    meta_test_monitor_color_modes);
 
   add_monitor_test ("/backends/monitor/migrated/rotated",
                     meta_test_monitor_migrated_rotated);
@@ -10442,7 +11025,7 @@ main (int   argc,
 
   context = meta_create_test_context (META_CONTEXT_TEST_TYPE_TEST,
                                       META_CONTEXT_TEST_FLAG_TEST_CLIENT);
-  g_assert (meta_context_configure (context, &argc, &argv, NULL));
+  g_assert_true (meta_context_configure (context, &argc, &argv, NULL));
 
   path = g_test_build_filename (G_TEST_DIST,
                                 "tests",

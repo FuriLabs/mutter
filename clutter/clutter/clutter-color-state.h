@@ -34,40 +34,42 @@ G_BEGIN_DECLS
 
 #define CLUTTER_TYPE_COLOR_STATE (clutter_color_state_get_type ())
 CLUTTER_EXPORT
-G_DECLARE_FINAL_TYPE (ClutterColorState, clutter_color_state,
-                      CLUTTER, COLOR_STATE,
-                      GObject)
+G_DECLARE_DERIVABLE_TYPE (ClutterColorState,
+                          clutter_color_state,
+                          CLUTTER, COLOR_STATE,
+                          GObject)
 
-CLUTTER_EXPORT
-ClutterColorState * clutter_color_state_new (ClutterContext          *context,
-                                             ClutterColorspace        colorspace,
-                                             ClutterTransferFunction  transfer_function);
+struct _ClutterColorStateClass
+{
+  GObjectClass parent_class;
 
-CLUTTER_EXPORT
-ClutterColorState * clutter_color_state_new_full (ClutterContext          *context,
-                                                  ClutterColorspace        colorspace,
-                                                  ClutterTransferFunction  transfer_function,
-                                                  float                    min_lum,
-                                                  float                    max_lum,
-                                                  float                    ref_lum);
+  void (* init_color_transform_key) (ClutterColorState        *color_state,
+                                     ClutterColorState        *target_color_state,
+                                     ClutterColorTransformKey *key);
+
+  CoglSnippet * (* create_transform_snippet) (ClutterColorState *color_state,
+                                              ClutterColorState *target_color_state);
+
+  void (* update_uniforms) (ClutterColorState *color_state,
+                            ClutterColorState *target_color_state,
+                            CoglPipeline      *pipeline);
+
+  gboolean (* equals) (ClutterColorState *color_state,
+                       ClutterColorState *other_color_state);
+
+  char * (* to_string) (ClutterColorState *color_state);
+
+  ClutterEncodingRequiredFormat (* required_format) (ClutterColorState *color_state);
+
+  ClutterColorState * (* get_blending) (ClutterColorState *color_state,
+                                        gboolean           force);
+};
 
 CLUTTER_EXPORT
 char * clutter_color_state_to_string (ClutterColorState *color_state);
 
 CLUTTER_EXPORT
 unsigned int clutter_color_state_get_id (ClutterColorState *color_state);
-
-CLUTTER_EXPORT
-ClutterColorspace clutter_color_state_get_colorspace (ClutterColorState *color_state);
-
-CLUTTER_EXPORT
-ClutterTransferFunction clutter_color_state_get_transfer_function (ClutterColorState *color_state);
-
-CLUTTER_EXPORT
-void clutter_color_state_get_luminances (ClutterColorState *color_state,
-                                         float             *min_lum_out,
-                                         float             *max_lum_out,
-                                         float             *ref_lum_out);
 
 CLUTTER_EXPORT
 void clutter_color_state_add_pipeline_transform (ClutterColorState *color_state,
@@ -79,7 +81,6 @@ void clutter_color_state_update_uniforms (ClutterColorState *color_state,
                                           ClutterColorState *target_color_state,
                                           CoglPipeline      *pipeline);
 
-
 CLUTTER_EXPORT
 gboolean clutter_color_state_equals (ClutterColorState *color_state,
                                      ClutterColorState *other_color_state);
@@ -90,11 +91,5 @@ ClutterEncodingRequiredFormat clutter_color_state_required_format (ClutterColorS
 CLUTTER_EXPORT
 ClutterColorState * clutter_color_state_get_blending (ClutterColorState *color_state,
                                                       gboolean           force);
-
-CLUTTER_EXPORT
-void clutter_transfer_function_get_default_luminances (ClutterTransferFunction  transfer_function,
-                                                       float                   *min_lum_out,
-                                                       float                   *max_lum_out,
-                                                       float                   *ref_lum_out);
 
 G_END_DECLS

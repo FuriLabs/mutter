@@ -97,7 +97,6 @@ if have_introspection
       'xfixes-4.0',
       libmutter_mtk_gir[0],
       libmutter_cogl_gir[0],
-      libmutter_cogl_pango_gir[0],
       libmutter_clutter_gir[0],
       libmutter_gir[0],
     ],
@@ -149,6 +148,7 @@ test_env_variables = {
   'XDG_CONFIG_HOME': mutter_builddir / '.config',
   'MUTTER_TEST_PLUGIN_PATH': '@0@'.format(default_plugin.full_path()),
   'MUTTER_REF_TEST_RESULT_DIR': mutter_builddir / 'meson-logs' / 'tests' / 'ref-tests',
+  'MUTTER_GDCTL_TEST_RESULT_DIR': mutter_builddir / 'meson-logs' / 'tests' / 'gdctl',
   'GSETTINGS_SCHEMA_DIR': ':'.join([mutter_builddir / 'src' / 'tests',
                                     locally_compiled_schemas_dir]),
 }
@@ -200,12 +200,14 @@ tests_datadir = pkgdatadir / 'tests'
 install_data(
   [
     'mutter_dbusrunner.py',
-    'logind_helpers.py',
     'socket-launch.sh',
   ],
   install_dir: tests_datadir,
 )
 install_subdir('dbusmock-templates',
+  install_dir: tests_datadir,
+)
+install_subdir('gdctl',
   install_dir: tests_datadir,
 )
 
@@ -280,6 +282,12 @@ test_cases += [
     'sources': [ 'monitor-backlight-tests.c', ]
   },
   {
+    'name': 'monitor-dbus',
+    'suite': 'backend',
+    'sources': [ 'monitor-dbus-tests.c', ],
+    'args': gdctl.full_path(),
+  },
+  {
     'name': 'stage-views',
     'suite': 'compositor',
     'sources': [ 'stage-view-tests.c', ],
@@ -331,8 +339,15 @@ test_cases += [
 remote_desktop_utils = [
   'remote-desktop-utils.c',
   'remote-desktop-utils.h',
+  '../backends/meta-fd-source.c',
+  '../backends/meta-fd-source.h',
   built_dbus_sources['meta-dbus-remote-desktop'],
   built_dbus_sources['meta-dbus-screen-cast'],
+]
+remote_desktop_utils_deps = [
+  gio_dep,
+  libei_dep,
+  libpipewire_dep,
 ]
 
 screen_cast_client = executable('mutter-screen-cast-client',
@@ -346,8 +361,7 @@ screen_cast_client = executable('mutter-screen-cast-client',
     '-DG_LOG_DOMAIN="mutter-screen-cast-client"',
   ],
   dependencies: [
-    gio_dep,
-    libpipewire_dep,
+    remote_desktop_utils_deps,
   ],
   install: have_installed_tests,
   install_dir: mutter_installed_tests_libexecdir,
@@ -409,13 +423,29 @@ cursor_screen_cast_client = executable('mutter-cursor-tests-screen-cast-client',
     '-DG_LOG_DOMAIN="mutter-cursor-tests-screen-cast-client"',
   ],
   dependencies: [
-    gio_dep,
-    libpipewire_dep,
+    remote_desktop_utils_deps,
     reftest_deps,
   ],
   install: have_installed_tests,
   install_dir: mutter_installed_tests_libexecdir,
   install_rpath: pkglibdir,
+)
+
+remote_desktop_tests_client = executable('mutter-remote-desktop-tests-client',
+  sources: [
+    'remote-desktop-tests-client.c',
+    remote_desktop_utils,
+  ],
+  include_directories: tests_includes,
+  c_args: [
+    tests_c_args,
+    '-DG_LOG_DOMAIN="mutter-remote-desktop-tests-client"',
+  ],
+  dependencies: [
+    remote_desktop_utils_deps,
+  ],
+  install: have_installed_tests,
+  install_dir: mutter_installed_tests_libexecdir,
 )
 
 # Native backend tests
@@ -502,7 +532,17 @@ test_cases += [
     ],
     'depends': [
       test_client_executables.get('cursor-tests-client'),
-    ]
+    ],
+  },
+  {
+    'name': 'remote-desktop-tests',
+    'suite': 'backends/native',
+    'sources': [
+      'remote-desktop-tests.c',
+    ],
+    'depends': [
+      remote_desktop_tests_client,
+    ],
   },
 ]
 
@@ -647,6 +687,29 @@ wayland_test_cases = [
     ],
   },
   {
+    'name': 'wayland-color-management',
+    'suite': 'wayland',
+    'sources': [
+      'wayland-color-management-test.c',
+      wayland_test_utils,
+    ],
+    'depends': [
+      test_client_executables.get('color-management'),
+    ],
+  },
+  {
+    'name': 'wayland-drm-lease',
+    'suite': 'wayland',
+    'sources': [
+      'wayland-drm-lease-tests.c',
+      wayland_test_utils,
+    ],
+    'variants': [['', test_env_variables + {'MUTTER_DEBUG_LEASE_CONNECTORS': 'Virtual-1'}]],
+    'depends': [
+      test_client_executables.get('drm-lease'),
+    ],
+  },
+  {
     'name': 'wayland-fullscreen',
     'suite': 'wayland',
     'sources': [
@@ -785,8 +848,12 @@ foreach test_case: test_cases
 
   test_depends = [ default_plugin ] + test_case.get('depends', [])
 
+  args = test_case.get('args', [])
+
+  message('test @0@ args: @1@'.format(test_case['name'], args))
   test(test_case['name'], test_executable,
     suite: ['core', 'mutter/' + test_case['suite']],
+    args: args,
     env: test_env,
     depends: test_depends,
     is_parallel: false,
@@ -1034,8 +1101,10 @@ if have_installed_tests
     installed_tests_cdata.set('libexecdir', libexecdir)
     installed_tests_cdata.set('pkgdatadir', pkgdatadir)
     installed_tests_cdata.set('reftestresultdir', '/tmp/mutter-ref-test-results')
+    installed_tests_cdata.set('gdctltestresultdir', '/tmp/mutter-gdctl-test-results')
     installed_tests_cdata.set('testname', test_case['name'])
     installed_tests_cdata.set('testexecutable', 'mutter-' + test_case['name'])
+    installed_tests_cdata.set('testargs', ' '.join(test_case.get('args', [])))
     installed_tests_cdata.set('runnerargs', ' '.join(runner_args))
 
     configure_file(

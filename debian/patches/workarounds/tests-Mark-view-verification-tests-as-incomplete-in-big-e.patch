@@ -31,7 +31,7 @@ index ed9beb9..b0bfcb8 100644
                             &diff_stat))
          {
 diff --git a/src/tests/ref-test-sanity.c b/src/tests/ref-test-sanity.c
-index 9e444e8..4d838a7 100644
+index 90268b4..83265ac 100644
 --- a/src/tests/ref-test-sanity.c
 +++ b/src/tests/ref-test-sanity.c
 @@ -108,6 +108,11 @@ meta_test_ref_test_sanity (void)

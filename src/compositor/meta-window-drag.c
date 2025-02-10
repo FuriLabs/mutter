@@ -50,7 +50,7 @@ static guint signals[LAST_SIGNAL] = { 0, };
 
 struct _MetaWindowDrag {
   GObject parent_class;
-  ClutterActor *handler;
+  ClutterActor *external_grab_actor;
 
   MetaWindow *window;
   MetaWindow *effective_grab_window;
@@ -79,6 +79,7 @@ struct _MetaWindowDrag {
 
   gulong unmanaged_id;
   gulong size_changed_id;
+  gulong event_handler_id;
 
   guint tile_preview_timeout_id;
   guint preview_tile_mode : 2;
@@ -102,12 +103,12 @@ update_tile_preview_timeout (MetaWindowDrag *window_drag)
         {
         case META_TILE_LEFT:
         case META_TILE_RIGHT:
-          if (!META_WINDOW_TILED_SIDE_BY_SIDE (window))
+          if (!meta_window_is_tiled_side_by_side (window))
             needs_preview = TRUE;
           break;
 
         case META_TILE_MAXIMIZED:
-          if (!META_WINDOW_MAXIMIZED (window))
+          if (!meta_window_is_maximized (window))
             needs_preview = TRUE;
           break;
 
@@ -181,8 +182,8 @@ meta_window_drag_finalize (GObject *object)
   MetaWindowDrag *window_drag = META_WINDOW_DRAG (object);
 
   hide_tile_preview (window_drag);
-  g_clear_pointer (&window_drag->handler, clutter_actor_destroy);
-  g_clear_object (&window_drag->grab);
+  if (window_drag->grab)
+    g_clear_object (&window_drag->grab);
   g_clear_object (&window_drag->effective_grab_window);
 
   G_OBJECT_CLASS (meta_window_drag_parent_class)->finalize (object);
@@ -387,7 +388,16 @@ meta_window_drag_end (MetaWindowDrag *window_drag)
 
   meta_window_grab_op_ended (grab_window, grab_op);
 
-  clutter_grab_dismiss (window_drag->grab);
+  if (window_drag->grab)
+    {
+      clutter_grab_dismiss (window_drag->grab);
+    }
+  else
+    {
+      g_assert (window_drag->external_grab_actor);
+      g_clear_signal_handler (&window_drag->event_handler_id,
+                              window_drag->external_grab_actor);
+    }
 
   g_clear_signal_handler (&window_drag->unmanaged_id, grab_window);
   g_clear_signal_handler (&window_drag->size_changed_id, grab_window);
@@ -891,9 +901,6 @@ process_keyboard_resize_grab (MetaWindowDrag  *window_drag,
   if (process_keyboard_resize_grab_op_change (window_drag, window, event))
     return TRUE;
 
-  width = window->rect.width;
-  height = window->rect.height;
-
   meta_window_get_frame_rect (window, &frame_rect);
   width = frame_rect.width;
   height = frame_rect.height;
@@ -1081,11 +1088,10 @@ process_keyboard_resize_grab (MetaWindowDrag  *window_drag,
                                                    gravity,
                                                    flags);
 
-      meta_window_resize_frame_with_gravity (window,
-                                             TRUE,
-                                             width,
-                                             height,
-                                             gravity);
+      meta_window_resize_frame (window,
+				TRUE,
+				width,
+				height);
 
       update_keyboard_resize (window_drag, FALSE);
     }
@@ -1216,13 +1222,14 @@ update_move (MetaWindowDrag          *window_drag,
   new_x = (int) (x - (frame_rect.width * window_drag->anchor_rel_x));
   new_y = (int) (y - (frame_rect.height * window_drag->anchor_rel_y));
 
-  meta_verbose ("x,y = %d,%d anchor ptr %d,%d rel anchor pos %f,%f dx,dy %d,%d",
-                x, y,
-                window_drag->anchor_root_x,
-                window_drag->anchor_root_y,
-                window_drag->anchor_rel_x,
-                window_drag->anchor_rel_y,
-                dx, dy);
+  meta_topic (META_DEBUG_RENDER,
+              "x,y = %d,%d anchor ptr %d,%d rel anchor pos %f,%f dx,dy %d,%d",
+              x, y,
+              window_drag->anchor_root_x,
+              window_drag->anchor_root_y,
+              window_drag->anchor_rel_x,
+              window_drag->anchor_rel_y,
+              dx, dy);
 
   /* Don't bother doing anything if no move has been specified.  (This
    * happens often, even in keyboard moving, due to the warping of the
@@ -1247,8 +1254,8 @@ update_move (MetaWindowDrag          *window_drag,
       window->tile_monitor_number = -1;
     }
   else if (meta_prefs_get_edge_tiling () &&
-           !META_WINDOW_MAXIMIZED (window) &&
-           !META_WINDOW_TILED_SIDE_BY_SIDE (window))
+           !meta_window_is_maximized (window) &&
+           !meta_window_is_tiled_side_by_side (window))
     {
       update_move_maybe_tile (window_drag, shake_threshold, x, y);
     }
@@ -1258,8 +1265,9 @@ update_move (MetaWindowDrag          *window_drag,
    * loose via X motion.
    */
 
-  if ((META_WINDOW_MAXIMIZED (window) && ABS (dy) >= shake_threshold) ||
-      (META_WINDOW_TILED_SIDE_BY_SIDE (window) && (MAX (ABS (dx), ABS (dy)) >= shake_threshold)))
+  if ((meta_window_is_maximized (window) && ABS (dy) >= shake_threshold) ||
+      (meta_window_is_tiled_side_by_side (window) &&
+       (MAX (ABS (dx), ABS (dy)) >= shake_threshold)))
     {
       double prop;
 
@@ -1294,7 +1302,7 @@ update_move (MetaWindowDrag          *window_drag,
   /* remaximize window on another monitor if window has been shaken
    * loose or it is still maximized (then move straight)
    */
-  else if ((window_drag->shaken_loose || META_WINDOW_MAXIMIZED (window)) &&
+  else if ((window_drag->shaken_loose || meta_window_is_maximized (window)) &&
            window->tile_mode != META_TILE_LEFT && window->tile_mode != META_TILE_RIGHT)
     {
       MetaDisplay *display = meta_window_get_display (window);
@@ -1368,7 +1376,7 @@ update_move (MetaWindowDrag          *window_drag,
   meta_window_get_frame_rect (window, &old);
 
   /* Don't allow movement in the maximized directions or while tiled */
-  if (window->maximized_horizontally || META_WINDOW_TILED_SIDE_BY_SIDE (window))
+  if (window->maximized_horizontally || meta_window_is_tiled_side_by_side (window))
     new_x = old.x;
   if (window->maximized_vertically)
     new_y = old.y;
@@ -1544,9 +1552,8 @@ update_resize (MetaWindowDrag          *window_drag,
                                                gravity,
                                                flags);
 
-  meta_window_resize_frame_with_gravity (window, TRUE,
-                                         new_rect.width, new_rect.height,
-                                         gravity);
+  meta_window_resize_frame (window, TRUE,
+			    new_rect.width, new_rect.height);
 }
 
 static gboolean
@@ -1598,8 +1605,9 @@ maybe_maximize_tiled_window (MetaWindow *window)
 {
   MtkRectangle work_area;
   gint shake_threshold;
+  int width;
 
-  if (!META_WINDOW_TILED_SIDE_BY_SIDE (window))
+  if (!meta_window_is_tiled_side_by_side (window))
     return;
 
   shake_threshold = meta_prefs_get_drag_threshold ();
@@ -1607,7 +1615,8 @@ maybe_maximize_tiled_window (MetaWindow *window)
   meta_window_get_work_area_for_monitor (window,
                                          window->tile_monitor_number,
                                          &work_area);
-  if (window->rect.width >= work_area.width - shake_threshold)
+  meta_window_config_get_size (window->config, &width, NULL);
+  if (width >= work_area.width - shake_threshold)
     meta_window_maximize (window, META_MAXIMIZE_BOTH);
 }
 
@@ -1759,8 +1768,8 @@ process_pointer_event (MetaWindowDrag     *window_drag,
 }
 
 static gboolean
-on_window_drag_event (MetaWindowDrag *window_drag,
-                      ClutterEvent   *event)
+on_window_drag_event (MetaWindowDrag     *window_drag,
+                      const ClutterEvent *event)
 {
   switch (clutter_event_type (event))
     {
@@ -1776,18 +1785,27 @@ on_window_drag_event (MetaWindowDrag *window_drag,
   return CLUTTER_EVENT_PROPAGATE;
 }
 
+static gboolean
+handle_drag_event (const ClutterEvent *event,
+                   gpointer            user_data)
+{
+  MetaWindowDrag *window_drag = user_data;
+  return on_window_drag_event (window_drag, event);
+}
+
 gboolean
 meta_window_drag_begin (MetaWindowDrag       *window_drag,
                         ClutterInputDevice   *device,
                         ClutterEventSequence *sequence,
-                        uint32_t              timestamp)
+                        uint32_t              timestamp,
+                        ClutterActor         *grab_actor)
 {
   MetaWindow *window = window_drag->window, *grab_window = NULL;
   MetaDisplay *display = meta_window_get_display (window);
   MetaContext *context = meta_display_get_context (display);
   MetaBackend *backend = meta_context_get_backend (context);
   MetaGrabOp grab_op = window_drag->grab_op;
-  ClutterActor *stage;
+  ClutterStage *stage;
   int root_x, root_y;
 
   if ((grab_op & META_GRAB_OP_KEYBOARD_MOVING) == META_GRAB_OP_KEYBOARD_MOVING)
@@ -1843,28 +1861,36 @@ meta_window_drag_begin (MetaWindowDrag       *window_drag,
               window->desc);
   meta_window_focus (window, timestamp);
 
-  stage = meta_backend_get_stage (backend);
+  stage = CLUTTER_STAGE (meta_backend_get_stage (backend));
 
-  window_drag->handler = clutter_actor_new ();
-  clutter_actor_hide (window_drag->handler);
-  clutter_actor_set_name (window_drag->handler,
-                          "Window drag helper");
-  clutter_actor_set_accessible_name (window_drag->handler,
-                                     "Window drag helper");
-  g_signal_connect_swapped (window_drag->handler, "event",
-                            G_CALLBACK (on_window_drag_event), window_drag);
-  clutter_actor_add_child (stage, window_drag->handler);
-
-  window_drag->grab = clutter_stage_grab (CLUTTER_STAGE (stage),
-                                          window_drag->handler);
-
-  if ((clutter_grab_get_seat_state (window_drag->grab) &
-       CLUTTER_GRAB_STATE_POINTER) == 0 &&
-      !meta_grab_op_is_keyboard (grab_op))
+  if (grab_actor)
     {
-      meta_topic (META_DEBUG_WINDOW_OPS,
-                  "Pointer grab failed on a pointer grab op");
-      return FALSE;
+      meta_topic (META_DEBUG_WINDOW_OPS, "Reusing grab actor %p.", grab_actor);
+      window_drag->external_grab_actor = grab_actor;
+      window_drag->event_handler_id =
+        g_signal_connect_swapped (window_drag->external_grab_actor, "event",
+                                  G_CALLBACK (on_window_drag_event), window_drag);
+    }
+  else
+    {
+      meta_topic (META_DEBUG_WINDOW_OPS, "Creating a new grab.");
+      window_drag->grab = clutter_stage_grab_input_only_inactive (stage,
+                                                                  handle_drag_event,
+                                                                  window_drag,
+                                                                  NULL);
+      grab_actor = clutter_stage_get_grab_actor (stage);
+      clutter_actor_set_name (grab_actor, "Window drag helper");
+      clutter_actor_set_accessible_name (grab_actor, "Window drag helper");
+      clutter_grab_activate (window_drag->grab);
+
+      if ((clutter_grab_get_seat_state (window_drag->grab) &
+           CLUTTER_GRAB_STATE_POINTER) == 0 &&
+          !meta_grab_op_is_keyboard (grab_op))
+        {
+          meta_topic (META_DEBUG_WINDOW_OPS,
+                      "Pointer grab failed on a pointer grab op");
+          return FALSE;
+        }
     }
 
   /* Temporarily release the passive key grabs on the window */

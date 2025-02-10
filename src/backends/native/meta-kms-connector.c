@@ -97,6 +97,13 @@ meta_kms_connector_get_device (MetaKmsConnector *connector)
   return meta_kms_impl_device_get_device (connector->impl_device);
 }
 
+static gboolean
+meta_kms_connector_has_prop (MetaKmsConnector     *connector,
+                             MetaKmsConnectorProp  prop)
+{
+  return connector->prop_table.props[prop].prop_id > 0;
+}
+
 uint32_t
 meta_kms_connector_get_prop_id (MetaKmsConnector     *connector,
                                 MetaKmsConnectorProp  prop)
@@ -165,7 +172,7 @@ meta_kms_connector_get_current_state (MetaKmsConnector *connector)
 }
 
 gboolean
-meta_kms_connector_is_for_lease (MetaKmsConnector *connector)
+meta_kms_connector_is_non_desktop (MetaKmsConnector *connector)
 {
   const char *lease_connectors_str;
 
@@ -187,6 +194,20 @@ meta_kms_connector_is_for_lease (MetaKmsConnector *connector)
     }
 
   return connector->current_state->non_desktop;
+}
+
+gboolean
+meta_kms_connector_supports_colorspace (MetaKmsConnector *connector)
+{
+  return meta_kms_connector_has_prop (connector,
+                                      META_KMS_CONNECTOR_PROP_COLORSPACE);
+}
+
+gboolean
+meta_kms_connector_supports_hdr_metadata (MetaKmsConnector *connector)
+{
+  return meta_kms_connector_has_prop (connector,
+                                      META_KMS_CONNECTOR_PROP_HDR_OUTPUT_METADATA);
 }
 
 static gboolean

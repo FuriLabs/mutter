@@ -43,7 +43,6 @@
 #include "cogl/cogl-clip-stack.h"
 #include "cogl/cogl-journal-private.h"
 #include "cogl/cogl-pipeline-state-private.h"
-#include "cogl/cogl-primitive-private.h"
 #include "cogl/cogl-offscreen.h"
 #include "cogl/cogl-private.h"
 #include "cogl/cogl-primitives-private.h"
@@ -872,17 +871,18 @@ cogl_framebuffer_init_driver (CoglFramebuffer  *framebuffer,
 {
   CoglFramebufferPrivate *priv =
     cogl_framebuffer_get_instance_private (framebuffer);
-  const CoglDriverVtable *driver_vtable = priv->context->driver_vtable;
-  CoglFramebufferDriver *driver;
+  CoglDriverClass *driver_klass = COGL_DRIVER_GET_CLASS (priv->context->driver);
+  CoglFramebufferDriver *fb_driver;
 
-  driver = driver_vtable->create_framebuffer_driver (priv->context,
-                                                     framebuffer,
-                                                     &priv->driver_config,
-                                                     error);
-  if (!driver)
+  fb_driver = driver_klass->create_framebuffer_driver (priv->context->driver,
+                                                       priv->context,
+                                                       framebuffer,
+                                                       &priv->driver_config,
+                                                       error);
+  if (!fb_driver)
     return FALSE;
 
-  priv->driver = driver;
+  priv->driver = fb_driver;
   return TRUE;
 }
 
@@ -1055,10 +1055,16 @@ cogl_context_flush_framebuffer_state (CoglContext          *ctx,
                                       CoglFramebuffer      *read_buffer,
                                       CoglFramebufferState  state)
 {
-  ctx->driver_vtable->flush_framebuffer_state (ctx,
-                                               draw_buffer,
-                                               read_buffer,
-                                               state);
+  CoglDriverClass *driver_klass = COGL_DRIVER_GET_CLASS (ctx->driver);
+
+  if (driver_klass->flush_framebuffer_state)
+    {
+      driver_klass->flush_framebuffer_state (ctx->driver,
+                                             ctx,
+                                             draw_buffer,
+                                             read_buffer,
+                                             state);
+    }
 }
 
 static void
@@ -1377,7 +1383,7 @@ cogl_framebuffer_is_y_flipped (CoglFramebuffer *framebuffer)
 }
 
 gboolean
-cogl_blit_framebuffer (CoglFramebuffer *framebuffer,
+cogl_framebuffer_blit (CoglFramebuffer *framebuffer,
                        CoglFramebuffer *dst,
                        int src_x,
                        int src_y,
@@ -1410,7 +1416,7 @@ cogl_blit_framebuffer (CoglFramebuffer *framebuffer,
     {
       g_set_error_literal (error, COGL_SYSTEM_ERROR,
                            COGL_SYSTEM_ERROR_UNSUPPORTED,
-                           "cogl_blit_framebuffer premult mismatch.");
+                           "cogl_framebuffer_blit premult mismatch.");
       return FALSE;
     }
 
@@ -2355,7 +2361,7 @@ cogl_framebuffer_create_timestamp_query (CoglFramebuffer *framebuffer)
 {
   CoglFramebufferPrivate *priv =
     cogl_framebuffer_get_instance_private (framebuffer);
-  const CoglDriverVtable *driver_vtable = priv->context->driver_vtable;
+  CoglDriverClass *driver_klass = COGL_DRIVER_GET_CLASS (priv->context->driver);
 
   g_return_val_if_fail (cogl_context_has_feature (priv->context,
                                                   COGL_FEATURE_ID_TIMESTAMP_QUERY),
@@ -2372,5 +2378,5 @@ cogl_framebuffer_create_timestamp_query (CoglFramebuffer *framebuffer)
                                         framebuffer,
                                         COGL_FRAMEBUFFER_STATE_BIND);
 
-  return driver_vtable->create_timestamp_query (priv->context);
+  return driver_klass->create_timestamp_query (priv->context->driver, priv->context);
 }

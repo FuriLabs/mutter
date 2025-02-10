@@ -76,9 +76,10 @@ meta_sync_counter_set_counter (MetaSyncCounter *sync_counter,
 
   if (sync_counter->sync_request_counter != None)
     {
-      meta_verbose ("Window has _NET_WM_SYNC_REQUEST_COUNTER 0x%lx (extended=%s)",
-                    sync_counter->sync_request_counter,
-                    sync_counter->extended_sync_request_counter ? "true" : "false");
+      meta_topic (META_DEBUG_X11,
+                  "Window has _NET_WM_SYNC_REQUEST_COUNTER 0x%lx (extended=%s)",
+                  sync_counter->sync_request_counter,
+                  sync_counter->extended_sync_request_counter ? "true" : "false");
     }
 
   if (sync_counter->extended_sync_request_counter)
@@ -185,7 +186,7 @@ meta_sync_counter_has_sync_alarm (MetaSyncCounter *sync_counter)
           sync_counter->sync_request_alarm != None);
 }
 
-static gboolean
+static void
 sync_request_timeout (gpointer data)
 {
   MetaSyncCounter *sync_counter = data;
@@ -212,8 +213,6 @@ sync_request_timeout (gpointer data)
       window == meta_window_drag_get_window (window_drag) &&
       meta_grab_op_is_resizing (meta_window_drag_get_grab_op (window_drag)))
     meta_window_x11_check_update_resize (window);
-
-  return G_SOURCE_REMOVE;
 }
 
 void
@@ -266,9 +265,9 @@ meta_sync_counter_send_request (MetaSyncCounter *sync_counter)
    * if this time expires, we consider the window unresponsive
    * and resize it unsynchonized.
    */
-  sync_counter->sync_request_timeout_id = g_timeout_add (1000,
-                                                         sync_request_timeout,
-                                                         sync_counter);
+  sync_counter->sync_request_timeout_id = g_timeout_add_once (1000,
+                                                              sync_request_timeout,
+                                                              sync_counter);
   g_source_set_name_by_id (sync_counter->sync_request_timeout_id,
                            "[mutter] sync_request_timeout");
 

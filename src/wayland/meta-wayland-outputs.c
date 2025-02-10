@@ -379,12 +379,13 @@ bind_output (struct wl_client *client,
   logical_monitor = meta_monitor_get_logical_monitor (monitor);
   meta_monitor_mode_get_resolution (wayland_output->mode, &mode_width, &mode_height);
 
-  meta_verbose ("Binding monitor %p/%s (%u, %u, %u, %u) x %f",
-                logical_monitor,
-                meta_monitor_get_product (monitor),
-                wayland_output->layout.x, wayland_output->layout.y,
-                mode_width, mode_height,
-                meta_monitor_mode_get_refresh_rate (wayland_output->mode));
+  meta_topic (META_DEBUG_WAYLAND,
+              "Binding monitor %p/%s (%u, %u, %u, %u) x %f",
+              logical_monitor,
+              meta_monitor_get_product (monitor),
+              wayland_output->layout.x, wayland_output->layout.y,
+              mode_width, mode_height,
+              meta_monitor_mode_get_refresh_rate (wayland_output->mode));
 #endif
 
   send_output_events (resource, wayland_output, monitor, TRUE, NULL);
@@ -514,11 +515,10 @@ make_output_inert (gpointer key,
   make_output_resources_inert (wayland_output);
 }
 
-static gboolean
+static void
 delayed_destroy_outputs (gpointer data)
 {
   g_hash_table_destroy (data);
-  return G_SOURCE_REMOVE;
 }
 
 static GHashTable *
@@ -562,7 +562,7 @@ meta_wayland_compositor_update_outputs (MetaWaylandCompositor *compositor,
   if (compositor->outputs)
     {
       g_hash_table_foreach (compositor->outputs, make_output_inert, NULL);
-      g_timeout_add_seconds (10, delayed_destroy_outputs, compositor->outputs);
+      g_timeout_add_seconds_once (10, delayed_destroy_outputs, compositor->outputs);
     }
 
   return new_table;

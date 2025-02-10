@@ -29,7 +29,7 @@
 
 #include "clutter/clutter-actor.h"
 #include "clutter/clutter-stage.h"
-#include <pango/pango.h>
+#include "cogl/cogl.h"
 
 G_BEGIN_DECLS
 
@@ -109,37 +109,20 @@ gboolean                clutter_get_accessibility_enabled       (void);
 
 /* Threading functions */
 CLUTTER_EXPORT
-guint                   clutter_threads_add_idle                (GSourceFunc    func,
-                                                                 gpointer       data);
-CLUTTER_EXPORT
-guint                   clutter_threads_add_idle_full           (gint           priority,
-                                                                 GSourceFunc    func,
-                                                                 gpointer       data,
-                                                                 GDestroyNotify notify);
-CLUTTER_EXPORT
-guint                   clutter_threads_add_timeout             (guint          interval,
-                                                                 GSourceFunc    func,
-                                                                 gpointer       data);
-CLUTTER_EXPORT
-guint                   clutter_threads_add_timeout_full        (gint           priority,
-                                                                 guint          interval,
-                                                                 GSourceFunc    func,
-                                                                 gpointer       data,
-                                                                 GDestroyNotify notify);
-CLUTTER_EXPORT
-guint                   clutter_threads_add_repaint_func        (GSourceFunc    func,
-                                                                 gpointer       data,
-                                                                 GDestroyNotify notify);
-CLUTTER_EXPORT
-guint                   clutter_threads_add_repaint_func_full   (ClutterRepaintFlags flags,
-                                                                 GSourceFunc    func,
-                                                                 gpointer       data,
-                                                                 GDestroyNotify notify);
+guint                   clutter_threads_add_repaint_func        (ClutterRepaintFlags flags,
+                                                                 GSourceFunc         func,
+                                                                 gpointer            data,
+                                                                 GDestroyNotify      notify);
 CLUTTER_EXPORT
 void                    clutter_threads_remove_repaint_func     (guint          handle_id);
 
 CLUTTER_EXPORT
 ClutterTextDirection    clutter_get_default_text_direction      (void);
+
+CLUTTER_EXPORT
+void                    clutter_get_debug_flags                 (ClutterDebugFlag     *debug_flags,
+                                                                 ClutterDrawDebugFlag *draw_flags,
+                                                                 ClutterPickDebugFlag *pick_flags);
 
 CLUTTER_EXPORT
 void                    clutter_add_debug_flags                 (ClutterDebugFlag     debug_flags,

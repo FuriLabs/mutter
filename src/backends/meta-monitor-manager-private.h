@@ -34,6 +34,7 @@
 #include "backends/meta-crtc.h"
 #include "backends/meta-cursor.h"
 #include "backends/meta-display-config-shared.h"
+#include "backends/meta-output.h"
 #include "backends/meta-viewport-info.h"
 #include "core/util-private.h"
 #include "meta/display.h"
@@ -107,6 +108,7 @@ struct _MetaOutputAssignment
   gboolean has_max_bpc;
   unsigned int max_bpc;
   unsigned int rgb_range;
+  MetaColorMode color_mode;
 };
 
 /*
@@ -344,6 +346,9 @@ MetaMonitorsConfig * meta_monitor_manager_ensure_configured (MetaMonitorManager 
 META_EXPORT_TEST
 void               meta_monitor_manager_update_logical_state (MetaMonitorManager *manager,
                                                               MetaMonitorsConfig *config);
+
+void               meta_monitor_manager_update_for_lease_state (MetaMonitorManager *manager,
+                                                                MetaMonitorsConfig *config);
 
 META_EXPORT_TEST
 void               meta_monitor_manager_update_logical_state_derived (MetaMonitorManager *manager,

@@ -591,11 +591,11 @@ index_binding (MetaKeyBindingManager *keys,
           if (i > 0)
             continue;
 
-          meta_warning ("Overwriting existing binding of keysym %x"
-                        " with keysym %x (keycode %x).",
-                        binding->combo.keysym,
-                        existing->combo.keysym,
-                        binding->resolved_combo.keycodes[i]);
+          g_warning ("Overwriting existing binding of keysym %x"
+                     " with keysym %x (keycode %x).",
+                     binding->combo.keysym,
+                     existing->combo.keysym,
+                     binding->resolved_combo.keycodes[i]);
         }
 
       g_hash_table_replace (keys->key_bindings_index,
@@ -1233,13 +1233,13 @@ meta_display_shutdown_keys (MetaDisplay *display)
 static void
 handle_external_grab (MetaDisplay           *display,
                       MetaWindow            *window,
-                      const ClutterKeyEvent *event,
+                      const ClutterEvent    *event,
                       MetaKeyBinding        *binding,
                       gpointer               user_data)
 {
   MetaKeyBindingManager *keys = &display->key_binding_manager;
   guint action = get_keybinding_action (keys, &binding->resolved_combo);
-  if (clutter_event_type ((ClutterEvent *) event) == CLUTTER_KEY_RELEASE)
+  if (clutter_event_type (event) == CLUTTER_KEY_RELEASE)
     meta_display_accelerator_deactivate (display, action, event);
   else
     meta_display_accelerator_activate (display, action, event);
@@ -1259,9 +1259,9 @@ meta_display_grab_accelerator (MetaDisplay         *display,
 
   if (!meta_parse_accelerator (accelerator, &combo))
     {
-      meta_topic (META_DEBUG_KEYBINDINGS,
-                  "Failed to parse accelerator");
-      meta_warning ("\"%s\" is not a valid accelerator", accelerator);
+      g_warning ("Failed to parse accelerator: "
+                 "\"%s\" is not a valid accelerator",
+                 accelerator);
 
       return META_KEYBINDING_ACTION_NONE;
     }
@@ -1356,7 +1356,7 @@ static void
 invoke_handler (MetaDisplay           *display,
                 MetaKeyHandler        *handler,
                 MetaWindow            *window,
-                const ClutterKeyEvent *event,
+                const ClutterEvent    *event,
                 MetaKeyBinding        *binding)
 {
   if (handler->func)
@@ -1394,16 +1394,16 @@ get_modifiers (ClutterEvent *event)
 static gboolean
 process_event (MetaDisplay          *display,
                MetaWindow           *window,
-               ClutterKeyEvent      *event)
+               ClutterEvent         *event)
 {
   MetaKeyBindingManager *keys = &display->key_binding_manager;
   xkb_keycode_t keycode =
-    (xkb_keycode_t) clutter_event_get_key_code ((ClutterEvent *) event);
+    (xkb_keycode_t) clutter_event_get_key_code (event);
   MetaResolvedKeyCombo resolved_combo = { &keycode, 1 };
   MetaKeyBinding *binding;
   ClutterModifierType modifiers;
 
-  modifiers = get_modifiers ((ClutterEvent *) event);
+  modifiers = get_modifiers (event);
   resolved_combo.mask = mask_from_event_params (keys, modifiers);
 
   binding = get_keybinding (keys, &resolved_combo);
@@ -1428,7 +1428,7 @@ process_event (MetaDisplay          *display,
     {
       ClutterInputDevice *source;
 
-      source = clutter_event_get_source_device ((ClutterEvent *) event);
+      source = clutter_event_get_source_device (event);
       if (meta_window_shortcuts_inhibited (display->focus_window, source))
         goto not_found;
     }
@@ -1439,7 +1439,7 @@ process_event (MetaDisplay          *display,
   if (meta_compositor_filter_keybinding (display->compositor, binding))
     goto not_found;
 
-  if (clutter_event_get_flags ((ClutterEvent *) event) & CLUTTER_EVENT_FLAG_REPEATED &&
+  if (clutter_event_get_flags (event) & CLUTTER_EVENT_FLAG_REPEATED &&
       binding->flags & META_KEY_BINDING_IGNORE_AUTOREPEAT)
     {
       meta_topic (META_DEBUG_KEYBINDINGS,
@@ -1448,7 +1448,7 @@ process_event (MetaDisplay          *display,
       return CLUTTER_EVENT_STOP;
     }
 
-  if (clutter_event_type ((ClutterEvent *) event) == CLUTTER_KEY_RELEASE)
+  if (clutter_event_type (event) == CLUTTER_KEY_RELEASE)
     {
       if (binding->release_pending)
         {
@@ -1495,7 +1495,7 @@ process_event (MetaDisplay          *display,
 
 static gboolean
 process_special_modifier_key (MetaDisplay          *display,
-                              ClutterKeyEvent      *event,
+                              ClutterEvent         *event,
                               MetaWindow           *window,
                               gboolean             *modifier_press_only,
                               MetaResolvedKeyCombo *resolved_key_combo,
@@ -1509,16 +1509,16 @@ process_special_modifier_key (MetaDisplay          *display,
   uint32_t time_ms;
   Display *xdisplay;
 
-  time_ms = clutter_event_get_time ((ClutterEvent *) event);
-  device = clutter_event_get_device ((ClutterEvent *) event);
+  time_ms = clutter_event_get_time (event);
+  device = clutter_event_get_device (event);
   if (META_IS_BACKEND_X11 (keys->backend))
     xdisplay = meta_backend_x11_get_xdisplay (META_BACKEND_X11 (keys->backend));
   else
     xdisplay = NULL;
 #endif
 
-  hardware_keycode = clutter_event_get_key_code ((ClutterEvent *) event);
-  modifiers = get_modifiers ((ClutterEvent *) event);
+  hardware_keycode = clutter_event_get_key_code (event);
+  modifiers = get_modifiers (event);
 
   if (*modifier_press_only)
     {
@@ -1577,7 +1577,7 @@ process_special_modifier_key (MetaDisplay          *display,
 #endif
             }
         }
-      else if (clutter_event_type ((ClutterEvent *) event) == CLUTTER_KEY_RELEASE)
+      else if (clutter_event_type (event) == CLUTTER_KEY_RELEASE)
         {
           MetaKeyBinding *binding;
 
@@ -1626,7 +1626,7 @@ process_special_modifier_key (MetaDisplay          *display,
 
       return TRUE;
     }
-  else if (clutter_event_type ((ClutterEvent *) event) == CLUTTER_KEY_PRESS &&
+  else if (clutter_event_type (event) == CLUTTER_KEY_PRESS &&
            ((modifiers & ~(IGNORED_MODIFIERS)) & CLUTTER_MODIFIER_MASK) == 0 &&
            resolved_key_combo_has_keycode (resolved_key_combo, hardware_keycode))
     {
@@ -1651,7 +1651,7 @@ process_special_modifier_key (MetaDisplay          *display,
 
 static gboolean
 process_overlay_key (MetaDisplay     *display,
-                     ClutterKeyEvent *event,
+                     ClutterEvent    *event,
                      MetaWindow      *window)
 {
   MetaKeyBindingManager *keys = &display->key_binding_manager;
@@ -1660,7 +1660,7 @@ process_overlay_key (MetaDisplay     *display,
     {
       ClutterInputDevice *source;
 
-      source = clutter_event_get_source_device ((ClutterEvent *) event);
+      source = clutter_event_get_source_device (event);
       if (meta_window_shortcuts_inhibited (display->focus_window, source))
         return FALSE;
     }
@@ -1681,7 +1681,7 @@ handle_locate_pointer (MetaDisplay *display)
 
 static gboolean
 process_locate_pointer_key (MetaDisplay     *display,
-                            ClutterKeyEvent *event,
+                            ClutterEvent    *event,
                             MetaWindow      *window)
 {
   MetaKeyBindingManager *keys = &display->key_binding_manager;
@@ -1695,52 +1695,47 @@ process_locate_pointer_key (MetaDisplay     *display,
 }
 
 static gboolean
-process_iso_next_group (MetaDisplay *display,
-                        ClutterKeyEvent *event)
+process_iso_next_group (MetaDisplay  *display,
+                        ClutterEvent *event)
 {
   MetaContext *context = meta_display_get_context (display);
   MetaBackend *backend = meta_context_get_backend (context);
   MetaKeyBindingManager *keys = &display->key_binding_manager;
-  gboolean activate;
-  xkb_keycode_t keycode =
-    (xkb_keycode_t) clutter_event_get_key_code ((ClutterEvent *) event);
+  uint32_t keyval = clutter_event_get_key_symbol (event);
   ClutterModifierType modifiers;
   xkb_mod_mask_t mask;
-  int i, j;
+  int i;
 
-  if (clutter_event_type ((ClutterEvent *) event) == CLUTTER_KEY_RELEASE)
+  if (clutter_event_type (event) == CLUTTER_KEY_RELEASE)
     return FALSE;
 
-  activate = FALSE;
-  modifiers = get_modifiers ((ClutterEvent *) event);
+  if (keyval != XKB_KEY_ISO_Next_Group)
+    return FALSE;
+
+  modifiers = get_modifiers (event);
   mask = mask_from_event_params (keys, modifiers);
 
   for (i = 0; i < keys->n_iso_next_group_combos; ++i)
     {
-      for (j = 0; j <  keys->iso_next_group_combo[i].len; ++j)
+      if (mask == keys->iso_next_group_combo[i].mask)
         {
-          if (keycode == keys->iso_next_group_combo[i].keycodes[j] &&
-              mask == keys->iso_next_group_combo[i].mask)
-            {
-              /* If the signal handler returns TRUE the keyboard will
-                 remain frozen. It's the signal handler's responsibility
-                 to unfreeze it. */
-              if (!meta_display_modifiers_accelerator_activate (display))
-                meta_backend_unfreeze_keyboard (backend,
-                                                clutter_event_get_time ((ClutterEvent *) event));
-              activate = TRUE;
-              break;
-            }
+          /* If the signal handler returns TRUE the keyboard will
+             remain frozen. It's the signal handler's responsibility
+             to unfreeze it. */
+          if (!meta_display_modifiers_accelerator_activate (display))
+            meta_backend_unfreeze_keyboard (backend,
+                                            clutter_event_get_time (event));
+          return TRUE;
         }
     }
 
-  return activate;
+  return FALSE;
 }
 
 static gboolean
 process_key_event (MetaDisplay     *display,
                    MetaWindow      *window,
-                   ClutterKeyEvent *event)
+                   ClutterEvent    *event)
 {
   if (process_overlay_key (display, event, window))
     return TRUE;
@@ -1760,11 +1755,11 @@ process_key_event (MetaDisplay     *display,
     if (META_IS_BACKEND_X11 (backend))
       {
         Display *xdisplay = meta_backend_x11_get_xdisplay (META_BACKEND_X11 (backend));
-        device = clutter_event_get_device ((ClutterEvent *) event);
+        device = clutter_event_get_device (event);
         XIAllowEvents (xdisplay,
                        meta_input_device_x11_get_device_id (device),
                        XIAsyncDevice,
-                       clutter_event_get_time ((ClutterEvent *) event));
+                       clutter_event_get_time (event));
       }
   }
 #endif
@@ -1807,7 +1802,7 @@ meta_keybindings_process_event (MetaDisplay        *display,
 
     case CLUTTER_KEY_PRESS:
     case CLUTTER_KEY_RELEASE:
-      return process_key_event (display, window, (ClutterKeyEvent *) event);
+      return process_key_event (display, window, (ClutterEvent *) event);
 
     default:
       return FALSE;
@@ -1817,7 +1812,7 @@ meta_keybindings_process_event (MetaDisplay        *display,
 static void
 handle_switch_to_last_workspace (MetaDisplay           *display,
                                  MetaWindow            *event_window,
-                                 const ClutterKeyEvent *event,
+                                 const ClutterEvent    *event,
                                  MetaKeyBinding        *binding,
                                  gpointer               user_data)
 {
@@ -1826,13 +1821,13 @@ handle_switch_to_last_workspace (MetaDisplay           *display,
     MetaWorkspace *workspace = meta_workspace_manager_get_workspace_by_index (workspace_manager, target);
 
     meta_workspace_activate (workspace,
-                             clutter_event_get_time ((ClutterEvent *) event));
+                             clutter_event_get_time (event));
 }
 
 static void
 handle_switch_to_workspace (MetaDisplay           *display,
                             MetaWindow            *event_window,
-                            const ClutterKeyEvent *event,
+                            const ClutterEvent    *event,
                             MetaKeyBinding        *binding,
                             gpointer               user_data)
 {
@@ -1857,7 +1852,7 @@ handle_switch_to_workspace (MetaDisplay           *display,
   if (workspace)
     {
       meta_workspace_activate (workspace,
-                               clutter_event_get_time ((ClutterEvent *) event));
+                               clutter_event_get_time (event));
     }
   else
     {
@@ -1869,7 +1864,7 @@ handle_switch_to_workspace (MetaDisplay           *display,
 static void
 handle_maximize_vertically (MetaDisplay           *display,
                             MetaWindow            *window,
-                            const ClutterKeyEvent *event,
+                            const ClutterEvent    *event,
                             MetaKeyBinding        *binding,
                             gpointer               user_data)
 {
@@ -1885,7 +1880,7 @@ handle_maximize_vertically (MetaDisplay           *display,
 static void
 handle_maximize_horizontally (MetaDisplay           *display,
                               MetaWindow            *window,
-                              const ClutterKeyEvent *event,
+                              const ClutterEvent    *event,
                               MetaKeyBinding        *binding,
                               gpointer               user_data)
 {
@@ -1901,7 +1896,7 @@ handle_maximize_horizontally (MetaDisplay           *display,
 static void
 handle_always_on_top (MetaDisplay           *display,
                       MetaWindow            *window,
-                      const ClutterKeyEvent *event,
+                      const ClutterEvent    *event,
                       MetaKeyBinding        *binding,
                       gpointer               user_data)
 {
@@ -1975,7 +1970,7 @@ handle_move_to_corner_backend (MetaDisplay           *display,
 static void
 handle_move_to_corner_nw (MetaDisplay           *display,
                           MetaWindow            *window,
-                          const ClutterKeyEvent *event,
+                          const ClutterEvent    *event,
                           MetaKeyBinding        *binding,
                           gpointer               user_data)
 {
@@ -1985,7 +1980,7 @@ handle_move_to_corner_nw (MetaDisplay           *display,
 static void
 handle_move_to_corner_ne (MetaDisplay           *display,
                           MetaWindow            *window,
-                          const ClutterKeyEvent *event,
+                          const ClutterEvent    *event,
                           MetaKeyBinding        *binding,
                           gpointer               user_data)
 {
@@ -1995,7 +1990,7 @@ handle_move_to_corner_ne (MetaDisplay           *display,
 static void
 handle_move_to_corner_sw (MetaDisplay           *display,
                           MetaWindow            *window,
-                          const ClutterKeyEvent *event,
+                          const ClutterEvent    *event,
                           MetaKeyBinding        *binding,
                           gpointer               user_data)
 {
@@ -2005,7 +2000,7 @@ handle_move_to_corner_sw (MetaDisplay           *display,
 static void
 handle_move_to_corner_se (MetaDisplay           *display,
                           MetaWindow            *window,
-                          const ClutterKeyEvent *event,
+                          const ClutterEvent    *event,
                           MetaKeyBinding        *binding,
                           gpointer               user_data)
 {
@@ -2015,7 +2010,7 @@ handle_move_to_corner_se (MetaDisplay           *display,
 static void
 handle_move_to_side_n (MetaDisplay           *display,
                        MetaWindow            *window,
-                       const ClutterKeyEvent *event,
+                       const ClutterEvent    *event,
                        MetaKeyBinding        *binding,
                        gpointer               user_data)
 {
@@ -2025,7 +2020,7 @@ handle_move_to_side_n (MetaDisplay           *display,
 static void
 handle_move_to_side_s (MetaDisplay           *display,
                        MetaWindow            *window,
-                       const ClutterKeyEvent *event,
+                       const ClutterEvent    *event,
                        MetaKeyBinding        *binding,
                        gpointer               user_data)
 {
@@ -2035,7 +2030,7 @@ handle_move_to_side_s (MetaDisplay           *display,
 static void
 handle_move_to_side_e (MetaDisplay           *display,
                        MetaWindow            *window,
-                       const ClutterKeyEvent *event,
+                       const ClutterEvent    *event,
                        MetaKeyBinding        *binding,
                        gpointer               user_data)
 {
@@ -2045,7 +2040,7 @@ handle_move_to_side_e (MetaDisplay           *display,
 static void
 handle_move_to_side_w (MetaDisplay           *display,
                        MetaWindow            *window,
-                       const ClutterKeyEvent *event,
+                       const ClutterEvent    *event,
                        MetaKeyBinding        *binding,
                        gpointer               user_data)
 {
@@ -2055,7 +2050,7 @@ handle_move_to_side_w (MetaDisplay           *display,
 static void
 handle_move_to_center (MetaDisplay           *display,
                        MetaWindow            *window,
-                       const ClutterKeyEvent *event,
+                       const ClutterEvent    *event,
                        MetaKeyBinding        *binding,
                        gpointer               user_data)
 {
@@ -2074,7 +2069,7 @@ handle_move_to_center (MetaDisplay           *display,
 static void
 handle_show_desktop (MetaDisplay           *display,
                      MetaWindow            *window,
-                     const ClutterKeyEvent *event,
+                     const ClutterEvent    *event,
                      MetaKeyBinding        *binding,
                      gpointer               user_data)
 {
@@ -2085,19 +2080,19 @@ handle_show_desktop (MetaDisplay           *display,
       meta_workspace_manager_unshow_desktop (workspace_manager);
       meta_workspace_focus_default_window (workspace_manager->active_workspace,
                                            NULL,
-                                           clutter_event_get_time ((ClutterEvent *) event));
+                                           clutter_event_get_time (event));
     }
   else
     {
       meta_workspace_manager_show_desktop (workspace_manager,
-                                           clutter_event_get_time ((ClutterEvent *) event));
+                                           clutter_event_get_time (event));
     }
 }
 
 static void
 handle_activate_window_menu (MetaDisplay           *display,
                              MetaWindow            *event_window,
-                             const ClutterKeyEvent *event,
+                             const ClutterEvent    *event,
                              MetaKeyBinding        *binding,
                              gpointer               user_data)
 {
@@ -2122,7 +2117,7 @@ handle_activate_window_menu (MetaDisplay           *display,
 static void
 do_choose_window (MetaDisplay           *display,
                   MetaWindow            *event_window,
-                  const ClutterKeyEvent *event,
+                  const ClutterEvent    *event,
                   MetaKeyBinding        *binding,
                   gboolean               backward)
 {
@@ -2142,14 +2137,14 @@ do_choose_window (MetaDisplay           *display,
   if (window)
     {
       meta_window_activate (window,
-                            clutter_event_get_time ((ClutterEvent *) event));
+                            clutter_event_get_time (event));
     }
 }
 
 static void
 handle_switch (MetaDisplay           *display,
                MetaWindow            *event_window,
-               const ClutterKeyEvent *event,
+               const ClutterEvent    *event,
                MetaKeyBinding        *binding,
                gpointer               user_data)
 {
@@ -2160,7 +2155,7 @@ handle_switch (MetaDisplay           *display,
 static void
 handle_cycle (MetaDisplay           *display,
               MetaWindow            *event_window,
-              const ClutterKeyEvent *event,
+              const ClutterEvent    *event,
               MetaKeyBinding        *binding,
               gpointer               user_data)
 {
@@ -2171,11 +2166,11 @@ handle_cycle (MetaDisplay           *display,
 static void
 handle_toggle_fullscreen (MetaDisplay           *display,
                           MetaWindow            *window,
-                          const ClutterKeyEvent *event,
+                          const ClutterEvent    *event,
                           MetaKeyBinding        *binding,
                           gpointer               user_data)
 {
-  if (window->fullscreen)
+  if (meta_window_is_fullscreen (window))
     meta_window_unmake_fullscreen (window);
   else if (window->has_fullscreen_func)
     meta_window_make_fullscreen (window);
@@ -2184,7 +2179,7 @@ handle_toggle_fullscreen (MetaDisplay           *display,
 static void
 handle_toggle_above (MetaDisplay           *display,
                      MetaWindow            *window,
-                     const ClutterKeyEvent *event,
+                     const ClutterEvent    *event,
                      MetaKeyBinding        *binding,
                      gpointer               user_data)
 {
@@ -2197,14 +2192,14 @@ handle_toggle_above (MetaDisplay           *display,
 static void
 handle_toggle_tiled (MetaDisplay           *display,
                      MetaWindow            *window,
-                     const ClutterKeyEvent *event,
+                     const ClutterEvent    *event,
                      MetaKeyBinding        *binding,
                      gpointer               user_data)
 {
   MetaTileMode mode = binding->handler->data;
 
-  if ((META_WINDOW_TILED_LEFT (window) && mode == META_TILE_LEFT) ||
-      (META_WINDOW_TILED_RIGHT (window) && mode == META_TILE_RIGHT))
+  if ((meta_window_is_tiled_left (window) && mode == META_TILE_LEFT) ||
+      (meta_window_is_tiled_right (window) && mode == META_TILE_RIGHT))
     {
       meta_window_untile (window);
     }
@@ -2225,11 +2220,11 @@ handle_toggle_tiled (MetaDisplay           *display,
 static void
 handle_toggle_maximized (MetaDisplay           *display,
                          MetaWindow            *window,
-                         const ClutterKeyEvent *event,
+                         const ClutterEvent    *event,
                          MetaKeyBinding        *binding,
                          gpointer               user_data)
 {
-  if (META_WINDOW_MAXIMIZED (window))
+  if (meta_window_is_maximized (window))
     meta_window_unmaximize (window, META_MAXIMIZE_BOTH);
   else if (window->has_maximize_func)
     meta_window_maximize (window, META_MAXIMIZE_BOTH);
@@ -2238,7 +2233,7 @@ handle_toggle_maximized (MetaDisplay           *display,
 static void
 handle_maximize (MetaDisplay           *display,
                  MetaWindow            *window,
-                 const ClutterKeyEvent *event,
+                 const ClutterEvent    *event,
                  MetaKeyBinding        *binding,
                  gpointer               user_data)
 {
@@ -2249,7 +2244,7 @@ handle_maximize (MetaDisplay           *display,
 static void
 handle_unmaximize (MetaDisplay           *display,
                    MetaWindow            *window,
-                   const ClutterKeyEvent *event,
+                   const ClutterEvent    *event,
                    MetaKeyBinding        *binding,
                    gpointer               user_data)
 {
@@ -2260,21 +2255,21 @@ handle_unmaximize (MetaDisplay           *display,
 static void
 handle_close (MetaDisplay           *display,
               MetaWindow            *window,
-              const ClutterKeyEvent *event,
+              const ClutterEvent    *event,
               MetaKeyBinding        *binding,
               gpointer               user_data)
 {
   if (window->has_close_func)
     {
       meta_window_delete (window,
-                          clutter_event_get_time ((ClutterEvent *) event));
+                          clutter_event_get_time (event));
     }
 }
 
 static void
 handle_minimize (MetaDisplay           *display,
                  MetaWindow            *window,
-                 const ClutterKeyEvent *event,
+                 const ClutterEvent    *event,
                  MetaKeyBinding        *binding,
                  gpointer               user_data)
 {
@@ -2285,7 +2280,7 @@ handle_minimize (MetaDisplay           *display,
 static void
 handle_begin_move (MetaDisplay           *display,
                    MetaWindow            *window,
-                   const ClutterKeyEvent *event,
+                   const ClutterEvent    *event,
                    MetaKeyBinding        *binding,
                    gpointer               user_data)
 {
@@ -2302,7 +2297,7 @@ handle_begin_move (MetaDisplay           *display,
                                  META_GRAB_OP_KEYBOARD_MOVING |
                                  META_GRAB_OP_WINDOW_FLAG_UNCONSTRAINED,
                                  device, NULL,
-                                 clutter_event_get_time ((ClutterEvent *) event),
+                                 clutter_event_get_time (event),
                                  NULL);
     }
 }
@@ -2310,7 +2305,7 @@ handle_begin_move (MetaDisplay           *display,
 static void
 handle_begin_resize (MetaDisplay           *display,
                      MetaWindow            *window,
-                     const ClutterKeyEvent *event,
+                     const ClutterEvent    *event,
                      MetaKeyBinding        *binding,
                      gpointer               user_data)
 {
@@ -2327,7 +2322,7 @@ handle_begin_resize (MetaDisplay           *display,
                                  META_GRAB_OP_KEYBOARD_RESIZING_UNKNOWN |
                                  META_GRAB_OP_WINDOW_FLAG_UNCONSTRAINED,
                                  device, NULL,
-                                 clutter_event_get_time ((ClutterEvent *) event),
+                                 clutter_event_get_time (event),
                                  NULL);
     }
 }
@@ -2335,7 +2330,7 @@ handle_begin_resize (MetaDisplay           *display,
 static void
 handle_toggle_on_all_workspaces (MetaDisplay           *display,
                                  MetaWindow            *window,
-                                 const ClutterKeyEvent *event,
+                                 const ClutterEvent    *event,
                                  MetaKeyBinding        *binding,
                                  gpointer               user_data)
 {
@@ -2348,7 +2343,7 @@ handle_toggle_on_all_workspaces (MetaDisplay           *display,
 static void
 handle_move_to_workspace_last (MetaDisplay           *display,
                                MetaWindow            *window,
-                               const ClutterKeyEvent *event,
+                               const ClutterEvent    *event,
                                MetaKeyBinding        *binding,
                                gpointer               user_data)
 {
@@ -2368,7 +2363,7 @@ handle_move_to_workspace_last (MetaDisplay           *display,
 static void
 handle_move_to_workspace (MetaDisplay           *display,
                           MetaWindow            *window,
-                          const ClutterKeyEvent *event,
+                          const ClutterEvent    *event,
                           MetaKeyBinding        *binding,
                           gpointer               user_data)
 {
@@ -2411,7 +2406,7 @@ handle_move_to_workspace (MetaDisplay           *display,
           meta_display_clear_mouse_mode (workspace->display);
           meta_workspace_activate_with_focus (workspace,
                                               window,
-                                              clutter_event_get_time ((ClutterEvent *) event));
+                                              clutter_event_get_time (event));
         }
     }
   else
@@ -2423,7 +2418,7 @@ handle_move_to_workspace (MetaDisplay           *display,
 static void
 handle_move_to_monitor (MetaDisplay           *display,
                         MetaWindow            *window,
-                        const ClutterKeyEvent *event,
+                        const ClutterEvent    *event,
                         MetaKeyBinding        *binding,
                         gpointer               user_data)
 {
@@ -2447,7 +2442,7 @@ handle_move_to_monitor (MetaDisplay           *display,
 static void
 handle_raise_or_lower (MetaDisplay           *display,
                        MetaWindow            *window,
-                       const ClutterKeyEvent *event,
+                       const ClutterEvent    *event,
                        MetaKeyBinding        *binding,
                        gpointer               user_data)
 {
@@ -2493,7 +2488,7 @@ handle_raise_or_lower (MetaDisplay           *display,
 static void
 handle_raise (MetaDisplay           *display,
               MetaWindow            *window,
-              const ClutterKeyEvent *event,
+              const ClutterEvent    *event,
               MetaKeyBinding        *binding,
               gpointer               user_data)
 {
@@ -2503,7 +2498,7 @@ handle_raise (MetaDisplay           *display,
 static void
 handle_lower (MetaDisplay           *display,
               MetaWindow            *window,
-              const ClutterKeyEvent *event,
+              const ClutterEvent    *event,
               MetaKeyBinding        *binding,
               gpointer               user_data)
 {
@@ -2513,18 +2508,18 @@ handle_lower (MetaDisplay           *display,
 static void
 handle_set_spew_mark (MetaDisplay           *display,
                       MetaWindow            *window,
-                      const ClutterKeyEvent *event,
+                      const ClutterEvent    *event,
                       MetaKeyBinding        *binding,
                       gpointer               user_data)
 {
-  meta_verbose ("-- MARK MARK MARK MARK --");
+  g_message ("-- MARK MARK MARK MARK --");
 }
 
 #ifdef HAVE_NATIVE_BACKEND
 static void
 handle_switch_vt (MetaDisplay           *display,
                   MetaWindow            *window,
-                  const ClutterKeyEvent *event,
+                  const ClutterEvent    *event,
                   MetaKeyBinding        *binding,
                   gpointer               user_data)
 {
@@ -2545,7 +2540,7 @@ handle_switch_vt (MetaDisplay           *display,
 static void
 handle_switch_monitor (MetaDisplay           *display,
                        MetaWindow            *window,
-                       const ClutterKeyEvent *event,
+                       const ClutterEvent    *event,
                        MetaKeyBinding        *binding,
                        gpointer               user_data)
 {
@@ -2566,7 +2561,7 @@ handle_switch_monitor (MetaDisplay           *display,
 static void
 handle_rotate_monitor (MetaDisplay           *display,
                        MetaWindow            *window,
-                       const ClutterKeyEvent *event,
+                       const ClutterEvent    *event,
                        MetaKeyBinding        *binding,
                        gpointer               user_data)
 {
@@ -2581,7 +2576,7 @@ handle_rotate_monitor (MetaDisplay           *display,
 static void
 handle_cancel_input_capture (MetaDisplay           *display,
                              MetaWindow            *window,
-                             const ClutterKeyEvent *event,
+                             const ClutterEvent    *event,
                              MetaKeyBinding        *binding,
                              gpointer               user_data)
 {
@@ -2591,7 +2586,7 @@ handle_cancel_input_capture (MetaDisplay           *display,
 static void
 handle_restore_shortcuts (MetaDisplay           *display,
                           MetaWindow            *window,
-                          const ClutterKeyEvent *event,
+                          const ClutterEvent    *event,
                           MetaKeyBinding        *binding,
                           gpointer               user_data)
 {
@@ -2600,7 +2595,7 @@ handle_restore_shortcuts (MetaDisplay           *display,
   if (!display->focus_window)
     return;
 
-  source = clutter_event_get_source_device ((ClutterEvent *) event);
+  source = clutter_event_get_source_device (event);
 
   meta_topic (META_DEBUG_KEYBINDINGS, "Restoring normal keyboard shortcuts");
 
@@ -2883,16 +2878,16 @@ meta_display_init_keys (MetaDisplay *display)
 static gboolean
 process_keybinding_key_event (MetaDisplay           *display,
                               MetaKeyHandler        *handler,
-                              const ClutterKeyEvent *event)
+                              const ClutterEvent    *event)
 {
   MetaKeyBindingManager *keys = &display->key_binding_manager;
   xkb_keycode_t keycode =
-    (xkb_keycode_t) clutter_event_get_key_code ((ClutterEvent *) event);
+    (xkb_keycode_t) clutter_event_get_key_code (event);
   ClutterModifierType modifiers;
   MetaResolvedKeyCombo resolved_combo = { &keycode, 1 };
   MetaKeyBinding *binding;
 
-  if (clutter_event_type ((ClutterEvent *) event) == CLUTTER_KEY_RELEASE)
+  if (clutter_event_type (event) == CLUTTER_KEY_RELEASE)
     return FALSE;
 
   modifiers = get_modifiers ((ClutterEvent *) event);
@@ -2927,8 +2922,7 @@ meta_display_process_keybinding_event (MetaDisplay        *display,
     {
     case CLUTTER_KEY_PRESS:
     case CLUTTER_KEY_RELEASE:
-      return process_keybinding_key_event (display, handler,
-                                           (ClutterKeyEvent *) event);
+      return process_keybinding_key_event (display, handler, event);
 
     default:
       return FALSE;

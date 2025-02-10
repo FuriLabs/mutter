@@ -392,10 +392,17 @@
 	    - "min-refresh-rate" (i): minimum refresh rate of monitor when
 	                              Variable Refresh Rate is active (absence
 	                              of this means unknown)
+	    - "is-for-lease" (b): whether the monitor is for lease or not
+	    - "color-mode" (u): current color mode
+	    - "supported-color-modes" (au): list of supported color modes
 
         Possible mode flags:
 	  1 : preferred mode
 	  2 : current mode
+
+        Available color modes:
+          0 : default
+          1 : BT.2100
 
 
 	@logical_monitors represent current logical monitor configuration
@@ -493,6 +500,8 @@
 	        - "underscanning" (b): enable monitor underscanning;
 					      may only be set when underscanning
 					      is supported (see GetCurrentState).
+		- "color-mode" (u): selected color mode. Defaults to
+				    "default". See GetCurrentState().
 
 	@properties may effect the global monitor configuration state. Possible
 	properties are:
@@ -500,6 +509,12 @@
 	* "layout-mode" (u): layout mode the passed configuration is in; may
 			     only be set when changing the layout mode is
 			     supported (see GetCurrentState).
+	* "monitors-for-lease" (a(ssss)): a list of monitors to be made available for
+	    lease. Monitors listed here must not be listed in @logical_monitors:
+	    * s connector: connector name (e.g. HDMI-1, DP-1, etc)
+	    * s vendor: vendor name
+	    * s product: product name
+	    * s serial: product serial
     -->
     <method name="ApplyMonitorsConfig">
       <arg name="serial" direction="in" type="u" />

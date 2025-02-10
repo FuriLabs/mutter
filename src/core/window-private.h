@@ -34,10 +34,12 @@
 #include "backends/meta-logical-monitor.h"
 #include "clutter/clutter.h"
 #include "core/stack.h"
+#include "meta/meta-window-config.h"
 #include "meta/compositor.h"
 #include "meta/meta-close-dialog.h"
 #include "meta/util.h"
 #include "meta/window.h"
+#include "meta/meta-window-config.h"
 #include "wayland/meta-wayland-types.h"
 
 typedef struct _MetaWindowQueue MetaWindowQueue;
@@ -311,8 +313,8 @@ struct _MetaWindow
    * comment at the top of meta_window_move_resize_internal() for more
    * information. */
 
-  /* The current window geometry of the window. */
-  MtkRectangle rect;
+  /* The current configuration of the window. */
+  MetaWindowConfig *config;
 
   /* The geometry to restore when we unmaximize. */
   MtkRectangle saved_rect;
@@ -400,9 +402,6 @@ struct _MetaWindow
   /* The last "full" maximized/unmaximized state. We need to keep track of
    * that to toggle between normal/tiled or maximized/tiled states. */
   guint saved_maximize : 1;
-
-  /* Whether we're fullscreen */
-  guint fullscreen : 1;
 
   /* Whether the window is marked as urgent */
   guint urgent : 1;
@@ -578,7 +577,6 @@ struct _MetaWindowClass
                                   MetaGrabOp  op);
   void (*current_workspace_changed) (MetaWindow *window);
   void (*move_resize_internal)   (MetaWindow                *window,
-                                  MetaGravity                gravity,
                                   MtkRectangle               unconstrained_rect,
                                   MtkRectangle               constrained_rect,
                                   MtkRectangle               temporary_rect,
@@ -628,30 +626,9 @@ struct _MetaWindowClass
                              int                 *stage_x,
                              int                 *stage_y,
                              MtkRoundingStrategy  rounding_strategy);
-};
 
-/* These differ from window->has_foo_func in that they consider
- * the dynamic window state such as "maximized", not just the
- * window's type
- */
-#define META_WINDOW_MAXIMIZED(w)       ((w)->maximized_horizontally && \
-                                        (w)->maximized_vertically)
-#define META_WINDOW_MAXIMIZED_VERTICALLY(w)    ((w)->maximized_vertically)
-#define META_WINDOW_MAXIMIZED_HORIZONTALLY(w)  ((w)->maximized_horizontally)
-#define META_WINDOW_TILED_SIDE_BY_SIDE(w)      ((w)->maximized_vertically && \
-                                                !(w)->maximized_horizontally && \
-                                                 (w)->tile_mode != META_TILE_NONE)
-#define META_WINDOW_TILED_LEFT(w)     (META_WINDOW_TILED_SIDE_BY_SIDE(w) && \
-                                       (w)->tile_mode == META_TILE_LEFT)
-#define META_WINDOW_TILED_RIGHT(w)    (META_WINDOW_TILED_SIDE_BY_SIDE(w) && \
-                                       (w)->tile_mode == META_TILE_RIGHT)
-#define META_WINDOW_TILED_MAXIMIZED(w)(META_WINDOW_MAXIMIZED(w) && \
-                                       (w)->tile_mode == META_TILE_MAXIMIZED)
-#define META_WINDOW_ALLOWS_MOVE(w)     ((w)->has_move_func && !(w)->fullscreen)
-#define META_WINDOW_ALLOWS_RESIZE_EXCEPT_HINTS(w)   ((w)->has_resize_func && !META_WINDOW_MAXIMIZED (w) && !(w)->fullscreen)
-#define META_WINDOW_ALLOWS_RESIZE(w)   (META_WINDOW_ALLOWS_RESIZE_EXCEPT_HINTS (w) &&                \
-                                        (((w)->size_hints.min_width < (w)->size_hints.max_width) ||  \
-                                         ((w)->size_hints.min_height < (w)->size_hints.max_height)))
+  MetaGravity (* get_gravity) (MetaWindow *window);
+};
 
 void        meta_window_unmanage           (MetaWindow  *window,
                                             guint32      timestamp);
@@ -683,11 +660,10 @@ gboolean    meta_window_has_fullscreen_monitors (MetaWindow *window);
 void        meta_window_adjust_fullscreen_monitor_rect (MetaWindow    *window,
                                                         MtkRectangle  *monitor_rect);
 
-void        meta_window_resize_frame_with_gravity (MetaWindow  *window,
-                                                   gboolean     user_op,
-                                                   int          w,
-                                                   int          h,
-                                                   MetaGravity  gravity);
+void        meta_window_resize_frame (MetaWindow  *window,
+                                      gboolean     user_op,
+                                      int          w,
+                                      int          h);
 
 gboolean    meta_window_should_be_showing_on_workspace (MetaWindow    *window,
                                                         MetaWorkspace *workspace);
@@ -815,12 +791,6 @@ void meta_window_update_monitor (MetaWindow                   *window,
 void meta_window_set_urgent (MetaWindow *window,
                              gboolean    urgent);
 
-void meta_window_move_resize_internal (MetaWindow          *window,
-                                       MetaMoveResizeFlags  flags,
-                                       MetaPlaceFlag        place_flags,
-                                       MetaGravity          gravity,
-                                       MtkRectangle         frame_rect);
-
 void meta_window_move_resize (MetaWindow          *window,
                               MetaMoveResizeFlags  flags,
                               MtkRectangle         frame_rect);
@@ -836,6 +806,9 @@ void meta_window_hide_close_dialog (MetaWindow *window);
 void meta_window_ensure_close_dialog_timeout (MetaWindow *window);
 
 void meta_window_emit_size_changed (MetaWindow *window);
+
+void meta_window_emit_configure (MetaWindow       *window,
+                                 MetaWindowConfig *window_config);
 
 MetaPlacementRule *meta_window_get_placement_rule (MetaWindow *window);
 
@@ -909,3 +882,15 @@ void meta_window_protocol_to_stage_point (MetaWindow          *window,
                                           int                 *stage_x,
                                           int                 *stage_y,
                                           MtkRoundingStrategy  rounding_strategy);
+
+gboolean meta_window_is_maximized (MetaWindow *window);
+
+gboolean meta_window_is_tiled_side_by_side (MetaWindow *window);
+
+gboolean meta_window_is_tiled_left (MetaWindow *window);
+
+gboolean meta_window_is_tiled_right (MetaWindow *window);
+
+MetaWindowConfig * meta_window_new_window_config (MetaWindow *window);
+
+MetaGravity meta_window_get_gravity (MetaWindow *window);

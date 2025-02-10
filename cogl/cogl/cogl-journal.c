@@ -122,7 +122,7 @@ typedef void (*CoglJournalBatchCallback) (CoglJournalEntry *start,
 typedef gboolean (*CoglJournalBatchTest) (CoglJournalEntry *entry0,
                                           CoglJournalEntry *entry1);
 
-G_DEFINE_TYPE (CoglJournal, cogl_journal, G_TYPE_OBJECT);
+G_DEFINE_FINAL_TYPE (CoglJournal, cogl_journal, G_TYPE_OBJECT);
 
 static void
 cogl_journal_dispose (GObject *object)
@@ -628,7 +628,7 @@ _cogl_journal_flush_vbo_offsets_and_entries (CoglJournalEntry *batch_start,
                         4,
                         COGL_ATTRIBUTE_TYPE_UNSIGNED_BYTE);
 
-  state->indices = cogl_get_rectangle_indices (ctx, batch_len);
+  state->indices = cogl_context_get_rectangle_indices (ctx, batch_len);
 
   /* We only create new Attributes when the stride within the
    * AttributeBuffer changes. (due to a change in the number of pipeline

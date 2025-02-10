@@ -461,7 +461,8 @@ setup_constraint_info (MetaBackend         *backend,
                                                  logical_monitor,
                                                  &info->work_area_monitor);
 
-  if (window->fullscreen && meta_window_has_fullscreen_monitors (window))
+  if (meta_window_is_fullscreen (window) &&
+      meta_window_has_fullscreen_monitors (window))
     {
       info->entire_monitor = window->fullscreen_monitors.top->rect;
       mtk_rectangle_union (&info->entire_monitor,
@@ -482,7 +483,7 @@ setup_constraint_info (MetaBackend         *backend,
   else
     {
       info->entire_monitor = logical_monitor->rect;
-      if (window->fullscreen)
+      if (meta_window_is_fullscreen (window))
         meta_window_adjust_fullscreen_monitor_rect (window, &info->entire_monitor);
     }
 
@@ -551,7 +552,7 @@ place_window_if_needed (MetaWindow     *window,
       !(window->maximized_horizontally ||
         window->maximized_vertically) &&
       !window->minimized &&
-      !window->fullscreen)
+      !meta_window_is_fullscreen (window))
     {
       MetaMonitorManager *monitor_manager =
         meta_backend_get_monitor_manager (info->backend);
@@ -559,10 +560,12 @@ place_window_if_needed (MetaWindow     *window,
       MtkRectangle placed_rect;
       MetaWorkspace *cur_workspace;
       MetaLogicalMonitor *logical_monitor;
+      int x, y;
 
+      meta_window_config_get_position (window->config, &x, &y);
       placed_rect = (MtkRectangle) {
-        .x = window->rect.x,
-        .y = window->rect.y,
+        .x = x,
+        .y = y,
         .width = info->current.width,
         .height = info->current.height
       };
@@ -670,7 +673,7 @@ update_onscreen_requirements (MetaWindow     *window,
    * the application sends a bunch of configurerequest events).  See
    * #353699.
    */
-  if (window->fullscreen)
+  if (meta_window_is_fullscreen (window))
     return;
 
   /* USABILITY NOTE: Naturally, I only want the require_fully_onscreen,
@@ -896,6 +899,7 @@ constrain_custom_rule (MetaWindow         *window,
   gboolean constraint_satisfied;
   MtkRectangle temporary_rect;
   MtkRectangle adjusted_unconstrained;
+  MtkRectangle parent_rect;
   int adjusted_rel_x;
   int adjusted_rel_y;
   MetaPlacementRule current_rule;
@@ -910,10 +914,11 @@ constrain_custom_rule (MetaWindow         *window,
     return TRUE;
 
   parent = meta_window_get_transient_for (window);
+  parent_rect = meta_window_config_get_rect (parent->config);
   if (window->placement.state == META_PLACEMENT_STATE_CONSTRAINED_FINISHED)
     {
-      placement_rule->parent_rect.x = parent->rect.x;
-      placement_rule->parent_rect.y = parent->rect.y;
+      placement_rule->parent_rect.x = parent_rect.x;
+      placement_rule->parent_rect.y = parent_rect.y;
     }
   parent_x = placement_rule->parent_rect.x;
   parent_y = placement_rule->parent_rect.y;
@@ -937,8 +942,8 @@ constrain_custom_rule (MetaWindow         *window,
     case META_PLACEMENT_STATE_CONSTRAINED_FINISHED:
     case META_PLACEMENT_STATE_INVALIDATED:
       temporary_rect = (MtkRectangle) {
-        .x = parent->rect.x + window->placement.current.rel_x,
-        .y = parent->rect.y + window->placement.current.rel_y,
+        .x = parent_rect.x + window->placement.current.rel_x,
+        .y = parent_rect.y + window->placement.current.rel_y,
         .width = info->current.width,
         .height = info->current.height,
       };
@@ -1166,7 +1171,7 @@ constrain_modal_dialog (MetaWindow         *window,
       meta_window_get_placement_rule (window))
     return TRUE;
 
-  if (window->fullscreen)
+  if (meta_window_is_fullscreen (window))
     return TRUE;
 
   /* We want to center the dialog on the parent, including the decorations
@@ -1217,15 +1222,16 @@ constrain_maximization (MetaWindow         *window,
 
   /* Determine whether constraint applies; exit if it doesn't */
   if ((!window->maximized_horizontally && !window->maximized_vertically) ||
-      META_WINDOW_TILED_SIDE_BY_SIDE (window))
+      meta_window_is_tiled_side_by_side (window))
     return TRUE;
 
   /* Calculate target_size = maximized size of (window + frame) */
-  if (META_WINDOW_TILED_MAXIMIZED (window))
+  if (meta_window_is_maximized (window) &&
+      window->tile_mode == META_TILE_MAXIMIZED)
     {
       meta_window_get_tile_area (window, window->tile_mode, &target_size);
     }
-  else if (META_WINDOW_MAXIMIZED (window))
+  else if (meta_window_is_maximized (window))
     {
       target_size = info->work_area_monitor;
     }
@@ -1304,7 +1310,7 @@ constrain_tiling (MetaWindow         *window,
     return TRUE;
 
   /* Determine whether constraint applies; exit if it doesn't */
-  if (!META_WINDOW_TILED_SIDE_BY_SIDE (window))
+  if (!meta_window_is_tiled_side_by_side (window))
     return TRUE;
 
   /* Calculate target_size - as the tile previews need this as well, we
@@ -1353,7 +1359,7 @@ constrain_fullscreen (MetaWindow         *window,
     return TRUE;
 
   /* Determine whether constraint applies; exit if it doesn't */
-  if (!window->fullscreen)
+  if (!meta_window_is_fullscreen (window))
     return TRUE;
 
   monitor = info->entire_monitor;
@@ -1391,8 +1397,9 @@ constrain_size_increments (MetaWindow         *window,
     return TRUE;
 
   /* Determine whether constraint applies; exit if it doesn't */
-  if (META_WINDOW_MAXIMIZED (window) || window->fullscreen ||
-      META_WINDOW_TILED_SIDE_BY_SIDE (window) ||
+  if (meta_window_is_maximized (window) ||
+      meta_window_is_fullscreen (window) ||
+      meta_window_is_tiled_side_by_side (window) ||
       info->action_type == ACTION_MOVE)
     return TRUE;
 
@@ -1522,8 +1529,9 @@ constrain_aspect_ratio (MetaWindow         *window,
          (double)window->size_hints.max_aspect.y;
   constraints_are_inconsistent = minr > maxr;
   if (constraints_are_inconsistent ||
-      META_WINDOW_MAXIMIZED (window) || window->fullscreen ||
-      META_WINDOW_TILED_SIDE_BY_SIDE (window) ||
+      meta_window_is_maximized (window) ||
+      meta_window_is_fullscreen (window) ||
+      meta_window_is_tiled_side_by_side (window) ||
       info->action_type == ACTION_MOVE)
     return TRUE;
 
@@ -1764,7 +1772,7 @@ constrain_fully_onscreen (MetaWindow         *window,
    */
   if (window->type == META_WINDOW_DESKTOP ||
       window->type == META_WINDOW_DOCK    ||
-      window->fullscreen                  ||
+      meta_window_is_fullscreen (window)  ||
       !window->require_fully_onscreen     ||
       info->is_user_action                ||
       meta_window_get_placement_rule (window))
@@ -1827,7 +1835,7 @@ constrain_titlebar_visible (MetaWindow         *window,
    */
   if (window->type == META_WINDOW_DESKTOP ||
       window->type == META_WINDOW_DOCK    ||
-      window->fullscreen                  ||
+      meta_window_is_fullscreen (window)  ||
       !window->require_titlebar_visible   ||
       unconstrained_user_action           ||
       user_nonnorthern_resize             ||

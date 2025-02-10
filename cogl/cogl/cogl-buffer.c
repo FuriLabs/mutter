@@ -37,6 +37,7 @@
  * Pixel Buffers API.
  */
 
+#include "cogl-driver-private.h"
 #include "config.h"
 
 #include <stdio.h>
@@ -56,6 +57,7 @@ enum
   PROP_0,
 
   PROP_CONTEXT,
+  PROP_IMPL,
   PROP_SIZE,
   PROP_DEFAULT_TARGET,
   PROP_UPDATE_HINT,
@@ -106,9 +108,17 @@ cogl_buffer_dispose (GObject *object)
   g_return_if_fail (!(buffer->flags & COGL_BUFFER_FLAG_MAPPED));
 
   if (buffer->flags & COGL_BUFFER_FLAG_BUFFER_OBJECT)
-    buffer->context->driver_vtable->buffer_destroy (buffer);
+    {
+      CoglBufferImplClass *impl_klass = COGL_BUFFER_IMPL_GET_CLASS (buffer->impl);
+
+      impl_klass->destroy (buffer->impl, buffer);
+    }
   else
-    g_free (buffer->data);
+    {
+      g_free (buffer->data);
+    }
+
+  g_clear_object (&buffer->impl);
 
   G_OBJECT_CLASS (cogl_buffer_parent_class)->dispose (object);
 }
@@ -127,6 +137,10 @@ cogl_buffer_set_property (GObject      *gobject,
       buffer->context = g_value_get_object (value);
       break;
 
+    case PROP_IMPL:
+      buffer->impl = g_value_get_object (value);
+      break;
+
     case PROP_SIZE:
       buffer->size = g_value_get_uint64 (value);
       break;
@@ -143,21 +157,17 @@ cogl_buffer_set_property (GObject      *gobject,
               use_malloc = TRUE;
           }
 
+        buffer->use_malloc = use_malloc;
         if (use_malloc)
           {
-            buffer->map_range = malloc_map_range;
-            buffer->unmap = malloc_unmap;
-            buffer->set_data = malloc_set_data;
-
             buffer->data = g_malloc (buffer->size);
           }
         else
           {
-            buffer->map_range = buffer->context->driver_vtable->buffer_map_range;
-            buffer->unmap = buffer->context->driver_vtable->buffer_unmap;
-            buffer->set_data = buffer->context->driver_vtable->buffer_set_data;
+            g_assert (buffer->impl != NULL);
+            CoglBufferImplClass *impl_klass = COGL_BUFFER_IMPL_GET_CLASS (buffer->impl);
 
-            buffer->context->driver_vtable->buffer_create (buffer);
+            impl_klass->create (buffer->impl, buffer);
 
             buffer->flags |= COGL_BUFFER_FLAG_BUFFER_OBJECT;
           }
@@ -185,6 +195,11 @@ cogl_buffer_class_init (CoglBufferClass *klass)
   obj_props[PROP_CONTEXT] =
     g_param_spec_object ("context", NULL, NULL,
                          COGL_TYPE_CONTEXT,
+                         G_PARAM_WRITABLE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+  obj_props[PROP_IMPL] =
+    g_param_spec_object ("impl", NULL, NULL,
+                         COGL_TYPE_BUFFER_IMPL,
                          G_PARAM_WRITABLE | G_PARAM_CONSTRUCT_ONLY |
                          G_PARAM_STATIC_STRINGS);
   obj_props[PROP_SIZE] =
@@ -282,12 +297,27 @@ cogl_buffer_map_range (CoglBuffer *buffer,
   g_return_val_if_fail (COGL_IS_BUFFER (buffer), NULL);
   g_return_val_if_fail (!(buffer->flags & COGL_BUFFER_FLAG_MAPPED), NULL);
 
-  buffer->data = buffer->map_range (buffer,
-                                    offset,
-                                    size,
-                                    access,
-                                    hints,
-                                    error);
+  if (buffer->use_malloc)
+    {
+      buffer->data = malloc_map_range (buffer,
+                                       offset,
+                                       size,
+                                       access,
+                                       hints,
+                                       error);
+    }
+  else
+    {
+      CoglBufferImplClass *impl_klass = COGL_BUFFER_IMPL_GET_CLASS (buffer->impl);
+
+      buffer->data = impl_klass->map_range (buffer->impl,
+                                            buffer,
+                                            offset,
+                                            size,
+                                            access,
+                                            hints,
+                                            error);
+    }
 
   return buffer->data;
 }
@@ -300,7 +330,16 @@ cogl_buffer_unmap (CoglBuffer *buffer)
   if (!(buffer->flags & COGL_BUFFER_FLAG_MAPPED))
     return;
 
-  buffer->unmap (buffer);
+  if (buffer->use_malloc)
+    {
+      malloc_unmap (buffer);
+    }
+  else
+    {
+      CoglBufferImplClass *impl_klass = COGL_BUFFER_IMPL_GET_CLASS (buffer->impl);
+
+      impl_klass->unmap (buffer->impl, buffer);
+    }
 }
 
 void *
@@ -387,7 +426,21 @@ cogl_buffer_set_data (CoglBuffer *buffer,
   g_return_val_if_fail (COGL_IS_BUFFER (buffer), FALSE);
   g_return_val_if_fail ((offset + size) <= buffer->size, FALSE);
 
-  status = buffer->set_data (buffer, offset, data, size, &ignore_error);
+  if (buffer->use_malloc)
+    {
+      status = malloc_set_data (buffer, offset, data, size, &ignore_error);
+    }
+  else
+    {
+      CoglBufferImplClass *impl_klass = COGL_BUFFER_IMPL_GET_CLASS (buffer->impl);
+
+      status = impl_klass->set_data (buffer->impl,
+                                     buffer,
+                                     offset,
+                                     data,
+                                     size,
+                                     &ignore_error);
+    }
 
   g_clear_error (&ignore_error);
   return status;

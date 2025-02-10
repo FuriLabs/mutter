@@ -54,7 +54,6 @@ cogl_headers = [
   'cogl-texture-2d-sliced.h',
   'cogl-texture.h',
   'cogl-trace.h',
-  'cogl-types.h',
 ]
 
 cogl_nonintrospected_headers = [
@@ -64,15 +63,8 @@ cogl_nodist_headers = [
 ]
 
 cogl_noop_driver_sources = [
-  'driver/nop/cogl-attribute-nop-private.h',
-  'driver/nop/cogl-attribute-nop.c',
-  'driver/nop/cogl-clip-stack-nop-private.h',
-  'driver/nop/cogl-clip-stack-nop.c',
   'driver/nop/cogl-driver-nop.c',
-  'driver/nop/cogl-nop-framebuffer.c',
-  'driver/nop/cogl-nop-framebuffer.h',
-  'driver/nop/cogl-texture-2d-nop-private.h',
-  'driver/nop/cogl-texture-2d-nop.c',
+  'driver/nop/cogl-driver-nop-private.h',
 ]
 
 cogl_gl_prototype_headers = [
@@ -88,10 +80,12 @@ cogl_common_driver_sources = [
   'driver/gl/cogl-attribute-gl.c',
   'driver/gl/cogl-bitmap-gl-private.h',
   'driver/gl/cogl-bitmap-gl.c',
-  'driver/gl/cogl-buffer-gl-private.h',
-  'driver/gl/cogl-buffer-gl.c',
+  'driver/gl/cogl-buffer-impl-gl-private.h',
+  'driver/gl/cogl-buffer-impl-gl.c',
   'driver/gl/cogl-clip-stack-gl-private.h',
   'driver/gl/cogl-clip-stack-gl.c',
+  'driver/gl/cogl-driver-gl.c',
+  'driver/gl/cogl-driver-gl-private.h',
   'driver/gl/cogl-framebuffer-gl-private.h',
   'driver/gl/cogl-framebuffer-gl.c',
   'driver/gl/cogl-gl-framebuffer-back.c',
@@ -100,8 +94,8 @@ cogl_common_driver_sources = [
   'driver/gl/cogl-gl-framebuffer-fbo.h',
   'driver/gl/cogl-pipeline-fragend-glsl-private.h',
   'driver/gl/cogl-pipeline-fragend-glsl.c',
-  'driver/gl/cogl-pipeline-opengl-private.h',
-  'driver/gl/cogl-pipeline-opengl.c',
+  'driver/gl/cogl-pipeline-gl-private.h',
+  'driver/gl/cogl-pipeline-gl.c',
   'driver/gl/cogl-pipeline-progend-glsl-private.h',
   'driver/gl/cogl-pipeline-progend-glsl.c',
   'driver/gl/cogl-pipeline-vertend-glsl-private.h',
@@ -109,19 +103,25 @@ cogl_common_driver_sources = [
   'driver/gl/cogl-texture-2d-gl-private.h',
   'driver/gl/cogl-texture-2d-gl.c',
   'driver/gl/cogl-texture-gl-private.h',
+  'driver/gl/cogl-texture-driver-gl.c',
+  'driver/gl/cogl-texture-driver-gl-private.h',
   'driver/gl/cogl-texture-gl.c',
   'driver/gl/cogl-util-gl-private.h',
   'driver/gl/cogl-util-gl.c',
 ]
 
 gl_driver_sources = [
-  'driver/gl/gl/cogl-driver-gl.c',
-  'driver/gl/gl/cogl-texture-driver-gl.c',
+  'driver/gl/gl3/cogl-driver-gl3.c',
+  'driver/gl/gl3/cogl-driver-gl3-private.h',
+  'driver/gl/gl3/cogl-texture-driver-gl3.c',
+  'driver/gl/gl3/cogl-texture-driver-gl3-private.h',
 ]
 
 gles_driver_sources = [
-  'driver/gl/gles/cogl-driver-gles.c',
-  'driver/gl/gles/cogl-texture-driver-gles.c',
+  'driver/gl/gles2/cogl-driver-gles2.c',
+  'driver/gl/gles2/cogl-driver-gles2-private.h',
+  'driver/gl/gles2/cogl-texture-driver-gles2.c',
+  'driver/gl/gles2/cogl-texture-driver-gles2-private.h',
 ]
 
 cogl_driver_sources = [
@@ -159,8 +159,10 @@ cogl_sources = [
   'cogl-blit.h',
   'cogl-boxed-value.c',
   'cogl-boxed-value.h',
+  'cogl-buffer-impl-private.h',
   'cogl-buffer-private.h',
   'cogl-buffer.c',
+  'cogl-buffer-impl.c',
   'cogl-clip-stack.c',
   'cogl-clip-stack.h',
   'cogl-closure-list-private.h',
@@ -179,7 +181,8 @@ cogl_sources = [
   'cogl-display.c',
   'cogl-display.h',
   'cogl-dma-buf-handle.c',
-  'cogl-driver.h',
+  'cogl-driver-private.h',
+  'cogl-driver.c',
   'cogl-feature-private.c',
   'cogl-feature-private.h',
   'cogl-flags.h',
@@ -211,8 +214,6 @@ cogl_sources = [
   'cogl-memory-stack.c',
   'cogl-meta-texture.c',
   'cogl-mutter.h',
-  'cogl-node-private.h',
-  'cogl-node.c',
   'cogl-offscreen-private.h',
   'cogl-offscreen.c',
   'cogl-onscreen-private.h',
@@ -238,7 +239,6 @@ cogl_sources = [
   'cogl-pixel-format.c',
   'cogl-point-in-poly-private.h',
   'cogl-point-in-poly.c',
-  'cogl-primitive-private.h',
   'cogl-primitive.c',
   'cogl-primitives-private.h',
   'cogl-primitives.c',
@@ -265,6 +265,7 @@ cogl_sources = [
   'cogl-texture-2d-sliced-private.h',
   'cogl-texture-2d-sliced.c',
   'cogl-texture-2d.c',
+  'cogl-texture-driver.c',
   'cogl-texture-driver.h',
   'cogl-texture-private.h',
   'cogl-texture.c',
@@ -332,6 +333,7 @@ endif
 cogl_enum_headers = [
   'cogl-buffer.h',
   'cogl-pixel-format.h',
+  'cogl-types.h',
 ]
 
 cogl_headers += [

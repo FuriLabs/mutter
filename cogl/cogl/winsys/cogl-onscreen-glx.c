@@ -57,10 +57,10 @@ struct _CoglOnscreenGlx
 static void
 x11_onscreen_init_iface (CoglX11OnscreenInterface *iface);
 
-G_DEFINE_TYPE_WITH_CODE (CoglOnscreenGlx, cogl_onscreen_glx,
-                         COGL_TYPE_ONSCREEN,
-                         G_IMPLEMENT_INTERFACE (COGL_TYPE_X11_ONSCREEN,
-                                                x11_onscreen_init_iface))
+G_DEFINE_FINAL_TYPE_WITH_CODE (CoglOnscreenGlx, cogl_onscreen_glx,
+                               COGL_TYPE_ONSCREEN,
+                               G_IMPLEMENT_INTERFACE (COGL_TYPE_X11_ONSCREEN,
+                                                      x11_onscreen_init_iface))
 
 #define COGL_ONSCREEN_X11_EVENT_MASK (StructureNotifyMask | ExposureMask)
 
@@ -528,6 +528,26 @@ cogl_onscreen_glx_get_buffer_age (CoglOnscreen *onscreen)
   return age;
 }
 
+static gboolean
+cogl_onscreen_glx_get_window_handles (CoglOnscreen *onscreen,
+                                      gpointer     *device_out,
+                                      gpointer     *window_out)
+{
+  CoglOnscreenGlx *onscreen_glx = COGL_ONSCREEN_GLX (onscreen);
+  CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
+  CoglContext *cogl_context = cogl_framebuffer_get_context (framebuffer);
+  CoglXlibRenderer *xlib_renderer =
+    _cogl_xlib_renderer_get_data (cogl_context->display->renderer);
+  GLXDrawable drawable;
+
+  drawable = onscreen_glx->glxwin ? onscreen_glx->glxwin : onscreen_glx->xwin;
+
+  *device_out = xlib_renderer->xdpy;
+  *window_out = (gpointer) drawable;
+
+  return TRUE;
+}
+
 static void
 cogl_onscreen_glx_flush_notification (CoglOnscreen *onscreen)
 {
@@ -637,11 +657,10 @@ set_complete_pending (CoglOnscreen *onscreen)
 }
 
 static void
-cogl_onscreen_glx_swap_region (CoglOnscreen  *onscreen,
-                               const int     *user_rectangles,
-                               int            n_rectangles,
-                               CoglFrameInfo *info,
-                               gpointer       user_data)
+cogl_onscreen_glx_swap_region (CoglOnscreen    *onscreen,
+                               const MtkRegion *region,
+                               CoglFrameInfo   *info,
+                               gpointer         user_data)
 {
   CoglOnscreenGlx *onscreen_glx = COGL_ONSCREEN_GLX (onscreen);
   CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
@@ -666,35 +685,20 @@ cogl_onscreen_glx_swap_region (CoglOnscreen  *onscreen,
 
   int framebuffer_width = cogl_framebuffer_get_width (framebuffer);
   int framebuffer_height = cogl_framebuffer_get_height (framebuffer);
+  int n_rectangles = mtk_region_num_rectangles (region);
   int *rectangles = g_alloca (sizeof (int) * n_rectangles * 4);
-  int i;
+  MtkRectangle extents;
+
+  extents = mtk_region_get_extents (region);
+  x_min = extents.x;
+  y_min = extents.y;
+  x_max = extents.x + extents.width;
+  y_max = extents.y + extents.height;
 
   /* glXCopySubBuffer expects rectangles relative to the bottom left corner but
    * we are given rectangles relative to the top left so we need to flip
    * them... */
-  memcpy (rectangles, user_rectangles, sizeof (int) * n_rectangles * 4);
-  for (i = 0; i < n_rectangles; i++)
-    {
-      int *rect = &rectangles[4 * i];
-
-      if (i == 0)
-        {
-          x_min = rect[0];
-          x_max = rect[0] + rect[2];
-          y_min = rect[1];
-          y_max = rect[1] + rect[3];
-        }
-      else
-        {
-          x_min = MIN (x_min, rect[0]);
-          x_max = MAX (x_max, rect[0] + rect[2]);
-          y_min = MIN (y_min, rect[1]);
-          y_max = MAX (y_max, rect[1] + rect[3]);
-        }
-
-      rect[1] = framebuffer_height - rect[1] - rect[3];
-
-    }
+  cogl_region_to_flipped_array (region, framebuffer_height, rectangles);
 
   cogl_context_flush_framebuffer_state (context,
                                         framebuffer,
@@ -750,6 +754,7 @@ cogl_onscreen_glx_swap_region (CoglOnscreen  *onscreen,
     {
       Display *xdpy = xlib_renderer->xdpy;
       GLXDrawable drawable;
+      int i;
 
       drawable =
         onscreen_glx->glxwin ? onscreen_glx->glxwin : onscreen_glx->xwin;
@@ -762,6 +767,8 @@ cogl_onscreen_glx_swap_region (CoglOnscreen  *onscreen,
     }
   else if (context->glBlitFramebuffer)
     {
+      int i;
+
       /* XXX: checkout how this state interacts with the code to use
        * glBlitFramebuffer in Neil's texture atlasing branch */
 
@@ -837,11 +844,10 @@ cogl_onscreen_glx_swap_region (CoglOnscreen  *onscreen,
 }
 
 static void
-cogl_onscreen_glx_swap_buffers_with_damage (CoglOnscreen  *onscreen,
-                                            const int     *rectangles,
-                                            int            n_rectangles,
-                                            CoglFrameInfo *info,
-                                            gpointer       user_data)
+cogl_onscreen_glx_swap_buffers_with_damage (CoglOnscreen    *onscreen,
+                                            const MtkRegion *region,
+                                            CoglFrameInfo   *info,
+                                            gpointer         user_data)
 {
   CoglOnscreenGlx *onscreen_glx = COGL_ONSCREEN_GLX (onscreen);
   CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
@@ -1081,4 +1087,5 @@ cogl_onscreen_glx_class_init (CoglOnscreenGlxClass *klass)
     cogl_onscreen_glx_swap_buffers_with_damage;
   onscreen_class->swap_region = cogl_onscreen_glx_swap_region;
   onscreen_class->get_buffer_age = cogl_onscreen_glx_get_buffer_age;
+  onscreen_class->get_window_handles = cogl_onscreen_glx_get_window_handles;
 }

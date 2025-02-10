@@ -34,11 +34,6 @@
 #error "Only <cogl/cogl.h> can be included directly."
 #endif
 
-/* We forward declare the CoglPipeline type here to avoid some circular
- * dependency issues with the following headers.
- */
-typedef struct _CoglPipeline CoglPipeline;
-
 #include "cogl/cogl-types.h"
 #include "cogl/cogl-context.h"
 #include "cogl/cogl-snippet.h"
@@ -60,21 +55,11 @@ G_BEGIN_DECLS
  * performs fragment processing including depth testing and texture
  * mapping. Finally it blends the result with the framebuffer.
  */
-#define COGL_TYPE_PIPELINE            (cogl_pipeline_get_type ())
-#define COGL_PIPELINE(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), COGL_TYPE_PIPELINE, CoglPipeline))
-#define COGL_PIPELINE_CONST(obj)      (G_TYPE_CHECK_INSTANCE_CAST ((obj), COGL_TYPE_PIPELINE, CoglPipeline const))
-#define COGL_PIPELINE_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST ((klass),  COGL_TYPE_PIPELINE, CoglPipelineClass))
-#define COGL_IS_PIPELINE(obj)         (G_TYPE_CHECK_INSTANCE_TYPE ((obj), COGL_TYPE_PIPELINE))
-#define COGL_IS_PIPELINE_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass),  COGL_TYPE_PIPELINE))
-#define COGL_PIPELINE_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj),  COGL_TYPE_PIPELINE, CoglPipelineClass))
 
-typedef struct _CoglPipelineClass CoglPipelineClass;
-typedef struct _CoglPipeline CoglPipeline;
-
-G_DEFINE_AUTOPTR_CLEANUP_FUNC (CoglPipeline, g_object_unref)
+#define COGL_TYPE_PIPELINE (cogl_pipeline_get_type ())
 
 COGL_EXPORT
-GType               cogl_pipeline_get_type       (void) G_GNUC_CONST;
+G_DECLARE_FINAL_TYPE (CoglPipeline, cogl_pipeline, COGL, PIPELINE, GObject)
 
 /**
  * cogl_pipeline_new: (constructor)

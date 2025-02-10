@@ -29,23 +29,18 @@
 #include "wayland/meta-wayland.h"
 #endif
 
-typedef struct _MetaBackendX11NestedPrivate
+struct _MetaBackendX11Nested
 {
+  MetaBackendX11 parent;
+
   MetaGpu *gpu;
   MetaCursorRenderer *cursor_renderer;
   MetaInputSettings *input_settings;
-} MetaBackendX11NestedPrivate;
+};
 
-static GInitableIface *initable_parent_iface;
-
-static void
-initable_iface_init (GInitableIface *initable_iface);
-
-G_DEFINE_TYPE_WITH_CODE (MetaBackendX11Nested, meta_backend_x11_nested,
-                         META_TYPE_BACKEND_X11,
-                         G_ADD_PRIVATE (MetaBackendX11Nested)
-                         G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
-                                                initable_iface_init));
+G_DEFINE_FINAL_TYPE (MetaBackendX11Nested,
+                     meta_backend_x11_nested,
+                     META_TYPE_BACKEND_X11)
 
 static MetaRenderer *
 meta_backend_x11_nested_create_renderer (MetaBackend *backend,
@@ -70,37 +65,33 @@ meta_backend_x11_nested_get_cursor_renderer (MetaBackend        *backend,
                                              ClutterInputDevice *device)
 {
   MetaBackendX11Nested *backend_x11_nested = META_BACKEND_X11_NESTED (backend);
-  MetaBackendX11NestedPrivate *priv =
-    meta_backend_x11_nested_get_instance_private (backend_x11_nested);
 
-  if (!priv->cursor_renderer)
+  if (!backend_x11_nested->cursor_renderer)
     {
-      priv->cursor_renderer =
+      backend_x11_nested->cursor_renderer =
         g_object_new (META_TYPE_CURSOR_RENDERER_X11_NESTED,
                       "backend", backend,
                       "device", device,
                       NULL);
     }
 
-  return priv->cursor_renderer;
+  return backend_x11_nested->cursor_renderer;
 }
 
 static MetaInputSettings *
 meta_backend_x11_nested_get_input_settings (MetaBackend *backend)
 {
   MetaBackendX11Nested *backend_x11_nested = META_BACKEND_X11_NESTED (backend);
-  MetaBackendX11NestedPrivate *priv =
-    meta_backend_x11_nested_get_instance_private (backend_x11_nested);
 
-  if (!priv->input_settings)
+  if (!backend_x11_nested->input_settings)
     {
-      priv->input_settings =
+      backend_x11_nested->input_settings =
         g_object_new (META_TYPE_INPUT_SETTINGS_DUMMY,
                       "backend", backend,
                       NULL);
     }
 
-  return priv->input_settings;
+  return backend_x11_nested->input_settings;
 }
 
 static void
@@ -239,22 +230,11 @@ meta_backend_x11_nested_translate_device_event (MetaBackendX11 *x11,
 static void
 init_gpus (MetaBackendX11Nested *backend_x11_nested)
 {
-  MetaBackendX11NestedPrivate *priv =
-    meta_backend_x11_nested_get_instance_private (backend_x11_nested);
-
-  priv->gpu = g_object_new (META_TYPE_GPU_DUMMY,
-                            "backend", backend_x11_nested,
-                            NULL);
-  meta_backend_add_gpu (META_BACKEND (backend_x11_nested), priv->gpu);
-}
-
-static void
-meta_backend_x11_nested_post_init (MetaBackend *backend)
-{
-  MetaBackendClass *backend_class =
-    META_BACKEND_CLASS (meta_backend_x11_nested_parent_class);
-
-  backend_class->post_init (backend);
+  backend_x11_nested->gpu = g_object_new (META_TYPE_GPU_DUMMY,
+                                          "backend", backend_x11_nested,
+                                          NULL);
+  meta_backend_add_gpu (META_BACKEND (backend_x11_nested),
+                        backend_x11_nested->gpu);
 }
 
 static MetaBackendCapabilities
@@ -264,42 +244,28 @@ meta_backend_x11_nested_get_capabilities (MetaBackend *backend)
 }
 
 static gboolean
-meta_backend_x11_nested_initable_init (GInitable     *initable,
-                                       GCancellable  *cancellable,
-                                       GError       **error)
+meta_backend_x11_nested_init_basic (MetaBackend  *backend,
+                                    GError      **error)
 {
-  return initable_parent_iface->init (initable, cancellable, error);
-}
+  MetaBackendX11Nested *backend_x11_nested = META_BACKEND_X11_NESTED (backend);
+  MetaBackendClass *parent_backend_class =
+    META_BACKEND_CLASS (meta_backend_x11_nested_parent_class);
 
-static void
-initable_iface_init (GInitableIface *initable_iface)
-{
-  initable_parent_iface = g_type_interface_peek_parent (initable_iface);
-
-  initable_iface->init = meta_backend_x11_nested_initable_init;
-}
-
-static void
-meta_backend_x11_nested_constructed (GObject *object)
-{
-  MetaBackendX11Nested *backend_x11_nested = META_BACKEND_X11_NESTED (object);
-  GObjectClass *parent_class =
-    G_OBJECT_CLASS (meta_backend_x11_nested_parent_class);
-
-  parent_class->constructed (object);
+  if (!parent_backend_class->init_basic (backend, error))
+    return FALSE;
 
   init_gpus (backend_x11_nested);
+
+  return TRUE;
 }
 
 static void
 meta_backend_x11_nested_dispose (GObject *object)
 {
   MetaBackendX11Nested *backend_x11_nested = META_BACKEND_X11_NESTED (object);
-  MetaBackendX11NestedPrivate *priv =
-    meta_backend_x11_nested_get_instance_private (backend_x11_nested);
 
-  g_clear_object (&priv->input_settings);
-  g_clear_object (&priv->cursor_renderer);
+  g_clear_object (&backend_x11_nested->input_settings);
+  g_clear_object (&backend_x11_nested->cursor_renderer);
 
   G_OBJECT_CLASS (meta_backend_x11_nested_parent_class)->dispose (object);
 }
@@ -316,10 +282,9 @@ meta_backend_x11_nested_class_init (MetaBackendX11NestedClass *klass)
   MetaBackendClass *backend_class = META_BACKEND_CLASS (klass);
   MetaBackendX11Class *backend_x11_class = META_BACKEND_X11_CLASS (klass);
 
-  object_class->constructed = meta_backend_x11_nested_constructed;
   object_class->dispose = meta_backend_x11_nested_dispose;
 
-  backend_class->post_init = meta_backend_x11_nested_post_init;
+  backend_class->init_basic = meta_backend_x11_nested_init_basic;
   backend_class->get_capabilities = meta_backend_x11_nested_get_capabilities;
   backend_class->create_renderer = meta_backend_x11_nested_create_renderer;
   backend_class->create_monitor_manager = meta_backend_x11_nested_create_monitor_manager;

@@ -53,68 +53,31 @@
 #include "cogl/winsys/cogl-winsys-glx-private.h"
 #endif
 
+#ifdef HAVE_GL
+#include "cogl/driver/gl/gl3/cogl-driver-gl3-private.h"
+#include "cogl/driver/gl/gl3/cogl-texture-driver-gl3-private.h"
+#endif
+#ifdef HAVE_GLES2
+#include "cogl/driver/gl/gles2/cogl-driver-gles2-private.h"
+#include "cogl/driver/gl/gles2/cogl-texture-driver-gles2-private.h"
+#endif
+#include "cogl/driver/nop/cogl-driver-nop-private.h"
+
 #ifdef HAVE_X11
 #include "cogl/cogl-xlib-renderer.h"
+#include "cogl/cogl-xlib-renderer-private.h"
 #endif
 
-#ifdef HAVE_GL
-extern const CoglTextureDriver _cogl_texture_driver_gl;
-extern const CoglDriverVtable _cogl_driver_gl;
-#endif
-#ifdef HAVE_GLES2
-extern const CoglTextureDriver _cogl_texture_driver_gles;
-extern const CoglDriverVtable _cogl_driver_gles;
-#endif
 
-extern const CoglDriverVtable _cogl_driver_nop;
-
-typedef struct _CoglDriverDescription
-{
-  CoglDriver id;
-  const char *name;
-  /* It would be nice to make this a pointer and then use a compound
-   * literal from C99 to initialise it but we probably can't get away
-   * with using C99 here. Instead we'll just use a fixed-size array.
-   * GCC should complain if someone adds an 8th feature to a
-   * driver. */
-  const CoglPrivateFeature private_features[8];
-  const CoglDriverVtable *vtable;
-  const CoglTextureDriver *texture_driver;
-  const char *libgl_name;
-} CoglDriverDescription;
-
-static CoglDriverDescription _cogl_drivers[] =
+static CoglDriverId _cogl_drivers[] =
 {
 #ifdef HAVE_GL
-  {
-    COGL_DRIVER_GL3,
-    "gl3",
-    { COGL_PRIVATE_FEATURE_ANY_GL,
-      -1 },
-    &_cogl_driver_gl,
-    &_cogl_texture_driver_gl,
-    COGL_GL_LIBNAME,
-  },
+  COGL_DRIVER_ID_GL3,
 #endif
 #ifdef HAVE_GLES2
-  {
-    COGL_DRIVER_GLES2,
-    "gles2",
-    { COGL_PRIVATE_FEATURE_ANY_GL,
-      -1 },
-    &_cogl_driver_gles,
-    &_cogl_texture_driver_gles,
-    COGL_GLES2_LIBNAME,
-  },
+  COGL_DRIVER_ID_GLES2,
 #endif
-  {
-    COGL_DRIVER_NOP,
-    "nop",
-    { -1 },
-    &_cogl_driver_nop,
-    NULL, /* texture driver */
-    NULL /* libgl_name */
-  }
+  COGL_DRIVER_ID_NOP,
 };
 
 static CoglWinsysVtableGetter _cogl_winsys_vtable_getters[] =
@@ -145,7 +108,7 @@ native_filter_closure_free (CoglNativeFilterClosure *closure)
   g_free (closure);
 }
 
-G_DEFINE_TYPE (CoglRenderer, cogl_renderer, G_TYPE_OBJECT);
+G_DEFINE_FINAL_TYPE (CoglRenderer, cogl_renderer, G_TYPE_OBJECT);
 
 static void
 cogl_renderer_dispose (GObject *object)
@@ -164,6 +127,9 @@ cogl_renderer_dispose (GObject *object)
 
   g_slist_free_full (renderer->event_filters,
                      (GDestroyNotify) native_filter_closure_free);
+
+  g_clear_object (&renderer->driver);
+  g_clear_object (&renderer->texture_driver);
 
   G_OBJECT_CLASS (cogl_renderer_parent_class)->dispose (object);
 }
@@ -205,33 +171,34 @@ void
 cogl_xlib_renderer_set_foreign_display (CoglRenderer *renderer,
                                         Display *xdisplay)
 {
+  CoglXlibRenderer *xlib_renderer;
   g_return_if_fail (COGL_IS_RENDERER (renderer));
 
   /* NB: Renderers are considered immutable once connected */
   g_return_if_fail (!renderer->connected);
 
-  renderer->foreign_xdpy = xdisplay;
-
+  xlib_renderer = _cogl_xlib_renderer_get_data (renderer);
+  xlib_renderer->xdpy = xdisplay;
 }
 #endif /* HAVE_X11 */
 
-typedef gboolean (*CoglDriverCallback) (CoglDriverDescription *description,
-                                        void *user_data);
+typedef gboolean (*CoglDriverCallback) (CoglDriverId  driver_id,
+                                        void         *user_data);
 
 static void
-foreach_driver_description (CoglDriver driver_override,
-                            CoglDriverCallback callback,
-                            void *user_data)
+foreach_driver_description (CoglDriverId        driver_override,
+                            CoglDriverCallback  callback,
+                            void               *user_data)
 {
   int i;
 
-  if (driver_override != COGL_DRIVER_ANY)
+  if (driver_override != COGL_DRIVER_ID_ANY)
     {
       for (i = 0; i < G_N_ELEMENTS (_cogl_drivers); i++)
         {
-          if (_cogl_drivers[i].id == driver_override)
+          if (_cogl_drivers[i] == driver_override)
             {
-              callback (&_cogl_drivers[i], user_data);
+              callback (_cogl_drivers[i], user_data);
               return;
             }
         }
@@ -242,37 +209,37 @@ foreach_driver_description (CoglDriver driver_override,
 
   for (i = 0; i < G_N_ELEMENTS (_cogl_drivers); i++)
     {
-      if (!callback (&_cogl_drivers[i], user_data))
+      if (!callback (_cogl_drivers[i], user_data))
         return;
     }
 }
 
-static CoglDriver
+static CoglDriverId
 driver_name_to_id (const char *name)
 {
-  int i;
+  if (g_ascii_strcasecmp ("gl3", name) == 0)
+    return COGL_DRIVER_ID_GL3;
+  else if (g_ascii_strcasecmp ("gles2", name) == 0)
+    return COGL_DRIVER_ID_GLES2;
+  else if (g_ascii_strcasecmp ("nop", name) == 0)
+    return COGL_DRIVER_ID_NOP;
 
-  for (i = 0; i < G_N_ELEMENTS (_cogl_drivers); i++)
-    {
-      if (g_ascii_strcasecmp (_cogl_drivers[i].name, name) == 0)
-        return _cogl_drivers[i].id;
-    }
-
-  return COGL_DRIVER_ANY;
+  g_warn_if_reached ();
+  return COGL_DRIVER_ID_ANY;
 }
 
 static const char *
-driver_id_to_name (CoglDriver id)
+driver_id_to_name (CoglDriverId id)
 {
   switch (id)
     {
-      case COGL_DRIVER_GL3:
+      case COGL_DRIVER_ID_GL3:
         return "gl3";
-      case COGL_DRIVER_GLES2:
+      case COGL_DRIVER_ID_GLES2:
         return "gles2";
-      case COGL_DRIVER_NOP:
+      case COGL_DRIVER_ID_NOP:
         return "nop";
-      case COGL_DRIVER_ANY:
+      case COGL_DRIVER_ID_ANY:
         g_warn_if_reached ();
         return "any";
     }
@@ -281,19 +248,14 @@ driver_id_to_name (CoglDriver id)
   return "unknown";
 }
 
-typedef struct _SatisfyConstraintsState
-{
-  const CoglDriverDescription *driver_description;
-} SatisfyConstraintsState;
-
 /* XXX this is still uglier than it needs to be */
 static gboolean
-satisfy_constraints (CoglDriverDescription *description,
-                     void *user_data)
+satisfy_constraints (CoglDriverId  driver_id,
+                     void         *user_data)
 {
-  SatisfyConstraintsState *state = user_data;
+  CoglDriverId *state = user_data;
 
-  state->driver_description = description;
+  *state = driver_id;
 
   return FALSE;
 }
@@ -303,42 +265,25 @@ _cogl_renderer_choose_driver (CoglRenderer *renderer,
                               GError **error)
 {
   const char *driver_name = g_getenv ("COGL_DRIVER");
-  CoglDriver driver_override = COGL_DRIVER_ANY;
+  CoglDriverId picked_driver, driver_override = COGL_DRIVER_ID_ANY;
   const char *invalid_override = NULL;
-  const char *libgl_name;
-  SatisfyConstraintsState state;
-  const CoglDriverDescription *desc;
+  const char *libgl_name = NULL;
   int i;
 
   if (driver_name)
     {
       driver_override = driver_name_to_id (driver_name);
-      if (driver_override == COGL_DRIVER_ANY)
+      if (driver_override == COGL_DRIVER_ID_ANY)
         invalid_override = driver_name;
     }
 
-  if (renderer->driver_override != COGL_DRIVER_ANY)
-    {
-      if (driver_override != COGL_DRIVER_ANY &&
-          renderer->driver_override != driver_override)
-        {
-          g_set_error (error, COGL_RENDERER_ERROR,
-                       COGL_RENDERER_ERROR_BAD_CONSTRAINT,
-                       "Application driver selection conflicts with driver "
-                       "specified in configuration");
-          return FALSE;
-        }
-
-      driver_override = renderer->driver_override;
-    }
-
-  if (driver_override != COGL_DRIVER_ANY)
+  if (driver_override != COGL_DRIVER_ID_ANY)
     {
       gboolean found = FALSE;
 
       for (i = 0; i < G_N_ELEMENTS (_cogl_drivers); i++)
         {
-          if (_cogl_drivers[i].id == driver_override)
+          if (_cogl_drivers[i] == driver_override)
             {
               found = TRUE;
               break;
@@ -357,13 +302,12 @@ _cogl_renderer_choose_driver (CoglRenderer *renderer,
       return FALSE;
     }
 
-  state.driver_description = NULL;
 
   foreach_driver_description (driver_override,
                               satisfy_constraints,
-                              &state);
+                              &picked_driver);
 
-  if (!state.driver_description)
+  if (picked_driver == COGL_DRIVER_ID_ANY)
     {
       g_set_error (error, COGL_RENDERER_ERROR,
                    COGL_RENDERER_ERROR_BAD_CONSTRAINT,
@@ -371,19 +315,33 @@ _cogl_renderer_choose_driver (CoglRenderer *renderer,
       return FALSE;
     }
 
-  desc = state.driver_description;
-  renderer->driver = desc->id;
-  renderer->driver_vtable = desc->vtable;
-  renderer->texture_driver = desc->texture_driver;
-  libgl_name = desc->libgl_name;
+  renderer->driver_id = picked_driver;
 
-  memset(renderer->private_features, 0, sizeof (renderer->private_features));
-  for (i = 0; desc->private_features[i] != -1; i++)
-    COGL_FLAGS_SET (renderer->private_features,
-                    desc->private_features[i], TRUE);
+  switch (renderer->driver_id)
+    {
+#ifdef HAVE_GL
+    case COGL_DRIVER_ID_GL3:
+      renderer->driver = g_object_new (COGL_TYPE_DRIVER_GL3, NULL);
+      renderer->texture_driver = g_object_new (COGL_TYPE_TEXTURE_DRIVER_GL3, NULL);
+      libgl_name = COGL_GL_LIBNAME;
+      break;
+#endif
+#ifdef HAVE_GLES2
+    case COGL_DRIVER_ID_GLES2:
+      renderer->driver = g_object_new (COGL_TYPE_DRIVER_GLES2, NULL);
+      renderer->texture_driver = g_object_new (COGL_TYPE_TEXTURE_DRIVER_GLES2, NULL);
+      libgl_name = COGL_GLES2_LIBNAME;
+      break;
+#endif
 
-  if (COGL_FLAGS_GET (renderer->private_features,
-                      COGL_PRIVATE_FEATURE_ANY_GL))
+    case COGL_DRIVER_ID_NOP:
+    default:
+      renderer->driver = g_object_new (COGL_TYPE_DRIVER_NOP, NULL);
+      renderer->texture_driver = NULL;
+      break;
+    }
+
+  if (libgl_name)
     {
       renderer->libgl_module = g_module_open (libgl_name,
                                               G_MODULE_BIND_LAZY);
@@ -578,20 +536,57 @@ cogl_renderer_get_proc_address (CoglRenderer *renderer,
   return winsys->renderer_get_proc_address (renderer, name);
 }
 
-void
-cogl_renderer_set_driver (CoglRenderer *renderer,
-                          CoglDriver driver)
-{
-  g_return_if_fail (!renderer->connected);
-  renderer->driver_override = driver;
-}
-
-CoglDriver
-cogl_renderer_get_driver (CoglRenderer *renderer)
+CoglDriverId
+cogl_renderer_get_driver_id (CoglRenderer *renderer)
 {
   g_return_val_if_fail (renderer->connected, 0);
 
-  return renderer->driver;
+  return renderer->driver_id;
+}
+
+GArray *
+cogl_renderer_query_drm_modifiers (CoglRenderer           *renderer,
+                                   CoglPixelFormat         format,
+                                   CoglDrmModifierFilter   filter,
+                                   GError                **error)
+{
+  const CoglWinsysVtable *winsys = _cogl_renderer_get_winsys (renderer);
+
+  if (winsys->renderer_query_drm_modifiers)
+    {
+      return winsys->renderer_query_drm_modifiers (renderer,
+                                                   format,
+                                                   filter,
+                                                   error);
+    }
+
+  g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED,
+               "CoglRenderer doesn't support querying drm modifiers");
+
+  return NULL;
+}
+
+uint64_t
+cogl_renderer_get_implicit_drm_modifier (CoglRenderer *renderer)
+{
+  const CoglWinsysVtable *winsys = _cogl_renderer_get_winsys (renderer);
+
+  g_return_val_if_fail (winsys->renderer_get_implicit_drm_modifier, 0);
+
+  return winsys->renderer_get_implicit_drm_modifier (renderer);
+}
+
+gboolean
+cogl_renderer_is_implicit_drm_modifier (CoglRenderer *renderer,
+                                        uint64_t      modifier)
+{
+  const CoglWinsysVtable *winsys = _cogl_renderer_get_winsys (renderer);
+  uint64_t implicit_modifier;
+
+  g_return_val_if_fail (winsys->renderer_get_implicit_drm_modifier, FALSE);
+
+  implicit_modifier = winsys->renderer_get_implicit_drm_modifier (renderer);
+  return modifier == implicit_modifier;
 }
 
 CoglDmaBufHandle *

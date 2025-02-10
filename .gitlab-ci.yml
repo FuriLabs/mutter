@@ -11,6 +11,7 @@ include:
       meson-options:
         -Dxwayland_initfd=enabled
         -Dprofiler=true
+        -Dbash_completion=false
 
 build-sysext:
   before_script:
@@ -105,13 +106,14 @@ variables:
     - .skip-git-clone
   variables:
     FDO_DISTRIBUTION_VERSION: 41
-    BASE_TAG: '2024-09-20.2'
+    BASE_TAG: '2025-02-04.1'
     MUTTER_USER: 'meta-user'
     FDO_DISTRIBUTION_PACKAGES:
+      accountsservice-devel
       clang
       gcovr
-      gdm
       gnome-shell
+      itstool
       python3-docutils
       sassc
       uncrustify
@@ -124,6 +126,7 @@ variables:
       zenity
       python3-dbusmock
       gnome-desktop-testing
+      ruff
 
     FDO_DISTRIBUTION_EXEC: |
       set -e
@@ -154,12 +157,16 @@ variables:
         https://gitlab.gnome.org/GNOME/gi-docgen.git \
         main
 
+      ./.gitlab-ci/install-meson-project.sh \
+        https://gitlab.freedesktop.org/wayland/wayland-protocols.git \
+        1.38
+
       ./.gitlab-ci/install-common-dependencies.sh
 
       rpm -e --nodeps gnome-bluetooth-libs-devel \
                       mutter mutter-devel \
                       gnome-shell \
-                      $(NULL)
+                      $NULL
 
       # Work-around for podman-push aborting on permission issue
       # https://gitlab.gnome.org/Infrastructure/Infrastructure/-/issues/1247
@@ -188,8 +195,6 @@ variables:
         ninja -C build src/tests/kvm/bzImage
         mkdir -p /opt/mutter
         cp build/src/tests/kvm/bzImage /opt/mutter/bzImage
-
-        dnf install -y python3-argcomplete
 
         git clone https://github.com/arighi/virtme-ng.git
         cd virtme-ng
@@ -343,7 +348,7 @@ build-fedora-container@aarch64:
     - !reference [.pipeline-guard, rules]
   when: manual
 
-check-code-style:
+check-c-code-style:
   extends:
     - .mutter.distribution-image
     - .mutter.fedora@x86_64
@@ -363,13 +368,31 @@ check-code-style:
   rules:
     - !reference [.only-merge-requests, rules]
 
+check-python-code-style:
+  extends:
+    - .mutter.distribution-image
+    - .mutter.fedora@x86_64
+  variables:
+    PYTHON_FILES:
+      tools/gdctl
+      clutter/clutter/gen-keyname-table.py
+      clutter/clutter/clutter-keysyms-update.py
+  stage: code-review
+  needs:
+    - job: build-fedora-container@x86_64
+      artifacts: false
+  script:
+    - ruff format --line-length 80 --check $PYTHON_FILES
+    - ruff check $PYTHON_FILES
+  rules:
+    - !reference [.only-merge-requests, rules]
+
 .build-mutter-base:
   variables:
     BASE_MESON_OPTIONS:
       -Degl_device=true
       -Dwayland_eglstream=true
       -Dcatch=true
-      -Dlibdisplay_info=enabled
 
 .build-mutter:
   extends:
@@ -382,6 +405,7 @@ check-code-style:
         --werror
         --fatal-meson-warnings
         --warnlevel 2
+        --wrap-mode nofallback
         -Dbuildtype=debugoptimized
         -Db_coverage=true
         -Ddocs=true
@@ -424,7 +448,10 @@ build-without-opengl-and-glx@x86_64:
     - job: build-fedora-container@x86_64
       artifacts: false
   script:
-    - meson setup . build --werror --prefix /usr
+    - meson setup . build
+        --prefix /usr
+        --werror
+        --wrap-mode nofallback
         -Dbuildtype=debugoptimized
         -Dopengl=false
         -Dglx=false
@@ -446,7 +473,10 @@ build-without-native-backend-and-wayland@x86_64:
     - job: build-fedora-container@x86_64
       artifacts: false
   script:
-    - meson setup . build --werror --prefix /usr
+    - meson setup . build
+        --prefix /usr
+        --werror
+        --wrap-mode nofallback
         -Dbuildtype=debugoptimized
         -Dnative_backend=false
         -Dudev=false
@@ -469,7 +499,10 @@ build-wayland-xwayland@x86_64:
     - job: build-fedora-container@x86_64
       artifacts: false
   script:
-    - meson setup . build --werror --prefix /usr
+    - meson setup . build
+        --prefix /usr
+        --werror
+        --wrap-mode nofallback
         -Dbuildtype=debugoptimized
         -Dwayland=true
         -Dxwayland=true
@@ -491,7 +524,10 @@ build-wayland-only@x86_64:
     - job: build-fedora-container@x86_64
       artifacts: false
   script:
-    - meson setup . build --werror --prefix /usr
+    - meson setup . build
+        --prefix /usr
+        --werror
+        --wrap-mode nofallback
         -Dbuildtype=debugoptimized
         -Dwayland=true
         -Dxwayland=false
@@ -527,7 +563,6 @@ build-wayland-only@x86_64:
     - pushd build
     - gcovr --root=..
         --filter='\.\./src/'
-        --filter='\.\./subprojects/'
         --filter='\.\./clutter/'
         --filter='\.\./cogl/'
         --filter='\.\./mtk/'
@@ -608,9 +643,13 @@ coverage:
     - .mutter.fedora@x86_64
   stage: analyze
   script:
+    - compgen -G "coverage-*.json" > /dev/null || exit 0
     - mkdir coveragereport
     - gcovr --add-tracefile 'coverage-*.json'
-        --html-details --print-summary --output coveragereport/index.html
+        --html-details
+        --html-theme github.blue
+        --print-summary
+        --output coveragereport/index.html
     - gcovr --add-tracefile 'coverage-*.json'
         --xml --output coveragereport/coverage.xml
   artifacts:
@@ -694,7 +733,10 @@ dist-mutter:
     - job: build-fedora-container@x86_64
       artifacts: false
   script:
-    - meson setup . build --werror --prefix /usr
+    - meson setup . build
+        --prefix /usr
+        --werror
+        --wrap-mode nofallback
         -Dbuildtype=debugoptimized
     - glib-compile-schemas $GSETTINGS_SCHEMA_DIR
     - mkdir -m 1777 /tmp/.X11-unix
@@ -774,7 +816,7 @@ reference:
   script:
     - mkdir references
     - cp -r doc/website/* ./references
-    - mv build/doc/reference/{clutter/clutter,cogl/cogl,cogl-pango/cogl-pango,meta/meta,mtk/mtk} references/
+    - mv build/doc/reference/{clutter/clutter,cogl/cogl,meta/meta,mtk/mtk} references/
   artifacts:
     expire_in: 1 week
     expose_as: 'Documentation'

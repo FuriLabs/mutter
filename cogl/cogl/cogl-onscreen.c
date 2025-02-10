@@ -260,24 +260,22 @@ cogl_onscreen_bind (CoglOnscreen *onscreen)
 }
 
 void
-cogl_onscreen_queue_damage_region (CoglOnscreen *onscreen,
-                                   const int    *rectangles,
-                                   int           n_rectangles)
+cogl_onscreen_queue_damage_region (CoglOnscreen    *onscreen,
+                                   const MtkRegion *region)
 {
   CoglOnscreenClass *klass = COGL_ONSCREEN_GET_CLASS (onscreen);
 
   if (!klass->queue_damage_region)
     return;
 
-  klass->queue_damage_region (onscreen, rectangles, n_rectangles);
+  klass->queue_damage_region (onscreen, region);
 }
 
 void
-cogl_onscreen_swap_buffers_with_damage (CoglOnscreen *onscreen,
-                                        const int *rectangles,
-                                        int n_rectangles,
-                                        CoglFrameInfo *info,
-                                        gpointer user_data)
+cogl_onscreen_swap_buffers_with_damage (CoglOnscreen    *onscreen,
+                                        const MtkRegion *region,
+                                        CoglFrameInfo   *info,
+                                        gpointer         user_data)
 {
   CoglOnscreenPrivate *priv = cogl_onscreen_get_instance_private (onscreen);
   CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
@@ -295,11 +293,7 @@ cogl_onscreen_swap_buffers_with_damage (CoglOnscreen *onscreen,
                                     COGL_BUFFER_BIT_DEPTH |
                                     COGL_BUFFER_BIT_STENCIL);
 
-  klass->swap_buffers_with_damage (onscreen,
-                                   rectangles,
-                                   n_rectangles,
-                                   info,
-                                   user_data);
+  klass->swap_buffers_with_damage (onscreen, region, info, user_data);
 
   if (G_UNLIKELY (COGL_DEBUG_ENABLED (COGL_DEBUG_SYNC_FRAME)))
     cogl_framebuffer_finish (framebuffer);
@@ -324,15 +318,14 @@ cogl_onscreen_swap_buffers (CoglOnscreen  *onscreen,
                             CoglFrameInfo *info,
                             gpointer user_data)
 {
-  cogl_onscreen_swap_buffers_with_damage (onscreen, NULL, 0, info, user_data);
+  cogl_onscreen_swap_buffers_with_damage (onscreen, NULL, info, user_data);
 }
 
 void
-cogl_onscreen_swap_region (CoglOnscreen *onscreen,
-                           const int *rectangles,
-                           int n_rectangles,
-                           CoglFrameInfo *info,
-                           gpointer user_data)
+cogl_onscreen_swap_region (CoglOnscreen    *onscreen,
+                           const MtkRegion *region,
+                           CoglFrameInfo   *info,
+                           gpointer         user_data)
 {
   CoglOnscreenPrivate *priv = cogl_onscreen_get_instance_private (onscreen);
   CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
@@ -354,11 +347,7 @@ cogl_onscreen_swap_region (CoglOnscreen *onscreen,
                                     COGL_BUFFER_BIT_DEPTH |
                                     COGL_BUFFER_BIT_STENCIL);
 
-  klass->swap_region (onscreen,
-                      rectangles,
-                      n_rectangles,
-                      info,
-                      user_data);
+  klass->swap_region (onscreen, region, info, user_data);
 
   if (G_UNLIKELY (COGL_DEBUG_ENABLED (COGL_DEBUG_SYNC_FRAME)))
     cogl_framebuffer_finish (framebuffer);
@@ -522,4 +511,17 @@ cogl_onscreen_get_frame_counter (CoglOnscreen *onscreen)
   CoglOnscreenPrivate *priv = cogl_onscreen_get_instance_private (onscreen);
 
   return priv->frame_counter;
+}
+
+gboolean
+cogl_onscreen_get_window_handles (CoglOnscreen *onscreen,
+                                  gpointer     *device_out,
+                                  gpointer     *window_out)
+{
+  CoglOnscreenClass *klass = COGL_ONSCREEN_GET_CLASS (onscreen);
+
+  if (!klass->get_window_handles)
+      return FALSE;
+
+  return klass->get_window_handles (onscreen, device_out, window_out);
 }

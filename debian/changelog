@@ -1,3 +1,39 @@
+mutter (48~beta-2) experimental; urgency=medium
+
+  * Add mutter Depends: gir1.2-glib-2.0, python3-argcomplete, python3-gi
+  * Cherry-pick proposed patch from Alessandro Astone to embed a copy of
+    the Adwaita cursors inside mutter's tests for resiliance against
+    changes to the Adwaita cursor theme (Closes: #1095225)
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Fri, 07 Feb 2025 10:33:09 -0500
+
+mutter (48~beta-1) experimental; urgency=medium
+
+  [ Jeremy Bícha ]
+  * New upstream release
+  * debian/*.symbols: Update
+  * Bump minimum libei
+  * Add Build-Depends: bash-completion, python3-argcomplete, python3-docutils
+  * Have mutter binary package install bash-completion & manpages
+  * Have mutter binary package depend on python3 for new gdctl utility
+
+  [ Daniel van Vugt ]
+  * d/p/debian/Support-Dynamic-triple-double-buffering.patch:
+    Update the triple buffering patch for 48 Beta
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Wed, 05 Feb 2025 07:38:59 -0500
+
+mutter (48~alpha-1) experimental; urgency=medium
+
+  * New upstream release
+  * Rename packages for API bump (mutter-15 -> mutter-16)
+  * debian/libmutter-16-0.symbols: Update
+  * libmutter-cogl-pango is no longer provided
+  * Bump minimum libdisplay-info & wayland-protocols
+  * Temporarily disable triple buffering patch until it can be updated
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 14 Jan 2025 18:05:13 -0500
+
 mutter (47.4-1ubuntu1) plucky; urgency=medium
 
   * Merge with Debian (LP: #2091159, LP: #2089843, LP: #1966635).

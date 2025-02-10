@@ -72,15 +72,16 @@
 #include "core/boxes-private.h"
 #include "core/constraints.h"
 #include "core/keybindings-private.h"
+#include "core/meta-window-config-private.h"
 #include "core/meta-workspace-manager-private.h"
 #include "core/place.h"
 #include "core/stack.h"
 #include "core/util-private.h"
 #include "core/workspace-private.h"
-#include "meta/compositor-mutter.h"
 #include "meta/meta-cursor-tracker.h"
 #include "meta/meta-enum-types.h"
 #include "meta/prefs.h"
+#include "meta/meta-window-config.h"
 
 #ifdef HAVE_X11_CLIENT
 #include "mtk/mtk-x11.h"
@@ -108,7 +109,7 @@
 #include "wayland/meta-window-xwayland.h"
 #endif
 
-#ifdef HAVE_LIBSYSTEMD
+#ifdef HAVE_LOGIND
 #include <systemd/sd-login.h>
 #endif
 
@@ -177,6 +178,11 @@ static void set_hidden_suspended_state (MetaWindow *window);
 
 static void initable_iface_init (GInitableIface *initable_iface);
 
+static void meta_window_move_resize_internal (MetaWindow          *window,
+                                              MetaMoveResizeFlags  flags,
+                                              MetaPlaceFlag        place_flags,
+                                              MtkRectangle         frame_rect);
+
 typedef struct _MetaWindowPrivate
 {
   MetaQueueType queued_types;
@@ -241,6 +247,7 @@ enum
   POSITION_CHANGED,
   SHOWN,
   HIGHEST_SCALE_MONITOR_CHANGED,
+  CONFIGURE,
 
   LAST_SIGNAL
 };
@@ -317,6 +324,27 @@ meta_window_real_get_client_pid (MetaWindow *window)
   return 0;
 }
 
+static MetaGravity
+meta_window_real_get_gravity (MetaWindow *window)
+{
+  MetaWindowDrag *window_drag = NULL;
+
+  if (window->display && window->display->compositor)
+    window_drag = meta_compositor_get_current_window_drag (window->display->compositor);
+
+  if (window_drag &&
+      meta_window_drag_get_window (window_drag) == window)
+    {
+      MetaGrabOp grab_op;
+
+      grab_op = meta_window_drag_get_grab_op (window_drag);
+
+      return meta_resize_gravity_from_grab_op (grab_op);
+    }
+
+  return META_GRAVITY_NONE;
+}
+
 static void
 meta_window_finalize (GObject *object)
 {
@@ -330,6 +358,8 @@ meta_window_finalize (GObject *object)
 
   g_clear_pointer (&window->preferred_logical_monitor,
                    meta_logical_monitor_id_free);
+
+  g_clear_object (&window->config);
 
   g_free (window->startup_id);
   g_free (window->role);
@@ -368,7 +398,7 @@ meta_window_get_property(GObject         *object,
       g_value_set_boolean (value, win->decorated);
       break;
     case PROP_FULLSCREEN:
-      g_value_set_boolean (value, win->fullscreen);
+      g_value_set_boolean (value, meta_window_is_fullscreen (win));
       break;
     case PROP_MAXIMIZED_HORIZONTALLY:
       g_value_set_boolean (value, win->maximized_horizontally);
@@ -493,6 +523,7 @@ meta_window_class_init (MetaWindowClass *klass)
   klass->update_struts = meta_window_real_update_struts;
   klass->get_default_skip_hints = meta_window_real_get_default_skip_hints;
   klass->get_client_pid = meta_window_real_get_client_pid;
+  klass->get_gravity = meta_window_real_get_gravity;
 
   obj_props[PROP_TITLE] =
     g_param_spec_string ("title", NULL, NULL,
@@ -731,6 +762,20 @@ meta_window_class_init (MetaWindowClass *klass)
                   0,
                   NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
+
+  /**
+   * MetaWindow::configure:
+   * @window: a #MetaWindow
+   * @window_config: a #MetaWindowConfig
+   */
+  window_signals[CONFIGURE] =
+    g_signal_new ("configure",
+                  G_TYPE_FROM_CLASS (object_class),
+                  G_SIGNAL_RUN_LAST,
+                  0,
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE, 1,
+                  META_TYPE_WINDOW_CONFIG);
 }
 
 static void
@@ -1021,6 +1066,7 @@ meta_window_constructed (GObject *object)
   MetaContext *context = meta_display_get_context (display);
   MetaBackend *backend = meta_context_get_backend (context);
   MetaWorkspaceManager *workspace_manager = display->workspace_manager;
+  MtkRectangle frame_rect;
 
   COGL_TRACE_BEGIN_SCOPED (MetaWindowSharedInit,
                            "Meta::Window::constructed()");
@@ -1041,9 +1087,10 @@ meta_window_constructed (GObject *object)
   meta_window_set_normal_hints (window, NULL);
 
   /* And this is our unmaximized size */
-  window->saved_rect = window->rect;
-  window->saved_rect_fullscreen = window->rect;
-  window->unconstrained_rect = window->rect;
+  frame_rect = meta_window_config_get_rect (window->config);
+  window->saved_rect = frame_rect;
+  window->saved_rect_fullscreen = frame_rect;
+  window->unconstrained_rect = frame_rect;
 
   window->title = NULL;
 
@@ -1055,7 +1102,7 @@ meta_window_constructed (GObject *object)
   window->maximize_horizontally_after_placement = FALSE;
   window->maximize_vertically_after_placement = FALSE;
   window->minimize_after_placement = FALSE;
-  window->fullscreen = FALSE;
+  meta_window_config_set_is_fullscreen (window->config, FALSE);
   window->require_fully_onscreen = TRUE;
   window->require_on_single_monitor = TRUE;
   window->require_titlebar_visible = TRUE;
@@ -1133,7 +1180,7 @@ meta_window_constructed (GObject *object)
 
   window->compositor_private = NULL;
 
-  if (window->rect.width > 0 && window->rect.height > 0)
+  if (frame_rect.width > 0 && frame_rect.height > 0)
     {
       window->monitor = meta_window_find_monitor_from_frame_rect (window);
       window->highest_scale_monitor =
@@ -1177,7 +1224,8 @@ meta_window_constructed (GObject *object)
     {
       /* WM_HINTS said minimized */
       window->minimized = TRUE;
-      meta_verbose ("Window %s asked to start out minimized", window->desc);
+      meta_topic (META_DEBUG_WINDOW_STATE,
+                  "Window %s asked to start out minimized", window->desc);
     }
 
   /* Apply any window attributes such as initial workspace
@@ -1417,7 +1465,7 @@ meta_window_unmanage (MetaWindow  *window,
   MetaWorkspaceManager *workspace_manager = window->display->workspace_manager;
   GList *tmp;
 
-  meta_verbose ("Unmanaging %s", window->desc);
+  meta_topic (META_DEBUG_WINDOW_STATE, "Unmanaging %s", window->desc);
   window->unmanaging = TRUE;
 
   g_clear_handle_id (&priv->suspend_timoeut_id, g_source_remove);
@@ -1461,7 +1509,7 @@ meta_window_unmanage (MetaWindow  *window,
     meta_window_on_all_workspaces_changed (window);
 
 #ifdef HAVE_X11_CLIENT
-  if (window->fullscreen)
+  if (meta_window_is_fullscreen (window))
     {
       MetaGroup *group = NULL;
       /* If the window is fullscreen, it may be forcing
@@ -1679,8 +1727,10 @@ meta_window_showing_on_its_workspace (MetaWindow *window)
       workspace_of_window && workspace_of_window->showing_desktop &&
       !is_desktop_or_dock)
     {
-      meta_verbose ("We're showing the desktop on the workspace(s) that window %s is on",
-                    window->desc);
+      meta_topic (META_DEBUG_WINDOW_STATE,
+                  "We're showing the desktop on the workspace(s) that window "
+                  "%s is on",
+                  window->desc);
       showing = FALSE;
     }
 
@@ -2076,6 +2126,7 @@ window_would_mostly_be_covered_by_always_above_window (MetaWindow *window)
   GList *l;
   g_autoptr (MtkRegion) region = NULL;
   int window_area, intersection_area, visible_area;
+  MtkRectangle frame_rect;
 
   region = mtk_region_create ();
   windows = meta_workspace_list_windows (workspace);
@@ -2083,13 +2134,15 @@ window_would_mostly_be_covered_by_always_above_window (MetaWindow *window)
     {
       MetaWindow *other_window = l->data;
 
+      frame_rect = meta_window_config_get_rect (other_window->config);
       if (other_window->wm_state_above && other_window != window)
-        mtk_region_union_rectangle (region, &other_window->rect);
+        mtk_region_union_rectangle (region, &frame_rect);
     }
 
-  window_area = window->rect.width * window->rect.height;
+  frame_rect = meta_window_config_get_rect (window->config);
+  window_area = frame_rect.width * frame_rect.height;
 
-  mtk_region_intersect_rectangle (region, &window->rect);
+  mtk_region_intersect_rectangle (region, &frame_rect);
   intersection_area = calculate_region_area (region);
   visible_area = window_area - intersection_area;
 
@@ -2128,7 +2181,6 @@ meta_window_force_placement (MetaWindow    *window,
   meta_window_move_resize_internal (window,
                                     flags,
                                     place_flags,
-                                    META_GRAVITY_NORTH_WEST,
                                     window->unconstrained_rect);
   window->calc_placement = FALSE;
 
@@ -2139,7 +2191,7 @@ meta_window_force_placement (MetaWindow    *window,
   window->placed = TRUE;
 }
 
-static gboolean
+static void
 enter_suspend_state_cb (gpointer user_data)
 {
   MetaWindow *window = META_WINDOW (user_data);
@@ -2147,13 +2199,10 @@ enter_suspend_state_cb (gpointer user_data)
 
   priv->suspend_timoeut_id = 0;
 
-  g_return_val_if_fail (priv->suspend_state == META_WINDOW_SUSPEND_STATE_HIDDEN,
-                        G_SOURCE_REMOVE);
+  g_return_if_fail (priv->suspend_state == META_WINDOW_SUSPEND_STATE_HIDDEN);
 
   priv->suspend_state = META_WINDOW_SUSPEND_STATE_SUSPENDED;
   g_object_notify_by_pspec (G_OBJECT (window), obj_props[PROP_SUSPEND_STATE]);
-
-  return G_SOURCE_REMOVE;
 }
 
 static void
@@ -2164,9 +2213,9 @@ set_hidden_suspended_state (MetaWindow *window)
   priv->suspend_state = META_WINDOW_SUSPEND_STATE_HIDDEN;
   g_return_if_fail (!priv->suspend_timoeut_id);
   priv->suspend_timoeut_id =
-    g_timeout_add_seconds (SUSPEND_HIDDEN_TIMEOUT_S,
-                           enter_suspend_state_cb,
-                           window);
+    g_timeout_add_seconds_once (SUSPEND_HIDDEN_TIMEOUT_S,
+                                enter_suspend_state_cb,
+                                window);
 }
 
 static void
@@ -2235,8 +2284,9 @@ implement_showing (MetaWindow *window,
                    gboolean    showing)
 {
   /* Actually show/hide the window */
-  meta_verbose ("Implement showing = %d for window %s",
-                showing, window->desc);
+  meta_topic (META_DEBUG_WINDOW_STATE,
+              "Implement showing = %d for window %s",
+              showing, window->desc);
 
   /* Some windows are not stackable until being showed, so add those now. */
   if (meta_window_is_stackable (window) && !meta_window_is_in_stack (window))
@@ -2275,6 +2325,13 @@ void
 meta_window_update_visibility (MetaWindow  *window)
 {
   implement_showing (window, meta_window_should_be_showing (window));
+}
+
+static gboolean
+meta_window_is_tied_to_drag (MetaWindow *window)
+{
+  MetaWindowActor *window_actor = meta_window_actor_from_window (window);
+  return window_actor && meta_window_actor_is_tied_to_drag (window_actor);
 }
 
 static void
@@ -2333,10 +2390,12 @@ meta_window_show (MetaWindow *window)
           window->has_maximize_func)
         {
           MtkRectangle work_area;
+          MtkRectangle frame_rect;
           int window_area;
           int work_area_area;
 
-          window_area = window->rect.width * window->rect.height;
+          frame_rect = meta_window_config_get_rect (window->config);
+          window_area = frame_rect.width * frame_rect.height;
           meta_window_get_work_area_current_monitor (window, &work_area);
           work_area_area = work_area.width * work_area.height;
 
@@ -2443,6 +2502,9 @@ meta_window_show (MetaWindow *window)
           break;
         }
 
+      if (meta_window_is_tied_to_drag (window))
+        effect = META_COMP_EFFECT_NONE;
+
       meta_compositor_show_window (window->display->compositor,
                                    window, effect);
       window->pending_compositor_effect = META_COMP_EFFECT_NONE;
@@ -2529,6 +2591,9 @@ meta_window_hide (MetaWindow *window)
           effect = window->pending_compositor_effect;
           break;
         }
+
+      if (meta_window_is_tied_to_drag (window))
+        effect = META_COMP_EFFECT_NONE;
 
       meta_compositor_hide_window (window->display->compositor, window, effect);
       window->pending_compositor_effect = META_COMP_EFFECT_NONE;
@@ -2695,18 +2760,23 @@ ensure_size_hints_satisfied (MtkRectangle        *rect,
 static void
 meta_window_save_rect (MetaWindow *window)
 {
-  if (!(META_WINDOW_MAXIMIZED (window) || META_WINDOW_TILED_SIDE_BY_SIDE (window) || window->fullscreen))
+  if (!(meta_window_is_maximized (window) ||
+        meta_window_is_tiled_side_by_side (window) ||
+        meta_window_is_fullscreen (window)))
     {
+      MtkRectangle frame_rect;
+
+      frame_rect = meta_window_config_get_rect (window->config);
       /* save size/pos as appropriate args for move_resize */
       if (!window->maximized_horizontally)
         {
-          window->saved_rect.x      = window->rect.x;
-          window->saved_rect.width  = window->rect.width;
+          window->saved_rect.x      = frame_rect.x;
+          window->saved_rect.width  = frame_rect.width;
         }
       if (!window->maximized_vertically)
         {
-          window->saved_rect.y      = window->rect.y;
-          window->saved_rect.height = window->rect.height;
+          window->saved_rect.y      = frame_rect.y;
+          window->saved_rect.height = frame_rect.height;
         }
     }
 }
@@ -2838,6 +2908,18 @@ meta_window_get_maximized (MetaWindow *window)
 }
 
 /**
+ * meta_window_is_maximized:
+ * @window: a #MetaWindow
+ *
+ * Return value: %TRUE if the window is maximized vertically and horizontally.
+ */
+gboolean
+meta_window_is_maximized (MetaWindow *window)
+{
+  return (window->maximized_horizontally && window->maximized_vertically);
+}
+
+/**
  * meta_window_is_fullscreen:
  * @window: a #MetaWindow
  *
@@ -2846,7 +2928,7 @@ meta_window_get_maximized (MetaWindow *window)
 gboolean
 meta_window_is_fullscreen (MetaWindow *window)
 {
-  return window->fullscreen;
+  return meta_window_config_get_is_fullscreen (window->config);
 }
 
 /**
@@ -2885,7 +2967,7 @@ meta_window_is_monitor_sized (MetaWindow *window)
   if (!window->monitor)
     return FALSE;
 
-  if (window->fullscreen)
+  if (meta_window_is_fullscreen (window))
     return TRUE;
 
   if (meta_window_is_screen_sized (window))
@@ -2937,7 +3019,7 @@ meta_window_get_tile_fraction (MetaWindow   *window,
     *fraction = 1.;
   else if (tile_match)
     *fraction = 1. - tile_match->tile_hfraction;
-  else if (META_WINDOW_TILED_SIDE_BY_SIDE (window))
+  else if (meta_window_is_tiled_side_by_side (window))
     {
       if (window->tile_mode != tile_mode)
         *fraction = 1. - window->tile_hfraction;
@@ -2957,7 +3039,7 @@ meta_window_update_tile_fraction (MetaWindow *window,
   MtkRectangle work_area;
   MetaWindowDrag *window_drag;
 
-  if (!META_WINDOW_TILED_SIDE_BY_SIDE (window))
+  if (!meta_window_is_tiled_side_by_side (window))
     return;
 
   meta_window_get_work_area_for_monitor (window,
@@ -3029,6 +3111,28 @@ update_edge_constraints (MetaWindow *window)
       window->edge_constraints.right = META_EDGE_CONSTRAINT_MONITOR;
       window->edge_constraints.left = META_EDGE_CONSTRAINT_MONITOR;
     }
+}
+
+gboolean
+meta_window_is_tiled_side_by_side (MetaWindow *window)
+{
+  return window->maximized_vertically &&
+         !window->maximized_horizontally &&
+         window->tile_mode != META_TILE_NONE;
+}
+
+gboolean
+meta_window_is_tiled_left (MetaWindow *window)
+{
+  return window->tile_mode == META_TILE_LEFT &&
+         meta_window_is_tiled_side_by_side (window);
+}
+
+gboolean
+meta_window_is_tiled_right (MetaWindow *window)
+{
+  return window->tile_mode == META_TILE_RIGHT &&
+         meta_window_is_tiled_side_by_side (window);
 }
 
 void
@@ -3156,7 +3260,7 @@ unmaximize_window_before_freeing (MetaWindow        *window)
 
   if (window->withdrawn)                /* See bug #137185 */
     {
-      window->rect = window->saved_rect;
+      meta_window_config_set_rect (window->config, window->saved_rect);
       set_net_wm_state (window);
     }
 #ifdef HAVE_WAYLAND
@@ -3362,14 +3466,14 @@ meta_window_set_above (MetaWindow *window,
 void
 meta_window_make_fullscreen_internal (MetaWindow  *window)
 {
-  if (!window->fullscreen)
+  if (!meta_window_is_fullscreen (window))
     {
       meta_topic (META_DEBUG_WINDOW_OPS,
                   "Fullscreening %s", window->desc);
 
-      window->saved_rect_fullscreen = window->rect;
+      window->saved_rect_fullscreen = meta_window_config_get_rect (window->config);
 
-      window->fullscreen = TRUE;
+      meta_window_config_set_is_fullscreen (window->config, TRUE);
 
       meta_stack_freeze (window->display->stack);
 
@@ -3392,7 +3496,7 @@ meta_window_make_fullscreen (MetaWindow  *window)
   g_return_if_fail (META_IS_WINDOW (window));
   g_return_if_fail (!window->override_redirect);
 
-  if (!window->fullscreen)
+  if (!meta_window_is_fullscreen (window))
     {
       MtkRectangle old_frame_rect, old_buffer_rect;
 
@@ -3419,7 +3523,7 @@ meta_window_unmake_fullscreen (MetaWindow  *window)
   g_return_if_fail (META_IS_WINDOW (window));
   g_return_if_fail (!window->override_redirect);
 
-  if (window->fullscreen)
+  if (meta_window_is_fullscreen (window))
     {
       MtkRectangle old_frame_rect, old_buffer_rect, target_rect;
       gboolean has_target_size;
@@ -3427,7 +3531,7 @@ meta_window_unmake_fullscreen (MetaWindow  *window)
       meta_topic (META_DEBUG_WINDOW_OPS,
                   "Unfullscreening %s", window->desc);
 
-      window->fullscreen = FALSE;
+      meta_window_config_set_is_fullscreen (window->config, FALSE);
       target_rect = window->saved_rect_fullscreen;
 
       meta_window_frame_size_changed (window);
@@ -3492,7 +3596,7 @@ meta_window_update_fullscreen_monitors (MetaWindow         *window,
       meta_window_clear_fullscreen_monitors (window);
     }
 
-  if (window->fullscreen)
+  if (meta_window_is_fullscreen (window))
     {
       meta_window_queue(window, META_QUEUE_MOVE_RESIZE);
     }
@@ -3657,11 +3761,14 @@ meta_window_updates_are_frozen (MetaWindow *window)
 static void
 meta_window_reposition (MetaWindow *window)
 {
+  MtkRectangle frame_rect;
+
+  frame_rect = meta_window_config_get_rect (window->config);
   meta_window_move_resize (window,
                            (META_MOVE_RESIZE_MOVE_ACTION |
                             META_MOVE_RESIZE_RESIZE_ACTION |
                             META_MOVE_RESIZE_CONSTRAIN),
-                           window->rect);
+                           frame_rect);
 }
 
 static gboolean
@@ -3827,6 +3934,7 @@ meta_window_update_monitor (MetaWindow                   *window,
 {
   MetaWorkspaceManager *workspace_manager = window->display->workspace_manager;
   const MetaLogicalMonitor *old, *old_highest_scale;
+  int frame_width, frame_height;
 
   old = window->monitor;
   META_WINDOW_GET_CLASS (window)->update_main_monitor (window, flags);
@@ -3859,8 +3967,9 @@ meta_window_update_monitor (MetaWindow                   *window,
     }
 
   old_highest_scale = window->highest_scale_monitor;
+  meta_window_config_get_size (window->config, &frame_width, &frame_height);
 
-  window->highest_scale_monitor = window->rect.width > 0 && window->rect.height > 0
+  window->highest_scale_monitor = frame_width > 0 && frame_height > 0
     ? meta_window_find_highest_scale_monitor_from_frame_rect (window)
     : window->monitor;
 
@@ -3868,11 +3977,10 @@ meta_window_update_monitor (MetaWindow                   *window,
     g_signal_emit (window, window_signals[HIGHEST_SCALE_MONITOR_CHANGED], 0);
 }
 
-void
+static void
 meta_window_move_resize_internal (MetaWindow          *window,
                                   MetaMoveResizeFlags  flags,
                                   MetaPlaceFlag        place_flags,
-                                  MetaGravity          gravity,
                                   MtkRectangle         frame_rect)
 {
   /* The rectangle here that's passed in *always* in "frame rect"
@@ -3899,11 +4007,13 @@ meta_window_move_resize_internal (MetaWindow          *window,
   MtkRectangle unconstrained_rect;
   MtkRectangle constrained_rect;
   MtkRectangle temporary_rect;
+  MtkRectangle rect;
   int rel_x = 0;
   int rel_y = 0;
   MetaMoveResizeResultFlags result = 0;
   gboolean moved_or_resized = FALSE;
   MetaWindowUpdateMonitorFlags update_monitor_flags;
+  MetaGravity gravity;
 
   g_return_if_fail (!window->override_redirect);
 
@@ -3916,8 +4026,11 @@ meta_window_move_resize_internal (MetaWindow          *window,
 
   did_placement = !window->placed && window->calc_placement;
 
+  gravity = meta_window_get_gravity (window);
+
   /* We don't need it in the idle queue anymore. */
   meta_window_unqueue (window, META_QUEUE_MOVE_RESIZE);
+  rect = meta_window_config_get_rect (window->config);
 
   if ((flags & META_MOVE_RESIZE_RESIZE_ACTION) && (flags & META_MOVE_RESIZE_MOVE_ACTION))
     {
@@ -3929,7 +4042,7 @@ meta_window_move_resize_internal (MetaWindow          *window,
       /* If this is only a resize, then ignore the position given in
        * the parameters and instead calculate the new position from
        * resizing the old rectangle with the given gravity. */
-      meta_rectangle_resize_with_gravity (&window->rect,
+      meta_rectangle_resize_with_gravity (&rect,
                                           &unconstrained_rect,
                                           gravity,
                                           frame_rect.width,
@@ -3941,22 +4054,25 @@ meta_window_move_resize_internal (MetaWindow          *window,
        * just use the existing size of the window. */
       unconstrained_rect.x = frame_rect.x;
       unconstrained_rect.y = frame_rect.y;
-      unconstrained_rect.width = window->rect.width;
-      unconstrained_rect.height = window->rect.height;
+      unconstrained_rect.width = rect.width;
+      unconstrained_rect.height = rect.height;
     }
   else if ((flags & META_MOVE_RESIZE_WAYLAND_FINISH_MOVE_RESIZE))
     {
       /* This is a Wayland buffer acking our size. The new rect is
        * just the existing one we have. Ignore the passed-in rect
        * completely. */
-      unconstrained_rect = window->rect;
+      unconstrained_rect = rect;
     }
   else
     g_assert_not_reached ();
 
   constrained_rect = unconstrained_rect;
-  temporary_rect = window->rect;
-  if (flags & META_MOVE_RESIZE_CONSTRAIN && window->monitor)
+  temporary_rect = rect;
+  /* Do not constrain if it is tied to an ongoing window drag. */
+  if ((flags & META_MOVE_RESIZE_CONSTRAIN) &&
+      window->monitor &&
+      !meta_window_is_tied_to_drag (window))
     {
       MtkRectangle old_rect;
 
@@ -3989,7 +4105,6 @@ meta_window_move_resize_internal (MetaWindow          *window,
 
   /* Do the protocol-specific move/resize logic */
   META_WINDOW_GET_CLASS (window)->move_resize_internal (window,
-                                                        gravity,
                                                         unconstrained_rect,
                                                         constrained_rect,
                                                         temporary_rect,
@@ -4078,7 +4193,6 @@ meta_window_move_resize (MetaWindow          *window,
   meta_window_move_resize_internal (window,
                                     flags,
                                     META_PLACE_FLAG_NONE,
-                                    META_GRAVITY_NORTH_WEST,
                                     rect);
 }
 
@@ -4257,7 +4371,7 @@ meta_window_move_to_monitor (MetaWindow  *window,
   window->preferred_logical_monitor =
     meta_logical_monitor_dup_id (window->monitor);
 
-  if (window->fullscreen || window->override_redirect)
+  if (meta_window_is_fullscreen (window) || window->override_redirect)
     meta_display_queue_check_fullscreen (window->display);
 }
 
@@ -4269,7 +4383,7 @@ adjust_size_for_tile_match (MetaWindow *window,
   MtkRectangle work_area, rect;
   MetaWindow *tile_match = window->tile_match;
 
-  if (!META_WINDOW_TILED_SIDE_BY_SIDE (window) || !tile_match)
+  if (!meta_window_is_tiled_side_by_side (window) || !tile_match)
     return;
 
   meta_window_get_work_area_for_monitor (window, window->tile_monitor_number, &work_area);
@@ -4290,14 +4404,13 @@ adjust_size_for_tile_match (MetaWindow *window,
 }
 
 void
-meta_window_resize_frame_with_gravity (MetaWindow *window,
-                                       gboolean     user_op,
-                                       int          w,
-                                       int          h,
-                                       MetaGravity  gravity)
+meta_window_resize_frame (MetaWindow *window,
+                          gboolean    user_op,
+                          int         w,
+                          int         h)
 {
   MetaMoveResizeFlags flags;
-  MtkRectangle rect;
+  MtkRectangle rect = { 0, };
 
   rect.width = w;
   rect.height = h;
@@ -4324,7 +4437,6 @@ meta_window_resize_frame_with_gravity (MetaWindow *window,
   meta_window_move_resize_internal (window,
                                     flags,
                                     META_PLACE_FLAG_NONE,
-                                    gravity,
                                     rect);
 }
 
@@ -4342,8 +4454,9 @@ gboolean
 meta_window_geometry_contains_rect (MetaWindow   *window,
                                     MtkRectangle *rect)
 {
-  return mtk_rectangle_contains_rect (&window->rect,
-                                      rect);
+  MtkRectangle frame_rect = meta_window_config_get_rect (window->config);
+
+  return mtk_rectangle_contains_rect (&frame_rect, rect);
 }
 
 /**
@@ -4477,7 +4590,7 @@ void
 meta_window_get_frame_rect (const MetaWindow *window,
                             MtkRectangle     *rect)
 {
-  *rect = window->rect;
+  *rect = meta_window_config_get_rect (window->config);
 }
 
 /**
@@ -4912,8 +5025,9 @@ meta_window_change_workspace (MetaWindow    *window,
 static void
 window_stick_impl (MetaWindow  *window)
 {
-  meta_verbose ("Sticking window %s current on_all_workspaces = %d",
-                window->desc, window->on_all_workspaces);
+  meta_topic (META_DEBUG_WINDOW_STATE,
+              "Sticking window %s current on_all_workspaces = %d",
+              window->desc, window->on_all_workspaces);
 
   if (window->on_all_workspaces_requested)
     return;
@@ -5061,21 +5175,7 @@ meta_window_raise (MetaWindow  *window)
    * constraints in stack.c then magically take care of raising all
    * the child windows appropriately.
    */
-  if (window->display->stack == ancestor->display->stack)
-    {
-      meta_stack_raise (window->display->stack, ancestor);
-    }
-  else
-    {
-      meta_warning (
-                    "Either stacks aren't per screen or some window has a weird "
-                    "transient_for hint; window->display->stack != "
-                    "ancestor->screen->stack.  window = %s, ancestor = %s.",
-                    window->desc, ancestor->desc);
-      /* We could raise the window here, but don't want to do that twice and
-       * so we let the case below handle that.
-       */
-    }
+  meta_stack_raise (window->display->stack, ancestor);
 
   /* Okay, so stacking constraints misses one case: If a window has
    * two children and we want to raise one of those children, then
@@ -5633,12 +5733,15 @@ meta_window_recalc_features (MetaWindow *window)
        * about these apps but make them work.
        */
 
-      meta_warning ("Window %s sets an MWM hint indicating it isn't resizable, but sets min size %d x %d and max size %d x %d; this doesn't make much sense.",
-                    window->desc,
-                    window->size_hints.min_width,
-                    window->size_hints.min_height,
-                    window->size_hints.max_width,
-                    window->size_hints.max_height);
+      meta_topic (META_DEBUG_X11,
+                  "Window %s sets an MWM hint indicating it isn't resizable, "
+                  "but sets min size %d x %d and max size %d x %d; "
+                  "this doesn't make much sense.",
+                  window->desc,
+                  window->size_hints.min_width,
+                  window->size_hints.min_height,
+                  window->size_hints.max_width,
+                  window->size_hints.max_height);
     }
 
   window->has_fullscreen_func = TRUE;
@@ -5706,7 +5809,7 @@ meta_window_recalc_features (MetaWindow *window)
    * is not resizable purely due to fullscreen, we don't want to
    * disable fullscreen mode.
    */
-  if (window->fullscreen)
+  if (meta_window_is_fullscreen (window))
     {
       window->has_move_func = FALSE;
       window->has_resize_func = FALSE;
@@ -5728,7 +5831,7 @@ meta_window_recalc_features (MetaWindow *window)
   meta_topic (META_DEBUG_WINDOW_OPS,
               "Window %s fullscreen = %d not resizable, maximizable = %d fullscreenable = %d min size %dx%d max size %dx%d",
               window->desc,
-              window->fullscreen,
+              meta_window_is_fullscreen (window),
               window->has_maximize_func, window->has_fullscreen_func,
               window->size_hints.min_width,
               window->size_hints.min_height,
@@ -5906,7 +6009,8 @@ meta_window_get_current_tile_monitor_number (MetaWindow *window)
 
   if (tile_monitor_number < 0)
     {
-      meta_warning ("%s called with an invalid monitor number; using 0 instead", G_STRFUNC);
+      g_warning ("%s called with an invalid monitor number; "
+                 "using 0 instead", G_STRFUNC);
       tile_monitor_number = 0;
     }
 
@@ -6069,7 +6173,7 @@ meta_window_begin_grab_op (MetaWindow           *window,
                                       window, op,
                                       device, sequence,
                                       timestamp,
-                                      pos_hint);
+                                      pos_hint, NULL);
 }
 
 MetaStackLayer
@@ -6077,7 +6181,7 @@ meta_window_get_default_layer (MetaWindow *window)
 {
   if (window->wm_state_below)
     return META_LAYER_BOTTOM;
-  else if (window->wm_state_above && !META_WINDOW_MAXIMIZED (window))
+  else if (window->wm_state_above && !meta_window_is_maximized (window))
     return META_LAYER_TOP;
   else if (window->type == META_WINDOW_DESKTOP)
     return META_LAYER_DESKTOP;
@@ -6733,7 +6837,7 @@ meta_window_get_pid (MetaWindow *window)
 GFile *
 meta_window_get_unit_cgroup (MetaWindow *window)
 {
-#ifdef HAVE_LIBSYSTEMD
+#ifdef HAVE_LOGIND
   g_autofree char *contents = NULL;
   g_autofree char *complete_path = NULL;
   g_autofree char *unit_name = NULL;
@@ -7203,8 +7307,8 @@ meta_window_set_transient_for (MetaWindow *window,
 
   if (check_transient_for_loop (window, parent))
     {
-      meta_warning ("Setting %s transient for %s would create a loop.",
-                    window->desc, parent->desc);
+      g_warning ("Setting %s transient for %s would create a loop.",
+                 window->desc, parent->desc);
       return;
     }
 
@@ -7476,13 +7580,22 @@ meta_window_is_above (MetaWindow *window)
 gboolean
 meta_window_allows_move (MetaWindow *window)
 {
-  return META_WINDOW_ALLOWS_MOVE (window);
+  return window->has_move_func && !meta_window_is_fullscreen (window);
 }
 
 gboolean
 meta_window_allows_resize (MetaWindow *window)
 {
-  return META_WINDOW_ALLOWS_RESIZE (window);
+  gboolean allows_resize_except_hints, allows_resize;
+
+  allows_resize_except_hints = window->has_resize_func &&
+                               !meta_window_is_maximized (window) &&
+                               !meta_window_is_fullscreen (window);
+  allows_resize = allows_resize_except_hints &&
+                  (window->size_hints.min_width < window->size_hints.max_width ||
+                   window->size_hints.min_height < window->size_hints.max_height);
+
+  return allows_resize;
 }
 
 void
@@ -7523,6 +7636,13 @@ MetaPlacementRule *
 meta_window_get_placement_rule (MetaWindow *window)
 {
   return window->placement.rule;
+}
+
+void
+meta_window_emit_configure (MetaWindow       *window,
+                            MetaWindowConfig *window_config)
+{
+  g_signal_emit (window, window_signals[CONFIGURE], 0, window_config);
 }
 
 void
@@ -7612,13 +7732,11 @@ meta_window_get_client_type (MetaWindow *window)
   return window->client_type;
 }
 
-static gboolean
+static void
 meta_window_close_dialog_timeout (MetaWindow *window)
 {
   meta_window_show_close_dialog (window);
   window->close_dialog_timeout_id = 0;
-
-  return G_SOURCE_REMOVE;
 }
 
 void
@@ -7634,9 +7752,9 @@ meta_window_ensure_close_dialog_timeout (MetaWindow *window)
     return;
 
   window->close_dialog_timeout_id =
-    g_timeout_add (check_alive_timeout,
-                   (GSourceFunc) meta_window_close_dialog_timeout,
-                   window);
+    g_timeout_add_once (check_alive_timeout,
+                        (GSourceOnceFunc) meta_window_close_dialog_timeout,
+                        window);
   g_source_set_name_by_id (window->close_dialog_timeout_id,
                            "[mutter] meta_window_close_dialog_timeout");
 }
@@ -8157,4 +8275,26 @@ meta_window_get_client_content_rect (MetaWindow   *window,
       meta_window_x11_is_ssd (window))
     meta_window_frame_rect_to_client_rect (window, rect, rect);
 #endif
+}
+
+MetaWindowConfig *
+meta_window_new_window_config (MetaWindow *window)
+{
+  if (window->showing_for_first_time)
+    return meta_window_config_initial_new ();
+  else
+    return meta_window_config_new ();
+}
+
+MetaGravity
+meta_window_get_gravity (MetaWindow *window)
+{
+  MetaGravity gravity;
+
+  gravity = META_WINDOW_GET_CLASS (window)->get_gravity (window);
+
+  if (gravity == META_GRAVITY_NONE)
+    gravity = META_GRAVITY_NORTH_WEST;
+
+  return gravity;
 }

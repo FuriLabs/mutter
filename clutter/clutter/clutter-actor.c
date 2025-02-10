@@ -482,16 +482,24 @@
 #include <math.h>
 
 #include <gobject/gvaluecollector.h>
+#ifdef HAVE_FONTS
+#include <pango/pangocairo.h>
+#endif
 
 #include "cogl/cogl.h"
 
 #include "clutter/clutter-actor-private.h"
 
+#ifdef HAVE_FONTS
+#include "clutter/pango/clutter-actor-pango.h"
+#include "clutter/pango/clutter-pango-private.h"
+#endif
 #include "clutter/clutter-action.h"
 #include "clutter/clutter-action-private.h"
 #include "clutter/clutter-actor-meta-private.h"
 #include "clutter/clutter-animatable.h"
 #include "clutter/clutter-color-state.h"
+#include "clutter/clutter-context-private.h"
 #include "clutter/clutter-constraint-private.h"
 #include "clutter/clutter-content-private.h"
 #include "clutter/clutter-debug.h"
@@ -549,6 +557,7 @@ struct _ClutterActorPrivate
   /* Accessibility */
   AtkObject *accessible;
   gchar *accessible_name;
+  AtkStateSet *accessible_state;
 
   /* request mode */
   ClutterRequestMode request_mode;
@@ -608,7 +617,9 @@ struct _ClutterActorPrivate
   /* a back-pointer to the Pango context that we can use
    * to create pre-configured PangoLayout
    */
+#ifdef HAVE_FONTS
   PangoContext *pango_context;
+#endif
 
   /* the text direction configured for this child - either by
    * application code, or by the actor's parent
@@ -1421,7 +1432,6 @@ clutter_actor_real_map (ClutterActor *self)
 {
   ClutterActorPrivate *priv = self->priv;
   ClutterActor *iter;
-  AtkObject *accessible;
 
   g_assert (!clutter_actor_is_mapped (self));
 
@@ -1458,11 +1468,8 @@ clutter_actor_real_map (ClutterActor *self)
    */
   g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_MAPPED]);
 
-  accessible = clutter_actor_get_accessible (self);
-  if (accessible && !clutter_actor_is_painting_unmapped (self))
-    atk_object_notify_state_change (accessible,
-                                    ATK_STATE_SHOWING,
-                                    TRUE);
+  if (!clutter_actor_is_painting_unmapped (self))
+    clutter_actor_add_accessible_state (self, ATK_STATE_SHOWING);
 
   for (iter = priv->first_child;
        iter != NULL;
@@ -1563,7 +1570,6 @@ clutter_actor_real_unmap (ClutterActor *self)
 {
   ClutterActorPrivate *priv = self->priv;
   ClutterActor *iter;
-  AtkObject *accessible;
 
   g_assert (clutter_actor_is_mapped (self));
 
@@ -1595,11 +1601,8 @@ clutter_actor_real_unmap (ClutterActor *self)
    */
   g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_MAPPED]);
 
-  accessible = clutter_actor_get_accessible (self);
-  if (accessible && !clutter_actor_is_painting_unmapped (self))
-    atk_object_notify_state_change (accessible,
-                                    ATK_STATE_SHOWING,
-                                    FALSE);
+  if (!clutter_actor_is_painting_unmapped (self))
+    clutter_actor_remove_accessible_state (self, ATK_STATE_SHOWING);
 
   if (priv->n_pointers > 0)
     {
@@ -1734,7 +1737,6 @@ void
 clutter_actor_show (ClutterActor *self)
 {
   ClutterActorPrivate *priv;
-  AtkObject *accessible;
 
   g_return_if_fail (CLUTTER_IS_ACTOR (self));
 
@@ -1772,11 +1774,7 @@ clutter_actor_show (ClutterActor *self)
   g_signal_emit (self, actor_signals[SHOW], 0);
   g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_VISIBLE]);
 
-  accessible = clutter_actor_get_accessible (self);
-  if (accessible)
-    atk_object_notify_state_change (accessible,
-                                    ATK_STATE_VISIBLE,
-                                    TRUE);
+  clutter_actor_add_accessible_state (self, ATK_STATE_VISIBLE);
 
   if (priv->parent != NULL)
     clutter_actor_queue_redraw (self);
@@ -1832,7 +1830,6 @@ void
 clutter_actor_hide (ClutterActor *self)
 {
   ClutterActorPrivate *priv;
-  AtkObject *accessible;
 
   g_return_if_fail (CLUTTER_IS_ACTOR (self));
 
@@ -1870,12 +1867,7 @@ clutter_actor_hide (ClutterActor *self)
   g_signal_emit (self, actor_signals[HIDE], 0);
   g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_VISIBLE]);
 
-  accessible = clutter_actor_get_accessible (self);
-  if (accessible)
-    atk_object_notify_state_change (accessible,
-                                    ATK_STATE_VISIBLE,
-                                    FALSE);
-
+  clutter_actor_remove_accessible_state (self, ATK_STATE_VISIBLE);
 
   if (priv->parent != NULL && priv->needs_allocation)
     clutter_actor_queue_redraw (priv->parent);
@@ -3069,7 +3061,7 @@ _clutter_actor_draw_paint_volume_full (ClutterActor       *self,
 {
   g_autoptr (ClutterPaintNode) pipeline_node = NULL;
   static CoglPipeline *outline = NULL;
-  CoglPrimitive *prim;
+  g_autoptr (CoglPrimitive) prim = NULL;
   graphene_point3d_t line_ends[12 * 2];
   int n_vertices;
   ClutterContext *context = clutter_actor_get_context (self);
@@ -3115,7 +3107,6 @@ _clutter_actor_draw_paint_volume_full (ClutterActor       *self,
                                       "ClutterActor (paint volume outline)");
   clutter_paint_node_add_primitive (pipeline_node, prim);
   clutter_paint_node_add_child (node, pipeline_node);
-  g_object_unref (prim);
 }
 
 static void
@@ -3131,7 +3122,7 @@ _clutter_actor_draw_paint_volume (ClutterActor     *self,
       ClutterPaintVolume fake_pv;
 
       ClutterActor *stage = _clutter_actor_get_stage_internal (self);
-      _clutter_paint_volume_init_static (&fake_pv, stage);
+      clutter_paint_volume_init_from_actor (&fake_pv, stage);
 
       clutter_actor_get_size (self, &width, &height);
       clutter_paint_volume_set_width (&fake_pv, width);
@@ -3140,8 +3131,6 @@ _clutter_actor_draw_paint_volume (ClutterActor     *self,
       _clutter_actor_draw_paint_volume_full (self, &fake_pv,
                                              &COGL_COLOR_INIT (0, 0, 255, 255),
                                              node);
-
-      clutter_paint_volume_free (&fake_pv);
     }
   else
     {
@@ -3262,6 +3251,57 @@ cull_actor (ClutterActor        *self,
   return TRUE;
 }
 
+/* Remove any transitions on properties with @prefix. */
+static void
+_clutter_actor_remove_transitions_for_prefix (ClutterActor *actor,
+                                              const char   *prefix)
+{
+  ClutterAnimationInfo *info;
+
+  info = _clutter_actor_get_animation_info (actor);
+
+  if (info->transitions != NULL)
+    {
+      GHashTableIter iter;
+      gpointer key, value;
+      g_autoptr (GPtrArray) to_remove = g_ptr_array_new_with_free_func (NULL);
+
+      g_hash_table_iter_init (&iter, info->transitions);
+
+      while (g_hash_table_iter_next (&iter, &key, &value))
+        {
+          if (g_str_has_prefix (key, prefix))
+            g_ptr_array_add (to_remove, key);
+        }
+
+      for (unsigned int i = 0; i < to_remove->len; i++)
+        clutter_actor_remove_transition (actor, to_remove->pdata[i]);
+    }
+}
+
+/* Remove any transitions on the properties of @meta.
+ * @section should be "actions", "constraints" or "effects" */
+static void
+_clutter_actor_remove_transitions_for_meta_internal (ClutterActor     *actor,
+                                                     const char       *section,
+                                                     ClutterActorMeta *meta)
+{
+  g_autofree char *meta_prefix =
+      g_strdup_printf ("@%s.%s.", section,
+                       clutter_actor_meta_get_name (meta));
+  _clutter_actor_remove_transitions_for_prefix (actor, meta_prefix);
+}
+
+/* Remove any transitions on the properties of any #ClutterActorMeta in @section.
+ * @section should be "actions", "constraints" or "effects" */
+static void
+_clutter_actor_remove_transitions_for_meta_section_internal (ClutterActor *actor,
+                                                             const char   *section)
+{
+  g_autofree char *meta_prefix = g_strdup_printf ("@%s.", section);
+  _clutter_actor_remove_transitions_for_prefix (actor, meta_prefix);
+}
+
 /* This is the same as clutter_actor_add_effect except that it doesn't
    queue a redraw and it doesn't notify on the effect property */
 static void
@@ -3289,6 +3329,10 @@ _clutter_actor_remove_effect_internal (ClutterActor  *self,
 
   if (priv->effects == NULL)
     return;
+
+  /* Remove any transitions on the effect’s properties. */
+  _clutter_actor_remove_transitions_for_meta_internal (self, "effects",
+                                                       CLUTTER_ACTOR_META (effect));
 
   _clutter_meta_group_remove_meta (priv->effects, CLUTTER_ACTOR_META (effect));
 
@@ -3408,7 +3452,7 @@ clutter_actor_paint_node (ClutterActor        *actor,
       priv->bg_color_set &&
       !cogl_color_equal (&priv->bg_color, &transparent))
     {
-      ClutterPaintNode *node;
+      g_autoptr (ClutterPaintNode) node = NULL;
 
       bg_color.alpha = clutter_actor_get_paint_opacity_internal (actor)
                      * priv->bg_color.alpha
@@ -3418,7 +3462,6 @@ clutter_actor_paint_node (ClutterActor        *actor,
       clutter_paint_node_set_static_name (node, "backgroundColor");
       clutter_paint_node_add_rectangle (node, &box);
       clutter_paint_node_add_child (root, node);
-      clutter_paint_node_unref (node);
     }
 
   if (priv->content != NULL)
@@ -3499,8 +3542,6 @@ clutter_actor_paint (ClutterActor        *self,
     }
 #endif
 
-  clutter_paint_context_push_color_state (paint_context, priv->color_state);
-
   actor_node = clutter_actor_node_new (self, -1);
   root_node = clutter_paint_node_ref (actor_node);
 
@@ -3561,7 +3602,7 @@ clutter_actor_paint (ClutterActor        *self,
 
           if (!graphene_matrix_equal_fast (&transform, &expected_matrix))
             {
-              GString *buf = g_string_sized_new (1024);
+              g_autoptr (GString) buf = g_string_sized_new (1024);
               ClutterActor *parent;
 
               parent = self;
@@ -3581,8 +3622,6 @@ clutter_actor_paint (ClutterActor        *self,
                          "children instead of using ::apply_transform().",
                          _clutter_actor_get_debug_name (self),
                          buf->str);
-
-              g_string_free (buf, TRUE);
             }
         }
 #endif /* CLUTTER_ENABLE_DEBUG */
@@ -3615,7 +3654,7 @@ clutter_actor_paint (ClutterActor        *self,
       if (G_UNLIKELY (clutter_paint_debug_flags & CLUTTER_DEBUG_REDRAWS))
         _clutter_actor_paint_cull_result (self, success, result, actor_node);
       else if (result == CLUTTER_CULL_RESULT_OUT && success)
-        goto out;
+        return;
     }
 
   if (priv->effects == NULL)
@@ -3634,9 +3673,6 @@ clutter_actor_paint (ClutterActor        *self,
    * unless a new redraw was queued up.
    */
   priv->is_dirty = priv->propagated_one_redraw;
-
-out:
-  clutter_paint_context_pop_color_state (paint_context);
 }
 
 /**
@@ -3672,7 +3708,7 @@ clutter_actor_continue_paint (ClutterActor        *self,
   if (priv->next_effect_to_paint == NULL)
     {
       CoglFramebuffer *framebuffer;
-      ClutterPaintNode *dummy;
+      g_autoptr (ClutterPaintNode) dummy = NULL;
 
       /* XXX - this will go away in 2.0, when we can get rid of this
        * stuff and switch to a pure retained render tree of PaintNodes
@@ -3687,7 +3723,6 @@ clutter_actor_continue_paint (ClutterActor        *self,
        * decide whether we should call the paint() vfunc.
        */
       clutter_actor_paint_node (self, dummy, paint_context);
-      clutter_paint_node_unref (dummy);
 
       CLUTTER_ACTOR_GET_CLASS (self)->paint (self, paint_context);
     }
@@ -4141,8 +4176,7 @@ _clutter_actor_get_transform_info_or_defaults (ClutterActor *self)
 static void
 clutter_transform_info_free (gpointer data)
 {
-  if (data != NULL)
-    g_free (data);
+  g_free (data);
 }
 
 /*< private >
@@ -5371,7 +5405,9 @@ clutter_actor_dispose (GObject *object)
 
   g_clear_pointer (&priv->accessible_name, g_free);
 
+#ifdef HAVE_FONTS
   g_clear_object (&priv->pango_context);
+#endif
   g_clear_object (&priv->actions);
   g_clear_object (&priv->color_state);
   g_clear_object (&priv->constraints);
@@ -5403,12 +5439,7 @@ clutter_actor_dispose (GObject *object)
       g_clear_object (&priv->content);
     }
 
-  if (priv->clones != NULL)
-    {
-      g_hash_table_unref (priv->clones);
-      priv->clones = NULL;
-    }
-
+  g_clear_pointer (&priv->clones, g_hash_table_unref);
   g_clear_pointer (&priv->stage_views, g_list_free);
   g_clear_pointer (&priv->next_redraw_clips, g_array_unref);
 
@@ -5429,6 +5460,7 @@ clutter_actor_finalize (GObject *object)
   g_free (priv->name);
 
   g_free (priv->debug_name);
+  g_clear_object (&priv->accessible_state);
 
   G_OBJECT_CLASS (clutter_actor_parent_class)->finalize (object);
 }
@@ -7791,7 +7823,7 @@ clutter_actor_queue_redraw_with_clip (ClutterActor       *self,
       return;
     }
 
-  _clutter_paint_volume_init_static (&volume, self);
+  clutter_paint_volume_init_from_actor (&volume, self);
 
   origin.x = clip->x;
   origin.y = clip->y;
@@ -7802,8 +7834,6 @@ clutter_actor_queue_redraw_with_clip (ClutterActor       *self,
   clutter_paint_volume_set_height (&volume, clip->height);
 
   _clutter_actor_queue_redraw_full (self, &volume, NULL);
-
-  clutter_paint_volume_free (&volume);
 }
 
 /**
@@ -10434,8 +10464,7 @@ clutter_actor_set_name (ClutterActor *self,
 {
   g_return_if_fail (CLUTTER_IS_ACTOR (self));
 
-  g_free (self->priv->name);
-  self->priv->name = g_strdup (name);
+  g_set_str (&self->priv->name, name);
 
   g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_NAME]);
 }
@@ -11887,7 +11916,6 @@ clutter_actor_set_reactive (ClutterActor *actor,
                             gboolean      reactive)
 {
   ClutterActorPrivate *priv;
-  AtkObject *accessible;
 
   g_return_if_fail (CLUTTER_IS_ACTOR (actor));
 
@@ -11903,11 +11931,16 @@ clutter_actor_set_reactive (ClutterActor *actor,
 
   g_object_notify_by_pspec (G_OBJECT (actor), obj_props[PROP_REACTIVE]);
 
-  accessible = clutter_actor_get_accessible (actor);
-  if (accessible)
-    atk_object_notify_state_change (accessible,
-                                    ATK_STATE_SENSITIVE,
-                                    reactive);
+  if (reactive)
+    {
+      clutter_actor_add_accessible_state (actor, ATK_STATE_SENSITIVE);
+      clutter_actor_add_accessible_state (actor, ATK_STATE_ENABLED);
+    }
+  else
+    {
+      clutter_actor_remove_accessible_state (actor, ATK_STATE_SENSITIVE);
+      clutter_actor_remove_accessible_state (actor, ATK_STATE_ENABLED);
+    }
 
   if (!clutter_actor_get_reactive (actor) && priv->n_pointers > 0)
     {
@@ -12021,7 +12054,7 @@ get_layout_from_animation_property (ClutterActor  *actor,
     return FALSE;
 
   tokens = g_strsplit (name, ".", -1);
-  if (tokens == NULL || g_strv_length (tokens) != 2)
+  if (tokens[0] == NULL || tokens[1] == NULL || tokens[2] != NULL)
     {
       CLUTTER_NOTE (ANIMATION, "Invalid property name '%s'",
                     name + 1);
@@ -12029,7 +12062,7 @@ get_layout_from_animation_property (ClutterActor  *actor,
     }
 
   if (name_p != NULL)
-    *name_p = g_strdup (tokens[1]);
+    *name_p = g_steal_pointer (&tokens[1]);
 
   return TRUE;
 }
@@ -12052,7 +12085,7 @@ get_content_from_animation_property (ClutterActor  *actor,
     }
 
   tokens = g_strsplit (name, ".", -1);
-  if (tokens == NULL || g_strv_length (tokens) != 2)
+  if (tokens[0] == NULL || tokens[1] == NULL || tokens[2] != NULL)
     {
       CLUTTER_NOTE (ANIMATION, "Invalid property name '%s'",
                     name + 1);
@@ -12060,7 +12093,7 @@ get_content_from_animation_property (ClutterActor  *actor,
     }
 
   if (name_p != NULL)
-    *name_p = g_strdup (tokens[1]);
+    *name_p = g_steal_pointer (&tokens[1]);
 
   return TRUE;
 }
@@ -12072,7 +12105,7 @@ get_meta_from_animation_property (ClutterActor  *actor,
 {
   ClutterActorPrivate *priv = actor->priv;
   ClutterActorMeta *meta = NULL;
-  gchar **tokens;
+  g_auto (GStrv) tokens = NULL;
 
   /* if this is not a special property, fall through */
   if (name[0] != '@')
@@ -12092,11 +12125,10 @@ get_meta_from_animation_property (ClutterActor  *actor,
    */
 
   tokens = g_strsplit (name + 1, ".", -1);
-  if (tokens == NULL || g_strv_length (tokens) != 3)
+  if (g_strv_length (tokens) != 3)
     {
       CLUTTER_NOTE (ANIMATION, "Invalid property name '%s'",
                     name + 1);
-      g_strfreev (tokens);
       return NULL;
     }
 
@@ -12110,15 +12142,13 @@ get_meta_from_animation_property (ClutterActor  *actor,
     meta = _clutter_meta_group_get_meta (priv->effects, tokens[1]);
 
   if (name_p != NULL)
-    *name_p = g_strdup (tokens[2]);
+    *name_p = g_steal_pointer (&tokens[2]);
 
   CLUTTER_NOTE (ANIMATION,
                 "Looking for property '%s' of object '%s' in section '%s'",
                 tokens[2],
                 tokens[1],
                 tokens[0]);
-
-  g_strfreev (tokens);
 
   return meta;
 }
@@ -12131,7 +12161,7 @@ clutter_actor_find_property (ClutterAnimatable *animatable,
   ClutterActorMeta *meta = NULL;
   GObjectClass *klass = NULL;
   GParamSpec *pspec = NULL;
-  gchar *p_name = NULL;
+  g_autofree char *p_name = NULL;
   gboolean use_content = FALSE;
   gboolean use_layout;
 
@@ -12174,8 +12204,6 @@ clutter_actor_find_property (ClutterAnimatable *animatable,
       pspec = g_object_class_find_property (klass, property_name);
     }
 
-  g_free (p_name);
-
   return pspec;
 }
 
@@ -12186,7 +12214,7 @@ clutter_actor_get_initial_state (ClutterAnimatable *animatable,
 {
   ClutterActor *actor = CLUTTER_ACTOR (animatable);
   ClutterActorMeta *meta = NULL;
-  gchar *p_name = NULL;
+  g_autofree char *p_name = NULL;
   gboolean use_content = FALSE;
   gboolean use_layout;
 
@@ -12212,8 +12240,6 @@ clutter_actor_get_initial_state (ClutterAnimatable *animatable,
     g_object_get_property (G_OBJECT (actor->priv->content), p_name, initial);
   else
     g_object_get_property (G_OBJECT (animatable), property_name, initial);
-
-  g_free (p_name);
 }
 
 /*
@@ -12365,7 +12391,7 @@ clutter_actor_set_final_state (ClutterAnimatable *animatable,
 {
   ClutterActor *actor = CLUTTER_ACTOR (animatable);
   ClutterActorMeta *meta = NULL;
-  gchar *p_name = NULL;
+  g_autofree char *p_name = NULL;
   gboolean use_content = FALSE;
   gboolean use_layout;
 
@@ -12409,8 +12435,6 @@ clutter_actor_set_final_state (ClutterAnimatable *animatable,
     }
 
   clutter_actor_update_devices (actor);
-
-  g_free (p_name);
 }
 
 static ClutterActor *
@@ -13024,16 +13048,16 @@ clutter_actor_grab_key_focus (ClutterActor *self)
     clutter_stage_set_key_focus (CLUTTER_STAGE (stage), self);
 }
 
+#ifdef HAVE_FONTS
 static void
 update_pango_context (ClutterBackend *backend,
                       PangoContext   *context)
 {
   ClutterSettings *settings;
   PangoFontDescription *font_desc;
-  const cairo_font_options_t *font_options;
   ClutterTextDirection dir;
   PangoDirection pango_dir;
-  gchar *font_name;
+  g_autofree char *font_name = NULL;
   gdouble resolution;
 
   settings = clutter_context_get_settings (backend->context);
@@ -13047,7 +13071,6 @@ update_pango_context (ClutterBackend *backend,
   g_object_get (settings, "font-name", &font_name, NULL);
 
   /* get the configuration for the PangoContext from the backend */
-  font_options = clutter_backend_get_font_options (backend);
   resolution = clutter_backend_get_resolution (backend);
 
   font_desc = pango_font_description_from_string (font_name);
@@ -13056,11 +13079,10 @@ update_pango_context (ClutterBackend *backend,
     resolution = 96.0; /* fall back */
 
   pango_context_set_font_description (context, font_desc);
-  pango_cairo_context_set_font_options (context, font_options);
+  pango_cairo_context_set_font_options (context, backend->font_options);
   pango_cairo_context_set_resolution (context, resolution);
 
   pango_font_description_free (font_desc);
-  g_free (font_name);
 }
 
 /**
@@ -13076,7 +13098,7 @@ update_pango_context (ClutterBackend *backend,
  * stored by the #ClutterBackend change.
  *
  * You can use the returned #PangoContext to create a #PangoLayout
- * and render text using cogl_pango_show_layout() to reuse the
+ * and render text using clutter_show_layout() to reuse the
  * glyphs cache also used by Clutter.
  *
  * Return value: (transfer none): the #PangoContext for a #ClutterActor.
@@ -13128,13 +13150,13 @@ clutter_actor_get_pango_context (ClutterActor *self)
 PangoContext *
 clutter_actor_create_pango_context (ClutterActor *self)
 {
-  CoglPangoFontMap *font_map;
+  PangoFontMap *font_map;
   ClutterContext *context = clutter_actor_get_context (self);
   PangoContext *pango_context;
 
   font_map = clutter_context_get_pango_fontmap (context);
 
-  pango_context = cogl_pango_font_map_create_context (font_map);
+  pango_context = pango_font_map_create_context (font_map);
   update_pango_context (clutter_context_get_backend (context), pango_context);
   pango_context_set_language (pango_context, pango_language_get_default ());
 
@@ -13176,6 +13198,7 @@ clutter_actor_create_pango_layout (ClutterActor *self,
 
   return layout;
 }
+#endif
 
 /**
  * clutter_actor_set_opacity_override:
@@ -13557,6 +13580,13 @@ _clutter_actor_set_has_key_focus (ClutterActor *self,
         return;
 
       if (has_key_focus)
+        clutter_actor_add_accessible_state (self,
+                                            ATK_STATE_FOCUSED);
+      else
+        clutter_actor_remove_accessible_state (self,
+                                               ATK_STATE_FOCUSED);
+
+      if (has_key_focus)
         g_signal_emit (self, actor_signals[KEY_FOCUS_IN], 0);
       else
         g_signal_emit (self, actor_signals[KEY_FOCUS_OUT], 0);
@@ -13753,6 +13783,10 @@ clutter_actor_remove_action (ClutterActor  *self,
   if (priv->actions == NULL)
     return;
 
+  /* Remove any transitions on the actions’s properties. */
+  _clutter_actor_remove_transitions_for_meta_internal (self, "actions",
+                                                       CLUTTER_ACTOR_META (action));
+
   _clutter_meta_group_remove_meta (priv->actions, CLUTTER_ACTOR_META (action));
 
   if (_clutter_meta_group_peek_metas (priv->actions) == NULL)
@@ -13787,6 +13821,9 @@ clutter_actor_remove_action_by_name (ClutterActor *self,
   meta = _clutter_meta_group_get_meta (priv->actions, name);
   if (meta == NULL)
     return;
+
+  /* Remove any transitions on the actions’s properties. */
+  _clutter_actor_remove_transitions_for_meta_internal (self, "actions", meta);
 
   _clutter_meta_group_remove_meta (priv->actions, meta);
 
@@ -13854,6 +13891,7 @@ clutter_actor_clear_actions (ClutterActor *self)
   if (self->priv->actions == NULL)
     return;
 
+  _clutter_actor_remove_transitions_for_meta_section_internal (self, "actions");
   _clutter_meta_group_clear_metas_no_internal (self->priv->actions);
 }
 
@@ -13945,6 +13983,10 @@ clutter_actor_remove_constraint (ClutterActor      *self,
   if (priv->constraints == NULL)
     return;
 
+  /* Remove any transitions on the constraint’s properties. */
+  _clutter_actor_remove_transitions_for_meta_internal (self, "constraints",
+                                                       CLUTTER_ACTOR_META (constraint));
+
   _clutter_meta_group_remove_meta (priv->constraints,
                                    CLUTTER_ACTOR_META (constraint));
 
@@ -13982,6 +14024,9 @@ clutter_actor_remove_constraint_by_name (ClutterActor *self,
   meta = _clutter_meta_group_get_meta (priv->constraints, name);
   if (meta == NULL)
     return;
+
+  /* Remove any transitions on the constraint’s properties. */
+  _clutter_actor_remove_transitions_for_meta_internal (self, "constraints", meta);
 
   _clutter_meta_group_remove_meta (priv->constraints, meta);
   clutter_actor_queue_relayout (self);
@@ -14048,6 +14093,7 @@ clutter_actor_clear_constraints (ClutterActor *self)
   if (self->priv->constraints == NULL)
     return;
 
+  _clutter_actor_remove_transitions_for_meta_section_internal (self, "constraints");
   _clutter_meta_group_clear_metas_no_internal (self->priv->constraints);
 
   clutter_actor_queue_relayout (self);
@@ -14273,6 +14319,7 @@ clutter_actor_clear_effects (ClutterActor *self)
   if (self->priv->effects == NULL)
     return;
 
+  _clutter_actor_remove_transitions_for_meta_section_internal (self, "effects");
   _clutter_meta_group_clear_metas_no_internal (self->priv->effects);
 
   clutter_actor_queue_redraw (self);
@@ -14310,11 +14357,10 @@ _clutter_actor_get_paint_volume_real (ClutterActor *self,
       return FALSE;
     }
 
-  _clutter_paint_volume_init_static (pv, self);
+  clutter_paint_volume_init_from_actor (pv, self);
 
   if (!CLUTTER_ACTOR_GET_CLASS (self)->get_paint_volume (self, pv))
     {
-      clutter_paint_volume_free (pv);
       CLUTTER_NOTE (CLIPPING, "Bail from get_paint_volume (%s): "
                     "Actor failed to report a volume",
                     _clutter_actor_get_debug_name (self));
@@ -14340,7 +14386,6 @@ _clutter_actor_get_paint_volume_real (ClutterActor *self,
             {
               if (!_clutter_effect_modify_paint_volume (l->data, pv))
                 {
-                  clutter_paint_volume_free (pv);
                   CLUTTER_NOTE (CLIPPING, "Bail from get_paint_volume (%s): "
                                 "Effect (%s) failed to report a volume",
                                 _clutter_actor_get_debug_name (self),
@@ -14358,7 +14403,6 @@ _clutter_actor_get_paint_volume_real (ClutterActor *self,
           for (l = effects; l != NULL; l = l->next)
             if (!_clutter_effect_modify_paint_volume (l->data, pv))
               {
-                clutter_paint_volume_free (pv);
                 CLUTTER_NOTE (CLIPPING, "Bail from get_paint_volume (%s): "
                               "Effect (%s) failed to report a volume",
                               _clutter_actor_get_debug_name (self),
@@ -14430,10 +14474,6 @@ ensure_paint_volume (ClutterActor *self)
   if (priv->needs_paint_volume_update)
     {
       priv->had_effects_on_last_paint_volume_update = has_paint_volume_override_effects;
-
-      if (priv->has_paint_volume)
-        clutter_paint_volume_free (&priv->paint_volume);
-
       priv->has_paint_volume = FALSE;
 
       if (_clutter_actor_get_paint_volume_real (self, &priv->paint_volume))
@@ -14903,8 +14943,8 @@ clutter_actor_finish_layout (ClutterActor *self,
 
       if (priv->has_paint_volume)
         {
-          _clutter_paint_volume_copy_static (&priv->paint_volume,
-                                             &priv->visible_paint_volume);
+          clutter_paint_volume_init_from_paint_volume (&priv->visible_paint_volume,
+                                                       &priv->paint_volume);
           _clutter_paint_volume_transform_relative (&priv->visible_paint_volume,
                                                     NULL); /* eye coordinates */
         }
@@ -15486,8 +15526,7 @@ static const ClutterLayoutInfo default_layout_info = {
 static void
 layout_info_free (gpointer data)
 {
-  if (G_LIKELY (data != NULL))
-    g_free (data);
+  g_free (data);
 }
 
 /*< private >
@@ -16320,15 +16359,10 @@ clutter_animation_info_free (gpointer data)
 {
   if (data != NULL)
     {
-      ClutterAnimationInfo *info = data;
+      g_autofree ClutterAnimationInfo *info = data;
 
-      if (info->transitions != NULL)
-        g_hash_table_unref (info->transitions);
-
-      if (info->states != NULL)
-        g_array_unref (info->states);
-
-      g_free (info);
+      g_clear_pointer (&info->transitions, g_hash_table_unref);
+      g_clear_pointer (&info->states, g_array_unref);
     }
 }
 
@@ -16404,7 +16438,7 @@ on_transition_stopped (ClutterTransition *transition,
   ClutterActor *actor = clos->actor;
   ClutterAnimationInfo *info;
   GQuark t_quark;
-  gchar *t_name;
+  g_autofree char *t_name = NULL;
 
   if (clos->name == NULL)
     return;
@@ -16439,13 +16473,10 @@ on_transition_stopped (ClutterTransition *transition,
                  t_name,
                  is_finished);
 
-  g_free (t_name);
-
   /* if it's the last transition then we clean up */
   if (g_hash_table_size (info->transitions) == 0)
     {
-      g_hash_table_unref (info->transitions);
-      info->transitions = NULL;
+      g_clear_pointer (&info->transitions, g_hash_table_unref);
 
       CLUTTER_NOTE (ANIMATION, "Transitions for '%s' completed",
                     _clutter_actor_get_debug_name (actor));
@@ -16565,7 +16596,7 @@ _clutter_actor_create_transition (ClutterActor *actor,
   g_auto (GValue) initial = G_VALUE_INIT;
   g_auto (GValue) final = G_VALUE_INIT;
   GType ptype;
-  char *error;
+  g_autofree char *error = NULL;
 
   g_assert (pspec != NULL);
   g_assert ((pspec->flags & CLUTTER_PARAM_ANIMATABLE) != 0);
@@ -16602,7 +16633,6 @@ _clutter_actor_create_transition (ClutterActor *actor,
   if (error != NULL)
     {
       g_critical ("%s: %s", G_STRLOC, error);
-      g_free (error);
       goto out;
     }
 
@@ -16612,7 +16642,6 @@ _clutter_actor_create_transition (ClutterActor *actor,
   if (error != NULL)
     {
       g_critical ("%s: %s", G_STRLOC, error);
-      g_free (error);
       goto out;
     }
 
@@ -16654,7 +16683,8 @@ _clutter_actor_create_transition (ClutterActor *actor,
 #ifdef CLUTTER_ENABLE_DEBUG
       if (CLUTTER_HAS_DEBUG (ANIMATION))
         {
-          gchar *initial_v, *final_v;
+          g_autofree char *initial_v = NULL;
+          g_autofree char *final_v = NULL;
 
           initial_v = g_strdup_value_contents (&initial);
           final_v = g_strdup_value_contents (&final);
@@ -16669,9 +16699,6 @@ _clutter_actor_create_transition (ClutterActor *actor,
                         clutter_get_easing_name_for_mode (info->cur_state->easing_mode),
                         info->cur_state->easing_delay,
                         initial_v, final_v);
-
-          g_free (initial_v);
-          g_free (final_v);
         }
 #endif /* CLUTTER_ENABLE_DEBUG */
 
@@ -16769,7 +16796,7 @@ clutter_actor_remove_transition (ClutterActor *self,
   TransitionClosure *clos;
   gboolean was_playing;
   GQuark t_quark;
-  gchar *t_name;
+  g_autofree char *t_name = NULL;
 
   g_return_if_fail (CLUTTER_IS_ACTOR (self));
   g_return_if_fail (name != NULL);
@@ -16809,8 +16836,6 @@ clutter_actor_remove_transition (ClutterActor *self,
                      t_name,
                      FALSE);
     }
-
-  g_free (t_name);
 }
 
 /**
@@ -17127,8 +17152,7 @@ clutter_actor_restore_easing_state (ClutterActor *self)
     info->cur_state = &g_array_index (info->states, AState, info->states->len - 1);
   else
     {
-      g_array_unref (info->states);
-      info->states = NULL;
+      g_clear_pointer (&info->states, g_array_unref);
       info->cur_state = NULL;
     }
 }
@@ -18092,10 +18116,7 @@ _clutter_actor_detach_clone (ClutterActor *actor,
   g_hash_table_remove (priv->clones, clone);
 
   if (g_hash_table_size (priv->clones) == 0)
-    {
-      g_hash_table_unref (priv->clones);
-      priv->clones = NULL;
-    }
+    g_clear_pointer (&priv->clones, g_hash_table_unref);
 
   g_signal_emit (actor, actor_signals[DECLONED], 0, clone);
 }
@@ -18191,8 +18212,9 @@ clutter_actor_child_model__items_changed (GListModel *model,
 
   for (i = 0; i < added; i++)
     {
-      GObject *item = g_list_model_get_item (model, position + i);
-      ClutterActor *child = priv->create_child_func (item, priv->create_child_data);
+      g_autoptr (GObject) item = g_list_model_get_item (model, position + i);
+      g_autoptr (ClutterActor) child = priv->create_child_func (
+        item, priv->create_child_data);
 
       /* The actor returned by the function can have a floating reference,
        * if the implementation is in pure C, or have a full reference, usually
@@ -18205,9 +18227,6 @@ clutter_actor_child_model__items_changed (GListModel *model,
         g_object_ref_sink (child);
 
       clutter_actor_insert_child_at_index (parent, child, position + i);
-
-      g_object_unref (child);
-      g_object_unref (item);
     }
 }
 
@@ -18510,8 +18529,7 @@ clutter_actor_set_accessible (ClutterActor *self,
         {
           g_object_remove_weak_pointer (G_OBJECT (self),
                                         (gpointer *)&priv->accessible);
-          g_object_unref (priv->accessible);
-          priv->accessible = NULL;
+          g_clear_object (&priv->accessible);
         }
 
       if (accessible)
@@ -18754,11 +18772,8 @@ clutter_actor_set_accessible_name (ClutterActor *self,
   if (g_strcmp0 (name, priv->accessible_name) == 0)
     return;
 
-  if (priv->accessible_name != NULL)
-    g_free (priv->accessible_name);
-
   accessible = clutter_actor_get_accessible (self);
-  priv->accessible_name = g_strdup (name);
+  g_set_str (&priv->accessible_name, name);
 
   if (accessible)
     g_object_notify (G_OBJECT (accessible), "accessible-name");
@@ -18852,4 +18867,85 @@ clutter_actor_get_accessible_role (ClutterActor *self)
     role = atk_object_get_role (accessible);
 
   return role;
+}
+
+AtkStateSet *
+clutter_actor_get_accessible_state (ClutterActor *actor)
+{
+  ClutterActorPrivate *priv;
+
+  g_return_val_if_fail (CLUTTER_IS_ACTOR (actor), NULL);
+
+  priv = clutter_actor_get_instance_private (actor);
+
+  return priv->accessible_state;
+}
+
+/**
+ * clutter_actor_add_accessible_state:
+ * @actor: A #ClutterActor
+ * @state: #AtkStateType state to add
+ *
+ * This method adds @state as one of the accessible states for
+ * @actor. The list of states of an actor describes the current state
+ * of user interface element @actor and is provided so that assistive
+ * technologies know how to present @actor to the user.
+ *
+ * Usually you will have no need to add accessible states for an
+ * object, as the accessible object can extract most of the states
+ * from the object itself.
+ * This method is only required when one cannot extract the
+ * information automatically from the object itself (i.e.: a generic
+ * container used as a toggle menu item will not automatically include
+ * the toggled state).
+ */
+void
+clutter_actor_add_accessible_state (ClutterActor *actor,
+                                    AtkStateType  state)
+{
+  ClutterActorPrivate *priv;
+  AtkObject *accessible;
+
+  g_return_if_fail (CLUTTER_IS_ACTOR (actor));
+
+  priv = clutter_actor_get_instance_private (actor);
+  accessible = clutter_actor_get_accessible (actor);
+
+  if (G_UNLIKELY (priv->accessible_state == NULL))
+    {
+      priv->accessible_state = atk_state_set_new ();
+      /* Actors are all focusable until we merge focus management from St */
+      atk_state_set_add_state (priv->accessible_state, ATK_STATE_FOCUSABLE);
+    }
+
+  if (atk_state_set_add_state (priv->accessible_state, state) && accessible)
+    atk_object_notify_state_change (accessible, state, TRUE);
+}
+
+/**
+ * clutter_actor_remove_accessible_state:
+ * @actor: A #ClutterActor
+ * @state: #AtkState state to remove
+ *
+ * This method removes @state as on of the accessible states for
+ * @actor. See [method@Clutter.Actor.add_accessible_state] for more information.
+ *
+ */
+void
+clutter_actor_remove_accessible_state (ClutterActor *actor,
+                                       AtkStateType  state)
+{
+  ClutterActorPrivate *priv;
+  AtkObject *accessible;
+
+  g_return_if_fail (CLUTTER_IS_ACTOR (actor));
+
+  priv = clutter_actor_get_instance_private (actor);
+  accessible = clutter_actor_get_accessible (actor);
+
+  if (G_UNLIKELY (priv->accessible_state == NULL))
+    return;
+
+  if (atk_state_set_remove_state (priv->accessible_state, state) && accessible)
+    atk_object_notify_state_change (accessible, state, FALSE);
 }

@@ -32,7 +32,8 @@ meta_test_screen_cast_record_virtual (void)
   g_autoptr (GSubprocess) subprocess = NULL;
 
   meta_add_verbose_topic (META_DEBUG_SCREEN_CAST);
-  subprocess = meta_launch_test_executable ("mutter-screen-cast-client",
+  subprocess = meta_launch_test_executable (G_SUBPROCESS_FLAGS_NONE,
+                                            "mutter-screen-cast-client",
                                             NULL);
   meta_wait_test_process (subprocess);
   meta_remove_verbose_topic (META_DEBUG_SCREEN_CAST);
@@ -53,7 +54,7 @@ main (int    argc,
 
   context = meta_create_test_context (META_CONTEXT_TEST_TYPE_HEADLESS,
                                       META_CONTEXT_TEST_FLAG_NO_X11);
-  g_assert (meta_context_configure (context, &argc, &argv, NULL));
+  g_assert_true (meta_context_configure (context, &argc, &argv, NULL));
 
   init_tests ();
 

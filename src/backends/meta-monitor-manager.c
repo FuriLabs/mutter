@@ -1288,6 +1288,10 @@ on_started (MetaContext        *context,
                          G_CALLBACK (meta_monitor_manager_reconfigure),
                          monitor_manager, NULL,
                          G_CONNECT_SWAPPED | G_CONNECT_AFTER);
+  g_signal_connect_data (debug_control, "notify::force-hdr",
+                         G_CALLBACK (meta_monitor_manager_reconfigure),
+                         monitor_manager, NULL,
+                         G_CONNECT_SWAPPED | G_CONNECT_AFTER);
   g_signal_connect_data (debug_control, "notify::force-linear-blending",
                          G_CALLBACK (meta_monitor_manager_reconfigure),
                          monitor_manager, NULL,
@@ -1961,15 +1965,13 @@ meta_monitor_manager_get_display_configuration_timeout (MetaMonitorManager *mana
   return DEFAULT_DISPLAY_CONFIGURATION_TIMEOUT;
 }
 
-static gboolean
+static void
 save_config_timeout (gpointer user_data)
 {
   MetaMonitorManager *manager = user_data;
 
   restore_previous_config (manager);
   manager->persistent_timeout_id = 0;
-
-  return G_SOURCE_REMOVE;
 }
 
 static void
@@ -1978,9 +1980,9 @@ request_persistent_confirmation (MetaMonitorManager *manager)
   int timeout_s;
 
   timeout_s = meta_monitor_manager_get_display_configuration_timeout (manager);
-  manager->persistent_timeout_id = g_timeout_add_seconds (timeout_s,
-                                                          save_config_timeout,
-                                                          manager);
+  manager->persistent_timeout_id = g_timeout_add_seconds_once (timeout_s,
+                                                               save_config_timeout,
+                                                               manager);
   g_source_set_name_by_id (manager->persistent_timeout_id,
                            "[mutter] save_config_timeout");
 
@@ -1999,6 +2001,23 @@ request_persistent_confirmation (MetaMonitorManager *manager)
 #define LOGICAL_MONITOR_MONITORS_FORMAT "a" MONITOR_SPEC_FORMAT
 #define LOGICAL_MONITOR_FORMAT "(iidub" LOGICAL_MONITOR_MONITORS_FORMAT "a{sv})"
 #define LOGICAL_MONITORS_FORMAT "a" LOGICAL_MONITOR_FORMAT
+
+static GVariant *
+generate_color_modes_variant (MetaMonitor *monitor)
+{
+  GVariantBuilder builder;
+  GList *l;
+
+  g_variant_builder_init (&builder, G_VARIANT_TYPE ("au"));
+  for (l = meta_monitor_get_supported_color_modes (monitor); l; l = l->next)
+    {
+      MetaColorMode color_mode = GPOINTER_TO_INT (l->data);
+
+      g_variant_builder_add (&builder, "u", color_mode);
+    }
+
+  return g_variant_builder_end (&builder);
+}
 
 static gboolean
 meta_monitor_manager_handle_get_current_state (MetaDBusDisplayConfig *skeleton,
@@ -2030,6 +2049,8 @@ meta_monitor_manager_handle_get_current_state (MetaDBusDisplayConfig *skeleton,
       GVariantBuilder monitor_properties_builder;
       GList *k;
       gboolean is_builtin;
+      gboolean is_for_lease;
+      MetaColorMode color_mode;
       const char *display_name;
 
       current_mode = meta_monitor_get_current_mode (monitor);
@@ -2150,6 +2171,20 @@ meta_monitor_manager_handle_get_current_state (MetaDBusDisplayConfig *skeleton,
                                  "min-refresh-rate",
                                  g_variant_new_int32 (min_refresh_rate));
         }
+
+      is_for_lease = meta_monitor_is_for_lease (monitor);
+      g_variant_builder_add (&monitor_properties_builder, "{sv}",
+                             "is-for-lease",
+                             g_variant_new_boolean (is_for_lease));
+
+      color_mode = meta_monitor_get_color_mode (monitor);
+      g_variant_builder_add (&monitor_properties_builder, "{sv}",
+                             "color-mode",
+                             g_variant_new_uint32 (color_mode));
+
+      g_variant_builder_add (&monitor_properties_builder, "{sv}",
+                             "supported-color-modes",
+                             generate_color_modes_variant (monitor));
 
       g_variant_builder_add (&monitors_builder, MONITOR_FORMAT,
                              monitor_spec->connector,
@@ -2442,6 +2477,8 @@ create_monitor_config_from_variant (MetaMonitorManager *manager,
   g_autoptr (GVariant) properties_variant = NULL;
   gboolean enable_underscanning = FALSE;
   gboolean set_underscanning = FALSE;
+  MetaColorMode color_mode = META_COLOR_MODE_DEFAULT;
+  uint32_t color_mode_value;
 
   g_variant_get (monitor_config_variant, "(ss@a{sv})",
                  &connector,
@@ -2477,6 +2514,10 @@ create_monitor_config_from_variant (MetaMonitorManager *manager,
         }
     }
 
+  if (g_variant_lookup (properties_variant, "color-mode", "u",
+                        &color_mode_value))
+    color_mode = color_mode_value;
+
   monitor_spec = meta_monitor_spec_clone (meta_monitor_get_spec (monitor));
 
   monitor_mode_spec = g_new0 (MetaMonitorModeSpec, 1);
@@ -2486,7 +2527,8 @@ create_monitor_config_from_variant (MetaMonitorManager *manager,
   *monitor_config = (MetaMonitorConfig) {
     .monitor_spec = monitor_spec,
     .mode_spec = monitor_mode_spec,
-    .enable_underscanning = enable_underscanning
+    .enable_underscanning = enable_underscanning,
+    .color_mode = color_mode,
   };
 
   return monitor_config;
@@ -2705,6 +2747,74 @@ is_valid_layout_mode (MetaLogicalMonitorLayoutMode layout_mode)
   return FALSE;
 }
 
+static GList *
+create_disabled_monitor_specs_for_config (MetaMonitorManager *monitor_manager,
+                                          GList              *logical_monitor_configs)
+{
+  GList *disabled_monitor_specs = NULL;
+  GList *monitors;
+  GList *l;
+
+  monitors = meta_monitor_manager_get_monitors (monitor_manager);
+  for (l = monitors; l; l = l->next)
+    {
+      MetaMonitor *monitor = l->data;
+
+      if (!meta_logical_monitor_configs_have_visible_monitor (monitor_manager,
+                                                              logical_monitor_configs,
+                                                              monitor))
+        {
+          MetaMonitorSpec *monitor_spec = meta_monitor_get_spec (monitor);
+
+          disabled_monitor_specs =
+            g_list_prepend (disabled_monitor_specs,
+                            meta_monitor_spec_clone (monitor_spec));
+        }
+    }
+
+  return disabled_monitor_specs;
+}
+
+static GList *
+create_for_lease_monitor_specs_from_variant (GVariant *properties_variant)
+{
+  GList *for_lease_monitor_specs = NULL;
+  g_autoptr (GVariant) for_lease_variant = NULL;
+  GVariantIter iter;
+  char *connector = NULL;
+  char *vendor = NULL;
+  char *product = NULL;
+  char *serial = NULL;
+
+  if (!properties_variant)
+    return NULL;
+
+  for_lease_variant = g_variant_lookup_value (properties_variant,
+                                              "monitors-for-lease",
+                                              G_VARIANT_TYPE ("a(ssss)"));
+  if (!for_lease_variant)
+    return NULL;
+
+  g_variant_iter_init (&iter, for_lease_variant);
+  while (g_variant_iter_next (&iter, "(ssss)", &connector, &vendor, &product, &serial))
+    {
+      MetaMonitorSpec *monitor_spec;
+
+      monitor_spec = g_new0 (MetaMonitorSpec, 1);
+      *monitor_spec = (MetaMonitorSpec) {
+        .connector = connector,
+        .vendor = vendor,
+        .product = product,
+        .serial = serial
+      };
+
+      for_lease_monitor_specs =
+        g_list_append (for_lease_monitor_specs, monitor_spec);
+    }
+
+  return for_lease_monitor_specs;
+}
+
 static gboolean
 meta_monitor_manager_handle_apply_monitors_config (MetaDBusDisplayConfig *skeleton,
                                                    GDBusMethodInvocation *invocation,
@@ -2722,6 +2832,8 @@ meta_monitor_manager_handle_apply_monitors_config (MetaDBusDisplayConfig *skelet
   GVariantIter logical_monitor_configs_iter;
   MetaMonitorsConfig *config;
   GList *logical_monitor_configs = NULL;
+  GList *disabled_monitor_specs = NULL;
+  GList *for_lease_monitor_specs = NULL;
   GError *error = NULL;
 
   if (serial != manager->serial)
@@ -2810,10 +2922,17 @@ meta_monitor_manager_handle_apply_monitors_config (MetaDBusDisplayConfig *skelet
                                                logical_monitor_config);
     }
 
-  config = meta_monitors_config_new (manager,
-                                     logical_monitor_configs,
-                                     layout_mode,
-                                     META_MONITORS_CONFIG_FLAG_NONE);
+  disabled_monitor_specs =
+    create_disabled_monitor_specs_for_config (manager,
+                                              logical_monitor_configs);
+  for_lease_monitor_specs =
+    create_for_lease_monitor_specs_from_variant (properties_variant);
+
+  config = meta_monitors_config_new_full (logical_monitor_configs,
+                                          disabled_monitor_specs,
+                                          for_lease_monitor_specs,
+                                          layout_mode,
+                                          META_MONITORS_CONFIG_FLAG_NONE);
   if (!meta_verify_monitors_config (config, manager, &error))
     {
       g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR,
@@ -3822,6 +3941,46 @@ meta_monitor_manager_update_logical_state (MetaMonitorManager *manager,
   meta_monitor_manager_rebuild_logical_monitors (manager, config);
 }
 
+static gboolean
+is_monitor_configured_for_lease (MetaMonitor        *monitor,
+                                 MetaMonitorsConfig *config)
+{
+  MetaMonitorSpec *monitor_spec;
+  GList *l;
+
+  monitor_spec = meta_monitor_get_spec (monitor);
+
+  for (l = config->for_lease_monitor_specs; l; l = l->next)
+    {
+      MetaMonitorSpec *spec = l->data;
+
+      if (meta_monitor_spec_equals (monitor_spec, spec))
+        return TRUE;
+    }
+
+  return FALSE;
+}
+
+void
+meta_monitor_manager_update_for_lease_state (MetaMonitorManager *manager,
+                                             MetaMonitorsConfig *config)
+{
+  GList *l;
+
+  for (l = manager->monitors; l; l = l->next)
+    {
+      MetaMonitor *monitor = l->data;
+      gboolean is_for_lease;
+
+      if (config)
+        is_for_lease = is_monitor_configured_for_lease (monitor, config);
+      else
+        is_for_lease = FALSE;
+
+      meta_monitor_set_for_lease (monitor, is_for_lease);
+    }
+}
+
 void
 meta_monitor_manager_rebuild (MetaMonitorManager *manager,
                               MetaMonitorsConfig *config)
@@ -3836,6 +3995,7 @@ meta_monitor_manager_rebuild (MetaMonitorManager *manager,
   old_logical_monitors = manager->logical_monitors;
 
   meta_monitor_manager_update_logical_state (manager, config);
+  meta_monitor_manager_update_for_lease_state (manager, config);
 
   ensure_privacy_screen_settings (manager);
 

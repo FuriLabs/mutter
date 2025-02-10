@@ -40,10 +40,6 @@ void meta_bug        (const char *format,
                       ...) G_GNUC_PRINTF (1, 2);
 
 META_EXPORT
-void meta_warning    (const char *format,
-                      ...) G_GNUC_PRINTF (1, 2);
-
-META_EXPORT
 void meta_fatal      (const char *format,
                       ...) G_GNUC_PRINTF (1, 2) G_GNUC_NORETURN G_ANALYZER_NORETURN;
 
@@ -92,21 +88,6 @@ char* meta_external_binding_name_for_action (guint keybinding_action);
 
 META_EXPORT
 char* meta_g_utf8_strndup (const gchar *src, gsize n);
-
-META_EXPORT
-void meta_add_clutter_debug_flags (ClutterDebugFlag     debug_flags,
-                                   ClutterDrawDebugFlag draw_flags,
-                                   ClutterPickDebugFlag pick_flags);
-
-META_EXPORT
-void meta_remove_clutter_debug_flags (ClutterDebugFlag     debug_flags,
-                                      ClutterDrawDebugFlag draw_flags,
-                                      ClutterPickDebugFlag pick_flags);
-
-META_EXPORT
-void meta_get_clutter_debug_flags (ClutterDebugFlag     *debug_flags,
-                                   ClutterDrawDebugFlag *draw_flags,
-                                   ClutterPickDebugFlag *pick_flags);
 
 META_EXPORT
 void meta_add_debug_paint_flag (MetaDebugPaintFlag flag);

@@ -77,11 +77,10 @@ _cogl_texture_pixmap_x11_get_winsys (CoglTexturePixmapX11 *tex_pixmap)
 static int
 _cogl_xlib_get_damage_base (CoglContext *ctx)
 {
-  CoglX11Renderer *x11_renderer;
+  CoglXlibRenderer *xlib_renderer =
+    _cogl_xlib_renderer_get_data (ctx->display->renderer);
 
-  x11_renderer =
-    (CoglX11Renderer *) _cogl_xlib_renderer_get_data (ctx->display->renderer);
-  return x11_renderer->damage_base;
+  return xlib_renderer->damage_base;
 }
 
 static void
@@ -794,38 +793,29 @@ _cogl_texture_pixmap_x11_get_data (CoglTexture *tex,
   return cogl_texture_get_data (child_tex, format, rowstride, data);
 }
 
-static int
-_cogl_texture_pixmap_x11_get_max_waste (CoglTexture *tex)
-{
-  CoglTexturePixmapX11 *tex_pixmap = COGL_TEXTURE_PIXMAP_X11 (tex);
-  CoglTexture *child_tex = _cogl_texture_pixmap_x11_get_texture (tex_pixmap);
-
-  return COGL_TEXTURE_GET_CLASS (child_tex)->get_max_waste (child_tex);
-}
-
 static void
 _cogl_texture_pixmap_x11_foreach_sub_texture_in_region
-                                  (CoglTexture              *tex,
-                                   float                     virtual_tx_1,
-                                   float                     virtual_ty_1,
-                                   float                     virtual_tx_2,
-                                   float                     virtual_ty_2,
-                                   CoglMetaTextureCallback   callback,
-                                   void                     *user_data)
+                                  (CoglTexture                *tex,
+                                   float                       virtual_tx_1,
+                                   float                       virtual_ty_1,
+                                   float                       virtual_tx_2,
+                                   float                       virtual_ty_2,
+                                   CoglTextureForeachCallback  callback,
+                                   void                       *user_data)
 {
   CoglTexturePixmapX11 *tex_pixmap = COGL_TEXTURE_PIXMAP_X11 (tex);
   CoglTexture *child_tex = _cogl_texture_pixmap_x11_get_texture (tex_pixmap);
 
   /* Forward on to the child texture */
-  cogl_meta_texture_foreach_in_region (child_tex,
-                                       virtual_tx_1,
-                                       virtual_ty_1,
-                                       virtual_tx_2,
-                                       virtual_ty_2,
-                                       COGL_PIPELINE_WRAP_MODE_REPEAT,
-                                       COGL_PIPELINE_WRAP_MODE_REPEAT,
-                                       callback,
-                                       user_data);
+  cogl_texture_foreach_in_region (child_tex,
+                                  virtual_tx_1,
+                                  virtual_ty_1,
+                                  virtual_tx_2,
+                                  virtual_ty_2,
+                                  COGL_PIPELINE_WRAP_MODE_REPEAT,
+                                  COGL_PIPELINE_WRAP_MODE_REPEAT,
+                                  callback,
+                                  user_data);
 }
 
 static gboolean
@@ -966,7 +956,6 @@ cogl_texture_pixmap_x11_class_init (CoglTexturePixmapX11Class *klass)
   texture_class->allocate = _cogl_texture_pixmap_x11_allocate;
   texture_class->set_region = _cogl_texture_pixmap_x11_set_region;
   texture_class->get_data = _cogl_texture_pixmap_x11_get_data;
-  texture_class->get_max_waste = _cogl_texture_pixmap_x11_get_max_waste;
   texture_class->foreach_sub_texture_in_region = _cogl_texture_pixmap_x11_foreach_sub_texture_in_region;
   texture_class->is_sliced = _cogl_texture_pixmap_x11_is_sliced;
   texture_class->can_hardware_repeat = _cogl_texture_pixmap_x11_can_hardware_repeat;
@@ -984,9 +973,6 @@ cogl_texture_pixmap_x11_class_init (CoglTexturePixmapX11Class *klass)
 static void
 cogl_texture_pixmap_x11_init (CoglTexturePixmapX11 *self)
 {
-  CoglTexture *texture = COGL_TEXTURE (self);
-
-  texture->is_primitive = FALSE;
 }
 
 uint32_t

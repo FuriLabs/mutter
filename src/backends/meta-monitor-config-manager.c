@@ -290,6 +290,7 @@ assign_monitor_crtc (MetaMonitor         *monitor,
     .has_max_bpc = data->monitor_config->has_max_bpc,
     .max_bpc = data->monitor_config->max_bpc,
     .rgb_range = data->monitor_config->rgb_range,
+    .color_mode = data->monitor_config->color_mode,
   };
 
   g_ptr_array_add (data->crtc_assignments, crtc_assignment);
@@ -658,7 +659,8 @@ find_primary_monitor (MetaMonitorManager *monitor_manager,
 
 static MetaMonitorConfig *
 create_monitor_config (MetaMonitor     *monitor,
-                       MetaMonitorMode *mode)
+                       MetaMonitorMode *mode,
+                       MetaColorMode    color_mode)
 {
   MetaMonitorSpec *monitor_spec;
   MetaMonitorModeSpec *mode_spec;
@@ -673,6 +675,7 @@ create_monitor_config (MetaMonitor     *monitor,
     .mode_spec = g_memdup2 (mode_spec, sizeof (MetaMonitorModeSpec)),
     .enable_underscanning = meta_monitor_is_underscanning (monitor),
     .rgb_range = meta_monitor_get_rgb_range (monitor),
+    .color_mode = color_mode,
   };
 
   monitor_config->has_max_bpc =
@@ -724,12 +727,13 @@ scale_logical_monitor_width (MetaLogicalMonitorLayoutMode  layout_mode,
 }
 
 static MetaLogicalMonitorConfig *
-create_preferred_logical_monitor_config (MetaMonitorManager          *monitor_manager,
-                                         MetaMonitor                 *monitor,
-                                         int                          x,
-                                         int                          y,
-                                         float                        scale,
-                                         MetaLogicalMonitorLayoutMode layout_mode)
+create_preferred_logical_monitor_config (MetaMonitorManager           *monitor_manager,
+                                         MetaMonitor                  *monitor,
+                                         int                           x,
+                                         int                           y,
+                                         float                         scale,
+                                         MetaColorMode                 color_mode,
+                                         MetaLogicalMonitorLayoutMode  layout_mode)
 {
   MetaMonitorMode *mode;
   int width, height;
@@ -742,7 +746,7 @@ create_preferred_logical_monitor_config (MetaMonitorManager          *monitor_ma
   scale_logical_monitor_width (layout_mode, scale,
                                width, height, &width, &height);
 
-  monitor_config = create_monitor_config (monitor, mode);
+  monitor_config = create_monitor_config (monitor, mode, color_mode);
 
   transform = get_monitor_transform (monitor_manager, monitor);
   if (mtk_monitor_transform_is_rotated (transform))
@@ -769,9 +773,9 @@ create_preferred_logical_monitor_config (MetaMonitorManager          *monitor_ma
 }
 
 static MetaLogicalMonitorConfig *
-find_monitor_config (MetaMonitorsConfig *config,
-                     MetaMonitor        *monitor,
-                     MetaMonitorMode    *monitor_mode)
+find_logical_monitor_config (MetaMonitorsConfig *config,
+                             MetaMonitor        *monitor,
+                             MetaMonitorMode    *monitor_mode)
 {
   int mode_width, mode_height;
   GList *l;
@@ -792,7 +796,7 @@ find_monitor_config (MetaMonitorsConfig *config,
             meta_monitor_mode_get_spec (monitor_mode);
 
           if (meta_monitor_spec_equals (meta_monitor_get_spec (monitor),
-                                         monitor_config->monitor_spec) &&
+                                        monitor_config->monitor_spec) &&
               meta_monitor_mode_spec_has_similar_size (mode_spec,
                                                        monitor_config->mode_spec))
             return logical_monitor_config;
@@ -800,6 +804,46 @@ find_monitor_config (MetaMonitorsConfig *config,
     }
 
   return NULL;
+}
+
+static MetaMonitorConfig *
+find_monitor_config (MetaMonitorsConfig *config,
+                     MetaMonitor        *monitor)
+{
+  GList *l;
+
+  for (l = config->logical_monitor_configs; l; l = l->next)
+    {
+      MetaLogicalMonitorConfig *logical_monitor_config = l->data;
+      GList *l_monitor;
+
+      for (l_monitor = logical_monitor_config->monitor_configs;
+           l_monitor;
+           l_monitor = l_monitor->next)
+        {
+          MetaMonitorConfig *monitor_config = l_monitor->data;
+
+          if (meta_monitor_spec_equals (meta_monitor_get_spec (monitor),
+                                        monitor_config->monitor_spec))
+            return monitor_config;
+        }
+    }
+
+  return NULL;
+}
+
+static GList *
+get_relevant_configs (MetaMonitorConfigManager *config_manager)
+{
+  GList *configs = NULL;
+
+  if (config_manager->current_config)
+    configs = g_list_append (configs, config_manager->current_config);
+
+  configs = g_list_concat (configs,
+                           g_list_copy (config_manager->config_history.head));
+
+  return configs;
 }
 
 static gboolean
@@ -811,19 +855,16 @@ get_last_scale_for_monitor (MetaMonitorConfigManager *config_manager,
   g_autoptr (GList) configs = NULL;
   GList *l;
 
-  if (config_manager->current_config)
-    configs = g_list_append (configs, config_manager->current_config);
-
-  configs = g_list_concat (configs,
-                           g_list_copy (config_manager->config_history.head));
+  configs = get_relevant_configs (config_manager);
 
   for (l = configs; l; l = l->next)
     {
       MetaMonitorsConfig *config = l->data;
       MetaLogicalMonitorConfig *logical_monitor_config;
 
-      logical_monitor_config = find_monitor_config (config,
-                                                    monitor, monitor_mode);
+      logical_monitor_config = find_logical_monitor_config (config,
+                                                            monitor,
+                                                            monitor_mode);
       if (logical_monitor_config)
         {
           *out_scale = logical_monitor_config->scale;
@@ -862,6 +903,32 @@ compute_scale_for_monitor (MetaMonitorConfigManager *config_manager,
                                                             layout_mode,
                                                             target_monitor,
                                                             monitor_mode);
+}
+
+static gboolean
+get_last_color_mode_for_monitor (MetaMonitorConfigManager *config_manager,
+                                 MetaMonitor              *monitor,
+                                 MetaColorMode            *out_color_mode)
+{
+  g_autoptr (GList) configs = NULL;
+  GList *l;
+
+  configs = get_relevant_configs (config_manager);
+
+  for (l = configs; l; l = l->next)
+    {
+      MetaMonitorsConfig *config = l->data;
+      MetaMonitorConfig *monitor_config;
+
+      monitor_config = find_monitor_config (config, monitor);
+      if (monitor_config)
+        {
+          *out_color_mode = monitor_config->color_mode;
+          return TRUE;
+        }
+    }
+
+  return FALSE;
 }
 
 typedef enum _MonitorPositioningMode
@@ -942,6 +1009,7 @@ create_monitors_config (MetaMonitorConfigManager *config_manager,
       MetaMonitor *monitor = l->data;
       MetaLogicalMonitorConfig *logical_monitor_config;
       gboolean has_suggested_position;
+      MetaColorMode color_mode;
 
       switch (positioning)
         {
@@ -956,10 +1024,15 @@ create_monitors_config (MetaMonitorConfigManager *config_manager,
 
       scale = compute_scale_for_monitor (config_manager, monitor,
                                          primary_monitor);
+      if (!get_last_color_mode_for_monitor (config_manager, monitor,
+                                            &color_mode))
+        color_mode = META_COLOR_MODE_DEFAULT;
+
       logical_monitor_config =
         create_preferred_logical_monitor_config (monitor_manager,
                                                  monitor,
                                                  x, y, scale,
+                                                 color_mode,
                                                  layout_mode);
       logical_monitor_config->is_primary = (monitor == primary_monitor);
       logical_monitor_configs = g_list_append (logical_monitor_configs,
@@ -1251,6 +1324,7 @@ create_for_switch_config_all_mirror (MetaMonitorConfigManager *config_manager)
     {
       MetaMonitor *other_monitor = l->data;
       MetaMonitorMode *mode = NULL;
+      MetaColorMode color_mode;
       GList *ll;
       float scale;
 
@@ -1271,7 +1345,16 @@ create_for_switch_config_all_mirror (MetaMonitorConfigManager *config_manager)
       scale = compute_scale_for_monitor (config_manager, other_monitor,
                                          primary_monitor);
       best_scale = MAX (best_scale, scale);
-      monitor_configs = g_list_prepend (monitor_configs, create_monitor_config (other_monitor, mode));
+
+      if (!get_last_color_mode_for_monitor (config_manager, monitor,
+                                            &color_mode))
+        color_mode = META_COLOR_MODE_DEFAULT;
+
+      monitor_configs =
+        g_list_prepend (monitor_configs,
+                        create_monitor_config (other_monitor,
+                                               mode,
+                                               color_mode));
     }
 
   scale_logical_monitor_width (layout_mode, best_scale,
@@ -1495,6 +1578,8 @@ meta_monitors_config_key_new (GList                        *logical_monitor_conf
         }
     }
 
+  /* Monitors for lease must be disabled (see meta_verify_monitors_config ()).
+     Therefore, there is no need to include them here. */
   for (l = disabled_monitor_specs; l; l = l->next)
     {
       MetaMonitorSpec *monitor_spec = l->data;
@@ -1598,6 +1683,7 @@ meta_monitors_config_set_parent_config (MetaMonitorsConfig *config,
 MetaMonitorsConfig *
 meta_monitors_config_new_full (GList                        *logical_monitor_configs,
                                GList                        *disabled_monitor_specs,
+                               GList                        *for_lease_monitor_specs,
                                MetaLogicalMonitorLayoutMode  layout_mode,
                                MetaMonitorsConfigFlag        flags)
 {
@@ -1606,6 +1692,7 @@ meta_monitors_config_new_full (GList                        *logical_monitor_con
   config = g_object_new (META_TYPE_MONITORS_CONFIG, NULL);
   config->logical_monitor_configs = logical_monitor_configs;
   config->disabled_monitor_specs = disabled_monitor_specs;
+  config->for_lease_monitor_specs = for_lease_monitor_specs;
   config->layout_mode = layout_mode;
   config->key = meta_monitors_config_key_new (logical_monitor_configs,
                                               disabled_monitor_specs,
@@ -1624,6 +1711,7 @@ meta_monitors_config_new (MetaMonitorManager           *monitor_manager,
                           MetaMonitorsConfigFlag        flags)
 {
   GList *disabled_monitor_specs = NULL;
+  GList *for_lease_monitor_specs = NULL;
   GList *monitors;
   GList *l;
 
@@ -1633,22 +1721,28 @@ meta_monitors_config_new (MetaMonitorManager           *monitor_manager,
       MetaMonitor *monitor = l->data;
       MetaMonitorSpec *monitor_spec;
 
-      if (!monitor_matches_rule (monitor, monitor_manager,
-                                 MONITOR_MATCH_VISIBLE))
+      if (meta_logical_monitor_configs_have_visible_monitor (monitor_manager,
+                                                             logical_monitor_configs,
+                                                             monitor))
         continue;
 
       monitor_spec = meta_monitor_get_spec (monitor);
-      if (meta_logical_monitor_configs_have_monitor (logical_monitor_configs,
-                                                     monitor_spec))
-        continue;
 
       disabled_monitor_specs =
         g_list_prepend (disabled_monitor_specs,
                         meta_monitor_spec_clone (monitor_spec));
+
+      if (meta_monitor_is_for_lease (monitor))
+        {
+          for_lease_monitor_specs =
+            g_list_prepend (for_lease_monitor_specs,
+                            meta_monitor_spec_clone (monitor_spec));
+        }
     }
 
   return meta_monitors_config_new_full (logical_monitor_configs,
                                         disabled_monitor_specs,
+                                        for_lease_monitor_specs,
                                         layout_mode,
                                         flags);
 }
@@ -1663,6 +1757,8 @@ meta_monitors_config_finalize (GObject *object)
   g_list_free_full (config->logical_monitor_configs,
                     (GDestroyNotify) meta_logical_monitor_config_free);
   g_list_free_full (config->disabled_monitor_specs,
+                    (GDestroyNotify) meta_monitor_spec_free);
+  g_list_free_full (config->for_lease_monitor_specs,
                     (GDestroyNotify) meta_monitor_spec_free);
 
   G_OBJECT_CLASS (meta_monitors_config_parent_class)->finalize (object);
@@ -1874,6 +1970,22 @@ meta_logical_monitor_configs_have_monitor (GList           *logical_monitor_conf
   return FALSE;
 }
 
+gboolean
+meta_logical_monitor_configs_have_visible_monitor (MetaMonitorManager *monitor_manager,
+                                                   GList              *logical_monitor_configs,
+                                                   MetaMonitor        *monitor)
+{
+  MetaMonitorSpec *monitor_spec;
+
+  if (!monitor_matches_rule (monitor, monitor_manager, MONITOR_MATCH_VISIBLE))
+    return TRUE;
+
+  monitor_spec = meta_monitor_get_spec (monitor);
+
+  return meta_logical_monitor_configs_have_monitor (logical_monitor_configs,
+                                                    monitor_spec);
+}
+
 static gboolean
 meta_monitors_config_is_monitor_enabled (MetaMonitorsConfig *config,
                                          MetaMonitorSpec    *monitor_spec)
@@ -1903,6 +2015,22 @@ meta_verify_monitors_config (MetaMonitorsConfig *config,
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "Assigned monitor explicitly disabled");
+          return FALSE;
+        }
+    }
+
+  for (l = config->for_lease_monitor_specs; l; l = l->next)
+    {
+      MetaMonitorSpec *monitor_spec = l->data;
+      gpointer disabled = NULL;
+
+      disabled = g_list_find_custom (config->disabled_monitor_specs,
+                                     monitor_spec,
+                                     (GCompareFunc) meta_monitor_spec_compare);
+      if (!disabled)
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "For lease monitor must be explicitly disabled");
           return FALSE;
         }
     }

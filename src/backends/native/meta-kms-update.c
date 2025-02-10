@@ -624,20 +624,22 @@ meta_kms_update_set_custom_page_flip (MetaKmsUpdate             *update,
 
 void
 meta_kms_plane_assignment_set_fb_damage (MetaKmsPlaneAssignment *plane_assignment,
-                                         const int              *rectangles,
-                                         int                     n_rectangles)
+                                         const MtkRegion        *region)
 {
   MetaKmsFbDamage *fb_damage;
   struct drm_mode_rect *mode_rects;
+  int n_rectangles;
   int i;
 
+  n_rectangles = mtk_region_num_rectangles (region);
   mode_rects = g_new0 (struct drm_mode_rect, n_rectangles);
   for (i = 0; i < n_rectangles; ++i)
     {
-      mode_rects[i].x1 = rectangles[i * 4];
-      mode_rects[i].y1 = rectangles[i * 4 + 1];
-      mode_rects[i].x2 = mode_rects[i].x1 + rectangles[i * 4 + 2];
-      mode_rects[i].y2 = mode_rects[i].y1 + rectangles[i * 4 + 3];
+      mtk_region_get_box (region, i,
+                          &mode_rects[i].x1,
+                          &mode_rects[i].y1,
+                          &mode_rects[i].x2,
+                          &mode_rects[i].y2);
     }
 
   fb_damage = g_new0 (MetaKmsFbDamage, 1);

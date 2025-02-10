@@ -115,7 +115,7 @@ meta_screen_cast_get_preferred_modifier (MetaScreenCast  *screen_cast,
         break;
 
       stride = meta_drm_buffer_get_stride (dmabuf);
-      offset = meta_drm_buffer_get_offset (dmabuf, 0);
+      offset = meta_drm_buffer_get_offset_for_plane (dmabuf, 0);
 
       dmabuf_fd = meta_drm_buffer_export_fd (dmabuf, &error);
       if (dmabuf_fd == -1)
@@ -125,24 +125,26 @@ meta_screen_cast_get_preferred_modifier (MetaScreenCast  *screen_cast,
         {
           *preferred_modifier = DRM_FORMAT_MOD_INVALID;
           fb = meta_renderer_native_create_dma_buf_framebuffer (renderer_native,
-                                                                dmabuf_fd,
                                                                 width, height,
-                                                                stride,
-                                                                offset,
-                                                                NULL,
                                                                 format_info->drm_format,
+                                                                1,
+                                                                &dmabuf_fd,
+                                                                &stride,
+                                                                &offset,
+                                                                NULL,
                                                                 &error);
         }
       else
         {
           *preferred_modifier = meta_drm_buffer_get_modifier (dmabuf);
           fb = meta_renderer_native_create_dma_buf_framebuffer (renderer_native,
-                                                                dmabuf_fd,
                                                                 width, height,
-                                                                stride,
-                                                                offset,
-                                                                preferred_modifier,
                                                                 format_info->drm_format,
+                                                                1,
+                                                                &dmabuf_fd,
+                                                                &stride,
+                                                                &offset,
+                                                                preferred_modifier,
                                                                 &error);
         }
       close (dmabuf_fd);
@@ -177,7 +179,6 @@ GArray *
 meta_screen_cast_query_modifiers (MetaScreenCast  *screen_cast,
                                   CoglPixelFormat  format)
 {
-#ifdef HAVE_NATIVE_BACKEND
   MetaBackend *backend =
     meta_screen_cast_get_backend (screen_cast);
   ClutterBackend *clutter_backend =
@@ -186,85 +187,30 @@ meta_screen_cast_query_modifiers (MetaScreenCast  *screen_cast,
     clutter_backend_get_cogl_context (clutter_backend);
   CoglRenderer *cogl_renderer =
     cogl_context_get_renderer (cogl_context);
-  EGLDisplay egl_display =
-    cogl_context_get_egl_display (cogl_context);
-  MetaEgl *egl =
-    meta_backend_get_egl (backend);
-  EGLint num_modifiers;
-  g_autofree EGLuint64KHR *all_modifiers = NULL;
-  g_autofree EGLBoolean *external_only = NULL;
   g_autoptr (GError) error = NULL;
-  GArray *modifiers = NULL;
-  gboolean ret;
-  const MetaFormatInfo *format_info;
+  GArray *modifiers;
   uint64_t modifier;
-  int i;
 
   if (!cogl_renderer_is_dma_buf_supported (cogl_renderer))
     return g_array_new (FALSE, FALSE, sizeof (uint64_t));
 
-  format_info = meta_format_info_from_cogl_format (format);
-  g_assert (format_info);
-
-  // TODO: query cogl_renderer for modifiers
-  ret = meta_egl_query_dma_buf_modifiers (egl,
-                                          egl_display,
-                                          format_info->drm_format,
-                                          0,
-                                          NULL,
-                                          NULL,
-                                          &num_modifiers,
-                                          &error);
-  if (!ret || num_modifiers == 0)
-    {
-      if (error)
-        g_warning ("Failed to query DMA-BUF modifiers: %s", error->message);
-      goto add_implicit_modifier;
-    }
-
-  all_modifiers = g_new (uint64_t, num_modifiers);
-  external_only = g_new (EGLBoolean, num_modifiers);
-
-  ret = meta_egl_query_dma_buf_modifiers (egl,
-                                          egl_display,
-                                          format_info->drm_format,
-                                          num_modifiers,
-                                          all_modifiers,
-                                          external_only,
-                                          &num_modifiers,
-                                          &error);
-  if (!ret)
-    {
-      g_warning ("Failed to query DMA-BUF modifiers: %s", error->message);
-      goto add_implicit_modifier;
-    }
-
-  modifiers = g_array_sized_new (FALSE, FALSE, sizeof (uint64_t),
-                                 num_modifiers + 1);
-
-  for (i = 0; i < num_modifiers; i++)
-    {
-      if (!external_only[i])
-        {
-          modifier = all_modifiers[i];
-          g_array_append_vals (modifiers, &modifier, 1);
-        }
-    }
-
-add_implicit_modifier:
+  modifiers =
+    cogl_renderer_query_drm_modifiers (cogl_renderer,
+                                       format,
+                                       COGL_DRM_MODIFIER_FILTER_SINGLE_PLANE |
+                                       COGL_DRM_MODIFIER_FILTER_NOT_EXTERNAL_ONLY,
+                                       &error);
   if (!modifiers)
     {
-      g_warning ("Couldn't retrieve the supported modifiers");
+      meta_topic (META_DEBUG_SCREEN_CAST,
+                  "Failed to query drm buffer modifiers: %s", error->message);
       modifiers = g_array_new (FALSE, FALSE, sizeof (uint64_t));
     }
 
-  modifier = DRM_FORMAT_MOD_INVALID;
-  g_array_append_vals (modifiers, &modifier, 1);
+  modifier = cogl_renderer_get_implicit_drm_modifier (cogl_renderer);
+  g_array_append_val (modifiers, modifier);
 
   return modifiers;
-#else
-  return g_array_new (FALSE, FALSE, sizeof (uint64_t));
-#endif
 }
 
 CoglDmaBufHandle *
@@ -274,7 +220,6 @@ meta_screen_cast_create_dma_buf_handle (MetaScreenCast  *screen_cast,
                                         int              width,
                                         int              height)
 {
-#ifdef HAVE_NATIVE_BACKEND
   MetaBackend *backend =
     meta_screen_cast_get_backend (screen_cast);
   ClutterBackend *clutter_backend =
@@ -286,8 +231,12 @@ meta_screen_cast_create_dma_buf_handle (MetaScreenCast  *screen_cast,
   CoglDmaBufHandle *dmabuf_handle;
   int n_modifiers;
 
-  n_modifiers = (modifier == DRM_FORMAT_MOD_INVALID) ? 0
-                                                     : 1;
+  g_return_val_if_fail (cogl_renderer_is_dma_buf_supported (cogl_renderer), NULL);
+
+  if (cogl_renderer_is_implicit_drm_modifier (cogl_renderer, modifier))
+    n_modifiers = 0;
+  else
+    n_modifiers = 1;
 
   dmabuf_handle = cogl_renderer_create_dma_buf (cogl_renderer,
                                                 format,
@@ -295,9 +244,6 @@ meta_screen_cast_create_dma_buf_handle (MetaScreenCast  *screen_cast,
                                                 width, height,
                                                 &error);
   return dmabuf_handle;
-#else
-  return NULL;
-#endif
 }
 
 static MetaRemoteDesktopSession *

@@ -129,7 +129,7 @@ check_monitor_mode (MetaMonitor         *monitor,
 
   output = output_from_winsys_id (backend,
                                   data->expect_crtc_mode_iter->output);
-  g_assert (monitor_crtc_mode->output == output);
+  g_assert_true (monitor_crtc_mode->output == output);
 
   expect_crtc_mode_index = data->expect_crtc_mode_iter->crtc_mode;
   if (expect_crtc_mode_index == -1)
@@ -143,7 +143,7 @@ check_monitor_mode (MetaMonitor         *monitor,
       crtc_mode = g_list_nth_data (meta_gpu_get_modes (gpu),
                                    expect_crtc_mode_index);
     }
-  g_assert (monitor_crtc_mode->crtc_mode == crtc_mode);
+  g_assert_true (monitor_crtc_mode->crtc_mode == crtc_mode);
 
   if (crtc_mode)
     {
@@ -198,7 +198,7 @@ check_current_monitor_mode (MetaMonitor         *monitor,
       crtc_config = meta_crtc_get_config (crtc);
       g_assert_nonnull (crtc_config);
 
-      g_assert (monitor_crtc_mode->crtc_mode == crtc_config->mode);
+      g_assert_true (monitor_crtc_mode->crtc_mode == crtc_config->mode);
 
       logical_monitor = meta_monitor_get_logical_monitor (monitor);
       g_assert_nonnull (logical_monitor);
@@ -238,6 +238,12 @@ check_logical_monitor (MetaMonitorManager             *monitor_manager,
   GList *l;
   int i;
 
+  g_debug ("Checking logical monitor with layout %dx%d+%d+%d",
+           test_logical_monitor->layout.width,
+           test_logical_monitor->layout.height,
+           test_logical_monitor->layout.x,
+           test_logical_monitor->layout.y);
+
   logical_monitor = logical_monitor_from_layout (monitor_manager,
                                                  &test_logical_monitor->layout);
   g_assert_nonnull (logical_monitor);
@@ -262,7 +268,7 @@ check_logical_monitor (MetaMonitorManager             *monitor_manager,
                     test_logical_monitor->transform);
 
   if (logical_monitor == monitor_manager->primary_logical_monitor)
-    g_assert (meta_logical_monitor_is_primary (logical_monitor));
+    g_assert_true (meta_logical_monitor_is_primary (logical_monitor));
 
   primary_output = NULL;
   monitors = meta_logical_monitor_get_monitors (logical_monitor);
@@ -291,7 +297,7 @@ check_logical_monitor (MetaMonitorManager             *monitor_manager,
           MetaOutput *output = l_output->data;
           MetaCrtc *crtc;
 
-          g_assert (meta_output_get_monitor (output) == monitor);
+          g_assert_true (meta_output_get_monitor (output) == monitor);
 
           if (meta_output_is_primary (output))
             {
@@ -302,10 +308,10 @@ check_logical_monitor (MetaMonitorManager             *monitor_manager,
           crtc = meta_output_get_assigned_crtc (output);
           if (crtc)
             {
-              g_assert (meta_monitor_get_logical_monitor (monitor) ==
-                        logical_monitor);
-              g_assert (g_list_find ((GList *) meta_crtc_get_outputs (crtc),
-                                     output));
+              g_assert_true (meta_monitor_get_logical_monitor (monitor) ==
+                             logical_monitor);
+              g_assert_true (g_list_find ((GList *) meta_crtc_get_outputs (crtc),
+                                          output));
               *all_crtcs = g_list_remove (*all_crtcs, crtc);
             }
           else
@@ -394,7 +400,7 @@ meta_check_monitor_configuration (MetaContext           *context,
           unsigned int output_max_bpc;
           MetaOutputRGBRange rgb_range = META_OUTPUT_RGB_RANGE_AUTO;
 
-          g_assert (output == output_from_winsys_id (backend, winsys_id));
+          g_assert_true (output == output_from_winsys_id (backend, winsys_id));
           g_assert_cmpint (expect->monitors[i].is_underscanning,
                            ==,
                            meta_output_is_underscanning (output));
@@ -487,11 +493,11 @@ meta_check_monitor_configuration (MetaContext           *context,
         expected_current_mode = g_list_nth (modes,
                                             expected_current_mode_index)->data;
 
-      g_assert (current_mode == expected_current_mode);
+      g_assert_true (current_mode == expected_current_mode);
       if (current_mode)
-        g_assert (meta_monitor_is_active (monitor));
+        g_assert_true (meta_monitor_is_active (monitor));
       else
-        g_assert (!meta_monitor_is_active (monitor));
+        g_assert_false (meta_monitor_is_active (monitor));
 
       if (current_mode)
         {
@@ -509,7 +515,7 @@ meta_check_monitor_configuration (MetaContext           *context,
         }
 
       meta_monitor_derive_current_mode (monitor);
-      g_assert (current_mode == meta_monitor_get_current_mode (monitor));
+      g_assert_true (current_mode == meta_monitor_get_current_mode (monitor));
     }
 
   n_logical_monitors =
@@ -538,7 +544,7 @@ meta_check_monitor_configuration (MetaContext           *context,
       logical_monitor =
         logical_monitor_from_layout (monitor_manager,
                                      &test_logical_monitor->layout);
-      g_assert (logical_monitor == monitor_manager->primary_logical_monitor);
+      g_assert_true (logical_monitor == monitor_manager->primary_logical_monitor);
     }
 
   all_crtcs = NULL;
@@ -597,7 +603,7 @@ meta_check_monitor_configuration (MetaContext           *context,
               g_debug ("Checking CRTC Output %d",
                        g_list_index ((GList *) outputs, output));
 
-              g_assert (meta_output_get_assigned_crtc (output) == crtc);
+              g_assert_true (meta_output_get_assigned_crtc (output) == crtc);
               g_assert_null (g_list_find (l_output->next, output));
             }
 
@@ -606,7 +612,7 @@ meta_check_monitor_configuration (MetaContext           *context,
           expected_current_mode =
             g_list_nth_data (meta_gpu_get_modes (gpu),
                              expect->crtcs[i].current_mode);
-          g_assert (crtc_config->mode == expected_current_mode);
+          g_assert_true (crtc_config->mode == expected_current_mode);
 
           g_assert_cmpuint (crtc_config->transform,
                             ==,
@@ -791,6 +797,10 @@ meta_create_monitor_test_setup (MetaBackend          *backend,
                                          (uint8_t *) &setup->outputs[i].edid_info,
                                          sizeof (setup->outputs[i].edid_info));
         }
+      output_info->supported_color_spaces =
+        setup->outputs[i].supported_color_spaces;
+      output_info->supported_hdr_eotfs =
+        setup->outputs[i].supported_hdr_eotfs;
 
       output = g_object_new (META_TYPE_OUTPUT_TEST,
                              "id", (uint64_t) i,

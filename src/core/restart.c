@@ -79,9 +79,9 @@ restart_helper_read_line_callback (GObject      *source_object,
                                                           &length, &error);
   if (line == NULL)
     {
-      meta_warning ("Failed to read output from restart helper%s%s",
-                    error ? ": " : NULL,
-                    error ? error->message : NULL);
+      g_warning ("Failed to read output from restart helper%s%s",
+                 error ? ": " : NULL,
+                 error ? error->message : NULL);
     }
   else
     g_free (line); /* We don't actually care what the restart helper outputs */
@@ -120,11 +120,11 @@ child_setup (gpointer user_data)
  * Starts the process of restarting the compositor.
  *
  * Note that Mutter's involvement here is to make the restart
- * visually smooth for the user - it cannot itself safely 
+ * visually smooth for the user - it cannot itself safely
  * reexec a program that embeds libmuttter.
  *
  * So in order for this to work, the compositor must handle two
- * signals 
+ * signals
  *
  * - [signal@Meta.Display::show-restart-message], to display the
  * message passed here on the Clutter stage
@@ -151,9 +151,9 @@ meta_restart (const char  *message,
   if (message && meta_display_show_restart_message (display, message))
     {
       /* Wait until the stage was painted */
-      clutter_threads_add_repaint_func_full (CLUTTER_REPAINT_FLAGS_POST_PAINT,
-                                             restart_message_painted,
-                                             context, NULL);
+      clutter_threads_add_repaint_func (CLUTTER_REPAINT_FLAGS_POST_PAINT,
+                                        restart_message_painted,
+                                        context, NULL);
     }
   else
     {
@@ -177,7 +177,7 @@ meta_restart (const char  *message,
                                  NULL, /* standard_error */
                                  &error))
     {
-      meta_warning ("Failed to start restart helper: %s", error->message);
+      g_warning ("Failed to start restart helper: %s", error->message);
       goto error;
     }
 

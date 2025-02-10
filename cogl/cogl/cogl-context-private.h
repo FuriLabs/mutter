@@ -40,7 +40,7 @@
 #include "cogl/cogl-buffer-private.h"
 #include "cogl/cogl-bitmask.h"
 #include "cogl/cogl-atlas.h"
-#include "cogl/cogl-driver.h"
+#include "cogl/cogl-driver-private.h"
 #include "cogl/cogl-texture-driver.h"
 #include "cogl/cogl-pipeline-cache.h"
 #include "cogl/cogl-texture-2d.h"
@@ -69,13 +69,10 @@ struct _CoglContext
 
   CoglDisplay *display;
 
-  CoglDriver driver;
+  CoglDriverId driver_id;
 
-  /* vtables for the driver functions */
-  const CoglDriverVtable *driver_vtable;
-  const CoglTextureDriver *texture_driver;
-
-  void *driver_context;
+  CoglDriver *driver;
+  CoglTextureDriver *texture_driver;
 
   int glsl_major;
   int glsl_minor;

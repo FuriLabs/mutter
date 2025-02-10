@@ -409,7 +409,15 @@ initialize_viewports (MetaRemoteDesktopSession *session)
         {
           MetaScreenCastStream *stream = META_SCREEN_CAST_STREAM (l->data);
 
-          meta_eis_add_viewport (session->eis, META_EIS_VIEWPORT (stream));
+          if (meta_screen_cast_stream_is_configured (stream))
+            {
+              meta_eis_add_viewport (session->eis, META_EIS_VIEWPORT (stream));
+            }
+          else
+            {
+              g_signal_connect (stream, "notify::is-configured",
+                                G_CALLBACK (on_stream_is_configured), session);
+            }
         }
 
       g_signal_connect (session->screen_cast_session,
@@ -1409,7 +1417,7 @@ meta_remote_desktop_session_cancel_transfer_requests (MetaRemoteDesktopSession *
                                session);
 }
 
-static gboolean
+static void
 transfer_request_cleanup_timeout (gpointer user_data)
 {
   MetaRemoteDesktopSession *session = user_data;
@@ -1423,7 +1431,6 @@ transfer_request_cleanup_timeout (gpointer user_data)
   meta_remote_desktop_session_cancel_transfer_requests (session);
 
   session->transfer_request_timeout_id = 0;
-  return G_SOURCE_REMOVE;
 }
 
 static void
@@ -1558,9 +1565,9 @@ reset_transfer_cleanup_timeout (MetaRemoteDesktopSession *session)
 {
   g_clear_handle_id (&session->transfer_request_timeout_id, g_source_remove);
   session->transfer_request_timeout_id =
-    g_timeout_add (TRANSFER_REQUEST_CLEANUP_TIMEOUT_MS,
-                   transfer_request_cleanup_timeout,
-                   session);
+    g_timeout_add_once (TRANSFER_REQUEST_CLEANUP_TIMEOUT_MS,
+                        transfer_request_cleanup_timeout,
+                        session);
 }
 
 void
@@ -1911,6 +1918,12 @@ device_types_to_eis_device_types (MetaRemoteDesktopDeviceTypes device_types)
     eis_device_types |= META_EIS_DEVICE_TYPE_TOUCHSCREEN;
 
   return eis_device_types;
+}
+
+MetaEis *
+meta_remote_desktop_session_get_eis (MetaRemoteDesktopSession *session)
+{
+  return session->eis;
 }
 
 static gboolean

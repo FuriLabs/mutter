@@ -150,6 +150,15 @@ typedef struct _MetaScreenCastStreamSrcPrivate
   GHashTable *modifiers;
 } MetaScreenCastStreamSrcPrivate;
 
+static void meta_screen_cast_stream_src_init_initable_iface (GInitableIface *iface);
+
+G_DEFINE_TYPE_WITH_CODE (MetaScreenCastStreamSrc,
+                         meta_screen_cast_stream_src,
+                         G_TYPE_OBJECT,
+                         G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
+                                                meta_screen_cast_stream_src_init_initable_iface)
+                         G_ADD_PRIVATE (MetaScreenCastStreamSrc))
+
 static const struct {
   CoglPixelFormat cogl_format;
   enum spa_video_format spa_video_format;
@@ -281,16 +290,6 @@ push_format_object (enum spa_video_format  format,
   return spa_pod_builder_pop (&pod_builder.b, &pod_frame);
 }
 
-static void
-meta_screen_cast_stream_src_init_initable_iface (GInitableIface *iface);
-
-G_DEFINE_TYPE_WITH_CODE (MetaScreenCastStreamSrc,
-                         meta_screen_cast_stream_src,
-                         G_TYPE_OBJECT,
-                         G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
-                                                meta_screen_cast_stream_src_init_initable_iface)
-                         G_ADD_PRIVATE (MetaScreenCastStreamSrc))
-
 static gboolean
 meta_screen_cast_stream_src_get_specs (MetaScreenCastStreamSrc *src,
                                        int                     *width,
@@ -389,7 +388,7 @@ draw_cursor_sprite_via_offscreen (MetaScreenCastStreamSrc  *src,
 
   bitmap_texture = cogl_texture_2d_new_with_size (cogl_context,
                                                   bitmap_width, bitmap_height);
-  cogl_texture_set_auto_mipmap (bitmap_texture, FALSE);
+  cogl_texture_2d_set_auto_mipmap (COGL_TEXTURE_2D (bitmap_texture), FALSE);
   if (!cogl_texture_allocate (bitmap_texture, error))
     {
       g_object_unref (bitmap_texture);
@@ -693,7 +692,7 @@ meta_screen_cast_stream_src_calculate_stride (MetaScreenCastStreamSrc *src,
       dmabuf_handle = g_hash_table_lookup (priv->dmabuf_handles,
                                            GINT_TO_POINTER (spa_data->fd));
       g_assert (dmabuf_handle != NULL);
-      return cogl_dma_buf_handle_get_stride (dmabuf_handle);
+      return cogl_dma_buf_handle_get_stride (dmabuf_handle, 0);
     }
 
   if (!cogl_pixel_format_from_spa_video_format (priv->video_format.format,
@@ -821,7 +820,7 @@ meta_screen_cast_stream_src_pending_follow_up_frame (MetaScreenCastStreamSrc *sr
   return priv->follow_up_frame_source_id != 0;
 }
 
-static gboolean
+static void
 follow_up_frame_cb (gpointer user_data)
 {
   MetaScreenCastStreamSrc *src = user_data;
@@ -830,8 +829,6 @@ follow_up_frame_cb (gpointer user_data)
 
   priv->follow_up_frame_source_id = 0;
   meta_screen_cast_stream_src_record_follow_up (src);
-
-  return G_SOURCE_REMOVE;
 }
 
 static void
@@ -844,9 +841,9 @@ maybe_schedule_follow_up_frame (MetaScreenCastStreamSrc *src,
   if (priv->follow_up_frame_source_id)
     return;
 
-  priv->follow_up_frame_source_id = g_timeout_add (us2ms (timeout_us),
-                                                   follow_up_frame_cb,
-                                                   src);
+  priv->follow_up_frame_source_id = g_timeout_add_once (us2ms (timeout_us),
+                                                        follow_up_frame_cb,
+                                                        src);
 }
 
 static void
@@ -1759,7 +1756,7 @@ on_stream_add_buffer (void             *data,
 
       spa_data->type = SPA_DATA_DmaBuf;
       spa_data->flags = SPA_DATA_FLAG_READWRITE;
-      spa_data->fd = cogl_dma_buf_handle_get_fd (dmabuf_handle);
+      spa_data->fd = cogl_dma_buf_handle_get_fd (dmabuf_handle, 0);
 
       g_hash_table_insert (priv->dmabuf_handles,
                            GINT_TO_POINTER (spa_data->fd),

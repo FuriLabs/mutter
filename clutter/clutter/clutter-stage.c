@@ -41,6 +41,10 @@
 
 #include "clutter/clutter-stage.h"
 
+#ifdef HAVE_FONTS
+#include "clutter/pango/clutter-actor-pango.h"
+#include "clutter/pango/clutter-text-node.h"
+#endif
 #include "clutter/clutter-stage-accessible-private.h"
 #include "clutter/clutter-action-private.h"
 #include "clutter/clutter-actor-private.h"
@@ -161,6 +165,7 @@ enum
   PREPARE_FRAME,
   BEFORE_PAINT,
   AFTER_PAINT,
+  SKIPPED_PAINT,
   AFTER_UPDATE,
   PAINT_VIEW,
   PRESENTED,
@@ -402,6 +407,7 @@ clutter_stage_do_paint_view (ClutterStage     *stage,
   MtkRectangle clip_rect;
   g_autoptr (GArray) clip_frusta = NULL;
   graphene_frustum_t clip_frustum;
+  ClutterColorState *color_state;
   ClutterPaintNode *root_node;
   CoglFramebuffer *fb;
   CoglColor bg_color;
@@ -452,16 +458,16 @@ clutter_stage_do_paint_view (ClutterStage     *stage,
   bg_color.alpha = 255;
 
   fb = clutter_stage_view_get_framebuffer (view);
+  color_state = clutter_actor_get_color_state (CLUTTER_ACTOR (stage));
 
-  clutter_paint_context_push_color_state (paint_context,
-                                          clutter_actor_get_color_state (CLUTTER_ACTOR (stage)));
+  root_node = clutter_root_node_new (fb,
+                                     color_state,
+                                     &bg_color,
+                                     COGL_BUFFER_BIT_DEPTH);
 
-  root_node = clutter_root_node_new (fb, &bg_color, COGL_BUFFER_BIT_DEPTH);
   clutter_paint_node_set_static_name (root_node, "Stage (root)");
   clutter_paint_node_paint (root_node, paint_context);
   clutter_paint_node_unref (root_node);
-
-  clutter_paint_context_pop_color_state (paint_context);
 
   clutter_actor_paint (CLUTTER_ACTOR (stage), paint_context);
   clutter_paint_context_destroy (paint_context);
@@ -520,6 +526,14 @@ clutter_stage_emit_after_paint (ClutterStage     *stage,
                                 ClutterFrame     *frame)
 {
   g_signal_emit (stage, stage_signals[AFTER_PAINT], 0, view, frame);
+}
+
+void
+clutter_stage_emit_skipped_paint (ClutterStage     *stage,
+                                  ClutterStageView *view,
+                                  ClutterFrame     *frame)
+{
+  g_signal_emit (stage, stage_signals[SKIPPED_PAINT], 0, view, frame);
 }
 
 void
@@ -629,24 +643,12 @@ clutter_stage_emit_key_focus_event (ClutterStage *stage,
                                     gboolean      focus_in)
 {
   ClutterStagePrivate *priv = clutter_stage_get_instance_private (stage);
-  AtkObject *old_accessible, *new_accessible = NULL;
 
   if (priv->key_focused_actor == NULL)
     return;
 
-  old_accessible = clutter_actor_get_accessible (priv->key_focused_actor);
-  new_accessible = clutter_actor_get_accessible (CLUTTER_ACTOR (stage));
-
   _clutter_actor_set_has_key_focus (CLUTTER_ACTOR (stage), focus_in);
 
-  if (old_accessible)
-    atk_object_notify_state_change (old_accessible,
-                                    ATK_STATE_FOCUSED,
-                                    !focus_in);
-  if (new_accessible)
-    atk_object_notify_state_change (new_accessible,
-                                    ATK_STATE_FOCUSED,
-                                    focus_in);
   g_object_notify_by_pspec (G_OBJECT (stage), obj_props[PROP_KEY_FOCUS]);
 }
 
@@ -677,12 +679,17 @@ clutter_stage_set_active (ClutterStage *stage,
     return;
 
   priv->is_active = is_active;
+
+  if (is_active)
+    clutter_actor_add_accessible_state (CLUTTER_ACTOR (stage),
+                                        ATK_STATE_ACTIVE);
+  else
+    clutter_actor_remove_accessible_state (CLUTTER_ACTOR (stage),
+                                           ATK_STATE_ACTIVE);
+
   accessible = clutter_actor_get_accessible (CLUTTER_ACTOR (stage));
   if (accessible)
     {
-      atk_object_notify_state_change (accessible,
-                                      ATK_STATE_ACTIVE,
-                                      priv->is_active);
       /* Emit AtkWindow signals */
       if (priv->is_active)
         g_signal_emit_by_name (accessible, "activate", 0);
@@ -1425,10 +1432,13 @@ static void
 clutter_stage_paint (ClutterActor        *actor,
                      ClutterPaintContext *paint_context)
 {
+#ifdef HAVE_FONTS
   ClutterStageView *view;
+#endif
 
   CLUTTER_ACTOR_CLASS (clutter_stage_parent_class)->paint (actor, paint_context);
 
+#ifdef HAVE_FONTS
   view = clutter_paint_context_get_stage_view (paint_context);
   if (view &&
       G_UNLIKELY (clutter_paint_debug_flags & CLUTTER_DEBUG_PAINT_MAX_RENDER_TIME))
@@ -1463,6 +1473,7 @@ clutter_stage_paint (ClutterActor        *actor,
 
       g_object_unref (layout);
     }
+#endif
 }
 
 static void
@@ -1620,6 +1631,29 @@ clutter_stage_class_init (ClutterStageClass *klass)
                   CLUTTER_TYPE_STAGE_VIEW,
                   CLUTTER_TYPE_FRAME | G_SIGNAL_TYPE_STATIC_SCOPE);
   g_signal_set_va_marshaller (stage_signals[AFTER_PAINT],
+                              G_TYPE_FROM_CLASS (gobject_class),
+                              _clutter_marshal_VOID__OBJECT_BOXEDv);
+
+  /**
+   * ClutterStage::skipped-paint:
+   * @stage: the stage that received the event
+   * @view: a #ClutterStageView
+   * @frame: a #ClutterFrame
+   *
+   * The ::skipped-paint signal is emitted after relayout, if no damage
+   * was posted and the paint was skipped.
+   */
+  stage_signals[SKIPPED_PAINT] =
+    g_signal_new (I_("skipped-paint"),
+                  G_TYPE_FROM_CLASS (gobject_class),
+                  G_SIGNAL_RUN_LAST,
+                  G_STRUCT_OFFSET (ClutterStageClass, skipped_paint),
+                  NULL, NULL,
+                  _clutter_marshal_VOID__OBJECT_BOXED,
+                  G_TYPE_NONE, 2,
+                  CLUTTER_TYPE_STAGE_VIEW,
+                  CLUTTER_TYPE_FRAME | G_SIGNAL_TYPE_STATIC_SCOPE);
+  g_signal_set_va_marshaller (stage_signals[SKIPPED_PAINT],
                               G_TYPE_FROM_CLASS (gobject_class),
                               _clutter_marshal_VOID__OBJECT_BOXEDv);
 
@@ -2068,7 +2102,6 @@ clutter_stage_set_key_focus (ClutterStage *stage,
                              ClutterActor *actor)
 {
   ClutterStagePrivate *priv;
-  AtkObject *old_accessible, *new_accessible = NULL;
 
   g_return_if_fail (CLUTTER_IS_STAGE (stage));
   g_return_if_fail (actor == NULL || CLUTTER_IS_ACTOR (actor));
@@ -2090,7 +2123,6 @@ clutter_stage_set_key_focus (ClutterStage *stage,
       ClutterActor *old_focused_actor;
 
       old_focused_actor = priv->key_focused_actor;
-      old_accessible = clutter_actor_get_accessible (old_focused_actor);
 
       /* set key_focused_actor to NULL before emitting the signal or someone
        * might hide the previously focused actor in the signal handler
@@ -2101,7 +2133,6 @@ clutter_stage_set_key_focus (ClutterStage *stage,
     }
   else
     {
-      old_accessible = clutter_actor_get_accessible (CLUTTER_ACTOR (stage));
       _clutter_actor_set_has_key_focus (CLUTTER_ACTOR (stage), FALSE);
     }
   /* Note, if someone changes key focus in focus-out signal handler we'd be
@@ -2123,25 +2154,13 @@ clutter_stage_set_key_focus (ClutterStage *stage,
     {
       if (actor != NULL)
         {
-          new_accessible = clutter_actor_get_accessible (actor);
           _clutter_actor_set_has_key_focus (actor, TRUE);
         }
       else
         {
-          new_accessible = clutter_actor_get_accessible (CLUTTER_ACTOR (stage));
           _clutter_actor_set_has_key_focus (CLUTTER_ACTOR (stage), TRUE);
         }
     }
-
-  if (old_accessible)
-    atk_object_notify_state_change (old_accessible,
-                                    ATK_STATE_FOCUSED,
-                                    FALSE);
-  if (new_accessible)
-    atk_object_notify_state_change (new_accessible,
-                                    ATK_STATE_FOCUSED,
-                                    TRUE);
-
 
   g_object_notify_by_pspec (G_OBJECT (stage), obj_props[PROP_KEY_FOCUS]);
 }

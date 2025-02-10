@@ -27,6 +27,7 @@
 
 #include "wayland/meta-wayland-data-source.h"
 #include "wayland/meta-wayland-private.h"
+#include "wayland/meta-wayland-toplevel-drag.h"
 
 #define ALL_ACTIONS (WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY | \
                      WL_DATA_DEVICE_MANAGER_DND_ACTION_MOVE | \
@@ -44,6 +45,7 @@ typedef struct _MetaWaylandDataSourcePrivate
   enum wl_data_device_manager_dnd_action user_dnd_action;
   enum wl_data_device_manager_dnd_action current_dnd_action;
   MetaWaylandSeat *seat;
+  MetaWaylandToplevelDrag *toplevel_drag;
   guint actions_set : 1;
   guint in_ask : 1;
   guint drop_performed : 1;
@@ -59,6 +61,14 @@ enum
 };
 
 static GParamSpec *props[N_PROPS] = { 0 };
+
+enum
+{
+  DESTROY,
+  LAST_SIGNAL
+};
+
+static guint signals[LAST_SIGNAL] = { 0 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (MetaWaylandDataSource, meta_wayland_data_source,
                             G_TYPE_OBJECT);
@@ -231,6 +241,13 @@ meta_wayland_data_source_class_init (MetaWaylandDataSourceClass *klass)
                          G_PARAM_STATIC_STRINGS);
 
   g_object_class_install_properties (object_class, N_PROPS, props);
+
+  signals[DESTROY] =
+    g_signal_new ("destroy",
+                  G_TYPE_FROM_CLASS (object_class),
+                  G_SIGNAL_RUN_LAST,
+                  0, NULL, NULL, NULL,
+                  G_TYPE_NONE, 0);
 }
 
 static void
@@ -297,6 +314,8 @@ static void
 destroy_data_source (struct wl_resource *resource)
 {
   MetaWaylandDataSource *source = wl_resource_get_user_data (resource);
+
+  g_signal_emit (source, signals[DESTROY], 0);
 
   meta_wayland_data_source_set_resource (source, NULL);
   g_object_unref (source);
@@ -596,4 +615,23 @@ meta_wayland_data_source_get_compositor (MetaWaylandDataSource *source)
     meta_wayland_data_source_get_instance_private (source);
 
   return priv->compositor;
+}
+
+void
+meta_wayland_data_source_set_toplevel_drag (MetaWaylandDataSource   *source,
+                                            MetaWaylandToplevelDrag *toplevel_drag)
+{
+  MetaWaylandDataSourcePrivate *priv =
+    meta_wayland_data_source_get_instance_private (source);
+
+  priv->toplevel_drag = toplevel_drag;
+}
+
+MetaWaylandToplevelDrag *
+meta_wayland_data_source_get_toplevel_drag (MetaWaylandDataSource *source)
+{
+  MetaWaylandDataSourcePrivate *priv =
+    meta_wayland_data_source_get_instance_private (source);
+
+  return priv->toplevel_drag;
 }

@@ -44,7 +44,7 @@
 #include "cogl/cogl-onscreen-private.h"
 #include "cogl/cogl-xlib-renderer.h"
 #include "cogl/cogl-util.h"
-#include "cogl/driver/gl/cogl-pipeline-opengl-private.h"
+#include "cogl/driver/gl/cogl-pipeline-gl-private.h"
 #include "cogl/winsys/cogl-glx-renderer-private.h"
 #include "cogl/winsys/cogl-glx-display-private.h"
 #include "cogl/winsys/cogl-onscreen-glx.h"
@@ -244,12 +244,7 @@ glx_event_filter_cb (XEvent *xevent, void *data)
 static void
 _cogl_winsys_renderer_disconnect (CoglRenderer *renderer)
 {
-  CoglGLXRenderer *glx_renderer = renderer->winsys;
-
   _cogl_xlib_renderer_disconnect (renderer);
-
-  if (glx_renderer->libgl_module)
-    g_module_close (glx_renderer->libgl_module);
 
   g_free (renderer->winsys);
 }
@@ -294,21 +289,19 @@ static gboolean
 resolve_core_glx_functions (CoglRenderer *renderer,
                             GError **error)
 {
-  CoglGLXRenderer *glx_renderer;
+  CoglGLXRenderer *glx_renderer = renderer->winsys;
 
-  glx_renderer = renderer->winsys;
-
-  if (!g_module_symbol (glx_renderer->libgl_module, "glXQueryExtension",
+  if (!g_module_symbol (renderer->libgl_module, "glXQueryExtension",
                         (void **) &glx_renderer->glXQueryExtension) ||
-      !g_module_symbol (glx_renderer->libgl_module, "glXQueryVersion",
+      !g_module_symbol (renderer->libgl_module, "glXQueryVersion",
                         (void **) &glx_renderer->glXQueryVersion) ||
-      !g_module_symbol (glx_renderer->libgl_module, "glXQueryExtensionsString",
+      !g_module_symbol (renderer->libgl_module, "glXQueryExtensionsString",
                         (void **) &glx_renderer->glXQueryExtensionsString) ||
-      (!g_module_symbol (glx_renderer->libgl_module, "glXGetProcAddress",
+      (!g_module_symbol (renderer->libgl_module, "glXGetProcAddress",
                          (void **) &glx_renderer->glXGetProcAddress) &&
-       !g_module_symbol (glx_renderer->libgl_module, "glXGetProcAddressARB",
+       !g_module_symbol (renderer->libgl_module, "glXGetProcAddressARB",
                          (void **) &glx_renderer->glXGetProcAddress)) ||
-       !g_module_symbol (glx_renderer->libgl_module, "glXQueryDrawable",
+       !g_module_symbol (renderer->libgl_module, "glXQueryDrawable",
                          (void **) &glx_renderer->glXQueryDrawable))
     {
       g_set_error_literal (error, COGL_WINSYS_ERROR,
@@ -345,7 +338,7 @@ update_base_winsys_features (CoglRenderer *renderer)
                              "GLX", winsys_feature_data + i,
                              glx_renderer->glx_major,
                              glx_renderer->glx_minor,
-                             COGL_DRIVER_GL3, /* the driver isn't used */
+                             COGL_DRIVER_ID_GL3, /* the driver isn't used */
                              split_extensions,
                              glx_renderer))
       {
@@ -391,22 +384,11 @@ _cogl_winsys_renderer_connect (CoglRenderer *renderer,
   if (!_cogl_xlib_renderer_connect (renderer, error))
     goto error;
 
-  if (renderer->driver != COGL_DRIVER_GL3)
+  if (renderer->driver_id != COGL_DRIVER_ID_GL3)
     {
       g_set_error_literal (error, COGL_WINSYS_ERROR,
                            COGL_WINSYS_ERROR_INIT,
                            "GLX Backend can only be used in conjunction with OpenGL");
-      goto error;
-    }
-
-  glx_renderer->libgl_module = g_module_open (COGL_GL_LIBNAME,
-                                              G_MODULE_BIND_LAZY);
-
-  if (glx_renderer->libgl_module == NULL)
-    {
-      g_set_error_literal (error, COGL_WINSYS_ERROR,
-                           COGL_WINSYS_ERROR_INIT,
-                           "Failed to dynamically open the OpenGL library");
       goto error;
     }
 
@@ -668,7 +650,7 @@ create_context (CoglDisplay *display, GError **error)
 
   mtk_x11_error_trap_push (xlib_renderer->xdpy);
 
-  if (display->renderer->driver == COGL_DRIVER_GL3)
+  if (display->renderer->driver_id == COGL_DRIVER_ID_GL3)
     glx_display->glx_context = create_gl3_context (display, config);
   else
     glx_display->glx_context =
