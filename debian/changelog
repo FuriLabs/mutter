@@ -1,3 +1,16 @@
+mutter (48~beta-2ubuntu1) UNRELEASED; urgency=medium
+
+  * Merge with Debian. Remaining changes:
+    - Add x11-Add-support-for-fractional-scaling-using-Randr.patch
+    - Add window-Add-ability-to-override-the-edge-constraints.patch
+      + Make possible for extensions (such as Tiling Assistant) to override
+        window constraints
+    - Add seat-impl-Initialize-the-impl-reverse-pointer-slightly-ea.patch
+      to avoid crashing when mousekeys or keyboard a11y features are
+      enabled
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Mon, 10 Feb 2025 13:47:28 -0500
+
 mutter (48~beta-2) experimental; urgency=medium
 
   * Add mutter Depends: gir1.2-glib-2.0, python3-argcomplete, python3-gi
