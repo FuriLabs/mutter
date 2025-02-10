@@ -8,5 +8,5 @@ workarounds/Mark-several-additional-tests-as-flaky.patch
 workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
 tests-cursor-Embed-a-copy-of-the-Adwaita-cursor-theme.patch
 workarounds/seat-impl-Initialize-the-impl-reverse-pointer-slightly-ea.patch
-ubuntu/x11-Add-support-for-fractional-scaling-using-Randr.patch
+#ubuntu/x11-Add-support-for-fractional-scaling-using-Randr.patch
 ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
