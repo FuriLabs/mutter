@@ -1,0 +1,70 @@
+From: =?utf-8?b?Ik1hcmNvIFRyZXZpc2FuIChUcmV2acOxbyki?= <mail@3v1n0.net>
+Date: Sat, 15 Feb 2025 16:08:25 +0100
+Subject: tools/gdctl: Make argcomplete optional
+
+While having automatic completions is a very nice feature of gdctl (I
+had suggested to use it too :)), it's not something that distros may
+have by default and in particular it's not a package in main in ubuntu.
+
+So, make the code less restrictive on completions, since completions is
+not a core functionality of the tool and it can definitely work without
+them.
+
+Origin: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4279
+---
+ tools/gdctl | 30 +++++++++++++++++++-----------
+ 1 file changed, 19 insertions(+), 11 deletions(-)
+
+diff --git a/tools/gdctl b/tools/gdctl
+index bff12ce..00e13c5 100755
+--- a/tools/gdctl
++++ b/tools/gdctl
+@@ -1,13 +1,18 @@
+ #!/usr/bin/env python3
+ 
+ import argparse
+-import argcomplete
+ import sys
+ 
+ from dataclasses import dataclass, field
+ from gi.repository import GLib, Gio
+ from enum import Enum, Flag
+-from argcomplete.completers import BaseCompleter, SuppressCompleter
++
++try:
++    import argcomplete
++    from argcomplete.completers import BaseCompleter
++except ModuleNotFoundError:
++    argcomplete = None
++    BaseCompleter = object
+ 
+ NAME = "org.gnome.Mutter.DisplayConfig"
+ INTERFACE = "org.gnome.Mutter.DisplayConfig"
+@@ -1436,15 +1441,18 @@ if __name__ == "__main__":
+         type=str,
+     ).completer = MonitorCompleter()
+ 
+-    for action in [
+-        GroupAction,
+-        SubGroupAction,
+-        AppendToGroup,
+-        AppendToSubGroup,
+-        AppendToGlobal,
+-    ]:
+-        argcomplete.safe_actions.add(action)
+-    argcomplete.autocomplete(parser, default_completer=SuppressCompleter)
++    if argcomplete:
++        for action in [
++            GroupAction,
++            SubGroupAction,
++            AppendToGroup,
++            AppendToSubGroup,
++            AppendToGlobal,
++        ]:
++            argcomplete.safe_actions.add(action)
++
++        argcomplete.autocomplete(parser,
++            default_completer=argcomplete.SuppressCompleter)
+ 
+     args = parser.parse_args()
+ 
