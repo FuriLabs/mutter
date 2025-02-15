@@ -1,4 +1,4 @@
-mutter (48~beta-3) UNRELEASED; urgency=medium
+mutter (48~beta-3) experimental; urgency=medium
 
   * debian: Install gdctl in mutter-common-bin
     gdctl is a tool to show and set the gnome display configuration and it's
@@ -13,7 +13,7 @@ mutter (48~beta-3) UNRELEASED; urgency=medium
     x11-tests, so it's only a dependency of mutter-16-tests and a build-one
     only if tests are performed
 
- -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Sat, 15 Feb 2025 16:58:38 +0100
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Sat, 15 Feb 2025 16:59:40 +0100
 
 mutter (48~beta-2) experimental; urgency=medium
 
