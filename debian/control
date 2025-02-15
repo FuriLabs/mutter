@@ -99,7 +99,7 @@ Build-Depends: debhelper-compat (= 13),
                xkb-data,
                xvfb,
                xwayland (>= 2:23.1.0),
-               zenity
+               zenity <!nocheck>,
 Rules-Requires-Root: no
 Standards-Version: 4.7.0
 Homepage: https://mutter.gnome.org/
@@ -113,7 +113,6 @@ Depends: adwaita-icon-theme,
          gnome-settings-daemon-common,
          gsettings-desktop-schemas (>= 40~alpha),
          mutter-common (>= ${source:Version}),
-         zenity,
          ${misc:Depends},
          ${shlibs:Depends}
 Provides: x-window-manager
@@ -151,6 +150,7 @@ Depends: at-spi2-core,
          xauth,
          xvfb,
          xwayland (>= 2:23.1.0),
+         zenity,
          ${misc:Depends},
          ${shlibs:Depends}
 Description: Tests for GNOME's window manager library
