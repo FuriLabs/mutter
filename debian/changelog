@@ -1,3 +1,26 @@
+mutter (48~beta-3ubuntu1) UNRELEASED; urgency=medium
+
+  * Merge with Debian.
+  * debian/patches/xrandr-scaling: Update for mutter 48
+  * debian/patches/ubuntu: Make argcomplete in gdctl optional
+  * debian/control: Mark python3-argcomplete as suggested package.
+    As per the patch we have now to make python3-argcomplete option, we can
+    safely mark python3-argcomplete as a suggested package, given that's not
+    in main in ubuntu
+  * Remaining changes with debian:
+    - Add x11-Add-support-for-fractional-scaling-using-Randr.patch
+    - Add window-Add-ability-to-override-the-edge-constraints.patch
+      + Make possible for extensions (such as Tiling Assistant) to override
+        window constraints
+    - Add seat-impl-Initialize-the-impl-reverse-pointer-slightly-ea.patch
+      to avoid crashing when mousekeys or keyboard a11y features are
+      enabled
+    - Add tools-gdctl-Make-argcomplete-optional.patch to not require python3
+      argcomplete module to run gdctl
+    - Mark python3-argcomplete as suggested package
+
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Sat, 15 Feb 2025 17:30:55 +0100
+
 mutter (48~beta-3) experimental; urgency=medium
 
   * debian: Install gdctl in mutter-common-bin
