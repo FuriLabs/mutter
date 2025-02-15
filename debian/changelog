@@ -1,3 +1,20 @@
+mutter (48~beta-3) experimental; urgency=medium
+
+  * debian: Install gdctl in mutter-common-bin
+    gdctl is a tool to show and set the gnome display configuration and it's
+    not mutter-specific, but it works for any-mutter based compositor including
+    gnome-shell, so it's something that we should not provide in the mutter
+    package (that only contains the mutter basic compositor implementation).
+    As per this, move the dependencies to mutter-common-bin and make
+    python3-argcomplete a required dependency for it (since the tools needs
+    it).
+  * debian/control: Mark zenity as a test-dependency only.
+    There's no strict dependency on zenity, but mutter uses it only for
+    x11-tests, so it's only a dependency of mutter-16-tests and a build-one
+    only if tests are performed
+
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Sat, 15 Feb 2025 16:59:40 +0100
+
 mutter (48~beta-2ubuntu1) plucky; urgency=medium
 
   * Merge with Debian. Remaining changes:

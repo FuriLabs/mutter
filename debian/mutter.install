@@ -1,4 +1,3 @@
-usr/bin
+usr/bin/mutter
 usr/lib/${DEB_HOST_MULTIARCH}/mutter-${env:MUTTER_API_VERSION}/plugins
-usr/share/bash-completion
 usr/share/man

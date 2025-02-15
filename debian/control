@@ -100,7 +100,7 @@ Build-Depends: debhelper-compat (= 13),
                xkb-data,
                xvfb,
                xwayland (>= 2:23.1.0),
-               zenity
+               zenity <!nocheck>,
 Rules-Requires-Root: no
 Standards-Version: 4.7.0
 Homepage: https://mutter.gnome.org/
@@ -117,9 +117,6 @@ Depends: adwaita-icon-theme,
          gnome-settings-daemon-common,
          gsettings-desktop-schemas (>= 40~alpha),
          mutter-common (>= ${source:Version}),
-         python3,
-         python3-gi,
-         zenity,
          ${misc:Depends},
          ${shlibs:Depends}
 Provides: x-window-manager
@@ -151,13 +148,13 @@ Depends: at-spi2-core,
          mutter (= ${binary:Version}),
          pipewire (>= 1.2.0),
          python3,
-         python3-argcomplete,
          python3-dbus,
          python3-dbusmock,
          wireplumber,
          xauth,
          xvfb,
          xwayland (>= 2:23.1.0),
+         zenity,
          ${misc:Depends},
          ${shlibs:Depends}
 Description: Tests for GNOME's window manager library
@@ -303,9 +300,12 @@ Section: misc
 Architecture: linux-any
 Multi-Arch: foreign
 Depends: ${misc:Depends},
-         ${shlibs:Depends}
-Breaks: mutter (<< 44~)
-Replaces: mutter (<< 44~)
+         ${shlibs:Depends},
+         python3,
+         python3-gi,
+         python3-argcomplete,
+Breaks: mutter (<< 48~beta-2~)
+Replaces: mutter (<< 48~beta-2~)
 Description: shared programs for the Mutter window manager
  Mutter is a Wayland display server and X11 window manager and
  compositor library. It contains functionality related to, among other
