@@ -109,7 +109,6 @@ Vcs-Browser: https://salsa.debian.org/gnome-team/mutter
 Package: mutter
 Architecture: linux-any
 Depends: adwaita-icon-theme,
-         gir1.2-glib-2.0,
          gnome-settings-daemon-common,
          gsettings-desktop-schemas (>= 40~alpha),
          mutter-common (>= ${source:Version}),
@@ -297,6 +296,7 @@ Architecture: linux-any
 Multi-Arch: foreign
 Depends: ${misc:Depends},
          ${shlibs:Depends},
+         gir1.2-glib-2.0,
          python3,
          python3-gi,
          python3-argcomplete,
