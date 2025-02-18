@@ -1,3 +1,20 @@
+mutter (48~beta-4ubuntu1) UNRELEASED; urgency=medium
+
+  * Merge with debian, remaining changes:
+    - Add x11-Add-support-for-fractional-scaling-using-Randr.patch
+    - Add window-Add-ability-to-override-the-edge-constraints.patch
+      + Make possible for extensions (such as Tiling Assistant) to override
+        window constraints
+    - Add seat-impl-Initialize-the-impl-reverse-pointer-slightly-ea.patch
+      to avoid crashing when mousekeys or keyboard a11y features are
+      enabled
+    - Add tools-gdctl-Make-argcomplete-optional.patch to not require python3
+      argcomplete module to run gdctl
+    - Mark python3-argcomplete as suggested package
+  * d/p: Refresh indexes
+
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Tue, 18 Feb 2025 17:22:24 +0100
+
 mutter (48~beta-4) experimental; urgency=medium
 
   * debian/patches: Make argcomplete in gdctl optional
