@@ -1,6 +1,6 @@
 workarounds/tests-Mark-view-verification-tests-as-incomplete-in-big-e.patch
 debian/tests-Do-not-run-screencast-tests.patch
-debian/Support-Dynamic-triple-double-buffering.patch
+debian/tests-Use-env-in-bash-scripts-shebang.patch
 workarounds/tests-skip-monitor-width-size-check-as-it-may-lead-to-une.patch
 workarounds/tests-Skip-thread-priority-test.patch
 workarounds/place-Always-center-initial-setup.patch
@@ -10,4 +10,5 @@ tests-cursor-Embed-a-copy-of-the-Adwaita-cursor-theme.patch
 workarounds/seat-impl-Initialize-the-impl-reverse-pointer-slightly-ea.patch
 ubuntu/x11-Add-support-for-fractional-scaling-using-Randr.patch
 ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
-ubuntu/tools-gdctl-Make-argcomplete-optional.patch
+Support-Dynamic-triple-double-buffering.patch
+tools-gdctl-Make-argcomplete-optional.patch

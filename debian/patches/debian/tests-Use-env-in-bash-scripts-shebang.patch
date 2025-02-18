@@ -1,0 +1,71 @@
+From: =?utf-8?b?Ik1hcmNvIFRyZXZpc2FuIChUcmV2acOxbyki?= <mail@3v1n0.net>
+Date: Tue, 18 Feb 2025 16:30:39 +0100
+Subject: tests: Use env in bash scripts shebang
+
+Bash can be in both /usr/bin/bash or /bin/bash (or elsewhere!) depending on
+the distro, so let's be generic using env to figure it out.
+
+This comes from a packaging lintian error we get:
+
+ E: mutter-16-tests: wrong-path-for-interpreter /usr/bin/bash != /bin/bash
+    [usr/share/mutter-16/tests/socket-launch.sh]
+
+Origin: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4288
+---
+ src/tests/clutter/interactive/meson/gen-test-unit-names.sh | 2 +-
+ src/tests/kvm/run-kvm-test.sh                              | 2 +-
+ src/tests/kvm/virtme-run.sh                                | 2 +-
+ src/tests/socket-launch.sh                                 | 2 +-
+ src/tests/x11-test.sh                                      | 2 +-
+ 5 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/src/tests/clutter/interactive/meson/gen-test-unit-names.sh b/src/tests/clutter/interactive/meson/gen-test-unit-names.sh
+index 72c5bf3..87c4e69 100755
+--- a/src/tests/clutter/interactive/meson/gen-test-unit-names.sh
++++ b/src/tests/clutter/interactive/meson/gen-test-unit-names.sh
+@@ -1,4 +1,4 @@
+-#!/bin/sh
++#!/usr/bin/env sh
+ 
+ outputfile=$1
+ shift
+diff --git a/src/tests/kvm/run-kvm-test.sh b/src/tests/kvm/run-kvm-test.sh
+index 4213ef9..e21ec64 100755
+--- a/src/tests/kvm/run-kvm-test.sh
++++ b/src/tests/kvm/run-kvm-test.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ set -e
+ 
+diff --git a/src/tests/kvm/virtme-run.sh b/src/tests/kvm/virtme-run.sh
+index 1e707d3..a74f463 100755
+--- a/src/tests/kvm/virtme-run.sh
++++ b/src/tests/kvm/virtme-run.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ set -e
+ 
+diff --git a/src/tests/socket-launch.sh b/src/tests/socket-launch.sh
+index f093cfe..7ca446f 100755
+--- a/src/tests/socket-launch.sh
++++ b/src/tests/socket-launch.sh
+@@ -1,4 +1,4 @@
+-#!/usr/bin/bash
++#!/usr/bin/env bash
+ 
+ export LISTEN_PID=$$
+ exec "$@"
+diff --git a/src/tests/x11-test.sh b/src/tests/x11-test.sh
+index c826a00..e015d3a 100755
+--- a/src/tests/x11-test.sh
++++ b/src/tests/x11-test.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ set -ex
+ 

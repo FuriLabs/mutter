@@ -1,3 +1,16 @@
+mutter (48~beta-4) experimental; urgency=medium
+
+  * debian/patches: Make argcomplete in gdctl optional
+  * debian/control:
+    - add gir1.2-glib-2.0 dependency to mutter-common-bin
+    - Fix mutter-common-bin breaks/replaces (LP: #2098605)
+    - Mark python3-argcomplete as suggested package
+  * d/p: Use env in bash scripts
+  * d/p/triple-buffering: Update patch to the one landed upstream
+    (Closes: #1050020)
+
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Tue, 18 Feb 2025 17:04:37 +0100
+
 mutter (48~beta-3ubuntu1) plucky; urgency=medium
 
   * Merge with Debian.
