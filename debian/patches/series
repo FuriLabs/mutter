@@ -9,3 +9,4 @@ workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
 Support-Dynamic-triple-double-buffering.patch
 tests-cursor-Embed-a-copy-of-the-Adwaita-cursor-theme.patch
 tools-gdctl-Make-argcomplete-optional.patch
+tests-Fall-back-if-there-s-no-seat_id-for-the-current-ses.patch
