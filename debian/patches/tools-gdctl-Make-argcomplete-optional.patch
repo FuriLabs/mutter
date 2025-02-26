@@ -17,7 +17,7 @@ Applied-Upstream: https://gitlab.gnome.org/GNOME/mutter/-/commit/cfdc63df2ddff
  1 file changed, 19 insertions(+), 11 deletions(-)
 
 diff --git a/tools/gdctl b/tools/gdctl
-index bff12ce..00e13c5 100755
+index 8f395e7..2f0cf9e 100755
 --- a/tools/gdctl
 +++ b/tools/gdctl
 @@ -1,13 +1,18 @@
@@ -41,7 +41,7 @@ index bff12ce..00e13c5 100755
  
  NAME = "org.gnome.Mutter.DisplayConfig"
  INTERFACE = "org.gnome.Mutter.DisplayConfig"
-@@ -1436,15 +1441,18 @@ if __name__ == "__main__":
+@@ -1434,15 +1439,18 @@ if __name__ == "__main__":
          type=str,
      ).completer = MonitorCompleter()
  

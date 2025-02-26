@@ -6,11 +6,11 @@ workarounds/tests-Skip-thread-priority-test.patch
 workarounds/place-Always-center-initial-setup.patch
 workarounds/Mark-several-additional-tests-as-flaky.patch
 workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
+Support-Dynamic-triple-double-buffering.patch
 tests-cursor-Embed-a-copy-of-the-Adwaita-cursor-theme.patch
-workarounds/seat-impl-Initialize-the-impl-reverse-pointer-slightly-ea.patch
+tools-gdctl-Make-argcomplete-optional.patch
+tests-Fall-back-if-there-s-no-seat_id-for-the-current-ses.patch
 ubuntu/x11-Add-support-for-fractional-scaling-using-Randr.patch
 ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
 ubuntu/Use-access-instead-of-checking-permission-modes-for-tmp-..patch
-Support-Dynamic-triple-double-buffering.patch
-tools-gdctl-Make-argcomplete-optional.patch
-tests-Fall-back-if-there-s-no-seat_id-for-the-current-ses.patch
+workarounds/seat-impl-Initialize-the-impl-reverse-pointer-slightly-ea.patch

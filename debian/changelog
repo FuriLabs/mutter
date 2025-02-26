@@ -1,4 +1,4 @@
-mutter (48~beta-5ubuntu1) UNRELEASED; urgency=medium
+mutter (48~beta-5ubuntu1) plucky; urgency=medium
 
   * Merge with Debian. Remaining changes:
     - Add x11-Add-support-for-fractional-scaling-using-Randr.patch
