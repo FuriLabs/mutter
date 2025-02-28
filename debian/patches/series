@@ -10,3 +10,4 @@ Support-Dynamic-triple-double-buffering.patch
 tests-cursor-Embed-a-copy-of-the-Adwaita-cursor-theme.patch
 tools-gdctl-Make-argcomplete-optional.patch
 tests-Fall-back-if-there-s-no-seat_id-for-the-current-ses.patch
+tests-Vary-the-gdctl-path-used-for-installed-tests.patch
