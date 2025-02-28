@@ -1,3 +1,10 @@
+mutter (48~beta-6) experimental; urgency=medium
+
+  [ Daniel van Vugt ]
+  * Add patch to fix gdctl path for installed tests (Closes: #1096037)
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Fri, 28 Feb 2025 13:24:06 -0500
+
 mutter (48~beta-5) experimental; urgency=medium
 
   [ Daniel van Vugt ]
