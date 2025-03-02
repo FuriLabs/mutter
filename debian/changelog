@@ -1,3 +1,9 @@
+mutter (48~beta-7) unstable; urgency=medium
+
+  * Release to unstable (Closes: #1093876)
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Sun, 02 Mar 2025 05:26:31 -0500
+
 mutter (48~beta-6) experimental; urgency=medium
 
   [ Daniel van Vugt ]
