@@ -522,6 +522,9 @@ main (int    argc,
   g_autoptr (MetaContext) context = NULL;
   g_autoptr (GError) error = NULL;
 
+  /* See https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/1441#note_2350786 */
+  g_setenv ("CLUTTER_PAINT", "disable-triple-buffering", TRUE);
+
   context = meta_create_test_context (META_CONTEXT_TEST_TYPE_VKMS,
                                       META_CONTEXT_TEST_FLAG_NO_X11);
   g_assert_true (meta_context_configure (context, &argc, &argv, NULL));

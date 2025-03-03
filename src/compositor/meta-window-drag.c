@@ -309,7 +309,7 @@ meta_cursor_for_grab_op (MetaGrabOp op)
       break;
     case META_GRAB_OP_RESIZING_S:
     case META_GRAB_OP_KEYBOARD_RESIZING_S:
-      return META_CURSOR_SOUTH_RESIZE;
+      return META_CURSOR_S_RESIZE;
       break;
     case META_GRAB_OP_RESIZING_SW:
     case META_GRAB_OP_KEYBOARD_RESIZING_SW:
@@ -317,7 +317,7 @@ meta_cursor_for_grab_op (MetaGrabOp op)
       break;
     case META_GRAB_OP_RESIZING_N:
     case META_GRAB_OP_KEYBOARD_RESIZING_N:
-      return META_CURSOR_NORTH_RESIZE;
+      return META_CURSOR_N_RESIZE;
       break;
     case META_GRAB_OP_RESIZING_NE:
     case META_GRAB_OP_KEYBOARD_RESIZING_NE:
@@ -329,18 +329,18 @@ meta_cursor_for_grab_op (MetaGrabOp op)
       break;
     case META_GRAB_OP_RESIZING_W:
     case META_GRAB_OP_KEYBOARD_RESIZING_W:
-      return META_CURSOR_WEST_RESIZE;
+      return META_CURSOR_W_RESIZE;
       break;
     case META_GRAB_OP_RESIZING_E:
     case META_GRAB_OP_KEYBOARD_RESIZING_E:
-      return META_CURSOR_EAST_RESIZE;
+      return META_CURSOR_E_RESIZE;
       break;
     case META_GRAB_OP_MOVING:
       return META_CURSOR_DEFAULT;
       break;
     case META_GRAB_OP_KEYBOARD_MOVING:
     case META_GRAB_OP_KEYBOARD_RESIZING_UNKNOWN:
-      return META_CURSOR_MOVE_OR_RESIZE_WINDOW;
+      return META_CURSOR_MOVE;
       break;
     default:
       break;
@@ -1878,11 +1878,7 @@ meta_window_drag_begin (MetaWindowDrag       *window_drag,
                                                                   handle_drag_event,
                                                                   window_drag,
                                                                   NULL);
-      grab_actor = clutter_stage_get_grab_actor (stage);
-      clutter_actor_set_name (grab_actor, "Window drag helper");
-      clutter_actor_set_accessible_name (grab_actor, "Window drag helper");
       clutter_grab_activate (window_drag->grab);
-
       if ((clutter_grab_get_seat_state (window_drag->grab) &
            CLUTTER_GRAB_STATE_POINTER) == 0 &&
           !meta_grab_op_is_keyboard (grab_op))

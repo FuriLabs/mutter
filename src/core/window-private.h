@@ -660,6 +660,7 @@ gboolean    meta_window_has_fullscreen_monitors (MetaWindow *window);
 void        meta_window_adjust_fullscreen_monitor_rect (MetaWindow    *window,
                                                         MtkRectangle  *monitor_rect);
 
+META_EXPORT_TEST
 void        meta_window_resize_frame (MetaWindow  *window,
                                       gboolean     user_op,
                                       int          w,
@@ -730,6 +731,9 @@ void meta_window_stack_just_below (MetaWindow *window,
 
 void meta_window_stack_just_above (MetaWindow *window,
                                    MetaWindow *above_this_one);
+
+int meta_window_stack_position_compare (gconstpointer window_a,
+                                        gconstpointer window_b);
 
 void meta_window_set_user_time (MetaWindow *window,
                                 guint32     timestamp);

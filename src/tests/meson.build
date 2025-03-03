@@ -653,7 +653,11 @@ kms_test_cases = [
   {
     'name': 'kms-headless-start',
     'suite': 'backend/native/kms',
-    'sources': [ 'native-kms-headless-start.c', ],
+    'sources': [
+      'meta-kms-test-utils.c',
+      'meta-kms-test-utils.h',
+      'native-kms-headless-start.c',
+    ],
   },
   {
     'name': 'kms-hotplug',
@@ -664,6 +668,14 @@ kms_test_cases = [
       'native-kms-hotplug.c',
     ],
     'variants': kms_test_variants,
+  },
+  {
+    'name': 'kms-cursor-force-disable',
+    'suite': 'backends/native',
+    'sources': [
+      'native-kms-cursor-force-disable.c',
+      wayland_test_utils,
+    ],
   },
   {
     'name': 'kms-cursor-hotplug',
@@ -992,8 +1004,11 @@ if have_x11_tests
     '+iglx -noreset',
   ]
 
+  zenity = find_program('zenity', required: true)
+
   foreach mode: ['', 'sync']
     x11_env = test_env
+    x11_env.set('ZENITY', zenity.full_path())
     if mode == 'sync'
       x11_env.set('MUTTER_SYNC', '1')
     endif
@@ -1080,6 +1095,7 @@ if have_installed_tests
   install_subdir('migration', install_dir: tests_datadir)
   install_subdir('ref-tests', install_dir: tests_datadir)
   install_subdir('icc-profiles', install_dir: tests_datadir)
+  install_subdir('xcursors', install_dir: tests_datadir)
 
   install_data('org.gnome.mutter.test.gschema.xml', install_dir: tests_datadir)
 
