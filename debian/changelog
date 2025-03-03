@@ -1,3 +1,9 @@
+mutter (48~rc-1) UNRELEASED; urgency=medium
+
+  * New upstream release
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Mon, 03 Mar 2025 13:39:12 -0500
+
 mutter (48~beta-7) unstable; urgency=medium
 
   * Release to unstable (Closes: #1093876)
