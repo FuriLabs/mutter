@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 
 export LISTEN_PID=$$
 exec "$@"

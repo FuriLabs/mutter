@@ -2361,7 +2361,7 @@ meta_display_unmanage_windows (MetaDisplay *display,
 
   winlist = meta_display_list_windows (display,
                                        META_LIST_INCLUDE_OVERRIDE_REDIRECT);
-  winlist = g_slist_sort (winlist, meta_display_stack_cmp);
+  winlist = g_slist_sort (winlist, meta_window_stack_position_compare);
   g_slist_foreach (winlist, (GFunc)g_object_ref, NULL);
 
   /* Unmanage all windows */
@@ -2381,16 +2381,6 @@ meta_display_unmanage_windows (MetaDisplay *display,
       tmp = tmp->next;
     }
   g_slist_free (winlist);
-}
-
-int
-meta_display_stack_cmp (const void *a,
-                        const void *b)
-{
-  MetaWindow *aw = (void*) a;
-  MetaWindow *bw = (void*) b;
-
-  return meta_stack_windows_cmp (aw->display->stack, aw, bw);
 }
 
 /**
@@ -2416,7 +2406,7 @@ meta_display_sort_windows_by_stacking (MetaDisplay *display,
 {
   GSList *copy = g_slist_copy (windows);
 
-  copy = g_slist_sort (copy, meta_display_stack_cmp);
+  copy = g_slist_sort (copy, meta_window_stack_position_compare);
 
   return copy;
 }
@@ -3228,7 +3218,7 @@ check_fullscreen_func (gpointer data)
          status so we need to trigger a re-layering. */
       MetaWindow *top_window = meta_stack_get_top (display->stack);
       if (top_window)
-        meta_stack_update_layer (display->stack, top_window);
+        meta_stack_update_layer (display->stack);
 
       g_signal_emit (display, display_signals[IN_FULLSCREEN_CHANGED], 0, NULL);
     }
@@ -3552,17 +3542,6 @@ static const char* meta_window_queue_names[META_N_QUEUE_TYPES] =
   };
 #endif
 
-static int
-window_stack_cmp (gconstpointer a,
-                  gconstpointer b)
-{
-  MetaWindow *aw = (gpointer) a;
-  MetaWindow *bw = (gpointer) b;
-
-  return meta_stack_windows_cmp (aw->display->stack,
-                                 aw, bw);
-}
-
 static void
 warn_on_incorrectly_unmanaged_window (MetaWindow *window)
 {
@@ -3594,11 +3573,11 @@ update_window_visibilities (MetaDisplay *display,
     }
 
   /* Sort bottom to top */
-  unplaced = g_list_sort (unplaced, window_stack_cmp);
-  should_hide = g_list_sort (should_hide, window_stack_cmp);
+  unplaced = g_list_sort (unplaced, meta_window_stack_position_compare);
+  should_hide = g_list_sort (should_hide, meta_window_stack_position_compare);
 
   /* Sort top to bottom */
-  should_show = g_list_sort (should_show, window_stack_cmp);
+  should_show = g_list_sort (should_show, meta_window_stack_position_compare);
   should_show = g_list_reverse (should_show);
 
   COGL_TRACE_BEGIN_SCOPED (MetaDisplayShowUnplacedWindows,

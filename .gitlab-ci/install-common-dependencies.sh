@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -e
 
@@ -140,4 +140,20 @@ then
       "${OPTIONS[@]}" \
       https://gitlab.gnome.org/GNOME/gdm.git \
       main
+fi
+
+if ! pkgconf --atleast-version 1.83.4 gjs-1.0
+then
+    ./$SCRIPTS_DIR/install-meson-project.sh \
+      "${OPTIONS[@]}" \
+      https://gitlab.gnome.org/GNOME/gjs.git \
+      master
+fi
+
+if ! pkgconf --atleast-version 1.41 wayland-protocols
+then
+    ./$SCRIPTS_DIR/install-meson-project.sh \
+      "${OPTIONS[@]}" \
+      https://gitlab.freedesktop.org/wayland/wayland-protocols.git \
+      1.41
 fi

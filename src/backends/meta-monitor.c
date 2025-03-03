@@ -104,7 +104,7 @@ static void
 meta_monitor_mode_free (MetaMonitorMode *mode);
 
 MetaMonitorSpec *
-meta_monitor_spec_clone (MetaMonitorSpec *monitor_spec)
+meta_monitor_spec_clone (const MetaMonitorSpec *monitor_spec)
 {
   MetaMonitorSpec *new_monitor_spec;
 
@@ -131,8 +131,8 @@ meta_monitor_spec_hash (gconstpointer key)
 }
 
 gboolean
-meta_monitor_spec_equals (MetaMonitorSpec *monitor_spec,
-                          MetaMonitorSpec *other_monitor_spec)
+meta_monitor_spec_equals (const MetaMonitorSpec *monitor_spec,
+                          const MetaMonitorSpec *other_monitor_spec)
 {
   return (g_str_equal (monitor_spec->connector, other_monitor_spec->connector) &&
           g_str_equal (monitor_spec->vendor, other_monitor_spec->vendor) &&

@@ -31,6 +31,10 @@ COMMANDS
 
   Set a new display configuration
 
+``pref``
+
+  Set display related preferences.
+
 SHOW OPTIONS
 ------------
 ``--help``, ``-h``
@@ -58,7 +62,7 @@ SET OPTIONS
 
 ``--persistent``, ``-P``
 
-  Store applied configuration on persistant storage and restore when applicable.
+  Store applied configuration on persistent storage and restore when applicable.
 
 ``--verbose``, ``-v``
 
@@ -76,6 +80,10 @@ SET OPTIONS
 ``--logical-monitor``, ``-L``
 
   Add and configure a logical monitor. See LOGICAL MONITOR OPTIONS.
+
+``--for-lease-monitor CONNECTOR``, ``-e CONNECTOR``
+
+  Set a monitor, that is not part of any logical monitor, available for lease.
 
 LOGICAL MONITOR OPTIONS
 -----------------------
@@ -105,7 +113,7 @@ LOGICAL MONITOR OPTIONS
 
   Set the X position of the currently configured logical monitor.
 
-``--y``, ``-y Y``             Y position
+``--y Y``, ``-y Y``             Y position
 
   Set the Y position of the currently configured logical monitor.
 
@@ -130,15 +138,32 @@ LOGICAL MONITOR OPTIONS
 MONITOR OPTIONS
 ---------------
 
-``--mode``, ``-M``
+``--mode MODE``, ``-m MODE``
 
   Set the mode of the monitor.
 
-``--color-mode``, ``-c``
+``--color-mode COLOR-MODE``, ``-c COLOR-MODE``
 
   Set the color mode of the monitor. Available color modes are ``default`` and
   ``bt2100``.
 
+PREFS OPTIONS
+-------------
+
+``--monitor CONNECTOR``, ``-M CONNECTOR``
+
+  Change monitor preferences. See MONITOR PREFS OPTIONS.
+
+MONITOR PREFS OPTIONS
+---------------------
+
+``--luminance LUMINANCE``, ``-l LUMINANCE``
+
+  Set the luminance of the monitor for the current color mode.
+
+``--reset-luminance``
+
+  Reset the luminance of the monitor for the current color mode to its default.
 
 EXAMPLES
 --------
@@ -155,6 +180,17 @@ of the two mirrored monitors.
             --logical-monitor
             --monitor DP-2
             --right-of DP-1
+            --transform 270
+
+Set eDP-1 and DP-2 as available for lease.
+
+::
+
+  gdctl set --logical-monitor
+            --primary
+            --monitor DP-1
+            --for-lease-monitor eDP-1
+            --for-lease-monitor DP-2
 
 BUGS
 ----
