@@ -1,8 +1,14 @@
-mutter (48~rc-1) UNRELEASED; urgency=medium
+mutter (48~rc-1) experimental; urgency=medium
 
   * New upstream release
+  * Bump minimum libinput & wayland-protocols
+  * debian/libmutter-16-0.symbols: Update
+  * Bump Breaks: gnome-shell to 48~rc
+  * Add many additional Depends to libmutter-16-dev
+  * Remove nocheck annotation from Build-Depends: zenity
+  * Remove 6 patches applied in new release including the triple buffering patch
 
- -- Jeremy Bícha <jbicha@ubuntu.com>  Mon, 03 Mar 2025 13:39:12 -0500
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Mon, 03 Mar 2025 16:56:33 -0500
 
 mutter (48~beta-7) unstable; urgency=medium
 
