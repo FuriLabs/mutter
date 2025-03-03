@@ -98,7 +98,7 @@ Build-Depends: debhelper-compat (= 13),
                xkb-data,
                xvfb,
                xwayland (>= 2:23.1.0),
-               zenity <!nocheck>,
+               zenity,
 Rules-Requires-Root: no
 Standards-Version: 4.7.0
 Homepage: https://mutter.gnome.org/
