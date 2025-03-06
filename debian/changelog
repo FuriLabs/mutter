@@ -1,4 +1,4 @@
-mutter (48~rc-2ubuntu1) UNRELEASED; urgency=medium
+mutter (48~rc-2ubuntu1) plucky; urgency=medium
 
   * Merge with Debian. Remaining changes:
     - Add x11-Add-support-for-fractional-scaling-using-Randr.patch
@@ -11,7 +11,7 @@ mutter (48~rc-2ubuntu1) UNRELEASED; urgency=medium
     - Add Use-access-instead-of-checking-permission-modes-for-tmp-..patch
       to fix access check for X11_TMP_UNIX_DIR
 
- -- Jeremy Bícha <jbicha@ubuntu.com>  Thu, 06 Mar 2025 11:09:27 -0500
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Thu, 06 Mar 2025 11:38:49 -0500
 
 mutter (48~rc-2) unstable; urgency=medium
 
