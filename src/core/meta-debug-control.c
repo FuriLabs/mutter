@@ -168,15 +168,11 @@ meta_debug_control_init (MetaDebugControl *debug_control)
 {
   MetaDBusDebugControl *dbus_debug_control =
     META_DBUS_DEBUG_CONTROL (debug_control);
-  gboolean force_hdr, force_linear_blending,
-           color_management_protocol;
+  gboolean force_hdr, force_linear_blending;
   gboolean session_management_protocol;
+  gboolean cursor_shape_protocol;
   gboolean inhibit_hw_cursor;
-
-  color_management_protocol =
-    g_strcmp0 (getenv ("MUTTER_DEBUG_COLOR_MANAGEMENT_PROTOCOL"), "1") == 0;
-  meta_dbus_debug_control_set_color_management_protocol (dbus_debug_control,
-                                                         color_management_protocol);
+  gboolean a11y_manager_without_access_control;
 
   force_hdr = g_strcmp0 (getenv ("MUTTER_DEBUG_FORCE_HDR"), "1") == 0;
   meta_dbus_debug_control_set_force_hdr (dbus_debug_control, force_hdr);
@@ -185,8 +181,6 @@ meta_debug_control_init (MetaDebugControl *debug_control)
     g_strcmp0 (getenv ("MUTTER_DEBUG_FORCE_LINEAR_BLENDING"), "1") == 0;
   meta_dbus_debug_control_set_force_linear_blending (dbus_debug_control,
                                                      force_linear_blending);
-
-  meta_dbus_debug_control_set_luminance_percentage (dbus_debug_control, 100);
 
   session_management_protocol =
     g_strcmp0 (getenv ("MUTTER_DEBUG_SESSION_MANAGEMENT_PROTOCOL"), "1") == 0;
@@ -197,15 +191,16 @@ meta_debug_control_init (MetaDebugControl *debug_control)
     g_strcmp0 (getenv ("MUTTER_DEBUG_INHIBIT_HW_CURSOR"), "1") == 0;
   meta_dbus_debug_control_set_inhibit_hw_cursor (dbus_debug_control,
                                                  inhibit_hw_cursor);
-}
 
-gboolean
-meta_debug_control_is_color_management_protocol_enabled (MetaDebugControl *debug_control)
-{
-  MetaDBusDebugControl *dbus_debug_control =
-    META_DBUS_DEBUG_CONTROL (debug_control);
+  cursor_shape_protocol =
+    g_strcmp0 (getenv ("MUTTER_DEBUG_CURSOR_SHAPE_PROTOCOL"), "1") == 0;
+  meta_dbus_debug_control_set_cursor_shape_protocol (dbus_debug_control,
+                                                     cursor_shape_protocol);
 
-  return meta_dbus_debug_control_get_color_management_protocol (dbus_debug_control);
+  a11y_manager_without_access_control =
+    g_strcmp0 (getenv ("MUTTER_DEBUG_A11Y_MANAGER_WITHOUT_ACCESS_CONTROL"), "1") == 0;
+  meta_dbus_debug_control_set_a11y_manager_without_access_control (dbus_debug_control,
+                                                                   a11y_manager_without_access_control);
 }
 
 gboolean
@@ -224,15 +219,6 @@ meta_debug_control_is_hdr_forced (MetaDebugControl *debug_control)
     META_DBUS_DEBUG_CONTROL (debug_control);
 
   return meta_dbus_debug_control_get_force_hdr (dbus_debug_control);
-}
-
-unsigned int
-meta_debug_control_get_luminance_percentage (MetaDebugControl *debug_control)
-{
-  MetaDBusDebugControl *dbus_debug_control =
-    META_DBUS_DEBUG_CONTROL (debug_control);
-
-  return meta_dbus_debug_control_get_luminance_percentage (dbus_debug_control);
 }
 
 gboolean
@@ -279,4 +265,22 @@ meta_debug_control_is_hw_cursor_inhibited (MetaDebugControl *debug_control)
     META_DBUS_DEBUG_CONTROL (debug_control);
 
   return meta_dbus_debug_control_get_inhibit_hw_cursor (dbus_debug_control);
+}
+
+gboolean
+meta_debug_control_is_cursor_shape_protocol_enabled (MetaDebugControl *debug_control)
+{
+  MetaDBusDebugControl *dbus_debug_control =
+    META_DBUS_DEBUG_CONTROL (debug_control);
+
+  return meta_dbus_debug_control_get_cursor_shape_protocol (dbus_debug_control);
+}
+
+gboolean
+meta_debug_control_is_a11y_manager_without_access_control (MetaDebugControl *debug_control)
+{
+  MetaDBusDebugControl *dbus_debug_control =
+    META_DBUS_DEBUG_CONTROL (debug_control);
+
+  return meta_dbus_debug_control_get_a11y_manager_without_access_control (dbus_debug_control);
 }

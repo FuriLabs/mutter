@@ -1,3 +1,34 @@
+mutter (48~rc-2) unstable; urgency=medium
+
+  * Release to unstable
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Thu, 06 Mar 2025 10:51:50 -0500
+
+mutter (48~rc-1) experimental; urgency=medium
+
+  * New upstream release
+  * Bump minimum libinput & wayland-protocols
+  * debian/libmutter-16-0.symbols: Update
+  * Bump Breaks: gnome-shell to 48~rc
+  * Add many additional Depends to libmutter-16-dev
+  * Remove nocheck annotation from Build-Depends: zenity
+  * Remove 6 patches applied in new release including the triple buffering patch
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Mon, 03 Mar 2025 16:56:33 -0500
+
+mutter (48~beta-7) unstable; urgency=medium
+
+  * Release to unstable (Closes: #1093876)
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Sun, 02 Mar 2025 05:26:31 -0500
+
+mutter (48~beta-6) experimental; urgency=medium
+
+  [ Daniel van Vugt ]
+  * Add patch to fix gdctl path for installed tests (Closes: #1096037)
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Fri, 28 Feb 2025 13:24:06 -0500
+
 mutter (48~beta-5ubuntu1) plucky; urgency=medium
 
   * Merge with Debian. Remaining changes:

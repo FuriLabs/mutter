@@ -93,10 +93,10 @@ index 93a8cf4..9018a53 100644
    pointer = clutter_seat_create_virtual_device (seat, CLUTTER_POINTER_DEVICE);
  
 diff --git a/src/tests/clutter/conform/meson.build b/src/tests/clutter/conform/meson.build
-index 532962f..05ae7ab 100644
+index a3654d6..7f7f20c 100644
 --- a/src/tests/clutter/conform/meson.build
 +++ b/src/tests/clutter/conform/meson.build
-@@ -67,6 +67,12 @@ test_env.set('CLUTTER_ENABLE_DIAGNOSTIC', '0')
+@@ -68,6 +68,12 @@ test_env.set('CLUTTER_ENABLE_DIAGNOSTIC', '0')
  test_env.set('GSETTINGS_SCHEMA_DIR', locally_compiled_schemas_dir)
  
  foreach test : clutter_conform_tests
@@ -109,7 +109,7 @@ index 532962f..05ae7ab 100644
    test_executable = executable('@0@'.format(test),
      sources: [
        '@0@.c'.format(test),
-@@ -82,7 +88,7 @@ foreach test : clutter_conform_tests
+@@ -83,7 +89,7 @@ foreach test : clutter_conform_tests
    )
  
    test(test, test_executable,
@@ -119,7 +119,7 @@ index 532962f..05ae7ab 100644
      is_parallel: false,
    )
 diff --git a/src/tests/meson.build b/src/tests/meson.build
-index 751fccf..901661e 100644
+index 99925c2..02d878e 100644
 --- a/src/tests/meson.build
 +++ b/src/tests/meson.build
 @@ -499,6 +499,7 @@ test_cases += [
@@ -130,7 +130,7 @@ index 751fccf..901661e 100644
    },
    {
      'name': 'thread',
-@@ -850,9 +851,20 @@ foreach test_case: test_cases
+@@ -862,9 +863,20 @@ foreach test_case: test_cases
  
    args = test_case.get('args', [])
  
@@ -152,7 +152,7 @@ index 751fccf..901661e 100644
      args: args,
      env: test_env,
      depends: test_depends,
-@@ -915,7 +927,7 @@ stacking_tests = [
+@@ -927,7 +939,7 @@ stacking_tests = [
  
  foreach stacking_test: stacking_tests
    test(stacking_test, test_runner,

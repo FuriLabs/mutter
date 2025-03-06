@@ -1,17 +1,41 @@
 #!/usr/bin/env python3
 
 import argparse
-import argcomplete
 import sys
 
 from dataclasses import dataclass, field
-from gi.repository import GLib, Gio
+from typing import NamedTuple, Any, Optional
+from types import ModuleType
+from gi.repository import GLib, Gio  # type: ignore
 from enum import Enum, Flag
-from argcomplete.completers import BaseCompleter, SuppressCompleter
+
+argcomplete: Optional[ModuleType] = None
+BaseCompleter: Any
+try:
+    import argcomplete
+    from argcomplete.completers import BaseCompleter
+except ModuleNotFoundError:
+    BaseCompleter = object
 
 NAME = "org.gnome.Mutter.DisplayConfig"
 INTERFACE = "org.gnome.Mutter.DisplayConfig"
 OBJECT_PATH = "/org/gnome/Mutter/DisplayConfig"
+
+
+class Dimension(NamedTuple):
+    width: int
+    height: int
+
+    def __str__(self):
+        return f"{self.width}x{self.height}"
+
+
+class Position(NamedTuple):
+    x: int | None
+    y: int | None
+
+    def __str__(self):
+        return f"({self.x}, {self.y})"
 
 
 class NamedEnum(Enum):
@@ -125,8 +149,7 @@ def print_data(*, level: int, is_last: bool, lines: list[int], data: str):
 
     if level >= 0:
         indent = level
-        buffer = f"{link:{padding}>{indent * 4}}──{data}"
-        buffer = list(buffer)
+        buffer = list(f"{link:{padding}>{indent * 4}}──{data}")
         for line in lines:
             if line == level:
                 continue
@@ -134,11 +157,10 @@ def print_data(*, level: int, is_last: bool, lines: list[int], data: str):
             if line > 0:
                 index -= 1
             buffer[index] = "│"
-        buffer = "".join(buffer)
     else:
-        buffer = data
+        buffer = list(data)
 
-    print(buffer)
+    print("".join(buffer))
 
     if is_last and level in lines:
         lines.remove(level)
@@ -175,6 +197,41 @@ def print_properties(*, level, lines, properties):
         )
 
 
+def print_monitor_prefs(
+    display_config, monitor, level: int, lines: list[int], is_last: bool
+):
+    print_data(
+        level=level,
+        is_last=is_last,
+        lines=lines,
+        data="Preferences:",
+    )
+
+    print_data(
+        level=level + 1,
+        is_last=True,
+        lines=lines,
+        data="Luminances:",
+    )
+
+    for color_mode in monitor.supported_color_modes:
+        (output_luminance, is_unset) = display_config.get_luminance(
+            monitor, color_mode
+        )
+        is_last = color_mode == monitor.supported_color_modes[-1]
+
+        is_default_string = " (default)" if is_unset else ""
+        is_current_string = (
+            " (current)" if monitor.color_mode == color_mode else ""
+        )
+        print_data(
+            level=level + 2,
+            is_last=is_last,
+            lines=lines,
+            data=f"{color_mode} ⇒  {output_luminance}{is_default_string}{is_current_string}",
+        )
+
+
 def strip_dbus_error_prefix(message):
     if message.startswith("GDBus.Error"):
         return message.partition(" ")[2]
@@ -182,7 +239,7 @@ def strip_dbus_error_prefix(message):
         return message
 
 
-def transform_size(size, transform) -> tuple[int, int]:
+def transform_size(size: Dimension, transform) -> Dimension:
     match transform:
         case (
             Transform.NORMAL
@@ -198,14 +255,14 @@ def transform_size(size, transform) -> tuple[int, int]:
             | Transform.ROTATE_270_FLIPPED
         ):
             width, height = size
-            return (height, width)
+            return Dimension(height, width)
         case _:
             raise NotImplementedError
 
 
-def scale_size(size, scale) -> tuple[int, int]:
+def scale_size(size: Dimension, scale) -> Dimension:
     width, height = size
-    return (round(width / scale), round(height / scale))
+    return Dimension(round(width / scale), round(height / scale))
 
 
 class DisplayConfig:
@@ -238,11 +295,17 @@ class DisplayConfig:
     def apply_monitors_config(self, config, config_method):
         serial = config.monitors_state.server_serial
         logical_monitors = config.generate_logical_monitor_tuples()
+        monitors_for_lease = config.generate_monitors_for_lease_tuples()
         properties = {}
 
         if monitors_state.supports_changing_layout_mode:
             properties["layout-mode"] = GLib.Variant(
                 "u", config.layout_mode.value
+            )
+
+        if monitors_for_lease:
+            properties["monitors-for-lease"] = GLib.Variant(
+                "a(ssss)", monitors_for_lease
             )
 
         parameters = GLib.Variant(
@@ -262,22 +325,65 @@ class DisplayConfig:
             cancellable=None,
         )
 
+    def get_luminance(self, monitor, color_mode) -> tuple[float, bool]:
+        variant = self._proxy.get_cached_property("Luminance")
+
+        luminance_entry = next(
+            entry
+            for entry in variant
+            if entry["connector"] == monitor.connector
+            and ColorMode(entry["color-mode"]) == color_mode
+        )
+        output_luminance = luminance_entry["luminance"]
+        is_unset = luminance_entry["is-unset"]
+
+        return (output_luminance, is_unset)
+
+    def set_luminance(self, monitor, color_mode, luminance):
+        parameters = GLib.Variant(
+            "(sud)",
+            (
+                monitor.connector,
+                color_mode.value,
+                luminance,
+            ),
+        )
+        self._proxy.call_sync(
+            method_name="SetLuminance",
+            parameters=parameters,
+            flags=Gio.DBusCallFlags.NO_AUTO_START,
+            timeout_msec=-1,
+            cancellable=None,
+        )
+
+    def reset_luminance(self, monitor, color_mode):
+        parameters = GLib.Variant(
+            "(su)",
+            (monitor.connector, color_mode.value),
+        )
+        self._proxy.call_sync(
+            method_name="ResetLuminance",
+            parameters=parameters,
+            flags=Gio.DBusCallFlags.NO_AUTO_START,
+            timeout_msec=-1,
+            cancellable=None,
+        )
+
 
 @dataclass
 class MonitorMode:
     name: str
-    resolution: tuple[int, int]
+    resolution: Dimension
     refresh_rate: float
     preferred_scale: float
     supported_scales: list[float]
-    refresh_rate: float
     properties: dict
 
     @classmethod
     def from_variant(cls, variant):
         return cls(
             name=variant[0],
-            resolution=(variant[1], variant[2]),
+            resolution=Dimension(variant[1], variant[2]),
             refresh_rate=variant[3],
             preferred_scale=variant[4],
             supported_scales=variant[5],
@@ -297,6 +403,7 @@ class Monitor:
     current_mode: MonitorMode | None
     preferred_mode: MonitorMode | None
     color_mode: ColorMode | None
+    supported_color_modes: list[ColorMode]
 
     @classmethod
     def from_variant(cls, variant):
@@ -322,6 +429,7 @@ class Monitor:
 
         display_name = properties.get("display-name", None)
         color_mode = properties.get("color-mode", None)
+        supported_color_modes = properties.get("supported-color-modes")
 
         return cls(
             connector=connector,
@@ -334,6 +442,7 @@ class Monitor:
             preferred_mode=preferred_mode,
             display_name=display_name,
             color_mode=color_mode,
+            supported_color_modes=supported_color_modes,
         )
 
 
@@ -341,11 +450,11 @@ class Monitor:
 class LogicalMonitor:
     monitors: list[Monitor]
     scale: float
-    position: tuple[int, int] | None = (0, 0)
+    position: Position = Position(0, 0)
     transform: Transform = Transform.NORMAL
     is_primary: bool = False
-    properties: dict = field(default_factory=dict)
-    args: dict | None = None
+    properties: dict[str, Any] = field(default_factory=dict)
+    args: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_variant(cls, monitors_state, variant):
@@ -434,7 +543,7 @@ def place_right_of(
     else:
         y = None
 
-    logical_monitor.position = (x, y)
+    logical_monitor.position = Position(x, y)
 
 
 def place_left_of(
@@ -459,7 +568,7 @@ def place_left_of(
     else:
         y = None
 
-    logical_monitor.position = (x, y)
+    logical_monitor.position = Position(x, y)
 
 
 def place_below(
@@ -479,9 +588,9 @@ def place_below(
     if set_x_position:
         x, _ = connector_logical_monitor.position
     else:
-        x = logical_monitor.position[0]
+        x = logical_monitor.position.x
 
-    logical_monitor.position = (x, y)
+    logical_monitor.position = Position(x, y)
 
 
 def place_above(
@@ -504,9 +613,9 @@ def place_above(
     if set_x_position:
         x, _ = connector_logical_monitor.position
     else:
-        x = logical_monitor.position[0]
+        x = logical_monitor.position.x
 
-    logical_monitor.position = (x, y)
+    logical_monitor.position = Position(x, y)
 
 
 class PositionType(Flag):
@@ -536,13 +645,13 @@ def calculate_position(
 
     set_y_position = vertical_args == 0
 
+    x = None
+    y = None
+
     if "x" in logical_monitor.args:
         x = int(logical_monitor.args["x"])
-        if set_y_position:
-            y = 0
-        else:
-            y = None
-        logical_monitor.position = (x, y)
+        y = 0 if set_y_position else None
+        logical_monitor.position = Position(x, y)
         position_types |= PositionType.ABSOLUTE_X
     elif "right_of" in logical_monitor.args:
         connector = logical_monitor.args["right_of"]
@@ -573,17 +682,14 @@ def calculate_position(
         )
         position_types |= PositionType.RELATIVE_X
     else:
-        logical_monitor.position = (0, 0)
+        logical_monitor.position = Position(0, 0)
 
     set_x_position = horizontal_args == 0
 
     if "y" in logical_monitor.args:
         y = int(logical_monitor.args["y"])
-        if set_x_position:
-            x = 0
-        else:
-            x = logical_monitor.position[0]
-        logical_monitor.position = (x, y)
+        x = 0 if set_x_position else logical_monitor.position.x
+        logical_monitor.position = Position(x, y)
         position_types |= PositionType.ABSOLUTE_Y
     elif "below" in logical_monitor.args:
         connector = logical_monitor.args["below"]
@@ -613,17 +719,19 @@ def calculate_position(
         x, y = logical_monitor.position
         if not y:
             y = 0
-        logical_monitor.position = (x, y)
+        logical_monitor.position = Position(x, y)
 
-    assert logical_monitor.position[0] is not None
-    assert logical_monitor.position[1] is not None
+    assert logical_monitor.position.x is not None
+    assert logical_monitor.position.y is not None
 
     return position_types
 
 
 def align_horizontally(logical_monitors: list[LogicalMonitor]):
     min_x = min(
-        logical_monitor.position[0] for logical_monitor in logical_monitors
+        logical_monitor.position.x
+        for logical_monitor in logical_monitors
+        if logical_monitor.position.x is not None
     )
 
     dx = min_x
@@ -632,12 +740,16 @@ def align_horizontally(logical_monitors: list[LogicalMonitor]):
 
     for logical_monitor in logical_monitors:
         x, y = logical_monitor.position
-        logical_monitor.position = (x - dx, y)
+        logical_monitor.position = Position(
+            x - dx if x is not None else None, y
+        )
 
 
 def align_vertically(logical_monitors: list[LogicalMonitor]):
     min_y = min(
-        logical_monitor.position[1] for logical_monitor in logical_monitors
+        logical_monitor.position.y
+        for logical_monitor in logical_monitors
+        if logical_monitor.position.y is not None
     )
 
     dy = min_y
@@ -646,7 +758,9 @@ def align_vertically(logical_monitors: list[LogicalMonitor]):
 
     for logical_monitor in logical_monitors:
         x, y = logical_monitor.position
-        logical_monitor.position = (x, y - dy)
+        logical_monitor.position = Position(
+            x, y - dy if y is not None else None
+        )
 
 
 def calculate_positions(
@@ -755,9 +869,15 @@ def generate_configuration(monitors_state, args):
         for monitor in logical_monitor.monitors:
             monitor_mappings[monitor.connector] = logical_monitor
 
+    monitors_for_lease = []
+    for connector in args.monitors_for_lease:
+        monitors_for_lease.append(monitors_state.monitors[connector])
+
     calculate_positions(logical_monitors, layout_mode, monitor_mappings)
 
-    return Config(monitors_state, logical_monitors, layout_mode)
+    return Config(
+        monitors_state, logical_monitors, layout_mode, monitors_for_lease
+    )
 
 
 def derive_config_method(args):
@@ -786,7 +906,7 @@ def print_config(config):
 
     print_data(
         level=0,
-        is_last=True,
+        is_last=False,
         lines=lines,
         data=f"Logical monitors ({len(config.logical_monitors)})",
     )
@@ -856,11 +976,28 @@ def print_config(config):
 
         index += 1
 
+    print_data(
+        level=0,
+        is_last=True,
+        lines=lines,
+        data=f"Monitors for lease ({len(config.monitors_for_lease)})",
+    )
+
+    for monitor in config.monitors_for_lease:
+        is_last = monitor == config.monitors_for_lease[-1]
+        print_data(
+            level=1,
+            is_last=is_last,
+            lines=lines,
+            data=f"Monitor {monitor.connector} ({monitor.display_name})",
+        )
+
 
 class MonitorsState:
     def __init__(self, display_config):
         current_state = display_config.get_current_state()
 
+        self.display_config = display_config
         self.server_serial = current_state[0]
         self.properties = translate_properties(current_state[3])
         self.supports_changing_layout_mode = self.properties.get(
@@ -894,12 +1031,11 @@ class MonitorsState:
         if not show_properties:
             return
 
-        width, height = mode.resolution
         print_data(
             level=3,
             is_last=False,
             lines=lines,
-            data=f"Dimension: {width}x{height}",
+            data=f"Dimension: {mode.resolution}",
         )
         print_data(
             level=3,
@@ -1001,11 +1137,19 @@ class MonitorsState:
                 if mode:
                     print_data(
                         level=1,
-                        is_last=not show_properties,
+                        is_last=False,
                         lines=lines,
                         data=f"{mode_type} mode",
                     )
                     self.print_mode(mode, True, show_properties, lines)
+
+            print_monitor_prefs(
+                self.display_config,
+                monitor,
+                level=1,
+                lines=lines,
+                is_last=not show_properties,
+            )
 
             if show_properties:
                 print_properties(level=1, lines=lines, properties=properties)
@@ -1087,6 +1231,7 @@ class Config:
     monitors_state: MonitorsState
     logical_monitors: list[LogicalMonitor]
     layout_mode: LayoutMode
+    monitors_for_lease: Monitor
 
     def generate_monitor_tuples(self, monitors):
         tuples = []
@@ -1130,10 +1275,30 @@ class Config:
             )
         return tuples
 
+    def generate_monitors_for_lease_tuples(self):
+        tuples = []
+        for monitor in self.monitors_for_lease:
+            tuples.append(
+                (
+                    monitor.connector,
+                    monitor.vendor,
+                    monitor.product,
+                    monitor.serial,
+                )
+            )
+        return tuples
+
 
 class GroupAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
-        namespace._current_group = {}
+        if len(values) == 1:
+            (value,) = values
+            namespace._current_group = {
+                "key": value,
+            }
+        else:
+            namespace._current_group = {}
+
         groups = namespace.__dict__.setdefault(self.dest, [])
         groups.append(namespace._current_group)
 
@@ -1324,7 +1489,7 @@ if __name__ == "__main__":
         choices=[str(layout_mode) for layout_mode in list(LayoutMode)],
         type=str,
         action=AppendToGlobal,
-    ).completer = LayoutModeCompleter()
+    ).completer = LayoutModeCompleter()  # type: ignore[attr-defined]
     set_parser.add_argument(
         "-L",
         "--logical-monitor",
@@ -1333,6 +1498,14 @@ if __name__ == "__main__":
         nargs=0,
         default=[],
     )
+    set_parser.add_argument(
+        "-e",
+        "--for-lease-monitor",
+        dest="monitors_for_lease",
+        action="append",
+        type=str,
+        default=[],
+    ).completer = MonitorCompleter()  # type: ignore[attr-defined]
     logical_monitor_parser = set_parser.add_argument_group(
         "logical_monitor",
         "Logical monitor options (pass after --logical-monitor)",
@@ -1346,7 +1519,7 @@ if __name__ == "__main__":
         action=SubGroupAction,
         nargs=1,
         help="Configure monitor",
-    ).completer = MonitorCompleter()
+    ).completer = MonitorCompleter()  # type: ignore[attr-defined]
     monitor_parser = set_parser.add_argument_group(
         "monitor",
         "Monitor options (pass after --monitor)",
@@ -1358,7 +1531,7 @@ if __name__ == "__main__":
         action=AppendToSubGroup,
         help="Monitor mode",
         type=str,
-    ).completer = MonitorModeCompleter()
+    ).completer = MonitorModeCompleter()  # type: ignore[attr-defined]
     monitor_parser.add_argument(
         "--color-mode",
         "-c",
@@ -1366,7 +1539,7 @@ if __name__ == "__main__":
         help="Color mode",
         choices=[str(color_mode) for color_mode in list(ColorMode)],
         type=str,
-    ).completer = ColorModeCompleter()
+    ).completer = ColorModeCompleter()  # type: ignore[attr-defined]
     logical_monitor_parser.add_argument(
         "--primary",
         "-p",
@@ -1382,7 +1555,7 @@ if __name__ == "__main__":
         action=AppendToGroup,
         help="Logical monitor scale",
         type=float,
-    ).completer = ScaleCompleter()
+    ).completer = ScaleCompleter()  # type: ignore[attr-defined]
     logical_monitor_parser.add_argument(
         "--transform",
         "-t",
@@ -1390,7 +1563,7 @@ if __name__ == "__main__":
         help="Apply viewport transform",
         choices=[str(transform) for transform in list(Transform)],
         type=str,
-    ).completer = TransformCompleter()
+    ).completer = TransformCompleter()  # type: ignore[attr-defined]
     logical_monitor_parser.add_argument(
         "--x",
         "-x",
@@ -1411,38 +1584,76 @@ if __name__ == "__main__":
         metavar="CONNECTOR",
         help="Place right of other monitor",
         type=str,
-    ).completer = MonitorCompleter()
+    ).completer = MonitorCompleter()  # type: ignore[attr-defined]
     logical_monitor_parser.add_argument(
         "--left-of",
         action=AppendToGroup,
         metavar="CONNECTOR",
         help="Place left of other monitor",
         type=str,
-    ).completer = MonitorCompleter()
+    ).completer = MonitorCompleter()  # type: ignore[attr-defined]
     logical_monitor_parser.add_argument(
         "--above",
         action=AppendToGroup,
         metavar="CONNECTOR",
         help="Place above other monitor",
         type=str,
-    ).completer = MonitorCompleter()
+    ).completer = MonitorCompleter()  # type: ignore[attr-defined]
     logical_monitor_parser.add_argument(
         "--below",
         action=AppendToGroup,
         metavar="CONNECTOR",
         help="Place below other monitor",
         type=str,
-    ).completer = MonitorCompleter()
+    ).completer = MonitorCompleter()  # type: ignore[attr-defined]
 
-    for action in [
-        GroupAction,
-        SubGroupAction,
-        AppendToGroup,
-        AppendToSubGroup,
-        AppendToGlobal,
-    ]:
-        argcomplete.safe_actions.add(action)
-    argcomplete.autocomplete(parser, default_completer=SuppressCompleter)
+    prefs_parser = subparser.add_parser(
+        "prefs",
+        help="Set display preferences",
+    )
+    prefs_parser.add_argument(
+        "-M",
+        "--monitor",
+        dest="monitors",
+        metavar="CONNECTOR",
+        action=GroupAction,
+        nargs=1,
+        default=[],
+        help="Change monitor preferences",
+    ).completer = MonitorCompleter()  # type: ignore[attr-defined]
+    monitor_prefs_parser = prefs_parser.add_argument_group(
+        "monitor",
+        "Monitor preferences (pass after --monitor)",
+        argument_default=argparse.SUPPRESS,
+    )
+    monitor_prefs_parser.add_argument(
+        "-l",
+        "--luminance",
+        action=AppendToGroup,
+        type=float,
+        nargs=1,
+    )
+    monitor_prefs_parser.add_argument(
+        "--reset-luminance",
+        action=AppendToGroup,
+        type=bool,
+        const=True,
+        nargs=0,
+    )
+
+    if argcomplete:
+        for action in [
+            GroupAction,
+            SubGroupAction,
+            AppendToGroup,
+            AppendToSubGroup,
+            AppendToGlobal,
+        ]:
+            argcomplete.safe_actions.add(action)
+
+        argcomplete.autocomplete(
+            parser, default_completer=argcomplete.SuppressCompleter
+        )  # type: ignore[arg-type]
 
     args = parser.parse_args()
 
@@ -1455,7 +1666,7 @@ if __name__ == "__main__":
                 if e.domain == GLib.quark_to_string(Gio.DBusError.quark()):
                     error_message = strip_dbus_error_prefix(e.message)
                     print(
-                        f"Failed retrieve current state: {error_message}",
+                        f"Failed to retrieve current state: {error_message}",
                         file=sys.stderr,
                     )
                 sys.exit(1)
@@ -1479,7 +1690,7 @@ if __name__ == "__main__":
                 if e.domain == GLib.quark_to_string(Gio.DBusError.quark()):
                     error_message = strip_dbus_error_prefix(e.message)
                     print(
-                        f"Failed retrieve current state: {error_message}",
+                        f"Failed to retrieve current state: {error_message}",
                         file=sys.stderr,
                     )
                 sys.exit(1)
@@ -1506,3 +1717,45 @@ if __name__ == "__main__":
                         file=sys.stderr,
                     )
                 sys.exit(1)
+        case "prefs":
+            try:
+                display_config = DisplayConfig()
+                monitors_state = MonitorsState(display_config)
+            except GLib.Error as e:
+                if e.domain == GLib.quark_to_string(Gio.DBusError.quark()):
+                    error_message = strip_dbus_error_prefix(e.message)
+                    print(
+                        f"Failed to retrieve current state: {error_message}",
+                        file=sys.stderr,
+                    )
+                sys.exit(1)
+
+            for monitor_prefs in args.monitors:
+                connector = monitor_prefs["key"]
+
+                if (
+                    "luminance" in monitor_prefs
+                    and "reset_luminance" in monitor_prefs
+                ):
+                    print(
+                        "Cannot both set and reset luminance",
+                        file=sys.stderr,
+                    )
+                    sys.exit(1)
+
+                if connector not in monitors_state.monitors:
+                    print(
+                        f"Monitor with connector {connector} not found",
+                        file=sys.stderr,
+                    )
+                    sys.exit(1)
+
+                monitor = monitors_state.monitors[connector]
+
+                if "luminance" in monitor_prefs:
+                    (luminance,) = monitor_prefs["luminance"]
+                    display_config.set_luminance(
+                        monitor, monitor.color_mode, luminance
+                    )
+                elif "reset_luminance" in monitor_prefs:
+                    display_config.reset_luminance(monitor, monitor.color_mode)

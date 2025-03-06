@@ -132,6 +132,7 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_context_get_debug_control@Base 47~beta
  meta_context_get_display@Base 43.0
  meta_context_get_service_channel@Base 44~beta
+ meta_context_get_session_manager@Base 48~rc
  meta_context_get_type@Base 43.0
  meta_context_get_wayland_compositor@Base 43.0
  meta_context_is_replacing@Base 43.0
@@ -294,6 +295,7 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_inhibit_shortcuts_dialog_show@Base 43.0
  meta_is_restart@Base 43.0
  meta_is_topic_enabled@Base 43.0
+ meta_is_udev_test_device@Base 48~rc
  meta_is_verbose@Base 43.0
  meta_is_wayland_compositor@Base 43.0
  meta_key_binding_action_get_type@Base 43.0
@@ -875,6 +877,7 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_window_protocol_to_stage_rect@Base 47~rc
  meta_window_raise@Base 43.0
  meta_window_raise_and_make_recent_on_workspace@Base 46~beta
+ meta_window_resize_frame@Base 48~rc
  meta_window_set_compositor_private@Base 43.0
  meta_window_set_demands_attention@Base 43.0
  meta_window_set_icon_geometry@Base 43.0
@@ -1320,6 +1323,7 @@ libmutter-clutter-16.so.0 libmutter-16-0 #MINVER#
  clutter_color_node_get_type@Base 43.0
  clutter_color_node_new@Base 43.0
  clutter_color_state_add_pipeline_transform@Base 47~beta
+ clutter_color_state_do_transform@Base 48~rc
  clutter_color_state_equals@Base 47~beta
  clutter_color_state_get_blending@Base 47~beta
  clutter_color_state_get_id@Base 47~beta
@@ -1492,17 +1496,14 @@ libmutter-clutter-16.so.0 libmutter-16-0 #MINVER#
  clutter_frame_clock_uninhibit@Base 43.0
  clutter_frame_get_count@Base 44~beta
  clutter_frame_get_frame_deadline@Base 46~beta
- (optional=triplebuffer)clutter_frame_get_hints@Base 43.0
  clutter_frame_get_result@Base 46~beta
  clutter_frame_get_target_presentation_time@Base 44~beta
  clutter_frame_get_type@Base 44~beta
  clutter_frame_has_result@Base 43.0
- (optional=triplebuffer)clutter_frame_hint_get_type@Base 43.0
  clutter_frame_info_flag_get_type@Base 43.0
  clutter_frame_new@Base 44~beta
  clutter_frame_ref@Base 44~beta
  clutter_frame_result_get_type@Base 43.0
- (optional=triplebuffer)clutter_frame_set_hint@Base 43.0
  clutter_frame_set_result@Base 43.0
  clutter_frame_unref@Base 44~beta
  clutter_gesture_action_cancel@Base 43.0
@@ -2262,6 +2263,7 @@ libmutter-cogl-16.so.0 libmutter-16-0 #MINVER#
  cogl_frame_info_get_refresh_rate@Base 43.0
  cogl_frame_info_get_rendering_duration_ns@Base 43.0
  cogl_frame_info_get_sequence@Base 43.0
+ cogl_frame_info_get_target_presentation_time_us@Base 48~rc
  cogl_frame_info_get_time_before_buffer_swap_us@Base 43.0
  cogl_frame_info_get_type@Base 46~beta
  cogl_frame_info_has_valid_gpu_rendering_duration@Base 46.0
@@ -2481,6 +2483,7 @@ libmutter-cogl-16.so.0 libmutter-16-0 #MINVER#
  cogl_renderer_new@Base 43.0
  cogl_renderer_query_drm_modifiers@Base 48~alpha
  cogl_renderer_set_custom_winsys@Base 43.0
+ cogl_renderer_set_driver@Base 48~rc
  cogl_scanout_blit_to_framebuffer@Base 43.0
  cogl_scanout_buffer_get_type@Base 46~beta
  cogl_scanout_error_get_type@Base 48~alpha

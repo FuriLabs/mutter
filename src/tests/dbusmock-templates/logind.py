@@ -149,17 +149,31 @@ class Login1Session(mockobject.DBusMockObject):
 
 
 @dbus.service.method(MANAGER_IFACE, in_signature='u', out_signature='o')
+def GetUser(self, uid):
+    user_path = f'{MAIN_OBJ}/user/_{uid}'
+    return user_path
+
+@dbus.service.method(MANAGER_IFACE, in_signature='u', out_signature='o')
 def GetSessionByPID(self, pid):
     session_path = f'{MAIN_OBJ}/session/{self.preferred_session_id}'
     return session_path
 
+@dbus.service.method(MANAGER_IFACE, in_signature='ssss', out_signature='h')
+def Inhibit(self, what, who, why, mode):
+    # Return an arbitrary FD
+    return os.open('/dev/null', os.O_RDONLY)
+
 def create_session(self, host_bus):
-    session_id = 'dummy'
-    seat_id = 'seat0'
+    session_id = None
+    seat_id = None
 
     if host_bus:
         session_id = find_host_session_id(host_bus)
         seat_id = find_host_seat_id(host_bus, session_id)
+
+    if not seat_id:
+        session_id = 'dummy'
+        seat_id = 'seat0'
 
     if not self.preferred_session_id or host_bus:
         self.preferred_session_id = session_id

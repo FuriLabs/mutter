@@ -419,7 +419,7 @@ meta_test_native_cursor_scaling (void)
   };
   int i;
 
-  cursor = META_CURSOR_MOVE_OR_RESIZE_WINDOW;
+  cursor = META_CURSOR_MOVE;
   meta_display_set_cursor (display, cursor);
   virtual_pointer = clutter_seat_create_virtual_device (seat,
                                                         CLUTTER_POINTER_DEVICE);
@@ -535,7 +535,7 @@ meta_test_native_cursor_cropping (void)
 
       test_client_cursor (view,
                           CURSOR_SCALE_METHOD_VIEWPORT_CROPPED,
-                          META_CURSOR_MOVE_OR_RESIZE_WINDOW,
+                          META_CURSOR_MOVE,
                           MTK_MONITOR_TRANSFORM_NORMAL,
                           ref_test_name, 0,
                           meta_ref_test_determine_ref_test_flag ());
@@ -629,7 +629,7 @@ meta_test_native_cursor_transform (void)
                           meta_ref_test_determine_ref_test_flag ());
       test_client_cursor (view,
                           CURSOR_SCALE_METHOD_VIEWPORT_CROPPED,
-                          META_CURSOR_MOVE_OR_RESIZE_WINDOW,
+                          META_CURSOR_MOVE,
                           test_cases[i].transform,
                           ref_test_name, 2,
                           meta_ref_test_determine_ref_test_flag ());
@@ -672,6 +672,7 @@ main (int    argc,
       char **argv)
 {
   g_autoptr (MetaContext) context = NULL;
+  g_autofree char *path = NULL;
 
   context = meta_create_test_context (META_CONTEXT_TEST_TYPE_TEST,
                                       (META_CONTEXT_TEST_FLAG_NO_X11 |
@@ -680,6 +681,9 @@ main (int    argc,
   g_assert_true (meta_context_configure (context, &argc, &argv, NULL));
   meta_context_test_set_background_color (META_CONTEXT_TEST (context),
                                           COGL_COLOR_INIT (255, 255, 255, 255));
+
+  path = g_test_build_filename (G_TEST_DIST, "tests", "xcursors", NULL);
+  g_setenv ("XCURSOR_PATH", path, TRUE);
 
   test_context = context;
 
