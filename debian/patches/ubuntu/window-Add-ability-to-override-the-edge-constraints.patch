@@ -49,7 +49,7 @@ index 0000000..ee5b2f4
 +                                  MetaWindowConstraint  right,
 +                                  MetaWindowConstraint  bottom);
 diff --git a/src/core/window-private.h b/src/core/window-private.h
-index 21c5803..21e4fb0d 100644
+index 6f07ad1..8bd7a03 100644
 --- a/src/core/window-private.h
 +++ b/src/core/window-private.h
 @@ -269,6 +269,13 @@ struct _MetaWindow
@@ -67,7 +67,7 @@ index 21c5803..21e4fb0d 100644
  
    MetaLogicalMonitorId *preferred_logical_monitor;
 diff --git a/src/core/window.c b/src/core/window.c
-index 7f0b511..82faf35 100644
+index 03bbb87..bae5ebe 100644
 --- a/src/core/window.c
 +++ b/src/core/window.c
 @@ -72,6 +72,7 @@
@@ -78,7 +78,7 @@ index 7f0b511..82faf35 100644
  #include "core/meta-window-config-private.h"
  #include "core/meta-workspace-manager-private.h"
  #include "core/place.h"
-@@ -3075,6 +3076,38 @@ meta_window_update_tile_fraction (MetaWindow *window,
+@@ -3090,6 +3091,38 @@ meta_window_update_tile_fraction (MetaWindow *window,
      meta_window_tile (tile_match, tile_match->tile_mode);
  }
  
@@ -117,7 +117,7 @@ index 7f0b511..82faf35 100644
  static void
  update_edge_constraints (MetaWindow *window)
  {
-@@ -3130,6 +3163,18 @@ update_edge_constraints (MetaWindow *window)
+@@ -3145,6 +3178,18 @@ update_edge_constraints (MetaWindow *window)
        window->edge_constraints.right = META_EDGE_CONSTRAINT_MONITOR;
        window->edge_constraints.left = META_EDGE_CONSTRAINT_MONITOR;
      }
@@ -137,10 +137,10 @@ index 7f0b511..82faf35 100644
  
  gboolean
 diff --git a/src/meson.build b/src/meson.build
-index 4301780..f2c9dfd 100644
+index b0c103b..890f6a7 100644
 --- a/src/meson.build
 +++ b/src/meson.build
-@@ -1335,7 +1335,8 @@ if have_introspection
+@@ -1347,7 +1347,8 @@ if have_introspection
      sources: [
        mutter_enum_types[1],
        mutter_introspected_sources,
