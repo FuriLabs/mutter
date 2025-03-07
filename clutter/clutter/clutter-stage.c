@@ -3586,10 +3586,15 @@ clutter_stage_pick_and_update_device (ClutterStage             *stage,
   ClutterActor *new_actor = NULL;
   MtkRegion *clear_area = NULL;
   ClutterSeat *seat;
+  gboolean is_touch, has_absolute_motion;
 
   seat = clutter_input_device_get_seat (device);
 
-  if (sequence ||
+  is_touch = sequence != NULL;
+  has_absolute_motion = is_touch ||
+                        (flags & CLUTTER_DEVICE_UPDATE_POINTER_EMULATED);
+
+  if (has_absolute_motion ||
       device != clutter_seat_get_pointer (seat) ||
       clutter_seat_is_unfocus_inhibited (seat))
     {
@@ -4676,6 +4681,9 @@ clutter_stage_update_device_for_event (ClutterStage *stage,
   time_ms = clutter_event_get_time (event);
 
   flags = CLUTTER_DEVICE_UPDATE_EMIT_CROSSING;
+
+  if (clutter_event_is_pointer_emulated (event))
+    flags |= CLUTTER_DEVICE_UPDATE_POINTER_EMULATED;
 
   return clutter_stage_pick_and_update_device (stage,
                                                device,
