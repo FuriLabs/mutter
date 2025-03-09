@@ -11,10 +11,10 @@ So let's disable this for now
  1 file changed, 10 insertions(+), 10 deletions(-)
 
 diff --git a/src/tests/meson.build b/src/tests/meson.build
-index 50b48e2..99925c2 100644
+index fdb6549..9ce0519 100644
 --- a/src/tests/meson.build
 +++ b/src/tests/meson.build
-@@ -462,16 +462,16 @@ test_cases += [
+@@ -463,16 +463,16 @@ test_cases += [
        'native-virtual-monitor.c',
      ],
    },
