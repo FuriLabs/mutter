@@ -15,6 +15,10 @@ backends-native-Generalize-keyboard-LED-management.patch
 Update-Catalan-translation.patch
 Update-Danish-translation.patch
 Update-Basque-translation.patch
+kms-impl-device-Refactor-meta_kms_impl_device_do_process_.patch
+kms-impl-device-Don-t-set_needs_flush-if-there-s-a-pendin.patch
+kms-impl-device-Process-pending-update-from-_schedule_pro.patch
+kms-impl-device-Don-t-disable-deadline-timer-on-G_IO_ERRO.patch
 workarounds/tests-Mark-view-verification-tests-as-incomplete-in-big-e.patch
 debian/tests-Do-not-run-screencast-tests.patch
 workarounds/tests-skip-monitor-width-size-check-as-it-may-lead-to-une.patch

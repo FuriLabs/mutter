@@ -1,0 +1,37 @@
+From: =?utf-8?q?Michel_D=C3=A4nzer?= <mdaenzer@redhat.com>
+Date: Wed, 5 Mar 2025 19:06:05 +0100
+Subject: kms/impl-device: Don't disable deadline timer on
+ G_IO_ERROR_NOT_FOUND
+
+It means crtc->current_state.is_drm_mode_valid happened to be NULL in
+meta_kms_crtc_determine_deadline. We don't want to permanently disable
+the deadline timer because of that. (The fact that it was done silently
+made it more surprising)
+
+Fixes: 7493ed39ce20 ("kms/impl-device: Avoid retrying a failing deadline timer")
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/3955
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/3959
+Bug-Debian: https://bugs.debian.org/1099743
+Origin: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4321
+---
+ src/backends/native/meta-kms-impl-device.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/src/backends/native/meta-kms-impl-device.c b/src/backends/native/meta-kms-impl-device.c
+index 8afc588..10a80c6 100644
+--- a/src/backends/native/meta-kms-impl-device.c
++++ b/src/backends/native/meta-kms-impl-device.c
+@@ -1398,11 +1398,9 @@ ensure_deadline_timer_armed (MetaKmsImplDevice *impl_device,
+ 
+           priv->deadline_timer_state = META_DEADLINE_TIMER_STATE_INHIBITED;
+         }
+-      else
++      else if (!g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+         {
+-          if (!g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+-            g_warning ("Failed to determine deadline: %s", local_error->message);
+-
++          g_warning ("Failed to determine deadline: %s", local_error->message);
+           priv->deadline_timer_state = META_DEADLINE_TIMER_STATE_DISABLED;
+         }
+ 
