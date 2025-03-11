@@ -1,3 +1,10 @@
+mutter (48~rc-4) unstable; urgency=medium
+
+  * Team upload
+  * Release to unstable
+
+ -- Simon McVittie <smcv@debian.org>  Tue, 11 Mar 2025 09:44:32 +0000
+
 mutter (48~rc-3) experimental; urgency=medium
 
   * Team upload
