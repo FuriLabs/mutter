@@ -1,0 +1,70 @@
+From: Daniel van Vugt <daniel.van.vugt@canonical.com>
+Date: Fri, 7 Mar 2025 16:25:08 +0800
+Subject: clutter: Repick actors when touches emulate button clicks
+
+Like we already do for native touch events.
+
+The X Input Extension v2.2 includes automatic conversion of simple tap
+sequences into emulated pointer events (emulated motion and mouse clicks),
+depending on the state of grabs.
+
+When this happens, no touch sequence is set and
+`clutter_stage_pick_and_update_device` would refuse to pick an actor at all.
+So touches received as emulated mouse clicks never reached their intended
+target.
+
+Fixes: 09101e36f8 ("wayland: Handle pointer focus inhibition at the Clutter level")
+
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/3484
+Bug: https://gitlab.gnome.org/GNOME/gnome-shell/-/issues/7763
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/2063005
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/1904237
+Origin: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4322
+---
+ clutter/clutter/clutter-stage-private.h |  1 +
+ clutter/clutter/clutter-stage.c         | 10 +++++++++-
+ 2 files changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/clutter/clutter/clutter-stage-private.h b/clutter/clutter/clutter-stage-private.h
+index ed54c05..7948223 100644
+--- a/clutter/clutter/clutter-stage-private.h
++++ b/clutter/clutter/clutter-stage-private.h
+@@ -38,6 +38,7 @@ typedef enum
+   CLUTTER_DEVICE_UPDATE_NONE = 0,
+   CLUTTER_DEVICE_UPDATE_EMIT_CROSSING = 1 << 0,
+   CLUTTER_DEVICE_UPDATE_IGNORE_CACHE = 1 << 1,
++  CLUTTER_DEVICE_UPDATE_POINTER_EMULATED = 1 << 2,
+ } ClutterDeviceUpdateFlags;
+ 
+ /* stage */
+diff --git a/clutter/clutter/clutter-stage.c b/clutter/clutter/clutter-stage.c
+index 074f5fe..5623567 100644
+--- a/clutter/clutter/clutter-stage.c
++++ b/clutter/clutter/clutter-stage.c
+@@ -3586,10 +3586,15 @@ clutter_stage_pick_and_update_device (ClutterStage             *stage,
+   ClutterActor *new_actor = NULL;
+   MtkRegion *clear_area = NULL;
+   ClutterSeat *seat;
++  gboolean is_touch, has_absolute_motion;
+ 
+   seat = clutter_input_device_get_seat (device);
+ 
+-  if (sequence ||
++  is_touch = sequence != NULL;
++  has_absolute_motion = is_touch ||
++                        (flags & CLUTTER_DEVICE_UPDATE_POINTER_EMULATED);
++
++  if (has_absolute_motion ||
+       device != clutter_seat_get_pointer (seat) ||
+       clutter_seat_is_unfocus_inhibited (seat))
+     {
+@@ -4677,6 +4682,9 @@ clutter_stage_update_device_for_event (ClutterStage *stage,
+ 
+   flags = CLUTTER_DEVICE_UPDATE_EMIT_CROSSING;
+ 
++  if (clutter_event_is_pointer_emulated (event))
++    flags |= CLUTTER_DEVICE_UPDATE_POINTER_EMULATED;
++
+   return clutter_stage_pick_and_update_device (stage,
+                                                device,
+                                                sequence,
