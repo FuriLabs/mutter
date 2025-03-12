@@ -13,10 +13,10 @@ Forwarded: not-needed, workaround
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/src/tests/meson.build b/src/tests/meson.build
-index 02d878e..ab93d47 100644
+index f50889d..b1ca0ac 100644
 --- a/src/tests/meson.build
 +++ b/src/tests/meson.build
-@@ -1099,7 +1099,7 @@ if have_installed_tests
+@@ -1100,7 +1100,7 @@ if have_installed_tests
        output: stacking_test + '.test',
        configuration: stacking_installed_tests_cdata,
        install: true,

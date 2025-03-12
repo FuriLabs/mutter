@@ -1,0 +1,79 @@
+From: Daniel van Vugt <daniel.van.vugt@canonical.com>
+Date: Tue, 4 Mar 2025 15:15:00 +0800
+Subject: clutter/frame-clock: Verify and change state earlier in dispatch
+
+So that if somehow it does return early then we're not left with an
+allocated `clutter_frame_clock_new_frame` that is never dispatched
+(which then leads to the pool being exhausted a frame or two later).
+
+It's not yet clear how it comes to this where the source is dispatched
+and the state unscheduled, but at least the more detailed logging here
+will help us to identify which state it came from.
+
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/3945
+Fixes: 394bf5ab24 ("clutter/frame-clock: Add triple buffering support")
+Forwarded: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4316
+Applied-upstream: 48.0, commit:2d70451bf3d4eeed2ddd2efd8b551d9e14b669a7
+---
+ clutter/clutter/clutter-frame-clock.c | 41 ++++++++++++++++++-----------------
+ 1 file changed, 21 insertions(+), 20 deletions(-)
+
+diff --git a/clutter/clutter/clutter-frame-clock.c b/clutter/clutter/clutter-frame-clock.c
+index 2800baa..803dc89 100644
+--- a/clutter/clutter/clutter-frame-clock.c
++++ b/clutter/clutter/clutter-frame-clock.c
+@@ -1367,6 +1367,27 @@ clutter_frame_clock_dispatch (ClutterFrameClock *frame_clock,
+   this_dispatch_time_us = time_us;
+ #endif
+ 
++  switch (frame_clock->state)
++    {
++    case CLUTTER_FRAME_CLOCK_STATE_INIT:
++    case CLUTTER_FRAME_CLOCK_STATE_IDLE:
++    case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE:
++    case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_TWO:
++      g_warning ("Frame clock dispatched in an unscheduled state %d",
++                 frame_clock->state);
++      return;
++    case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED:
++    case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_NOW:
++    case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_LATER:
++      frame_clock->state = CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE;
++      break;
++    case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE_AND_SCHEDULED:
++    case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE_AND_SCHEDULED_NOW:
++    case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE_AND_SCHEDULED_LATER:
++      frame_clock->state = CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_TWO;
++      break;
++    }
++
+   /* Discarding the old prev_dispatch early here allows us to keep the
+    * frame_pool size equal to nbuffers instead of nbuffers+1.
+    */
+@@ -1424,26 +1445,6 @@ clutter_frame_clock_dispatch (ClutterFrameClock *frame_clock,
+   this_dispatch->dispatch_time_us = time_us;
+   g_source_set_ready_time (frame_clock->source, -1);
+ 
+-  switch (frame_clock->state)
+-    {
+-    case CLUTTER_FRAME_CLOCK_STATE_INIT:
+-    case CLUTTER_FRAME_CLOCK_STATE_IDLE:
+-    case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE:
+-    case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_TWO:
+-      g_warn_if_reached ();
+-      return;
+-    case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED:
+-    case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_NOW:
+-    case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_LATER:
+-      frame_clock->state = CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE;
+-      break;
+-    case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE_AND_SCHEDULED:
+-    case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE_AND_SCHEDULED_NOW:
+-    case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE_AND_SCHEDULED_LATER:
+-      frame_clock->state = CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_TWO;
+-      break;
+-    }
+-
+   frame_count = frame_clock->frame_count++;
+ 
+   if (iface->new_frame)

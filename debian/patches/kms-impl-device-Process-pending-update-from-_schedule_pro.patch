@@ -1,0 +1,37 @@
+From: =?utf-8?q?Michel_D=C3=A4nzer?= <mdaenzer@redhat.com>
+Date: Thu, 6 Mar 2025 16:31:47 +0100
+Subject: kms/impl-device: Process pending update from _schedule_process
+
+Instead of asking the main thread to do a frame update, which may or may
+not result in a new KMS update. If it doesn't, the pending update may
+never get processed, and the main thread may wait indefinitely for it,
+resulting in the stage view visibly freezing.
+
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/3955
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/3959
+Bug-Debian: https://bugs.debian.org/1099743
+Origin: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4321
+---
+ src/backends/native/meta-kms-impl-device.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/src/backends/native/meta-kms-impl-device.c b/src/backends/native/meta-kms-impl-device.c
+index 3b32ba4..8afc588 100644
+--- a/src/backends/native/meta-kms-impl-device.c
++++ b/src/backends/native/meta-kms-impl-device.c
+@@ -2085,6 +2085,15 @@ meta_kms_impl_device_schedule_process (MetaKmsImplDevice *impl_device,
+       ensure_deadline_timer_armed (impl_device, crtc_frame))
+     return;
+ 
++  if (crtc_frame->pending_update)
++    {
++      meta_kms_impl_device_do_process_update (impl_device, crtc_frame,
++                                              crtc_frame->crtc,
++                                              crtc_frame->pending_update,
++                                              META_KMS_UPDATE_FLAG_NONE);
++      return;
++    }
++
+   meta_kms_device_set_needs_flush (meta_kms_crtc_get_device (crtc), crtc);
+ }
+ 

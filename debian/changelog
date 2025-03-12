@@ -1,3 +1,23 @@
+mutter (48~rc-4) unstable; urgency=medium
+
+  * Team upload
+  * Release to unstable
+
+ -- Simon McVittie <smcv@debian.org>  Tue, 11 Mar 2025 09:44:32 +0000
+
+mutter (48~rc-3) experimental; urgency=medium
+
+  * Team upload
+  * d/patches: Update to upstream git commit 48.rc-17-gefb3cb75e4
+  * d/p/kms-impl-device-Refactor-meta_kms_impl_device_do_process_.patch,
+    d/p/kms-impl-device-Don-t-set_needs_flush-if-there-s-a-pendin.patch,
+    d/p/kms-impl-device-Process-pending-update-from-_schedule_pro.patch,
+    d/p/kms-impl-device-Don-t-disable-deadline-timer-on-G_IO_ERRO.patch:
+    Add proposed patches from upstream merge request 4321 to address
+    display freezes (Closes: #1099743, hopefully)
+
+ -- Simon McVittie <smcv@debian.org>  Sun, 09 Mar 2025 16:56:14 +0000
+
 mutter (48~rc-2ubuntu1) plucky; urgency=medium
 
   * Merge with Debian. Remaining changes:
