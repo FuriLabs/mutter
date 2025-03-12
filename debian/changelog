@@ -1,3 +1,15 @@
+mutter (48~rc-4ubuntu1) plucky; urgency=medium
+
+  [ Nathan Pratta Teodosio ]
+  * Update d/libmutter-1{5->6}-0.lintian-overrides.
+
+  [ Daniel van Vugt ]
+  * Merge with Debian 48~rc-4
+  * Merge up to 968dae3916 to resolve touchscreen problems on X11
+    (LP: #2063005, LP: #1904237)
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Wed, 12 Mar 2025 17:14:05 +0800
+
 mutter (48~rc-4) unstable; urgency=medium
 
   * Team upload
