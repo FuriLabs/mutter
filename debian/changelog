@@ -1,3 +1,11 @@
+mutter (48~rc-4ubuntu2) plucky; urgency=medium
+
+  * Refresh seat-impl-Initialize-the-impl-reverse-pointer-slightly-ea.patch
+  * Add tests-Mark-wayland-unit-as-flaky.patch to avoid spurious Launchpad
+    build failures that blocked the previous 48~rc-ubuntu tags.
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Fri, 14 Mar 2025 17:52:01 +0800
+
 mutter (48~rc-4ubuntu1) plucky; urgency=medium
 
   [ Nathan Pratta Teodosio ]
