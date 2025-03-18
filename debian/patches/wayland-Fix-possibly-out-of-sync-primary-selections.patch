@@ -1,0 +1,103 @@
+From: Carlos Garnacho <carlosg@gnome.org>
+Date: Thu, 30 May 2024 13:29:55 +0200
+Subject: wayland: Fix possibly out of sync primary selections
+
+Replace the sync_focus() calls with a set_focus() do-it function taking
+a surface. This is in line with the rest of the things that happen at
+the default MetaWaylandEventInterface.focus implementation, and will
+make these correctly observe the presence of grabs, since
+meta_wayland_seat_get_input_focus() will return the would-be focus
+in these cases.
+
+This change makes the "focused" client selection truly
+in sync with the keyboard focus.
+
+Closes: https://gitlab.gnome.org/GNOME/mutter/-/issues/3498
+Fixes: 9bdb00c459 ("wayland: Follow seat's input focus client for primary selections")
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3789>
+
+Origin: upstream, https://gitlab.gnome.org/GNOME/mutter/-/commit/9dab806a18b604e87d512ddfd340aca2df9ac941
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/3498
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/2085634
+---
+ src/wayland/meta-wayland-data-device-primary.c | 20 +++++++-------------
+ src/wayland/meta-wayland-data-device-primary.h |  3 ++-
+ src/wayland/meta-wayland-seat.c                |  3 ++-
+ 3 files changed, 11 insertions(+), 15 deletions(-)
+
+diff --git a/src/wayland/meta-wayland-data-device-primary.c b/src/wayland/meta-wayland-data-device-primary.c
+index 3e20f4b..c4831ea 100644
+--- a/src/wayland/meta-wayland-data-device-primary.c
++++ b/src/wayland/meta-wayland-data-device-primary.c
+@@ -181,8 +181,7 @@ primary_device_set_selection (struct wl_client   *client,
+   if (source_resource)
+     source = wl_resource_get_user_data (source_resource);
+ 
+-  if (wl_resource_get_client (resource) !=
+-      meta_wayland_seat_get_input_focus_client (seat))
++  if (wl_resource_get_client (resource) != data_device->focus_client)
+     {
+       if (source)
+         meta_wayland_data_source_cancel (source);
+@@ -203,16 +202,9 @@ owner_changed_cb (MetaSelection                *selection,
+                   MetaSelectionSource          *new_owner,
+                   MetaWaylandDataDevicePrimary *data_device)
+ {
+-  MetaDisplay *display = meta_selection_get_display (selection);
+-  MetaContext *context = meta_display_get_context (display);
+-  MetaWaylandCompositor *compositor =
+-    meta_context_get_wayland_compositor (context);
+-  MetaWaylandSeat *seat = compositor->seat;
+   struct wl_resource *data_device_resource;
+-  struct wl_client *focus_client;
+ 
+-  focus_client = meta_wayland_seat_get_input_focus_client (seat);
+-  if (!focus_client)
++  if (!data_device->focus_client)
+     return;
+ 
+   if (selection_type == META_SELECTION_PRIMARY)
+@@ -348,13 +340,15 @@ create_and_send_primary_offer (MetaWaylandDataDevicePrimary *data_device,
+ }
+ 
+ void
+-meta_wayland_data_device_primary_sync_focus (MetaWaylandDataDevicePrimary *data_device)
++meta_wayland_data_device_primary_set_focus (MetaWaylandDataDevicePrimary *data_device,
++                                            MetaWaylandSurface           *surface)
+ {
+   MetaWaylandSeat *seat = wl_container_of (data_device, seat, primary_data_device);
+-  struct wl_client *focus_client;
++  struct wl_client *focus_client = NULL;
+   struct wl_resource *data_device_resource;
+ 
+-  focus_client = meta_wayland_seat_get_input_focus_client (seat);
++  if (surface)
++    focus_client = wl_resource_get_client (surface->resource);
+ 
+   if (focus_client == data_device->focus_client)
+     return;
+diff --git a/src/wayland/meta-wayland-data-device-primary.h b/src/wayland/meta-wayland-data-device-primary.h
+index e686612..ae5e648 100644
+--- a/src/wayland/meta-wayland-data-device-primary.h
++++ b/src/wayland/meta-wayland-data-device-primary.h
+@@ -52,4 +52,5 @@ void meta_wayland_data_device_primary_manager_init (MetaWaylandCompositor *compo
+ void meta_wayland_data_device_primary_init (MetaWaylandDataDevicePrimary *data_device,
+                                             MetaWaylandSeat              *seat);
+ 
+-void meta_wayland_data_device_primary_sync_focus (MetaWaylandDataDevicePrimary *data_device);
++void meta_wayland_data_device_primary_set_focus (MetaWaylandDataDevicePrimary *data_device,
++                                                 MetaWaylandSurface           *surface);
+diff --git a/src/wayland/meta-wayland-seat.c b/src/wayland/meta-wayland-seat.c
+index ac75858..2d29956 100644
+--- a/src/wayland/meta-wayland-seat.c
++++ b/src/wayland/meta-wayland-seat.c
+@@ -228,7 +228,8 @@ default_focus (MetaWaylandEventHandler *handler,
+         meta_wayland_keyboard_set_focus (seat->keyboard, surface);
+ 
+       meta_wayland_data_device_sync_focus (&seat->data_device);
+-      meta_wayland_data_device_primary_sync_focus (&seat->primary_data_device);
++      meta_wayland_data_device_primary_set_focus (&seat->primary_data_device,
++                                                  surface);
+       meta_wayland_tablet_seat_set_pad_focus (seat->tablet_seat, surface);
+       meta_wayland_text_input_set_focus (seat->text_input, surface);
+     }

@@ -1,0 +1,105 @@
+From: Carlos Garnacho <carlosg@gnome.org>
+Date: Thu, 30 May 2024 13:30:52 +0200
+Subject: wayland: Fix possibly out of sync clipboard selections
+
+Replace the sync_focus() calls with a set_focus() do-it function taking
+a surface. This is in line with the rest of the things that happen at
+the default MetaWaylandEventInterface.focus implementation, and will
+make these correctly observe the presence of grabs, since
+meta_wayland_seat_get_input_focus() will return the would-be focus
+in these cases.
+
+This change makes the "focused" client selection truly
+in sync with the keyboard focus.
+
+Fixes: 5ca10c31d1 ("wayland: Follow seat's input focus client for clipboard selections")
+Closes: https://gitlab.gnome.org/GNOME/mutter/-/issues/3490
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3789>
+
+Origin: upstream, https://gitlab.gnome.org/GNOME/mutter/-/commit/b968796f1fb2e9070f7c09a014cca19cc5a0c564
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/3498
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/2085634
+---
+ src/wayland/meta-wayland-data-device.c | 20 +++++++-------------
+ src/wayland/meta-wayland-data-device.h |  3 ++-
+ src/wayland/meta-wayland-seat.c        |  2 +-
+ 3 files changed, 10 insertions(+), 15 deletions(-)
+
+diff --git a/src/wayland/meta-wayland-data-device.c b/src/wayland/meta-wayland-data-device.c
+index 332b610..442e676 100644
+--- a/src/wayland/meta-wayland-data-device.c
++++ b/src/wayland/meta-wayland-data-device.c
+@@ -1067,8 +1067,7 @@ data_device_set_selection (struct wl_client   *client,
+         }
+     }
+ 
+-  if (wl_resource_get_client (resource) !=
+-      meta_wayland_seat_get_input_focus_client (seat))
++  if (wl_resource_get_client (resource) != data_device->focus_client)
+     {
+       if (source)
+         meta_wayland_data_source_cancel (source);
+@@ -1104,16 +1103,9 @@ owner_changed_cb (MetaSelection         *selection,
+                   MetaSelectionSource   *new_owner,
+                   MetaWaylandDataDevice *data_device)
+ {
+-  MetaDisplay *display = meta_selection_get_display (selection);
+-  MetaContext *context = meta_display_get_context (display);
+-  MetaWaylandCompositor *compositor =
+-    meta_context_get_wayland_compositor (context);
+-  MetaWaylandSeat *seat = compositor->seat;
+   struct wl_resource *data_device_resource;
+-  struct wl_client *focus_client;
+ 
+-  focus_client = meta_wayland_seat_get_input_focus_client (seat);
+-  if (!focus_client)
++  if (!data_device->focus_client)
+     return;
+ 
+   if (selection_type == META_SELECTION_CLIPBOARD)
+@@ -1255,13 +1247,15 @@ create_and_send_clipboard_offer (MetaWaylandDataDevice *data_device,
+ }
+ 
+ void
+-meta_wayland_data_device_sync_focus (MetaWaylandDataDevice *data_device)
++meta_wayland_data_device_set_focus (MetaWaylandDataDevice *data_device,
++                                    MetaWaylandSurface    *surface)
+ {
+   MetaWaylandSeat *seat = wl_container_of (data_device, seat, data_device);
+-  struct wl_client *focus_client;
++  struct wl_client *focus_client = NULL;
+   struct wl_resource *data_device_resource;
+ 
+-  focus_client = meta_wayland_seat_get_input_focus_client (seat);
++  if (surface)
++    focus_client = wl_resource_get_client (surface->resource);
+ 
+   if (focus_client == data_device->focus_client)
+     return;
+diff --git a/src/wayland/meta-wayland-data-device.h b/src/wayland/meta-wayland-data-device.h
+index 8834451..5478ea3 100644
+--- a/src/wayland/meta-wayland-data-device.h
++++ b/src/wayland/meta-wayland-data-device.h
+@@ -59,7 +59,8 @@ void meta_wayland_data_device_init (MetaWaylandDataDevice *data_device,
+ 
+ MetaWaylandSeat * meta_wayland_data_device_get_seat (MetaWaylandDataDevice *data_device);
+ 
+-void meta_wayland_data_device_sync_focus (MetaWaylandDataDevice *data_device);
++void meta_wayland_data_device_set_focus (MetaWaylandDataDevice *data_device,
++                                         MetaWaylandSurface    *surface);
+ 
+ MetaWaylandDragGrab *
+      meta_wayland_data_device_get_current_grab   (MetaWaylandDataDevice *data_device);
+diff --git a/src/wayland/meta-wayland-seat.c b/src/wayland/meta-wayland-seat.c
+index 2d29956..984035c 100644
+--- a/src/wayland/meta-wayland-seat.c
++++ b/src/wayland/meta-wayland-seat.c
+@@ -227,7 +227,7 @@ default_focus (MetaWaylandEventHandler *handler,
+       if (meta_wayland_seat_has_keyboard (seat))
+         meta_wayland_keyboard_set_focus (seat->keyboard, surface);
+ 
+-      meta_wayland_data_device_sync_focus (&seat->data_device);
++      meta_wayland_data_device_set_focus (&seat->data_device, surface);
+       meta_wayland_data_device_primary_set_focus (&seat->primary_data_device,
+                                                   surface);
+       meta_wayland_tablet_seat_set_pad_focus (seat->tablet_seat, surface);
