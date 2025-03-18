@@ -1,0 +1,58 @@
+From: Sebastian Wick <sebastian.wick@redhat.com>
+Date: Wed, 31 Jul 2024 17:49:47 +0200
+Subject: cogl/gles: Use a premul required format for opaque fp16 Cogl formats
+
+The opaque fp16 Cogl format variants need a required format that is
+already premultiplied whereas the fp16 formats with an alpha channel can
+be either straight or premult.
+
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3914>
+
+(cherry picked from commit d820fe030ae83c6f7292c2cd5c7c7d0db68ac8ff)
+
+Origin: upstream, https://gitlab.gnome.org/GNOME/mutter/-/commit/66156236e2d0cdc9889cdd66f79b8d6c4ac8fde1
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/3600
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/2099879
+---
+ cogl/cogl/driver/gl/gles/cogl-driver-gles.c | 16 ++++++++++++----
+ 1 file changed, 12 insertions(+), 4 deletions(-)
+
+diff --git a/cogl/cogl/driver/gl/gles/cogl-driver-gles.c b/cogl/cogl/driver/gl/gles/cogl-driver-gles.c
+index 7f9e65a..13c600d 100644
+--- a/cogl/cogl/driver/gl/gles/cogl-driver-gles.c
++++ b/cogl/cogl/driver/gl/gles/cogl-driver-gles.c
+@@ -356,7 +356,6 @@ _cogl_driver_pixel_format_to_gl (CoglContext     *context,
+                                          &gltype);
+       break;
+ 
+-    case COGL_PIXEL_FORMAT_RGBX_FP_16161616:
+     case COGL_PIXEL_FORMAT_RGBA_FP_16161616:
+     case COGL_PIXEL_FORMAT_RGBA_FP_16161616_PRE:
+       if (cogl_has_feature (context, COGL_FEATURE_ID_TEXTURE_HALF_FLOAT))
+@@ -371,14 +370,23 @@ _cogl_driver_pixel_format_to_gl (CoglContext     *context,
+         }
+       break;
+ 
++    case COGL_PIXEL_FORMAT_RGBX_FP_16161616:
+     case COGL_PIXEL_FORMAT_BGRX_FP_16161616:
+-    case COGL_PIXEL_FORMAT_BGRA_FP_16161616:
+     case COGL_PIXEL_FORMAT_XRGB_FP_16161616:
+-    case COGL_PIXEL_FORMAT_ARGB_FP_16161616:
+     case COGL_PIXEL_FORMAT_XBGR_FP_16161616:
+-    case COGL_PIXEL_FORMAT_ABGR_FP_16161616:
++      required_format =
++        _cogl_driver_pixel_format_to_gl (context,
++                                         COGL_PIXEL_FORMAT_RGBA_FP_16161616_PRE,
++                                         &glintformat,
++                                         &glformat,
++                                         &gltype);
++      break;
++
++    case COGL_PIXEL_FORMAT_BGRA_FP_16161616:
+     case COGL_PIXEL_FORMAT_BGRA_FP_16161616_PRE:
++    case COGL_PIXEL_FORMAT_ARGB_FP_16161616:
+     case COGL_PIXEL_FORMAT_ARGB_FP_16161616_PRE:
++    case COGL_PIXEL_FORMAT_ABGR_FP_16161616:
+     case COGL_PIXEL_FORMAT_ABGR_FP_16161616_PRE:
+       required_format =
+         _cogl_driver_pixel_format_to_gl (context,

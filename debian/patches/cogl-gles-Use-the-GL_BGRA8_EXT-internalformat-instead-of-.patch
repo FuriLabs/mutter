@@ -1,0 +1,60 @@
+From: Sebastian Wick <sebastian.wick@redhat.com>
+Date: Wed, 31 Jul 2024 13:20:38 +0200
+Subject: cogl/gles: Use the GL_BGRA8_EXT internalformat instead of the format
+
+There is one define for the format (GL_BGRA_EXT) and one for the
+internal format (GL_BGRA8_EXT). Use them appropriately.
+
+This also adds defines to consistenly not use the _EXT postfix.
+
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3914>
+
+(cherry picked from commit c3eb01e5474c98cbaf19fb05bf8930d0b40a7014)
+
+Origin: upstream, https://gitlab.gnome.org/GNOME/mutter/-/commit/7ab98f961c569542760269dc4b1e3aa6f91d6792
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/3600
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/2099879
+---
+ cogl/cogl/driver/gl/gles/cogl-driver-gles.c | 15 ++++++++++++---
+ 1 file changed, 12 insertions(+), 3 deletions(-)
+
+diff --git a/cogl/cogl/driver/gl/gles/cogl-driver-gles.c b/cogl/cogl/driver/gl/gles/cogl-driver-gles.c
+index 13c600d..564dfaa 100644
+--- a/cogl/cogl/driver/gl/gles/cogl-driver-gles.c
++++ b/cogl/cogl/driver/gl/gles/cogl-driver-gles.c
+@@ -89,6 +89,15 @@
+ #ifndef GL_RGBA16
+ #define GL_RGBA16 0x805B
+ #endif
++#ifndef GL_BGRA
++#define GL_BGRA 0x80E1
++#endif
++#ifndef GL_BGRA8
++#define GL_BGRA8 0x93A1
++#endif
++#ifndef GL_RG8
++#define GL_RG8 0x822B
++#endif
+ 
+ static CoglPixelFormat
+ _cogl_driver_pixel_format_to_gl (CoglContext     *context,
+@@ -163,7 +172,7 @@ _cogl_driver_pixel_format_to_gl (CoglContext     *context,
+     case COGL_PIXEL_FORMAT_RG_88:
+       if (cogl_has_feature (context, COGL_FEATURE_ID_TEXTURE_RG))
+         {
+-          glintformat = GL_RG8_EXT;
++          glintformat = GL_RG8;
+           glformat = GL_RG;
+           gltype = GL_UNSIGNED_BYTE;
+         }
+@@ -248,8 +257,8 @@ _cogl_driver_pixel_format_to_gl (CoglContext     *context,
+       if (_cogl_has_private_feature
+           (context, COGL_PRIVATE_FEATURE_TEXTURE_FORMAT_BGRA8888))
+         {
+-          glintformat = GL_BGRA_EXT;
+-          glformat = GL_BGRA_EXT;
++          glintformat = GL_BGRA8;
++          glformat = GL_BGRA;
+           gltype = GL_UNSIGNED_BYTE;
+         }
+       else

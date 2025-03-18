@@ -1,0 +1,53 @@
+From: Sebastian Wick <sebastian.wick@redhat.com>
+Date: Thu, 15 Aug 2024 17:09:39 +0200
+Subject: cogl/gles: Revert to unsized GL_BGRA as internalformat for BGRA_8888
+
+Using GL_BGRA8_EXT as internalformat for TexSubImage2D was not allowed
+in the EXT_texture_format_BGRA8888 extension. This changed recently:
+
+https://registry.khronos.org/OpenGL/extensions/EXT/EXT_texture_format_BGRA8888.txt
+
+  1.4, 23/06/2024 Erik Faye-Lund: Add GL_BGRA8_EXT for ES 2.0 and later.
+
+Mesa already supports this which is why 7f943613a8 ("cogl: Use sized
+internal renderable formats") worked as intended. Technically spec
+compliant and our CI had an up-to-date driver.
+
+So while this is no bug, it's still not great because older drivers will
+generate GL errors. This commit changes this specific format back to an
+unsized internal format which means we could, in theory, get less than
+8bpc framebuffers.
+
+We can try to revert this commit when newer driver versions have
+propagated far enough.
+
+Fixes: 7f943613a8 ("cogl: Use sized internal renderable formats")
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3954>
+
+(cherry picked from commit 45dcfeb0cc1f55045b169cb8ac769e314ff3f528)
+
+Origin: upstream, https://gitlab.gnome.org/GNOME/mutter/-/commit/1a09f44c60130c7dddb217075ac8ae987904dfe8
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/3600
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/2099879
+---
+ cogl/cogl/driver/gl/gles/cogl-driver-gles.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/cogl/cogl/driver/gl/gles/cogl-driver-gles.c b/cogl/cogl/driver/gl/gles/cogl-driver-gles.c
+index 564dfaa..fe5da4e 100644
+--- a/cogl/cogl/driver/gl/gles/cogl-driver-gles.c
++++ b/cogl/cogl/driver/gl/gles/cogl-driver-gles.c
+@@ -257,7 +257,12 @@ _cogl_driver_pixel_format_to_gl (CoglContext     *context,
+       if (_cogl_has_private_feature
+           (context, COGL_PRIVATE_FEATURE_TEXTURE_FORMAT_BGRA8888))
+         {
+-          glintformat = GL_BGRA8;
++          /* Using the sized internal format GL_BGRA8 only become possible on
++           * 23/06/2024 (https://registry.khronos.org/OpenGL/extensions/EXT/EXT_texture_format_BGRA8888.txt).
++           * When support has propagated to more drivers, we should start
++           * using GL_BGRA8 again.
++           */
++          glintformat = GL_BGRA;
+           glformat = GL_BGRA;
+           gltype = GL_UNSIGNED_BYTE;
+         }

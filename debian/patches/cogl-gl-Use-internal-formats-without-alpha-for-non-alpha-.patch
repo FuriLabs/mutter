@@ -1,0 +1,38 @@
+From: Sebastian Wick <sebastian.wick@redhat.com>
+Date: Wed, 31 Jul 2024 17:47:04 +0200
+Subject: cogl/gl: Use internal formats without alpha for non-alpha Cogl
+ formats
+
+The formats COGL_PIXEL_FORMAT_RGB_888 and COGL_PIXEL_FORMAT_BGR_888 for
+the gl driver were using internal formats with an alpha channel.
+
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3914>
+
+(cherry picked from commit 41700d3cc77975a86af90853aaa2b3052517c5b1)
+
+Origin: upstream, https://gitlab.gnome.org/GNOME/mutter/-/commit/eecec5a69929a4799f2d694d06b92e0b938d7b38
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/3600
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/2099879
+---
+ cogl/cogl/driver/gl/gl/cogl-driver-gl.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/cogl/cogl/driver/gl/gl/cogl-driver-gl.c b/cogl/cogl/driver/gl/gl/cogl-driver-gl.c
+index fff4a9f..739b082 100644
+--- a/cogl/cogl/driver/gl/gl/cogl-driver-gl.c
++++ b/cogl/cogl/driver/gl/gl/cogl-driver-gl.c
+@@ -124,12 +124,12 @@ _cogl_driver_pixel_format_to_gl (CoglContext     *context,
+       break;
+ 
+     case COGL_PIXEL_FORMAT_RGB_888:
+-      glintformat = GL_RGBA8;
++      glintformat = GL_RGB8;
+       glformat = GL_RGB;
+       gltype = GL_UNSIGNED_BYTE;
+       break;
+     case COGL_PIXEL_FORMAT_BGR_888:
+-      glintformat = GL_RGBA8;
++      glintformat = GL_RGB8;
+       glformat = GL_BGR;
+       gltype = GL_UNSIGNED_BYTE;
+       break;

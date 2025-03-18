@@ -39,3 +39,7 @@ wayland-Fix-thinko-checking-for-pointers-with-pressed-but.patch
 wayland-Also-cancel-XDnD-drops-with-no-selected-target.patch
 wayland-Fix-possibly-out-of-sync-primary-selections.patch
 wayland-Fix-possibly-out-of-sync-clipboard-selections.patch
+cogl-gl-Use-internal-formats-without-alpha-for-non-alpha-.patch
+cogl-gles-Use-a-premul-required-format-for-opaque-fp16-Co.patch
+cogl-gles-Use-the-GL_BGRA8_EXT-internalformat-instead-of-.patch
+cogl-gles-Revert-to-unsized-GL_BGRA-as-internalformat-for.patch
