@@ -1,0 +1,53 @@
+From: Carlos Garnacho <carlosg@gnome.org>
+Date: Mon, 17 Jun 2024 20:23:35 +0200
+Subject: wayland: Redirect the focus explicitly to the Xdnd drag source
+
+We were relying on the drag source surface to keep receiving events
+thanks to it being implicitly grabbed by the button press. This
+broke at some point, making the Xdnd drag source unable to keep
+directing the DnD operation as it is expected by X11 clients.
+
+To fix this, make the Xdnd MetaWaylandEventInterface stick itself
+to the drag source surface keeping the focus of the device driving
+the DnD operation, so that the X11 client can still handle events
+from it.
+
+Closes: https://gitlab.gnome.org/GNOME/mutter/-/issues/3511
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3821>
+
+Origin: https://gitlab.gnome.org/GNOME/mutter/-/commit/fd1d8c778b1f691ff5ff6fa298e6d34a0f1d674f
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/3511
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/2097415
+---
+ src/wayland/meta-xwayland-dnd.c | 15 ++++++++-------
+ 1 file changed, 8 insertions(+), 7 deletions(-)
+
+diff --git a/src/wayland/meta-xwayland-dnd.c b/src/wayland/meta-xwayland-dnd.c
+index 4659cf1..33d92e5 100644
+--- a/src/wayland/meta-xwayland-dnd.c
++++ b/src/wayland/meta-xwayland-dnd.c
+@@ -842,16 +842,17 @@ drag_xgrab_get_focus_surface (MetaWaylandEventHandler *handler,
+                               ClutterEventSequence    *sequence,
+                               gpointer                 user_data)
+ {
+-  ClutterSeat *clutter_seat;
++  MetaWaylandDragGrab *drag_grab = user_data;
++  ClutterInputDevice *drag_device;
++  ClutterEventSequence *drag_sequence;
++
++  drag_device = meta_wayland_drag_grab_get_device (drag_grab, &drag_sequence);
+ 
+-  clutter_seat = clutter_input_device_get_seat (device);
+-  if (sequence ||
+-      device != clutter_seat_get_pointer (clutter_seat))
++  if (drag_sequence != sequence ||
++      drag_device != device)
+     return NULL;
+ 
+-  return meta_wayland_event_handler_chain_up_get_focus_surface (handler,
+-                                                                device,
+-                                                                sequence);
++  return meta_wayland_drag_grab_get_origin (drag_grab);
+ }
+ 
+ static void

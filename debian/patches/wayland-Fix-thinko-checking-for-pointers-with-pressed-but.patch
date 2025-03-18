@@ -1,0 +1,38 @@
+From: Carlos Garnacho <carlosg@gnome.org>
+Date: Mon, 17 Jun 2024 20:27:53 +0200
+Subject: wayland: Fix thinko checking for pointers with pressed buttons
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+These are bail out paths, so we should ignore pointers with no
+buttons pressed. Spotted by Jonas Ådahl.
+
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3821>
+
+Origin: upstream, https://gitlab.gnome.org/GNOME/mutter/-/commit/6f2f4c5767dd8cbb6915a51cb551553699791b05
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/3511
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/2097415
+---
+ src/wayland/meta-xwayland-dnd.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/src/wayland/meta-xwayland-dnd.c b/src/wayland/meta-xwayland-dnd.c
+index 33d92e5..0a768eb 100644
+--- a/src/wayland/meta-xwayland-dnd.c
++++ b/src/wayland/meta-xwayland-dnd.c
+@@ -1108,10 +1108,10 @@ find_dnd_candidate_device (ClutterStage         *stage,
+ 
+   if (!sequence)
+     {
+-      if (modifiers &
+-          (CLUTTER_BUTTON1_MASK | CLUTTER_BUTTON2_MASK |
+-           CLUTTER_BUTTON3_MASK | CLUTTER_BUTTON4_MASK |
+-           CLUTTER_BUTTON5_MASK))
++      if ((modifiers &
++           (CLUTTER_BUTTON1_MASK | CLUTTER_BUTTON2_MASK |
++            CLUTTER_BUTTON3_MASK | CLUTTER_BUTTON4_MASK |
++            CLUTTER_BUTTON5_MASK)) == 0)
+         return TRUE;
+     }
+ 

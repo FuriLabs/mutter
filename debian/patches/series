@@ -33,3 +33,7 @@ synchronize-touchscreen-enabled-state-on-add.patch
 compositor-Make-surface-actors-unreactive-after-losing-th.patch
 wayland-Make-subsurface-actors-unreactive-early-during-de.patch
 wayland-Double-check-surface-window-before-looking-for-mo.patch
+wayland-Add-getter-for-DnD-origin-surface.patch
+wayland-Redirect-the-focus-explicitly-to-the-Xdnd-drag-so.patch
+wayland-Fix-thinko-checking-for-pointers-with-pressed-but.patch
+wayland-Also-cancel-XDnD-drops-with-no-selected-target.patch

@@ -1,0 +1,43 @@
+From: Carlos Garnacho <carlosg@gnome.org>
+Date: Mon, 17 Jun 2024 20:22:53 +0200
+Subject: wayland: Add getter for DnD origin surface
+
+This private method will be used in later commits.
+
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3821>
+
+Origin: upstream, https://gitlab.gnome.org/GNOME/mutter/-/commit/a4ec154c8b2f4075cde73bd50c624e4e32381b9b
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/3511
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/2097415
+---
+ src/wayland/meta-wayland-data-device.c | 6 ++++++
+ src/wayland/meta-wayland-data-device.h | 2 ++
+ 2 files changed, 8 insertions(+)
+
+diff --git a/src/wayland/meta-wayland-data-device.c b/src/wayland/meta-wayland-data-device.c
+index 6e0be6f..332b610 100644
+--- a/src/wayland/meta-wayland-data-device.c
++++ b/src/wayland/meta-wayland-data-device.c
+@@ -345,6 +345,12 @@ meta_wayland_drag_grab_get_device (MetaWaylandDragGrab    *drag_grab,
+   return drag_grab->device;
+ }
+ 
++MetaWaylandSurface *
++meta_wayland_drag_grab_get_origin (MetaWaylandDragGrab *drag_grab)
++{
++  return drag_grab->drag_origin;
++}
++
+ static void
+ data_source_update_user_dnd_action (MetaWaylandDataSource *source,
+                                     ClutterModifierType    modifiers)
+diff --git a/src/wayland/meta-wayland-data-device.h b/src/wayland/meta-wayland-data-device.h
+index d117cfc..8834451 100644
+--- a/src/wayland/meta-wayland-data-device.h
++++ b/src/wayland/meta-wayland-data-device.h
+@@ -97,3 +97,5 @@ MetaWaylandSeat * meta_wayland_drag_grab_get_seat (MetaWaylandDragGrab *drag_gra
+ 
+ ClutterInputDevice * meta_wayland_drag_grab_get_device (MetaWaylandDragGrab    *drag_grab,
+                                                         ClutterEventSequence  **sequence);
++
++MetaWaylandSurface * meta_wayland_drag_grab_get_origin (MetaWaylandDragGrab *drag_grab);
