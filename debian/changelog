@@ -32,6 +32,8 @@ mutter (48.0-1) UNRELEASED; urgency=medium
     - kms-impl-device-Always-catch-pending-KMS-update-in-_sched.patch
     - Revert-onscreen-native-Account-for-all-posted-frames.patch
     - tests-Raise-the-timeout-on-monitor-unit-from-1-minute-to-.patch
+  * Add clutter-Repick-actors-when-touches-emulate-button-clicks.patch
+    to resolve touchscreen problems on X11 (LP: #2063005, LP: #1904237)
   * libmutter-16-0.symbols, libmutter-test-16.symbols: Add new symbols in 48.0
 
  -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 20 Mar 2025 17:00:31 +0800
