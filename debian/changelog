@@ -23,6 +23,11 @@ mutter (48.0-1) UNRELEASED; urgency=medium
     - wayland-drm-lease-Move-on-device-bind-events-to-a-functio.patch
     - wayland-drm-lease-Put-clients-in-a-queue-on-drm_fd-error.patch
     - wayland-drm-lease-Send-drm_fd-to-pending-clients.patch
+  * Refresh patches:
+    - tests-Do-not-run-screencast-tests.patch
+    - Mark-several-additional-tests-as-flaky.patch
+    - tests-Install-stacking-tests-into-a-subdirectory.patch
+    - tests-Mark-view-verification-tests-as-incomplete-in-big-e.patch
 
  -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 20 Mar 2025 17:00:31 +0800
 
