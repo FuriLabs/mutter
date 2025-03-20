@@ -1,3 +1,9 @@
+mutter (48.0-1) UNRELEASED; urgency=medium
+
+  * New upstream release
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 20 Mar 2025 17:00:31 +0800
+
 mutter (48~rc-4) unstable; urgency=medium
 
   * Team upload
