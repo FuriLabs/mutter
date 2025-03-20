@@ -28,6 +28,10 @@ mutter (48.0-1) UNRELEASED; urgency=medium
     - Mark-several-additional-tests-as-flaky.patch
     - tests-Install-stacking-tests-into-a-subdirectory.patch
     - tests-Mark-view-verification-tests-as-incomplete-in-big-e.patch
+  * Add patches already accepted upstream in 48.1:
+    - kms-impl-device-Always-catch-pending-KMS-update-in-_sched.patch
+    - Revert-onscreen-native-Account-for-all-posted-frames.patch
+    - tests-Raise-the-timeout-on-monitor-unit-from-1-minute-to-.patch
 
  -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 20 Mar 2025 17:00:31 +0800
 
