@@ -1,3 +1,20 @@
+mutter (48.0-1ubuntu1) plucky; urgency=medium
+
+  * Merge with Debian. Remaining changes:
+    - Add x11-Add-support-for-fractional-scaling-using-Randr.patch
+    - Add window-Add-ability-to-override-the-edge-constraints.patch
+      + Make possible for extensions (such as Tiling Assistant) to override
+        window constraints
+    - Add seat-impl-Initialize-the-impl-reverse-pointer-slightly-ea.patch
+      to avoid crashing when mousekeys or keyboard a11y features are
+      enabled
+    - Add Use-access-instead-of-checking-permission-modes-for-tmp-..patch
+      to fix access check for X11_TMP_UNIX_DIR
+    - Add tests-Mark-wayland-unit-as-flaky.patch to avoid spurious Launchpad
+      build failures
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Fri, 21 Mar 2025 09:07:14 -0400
+
 mutter (48.0-1) unstable; urgency=medium
 
   * New upstream release
