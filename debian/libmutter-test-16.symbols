@@ -35,6 +35,7 @@ libmutter-test-16.so libmutter-test-16 #MINVER#
  meta_read_file@Base 42~beta
  meta_ref_test_determine_ref_test_flag@Base 42~beta
  meta_ref_test_verify_view@Base 42~beta
+ meta_ref_test_verify_view_undamaged@Base 48.0
  meta_sensors_proxy_mock_get@Base 41.0
  meta_sensors_proxy_mock_set_orientation@Base 41.0
  meta_sensors_proxy_mock_set_property@Base 41.0

@@ -15,7 +15,7 @@ Applied-upstream: no, this is a workaround
  2 files changed, 10 insertions(+)
 
 diff --git a/src/tests/meta-ref-test-utils.c b/src/tests/meta-ref-test-utils.c
-index ed9beb9..b0bfcb8 100644
+index daf543b..3ede046 100644
 --- a/src/tests/meta-ref-test-utils.c
 +++ b/src/tests/meta-ref-test-utils.c
 @@ -374,6 +374,11 @@ meta_ref_test_verify (MetaRefTestAdaptor  adaptor,

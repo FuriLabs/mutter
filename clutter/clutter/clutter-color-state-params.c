@@ -647,7 +647,10 @@ static const char gamma_eotf_source[] =
   "// Returns: tristimulus values ([0,1])\n"
   "vec3 gamma_eotf (vec3 color)\n"
   "{\n"
-  "  return pow (color, vec3 (" UNIFORM_NAME_GAMMA_EXP "));\n"
+  "  bvec3 is_negative = lessThan (color, vec3 (0.0));"
+  "  vec3 positive = pow (abs (color), vec3 (" UNIFORM_NAME_GAMMA_EXP "));\n"
+  "  vec3 negative = -positive;\n"
+  "  return mix (positive, negative, is_negative);\n"
   "}\n"
   "\n"
   "vec4 gamma_eotf (vec4 color)\n"
@@ -662,7 +665,10 @@ static const char gamma_inv_eotf_source[] =
   "// Returns: Normalized ([0,1]) electrical signal value\n"
   "vec3 gamma_inv_eotf (vec3 color)\n"
   "{\n"
-  "  return pow (color, vec3 (" UNIFORM_NAME_INV_GAMMA_EXP "));\n"
+  "  bvec3 is_negative = lessThan (color, vec3 (0.0));"
+  "  vec3 positive = pow (abs (color), vec3 (" UNIFORM_NAME_INV_GAMMA_EXP "));\n"
+  "  vec3 negative = -positive;\n"
+  "  return mix (positive, negative, is_negative);\n"
   "}\n"
   "\n"
   "vec4 gamma_inv_eotf (vec4 color)\n"
@@ -1615,7 +1621,10 @@ clutter_color_state_params_new_full (ClutterContext          *context,
     {
       color_state_params->luminance.type = CLUTTER_LUMINANCE_TYPE_EXPLICIT;
       color_state_params->luminance.min = min_lum;
-      color_state_params->luminance.max = max_lum;
+      if (transfer_function == CLUTTER_TRANSFER_FUNCTION_PQ)
+        color_state_params->luminance.max = min_lum + 10000.0f;
+      else
+        color_state_params->luminance.max = max_lum;
       color_state_params->luminance.ref = ref_lum;
     }
   else

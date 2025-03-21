@@ -143,7 +143,7 @@ subdir('wayland-test-clients')
 test_env = environment()
 
 test_env_variables = {
-  'G_TEST_SRCDIR': mutter_srcdir / 'src',
+  'G_TEST_SRCDIR': mutter_srcdir / 'src' / 'tests',
   'G_TEST_BUILDDIR': mutter_builddir / 'src' / 'tests',
   'XDG_CONFIG_HOME': mutter_builddir / '.config',
   'MUTTER_TEST_PLUGIN_PATH': '@0@'.format(default_plugin.full_path()),
@@ -286,6 +286,7 @@ test_cases += [
     'suite': 'backend',
     'sources': [ 'monitor-dbus-tests.c', ],
     'args': gdctl.full_path(),
+    'installed_args': bindir / 'gdctl',
   },
   {
     'name': 'stage-views',
@@ -509,6 +510,14 @@ test_cases += [
       'meta-thread-test.h',
       'meta-thread-impl-test.c',
       'meta-thread-impl-test.h',
+    ],
+  },
+  {
+    'name': 'cursor-overlay-tests',
+    'suite': 'backends/native',
+    'sources': [
+      'cursor-overlay-tests.c',
+      wayland_test_utils,
     ],
   },
   {
@@ -756,6 +765,7 @@ wayland_test_cases = [
     'depends': [
       test_client,
       test_client_executables.get('buffer-transform'),
+      test_client_executables.get('cursor-shape'),
       test_client_executables.get('dma-buf-scanout'),
       test_client_executables.get('fractional-scale'),
       test_client_executables.get('fullscreen'),
@@ -1079,6 +1089,7 @@ if have_installed_tests
     stacking_installed_tests_cdata = configuration_data()
     stacking_installed_tests_cdata.set('apiversion', libmutter_api_version)
     stacking_installed_tests_cdata.set('libexecdir', libexecdir)
+    stacking_installed_tests_cdata.set('pkgdatadir', pkgdatadir)
     stacking_installed_tests_cdata.set('tests_datadir', tests_datadir)
     stacking_installed_tests_cdata.set('stacking_test', stacking_test)
 
@@ -1112,6 +1123,12 @@ if have_installed_tests
       endforeach
     endif
 
+    if test_case.has_key('installed_args')
+      args = test_case.get('installed_args', [])
+    else
+      args = test_case.get('args', [])
+    endif
+
     installed_tests_cdata = configuration_data()
     installed_tests_cdata.set('apiversion', libmutter_api_version)
     installed_tests_cdata.set('libexecdir', libexecdir)
@@ -1120,7 +1137,7 @@ if have_installed_tests
     installed_tests_cdata.set('gdctltestresultdir', '/tmp/mutter-gdctl-test-results')
     installed_tests_cdata.set('testname', test_case['name'])
     installed_tests_cdata.set('testexecutable', 'mutter-' + test_case['name'])
-    installed_tests_cdata.set('testargs', ' '.join(test_case.get('args', [])))
+    installed_tests_cdata.set('testargs', ' '.join(args))
     installed_tests_cdata.set('runnerargs', ' '.join(runner_args))
 
     configure_file(

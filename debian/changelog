@@ -1,3 +1,43 @@
+mutter (48.0-1) unstable; urgency=medium
+
+  * New upstream release
+  * Drop all the patches merged upstream between 48.rc and 48.0:
+    - debian/patches/Update-Basque-translation.patch
+    - Update-Catalan-translation.patch
+    - Update-Danish-translation.patch
+    - Update-Hungarian-translation.patch
+    - Update-Russian-translation.patch
+    - backends-native-Generalize-keyboard-LED-management.patch
+    - clutter-color-state-params-Handle-on-gamma-EOTFs-negative.patch
+    - clutter-color-state-params-Ignore-explicit-max_lum-on-EOT.patch
+    - clutter-frame-clock-Verify-and-change-state-earlier-in-di.patch
+    - clutter-stage-view-Notify-about-color-state-changes.patch
+    - cursor-renderer-native-Invalidate-state-for-output-color-.patch
+    - cursor-renderer-native-Removed-unused-argument-and-update.patch
+    - kms-impl-device-Don-t-disable-deadline-timer-on-G_IO_ERRO.patch
+    - kms-impl-device-Don-t-set_needs_flush-if-there-s-a-pendin.patch
+    - kms-impl-device-Process-pending-update-from-_schedule_pro.patch
+    - kms-impl-device-Refactor-meta_kms_impl_device_do_process_.patch
+    - tests-Vary-the-gdctl-path-used-for-installed-tests.patch
+    - wayland-color-management-Ensure-ref-lum-can-t-be-bigger-t.patch
+    - wayland-drm-lease-Move-on-device-bind-events-to-a-functio.patch
+    - wayland-drm-lease-Put-clients-in-a-queue-on-drm_fd-error.patch
+    - wayland-drm-lease-Send-drm_fd-to-pending-clients.patch
+  * Refresh patches:
+    - tests-Do-not-run-screencast-tests.patch
+    - Mark-several-additional-tests-as-flaky.patch
+    - tests-Install-stacking-tests-into-a-subdirectory.patch
+    - tests-Mark-view-verification-tests-as-incomplete-in-big-e.patch
+  * Add patches already accepted upstream in 48.1:
+    - kms-impl-device-Always-catch-pending-KMS-update-in-_sched.patch
+    - Revert-onscreen-native-Account-for-all-posted-frames.patch
+    - tests-Raise-the-timeout-on-monitor-unit-from-1-minute-to-.patch
+  * Add clutter-Repick-actors-when-touches-emulate-button-clicks.patch
+    to resolve touchscreen problems on X11 (LP: #2063005, LP: #1904237)
+  * libmutter-16-0.symbols, libmutter-test-16.symbols: Add new symbols in 48.0
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 20 Mar 2025 17:00:31 +0800
+
 mutter (48~rc-4ubuntu2) plucky; urgency=medium
 
   * Refresh seat-impl-Initialize-the-impl-reverse-pointer-slightly-ea.patch

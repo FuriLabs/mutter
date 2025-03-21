@@ -33,6 +33,7 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_backend_get_stage@Base 43.0
  meta_backend_get_type@Base 43.0
  meta_backend_get_udev@Base 48~alpha
+ meta_backend_inhibit_hw_cursor@Base 48.0
  meta_backend_is_headless@Base 43.0
  meta_backend_is_hw_cursors_inhibited@Base 47.4
  meta_backend_is_rendering_hardware_accelerated@Base 43.0
@@ -44,6 +45,7 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_backend_set_keymap@Base 43.0
  meta_backend_unfreeze_keyboard@Base 46~rc
  meta_backend_ungrab_keyboard@Base 46~rc
+ meta_backend_uninhibit_hw_cursor@Base 48.0
  meta_background_actor_get_type@Base 43.0
  meta_background_actor_new@Base 43.0
  meta_background_content_get_type@Base 43.0
@@ -2266,6 +2268,7 @@ libmutter-cogl-16.so.0 libmutter-16-0 #MINVER#
  cogl_frame_info_get_target_presentation_time_us@Base 48~rc
  cogl_frame_info_get_time_before_buffer_swap_us@Base 43.0
  cogl_frame_info_get_type@Base 46~beta
+ cogl_frame_info_get_view_frame_counter@Base 48.0
  cogl_frame_info_has_valid_gpu_rendering_duration@Base 46.0
  cogl_frame_info_is_hw_clock@Base 43.0
  cogl_frame_info_is_vsync@Base 43.0
