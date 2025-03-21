@@ -3036,7 +3036,7 @@ index 14b9792..03bbb87 100644
      g_signal_emit_by_name (window->display, "window-left-monitor",
                             old->number, window);
 diff --git a/src/tests/cursor-tests.c b/src/tests/cursor-tests.c
-index 3aef77d..b5040f2 100644
+index dd5d7b0..b6d8857 100644
 --- a/src/tests/cursor-tests.c
 +++ b/src/tests/cursor-tests.c
 @@ -16,6 +16,7 @@

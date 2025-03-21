@@ -18,10 +18,10 @@ Forwarded: no
  1 file changed, 1 insertion(+)
 
 diff --git a/src/tests/meson.build b/src/tests/meson.build
-index b1ca0ac..5eb467e 100644
+index 1b074f2..5782b90 100644
 --- a/src/tests/meson.build
 +++ b/src/tests/meson.build
-@@ -748,6 +748,7 @@ wayland_test_cases = [
+@@ -757,6 +757,7 @@ wayland_test_cases = [
    {
      'name': 'wayland-unit',
      'suite': 'wayland',

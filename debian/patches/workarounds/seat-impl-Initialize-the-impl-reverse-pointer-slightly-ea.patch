@@ -22,10 +22,10 @@ Bug-Ubuntu: https://bugs.launchpad.net/bugs/2081728
  1 file changed, 3 insertions(+)
 
 diff --git a/src/backends/native/meta-seat-impl.c b/src/backends/native/meta-seat-impl.c
-index 38576e8..6d91289 100644
+index e430bf7..09addcc 100644
 --- a/src/backends/native/meta-seat-impl.c
 +++ b/src/backends/native/meta-seat-impl.c
-@@ -3112,6 +3112,9 @@ meta_seat_impl_initable_init (GInitable     *initable,
+@@ -3120,6 +3120,9 @@ meta_seat_impl_initable_init (GInitable     *initable,
  {
    MetaSeatImpl *seat_impl = META_SEAT_IMPL (initable);
  
