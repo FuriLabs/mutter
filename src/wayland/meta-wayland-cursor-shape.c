@@ -20,7 +20,6 @@
 
 #include "wayland/meta-wayland-cursor-shape.h"
 
-#include "core/meta-debug-control-private.h"
 #include "core/window-private.h"
 #include "wayland/meta-wayland-private.h"
 #include "wayland/meta-wayland-xdg-shell.h"
@@ -43,47 +42,46 @@ typedef struct _MetaWaylandCursorShapeDevice
   };
 } MetaWaylandCursorShapeDevice;
 
-static const struct
-{
-  enum wp_cursor_shape_device_v1_shape shape;
-  MetaCursor cursor;
-} shape_map[] = {
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_DEFAULT, META_CURSOR_DEFAULT },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_CONTEXT_MENU, META_CURSOR_CONTEXT_MENU },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_HELP, META_CURSOR_HELP },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_POINTER, META_CURSOR_POINTER },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_PROGRESS, META_CURSOR_PROGRESS },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_WAIT, META_CURSOR_WAIT },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_CELL, META_CURSOR_CELL },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_CROSSHAIR, META_CURSOR_CROSSHAIR },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_TEXT, META_CURSOR_TEXT },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_VERTICAL_TEXT, META_CURSOR_VERTICAL_TEXT },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_ALIAS, META_CURSOR_ALIAS },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_COPY, META_CURSOR_COPY },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_MOVE, META_CURSOR_MOVE },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_NO_DROP, META_CURSOR_NO_DROP },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_NOT_ALLOWED, META_CURSOR_NOT_ALLOWED },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_GRAB, META_CURSOR_GRAB },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_GRABBING, META_CURSOR_GRABBING },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_E_RESIZE, META_CURSOR_E_RESIZE },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_N_RESIZE, META_CURSOR_N_RESIZE },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_NE_RESIZE, META_CURSOR_NE_RESIZE },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_NW_RESIZE, META_CURSOR_NW_RESIZE },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_S_RESIZE, META_CURSOR_S_RESIZE },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_SE_RESIZE, META_CURSOR_SE_RESIZE },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_SW_RESIZE, META_CURSOR_SW_RESIZE },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_W_RESIZE, META_CURSOR_W_RESIZE },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_EW_RESIZE, META_CURSOR_EW_RESIZE },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_NS_RESIZE, META_CURSOR_NS_RESIZE },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_NESW_RESIZE, META_CURSOR_NESW_RESIZE },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_NWSE_RESIZE, META_CURSOR_NWSE_RESIZE },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_COL_RESIZE, META_CURSOR_COL_RESIZE },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_ROW_RESIZE, META_CURSOR_ROW_RESIZE },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_ALL_SCROLL, META_CURSOR_ALL_SCROLL },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_ZOOM_IN, META_CURSOR_ZOOM_IN },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_ZOOM_OUT, META_CURSOR_ZOOM_OUT },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_DND_ASK, META_CURSOR_DND_ASK },
-  { WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_ALL_RESIZE, META_CURSOR_ALL_RESIZE },
+static const MetaCursor
+shape_map[] = {
+  /* version 1 */
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_DEFAULT] = META_CURSOR_DEFAULT,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_CONTEXT_MENU] = META_CURSOR_CONTEXT_MENU,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_HELP] = META_CURSOR_HELP,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_POINTER] = META_CURSOR_POINTER,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_PROGRESS] = META_CURSOR_PROGRESS,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_WAIT] = META_CURSOR_WAIT,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_CELL] = META_CURSOR_CELL,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_CROSSHAIR] = META_CURSOR_CROSSHAIR,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_TEXT] = META_CURSOR_TEXT,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_VERTICAL_TEXT] = META_CURSOR_VERTICAL_TEXT,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_ALIAS] = META_CURSOR_ALIAS,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_COPY] = META_CURSOR_COPY,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_MOVE] = META_CURSOR_MOVE,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_NO_DROP] = META_CURSOR_NO_DROP,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_NOT_ALLOWED] = META_CURSOR_NOT_ALLOWED,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_GRAB] = META_CURSOR_GRAB,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_GRABBING] = META_CURSOR_GRABBING,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_E_RESIZE] = META_CURSOR_E_RESIZE,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_N_RESIZE] = META_CURSOR_N_RESIZE,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_NE_RESIZE] = META_CURSOR_NE_RESIZE,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_NW_RESIZE] = META_CURSOR_NW_RESIZE,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_S_RESIZE] = META_CURSOR_S_RESIZE,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_SE_RESIZE] = META_CURSOR_SE_RESIZE,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_SW_RESIZE] = META_CURSOR_SW_RESIZE,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_W_RESIZE] = META_CURSOR_W_RESIZE,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_EW_RESIZE] = META_CURSOR_EW_RESIZE,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_NS_RESIZE] = META_CURSOR_NS_RESIZE,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_NESW_RESIZE] = META_CURSOR_NESW_RESIZE,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_NWSE_RESIZE] = META_CURSOR_NWSE_RESIZE,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_COL_RESIZE] = META_CURSOR_COL_RESIZE,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_ROW_RESIZE] = META_CURSOR_ROW_RESIZE,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_ALL_SCROLL] = META_CURSOR_ALL_SCROLL,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_ZOOM_IN] = META_CURSOR_ZOOM_IN,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_ZOOM_OUT] = META_CURSOR_ZOOM_OUT,
+  /* version 2 */
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_DND_ASK] = META_CURSOR_DND_ASK,
+  [WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_ALL_RESIZE] = META_CURSOR_ALL_RESIZE,
 };
 
 static MetaCursor
@@ -99,7 +97,7 @@ cursor_from_shape (enum wp_cursor_shape_device_v1_shape shape,
   if (shape >= G_N_ELEMENTS (shape_map))
     return META_CURSOR_INVALID;
 
-  return shape_map[shape].cursor;
+  return shape_map[shape];
 }
 
 static MetaWaylandCursorShapeDevice *
@@ -283,48 +281,12 @@ bind_cursor_shape (struct wl_client *client,
                                   NULL, NULL);
 }
 
-static void
-update_enabled (MetaWaylandCompositor *compositor)
-{
-  MetaDebugControl *debug_control =
-    meta_context_get_debug_control (compositor->context);
-  gboolean is_enabled =
-    meta_debug_control_is_cursor_shape_protocol_enabled (debug_control);
-  struct wl_global *global;
-
-  global = g_object_get_data (G_OBJECT (compositor),
-                              "-meta-wayland-cursor-shape");
-
-  if (is_enabled && global == NULL)
-    {
-
-      global = wl_global_create (compositor->wayland_display,
-                                 &wp_cursor_shape_manager_v1_interface,
-                                 META_WP_CURSOR_SHAPE_VERSION,
-                                 NULL, bind_cursor_shape);
-      if (global == NULL)
-        g_error ("Failed to register a global cursor-shape object");
-    }
-  else if (!is_enabled)
-    {
-      g_clear_pointer (&global, wl_global_destroy);
-    }
-
-  g_object_set_data (G_OBJECT (compositor),
-                     "-meta-wayland-cursor-shape",
-                     global);
-}
-
 void
 meta_wayland_init_cursor_shape (MetaWaylandCompositor *compositor)
 {
-  MetaDebugControl *debug_control =
-    meta_context_get_debug_control (compositor->context);
-
-  g_signal_connect_data (debug_control, "notify::cursor-shape-protocol",
-                         G_CALLBACK (update_enabled),
-                         compositor, NULL,
-                         G_CONNECT_SWAPPED | G_CONNECT_AFTER);
-
-  update_enabled (compositor);
+  if (wl_global_create (compositor->wayland_display,
+                        &wp_cursor_shape_manager_v1_interface,
+                        META_WP_CURSOR_SHAPE_VERSION,
+                        NULL, bind_cursor_shape) == NULL)
+    g_error ("Failed to register a global cursor-shape object");
 }
