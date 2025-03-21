@@ -1,4 +1,4 @@
-mutter (48.0-1) UNRELEASED; urgency=medium
+mutter (48.0-1) unstable; urgency=medium
 
   * New upstream release
   * Drop all the patches merged upstream between 48.rc and 48.0:
