@@ -12,4 +12,4 @@ ubuntu/x11-Add-support-for-fractional-scaling-using-Randr.patch
 ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
 ubuntu/Use-access-instead-of-checking-permission-modes-for-tmp-..patch
 workarounds/seat-impl-Initialize-the-impl-reverse-pointer-slightly-ea.patch
-workarounds/tests-Mark-wayland-unit-as-flaky.patch
+tests-Disconnect-dangling-signal-handlers.patch
