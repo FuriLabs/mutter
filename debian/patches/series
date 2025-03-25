@@ -8,3 +8,4 @@ clutter-Repick-actors-when-touches-emulate-button-clicks.patch
 kms-impl-device-Always-catch-pending-KMS-update-in-_sched.patch
 Revert-onscreen-native-Account-for-all-posted-frames.patch
 tests-Raise-the-timeout-on-monitor-unit-from-1-minute-to-.patch
+cursor-Move-sprite-preparation-into-sprite-classes.patch
