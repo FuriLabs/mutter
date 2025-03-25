@@ -202,6 +202,9 @@ is_connector_configured_for_lease (MetaKmsConnector *connector)
     return FALSE;
 
   monitor = meta_output_get_monitor (META_OUTPUT (output_kms));
+  if (!monitor)
+    return FALSE;
+
   return meta_monitor_is_for_lease (monitor);
 }
 
