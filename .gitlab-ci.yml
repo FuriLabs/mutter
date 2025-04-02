@@ -21,7 +21,6 @@ build-sysext:
   # https://gitlab.gnome.org/Infrastructure/Infrastructure/-/issues/1665
   tags:
     - x86_64_v3
-  when: manual
 
 stages:
  - review
@@ -107,7 +106,7 @@ variables:
     - .skip-git-clone
   variables:
     FDO_DISTRIBUTION_VERSION: 41
-    BASE_TAG: '2025-02-25.0'
+    BASE_TAG: '2025-03-28.0'
     MUTTER_USER: 'meta-user'
     FDO_DISTRIBUTION_PACKAGES:
       accountsservice-devel
@@ -327,14 +326,9 @@ check-merge-request:
   rules:
     - !reference [.only-merge-requests, rules]
 
-.dummy-container-build:
-  script:
-    - echo Dummy container build
-
 build-fedora-container@x86_64:
   extends:
-    #- .fdo.container-build@fedora@x86_64
-    - .dummy-container-build
+    - .fdo.container-build@fedora@x86_64
     - .mutter.fedora@x86_64
     - .mutter.skip-git-clone
   stage: prepare
@@ -343,8 +337,7 @@ build-fedora-container@x86_64:
 
 build-fedora-container@aarch64:
   extends:
-    #- .fdo.container-build@fedora@aarch64
-    - .dummy-container-build
+    - .fdo.container-build@fedora@aarch64
     - .mutter.fedora@aarch64
     - .mutter.skip-git-clone
   stage: prepare
