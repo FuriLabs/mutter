@@ -41,7 +41,9 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_backend_native_get_device_pool@Base 43.0
  meta_backend_native_get_kms@Base 43.0
  meta_backend_native_get_type@Base 43.0
+ meta_backend_pause@Base 48.1
  meta_backend_renderdoc_capture@Base 48~alpha
+ meta_backend_resume@Base 48.1
  meta_backend_set_keymap@Base 43.0
  meta_backend_unfreeze_keyboard@Base 46~rc
  meta_backend_ungrab_keyboard@Base 46~rc
