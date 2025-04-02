@@ -11,6 +11,7 @@ mutter (48.1-1) UNRELEASED; urgency=medium
     - Mark-several-additional-tests-as-flaky.patch
     - tests-Install-stacking-tests-into-a-subdirectory.patch
   * libmutter-16-0.symbols, libmutter-test-16.symbols: Add new symbols in 48.1
+  * debian: Split man pages into the packages that contain the binaries
 
  -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Wed, 02 Apr 2025 13:28:46 +0800
 
