@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 Red Hat
+ * Copyright (C) 2025 Red Hat Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -13,19 +13,17 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, see <http://www.gnu.org/licenses/>.
+ *
  */
 
 #pragma once
 
-#include <glib.h>
+#include <libevdev/libevdev.h>
 
-#include "backends/meta-monitor-manager-private.h"
+#include "meta/meta-base.h"
 
-GList * meta_clone_logical_monitor_config_list (GList *logical_monitor_configs);
+META_EXPORT
+struct libevdev_uinput * meta_create_test_keyboard (void);
 
-MetaMonitorsConfig * meta_monitors_config_copy (MetaMonitorsConfig *monitors_config);
-
-gboolean meta_verify_logical_monitor_config_list (GList                         *logical_monitor_configs,
-                                                  MetaLogicalMonitorLayoutMode   layout_mode,
-                                                  MetaMonitorManager            *monitor_manager,
-                                                  GError                       **error);
+META_EXPORT
+void meta_wait_for_uinput_device (struct libevdev_uinput *evdev_uinput);

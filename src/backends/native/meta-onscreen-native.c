@@ -156,16 +156,25 @@ init_secondary_gpu_state (MetaRendererNative  *renderer_native,
                           GError             **error);
 
 static void
-meta_onscreen_native_swap_drm_fb (CoglOnscreen *onscreen)
+meta_onscreen_native_promote_posted_frame (CoglOnscreen *onscreen)
 {
   MetaOnscreenNative *onscreen_native = META_ONSCREEN_NATIVE (onscreen);
+  MetaFrameNative *frame_native;
 
   if (!onscreen_native->posted_frame)
     return;
 
-  g_clear_pointer (&onscreen_native->presented_frame, clutter_frame_unref);
-  onscreen_native->presented_frame =
-    g_steal_pointer (&onscreen_native->posted_frame);
+  frame_native = meta_frame_native_from_frame (onscreen_native->posted_frame);
+  if (!meta_frame_native_get_buffer (frame_native))
+    {
+      g_clear_pointer (&onscreen_native->posted_frame, clutter_frame_unref);
+    }
+  else
+    {
+      g_clear_pointer (&onscreen_native->presented_frame, clutter_frame_unref);
+      onscreen_native->presented_frame =
+        g_steal_pointer (&onscreen_native->posted_frame);
+    }
 }
 
 static void
@@ -252,7 +261,7 @@ notify_view_crtc_presented (MetaRendererView *view,
   maybe_update_frame_info (crtc, frame_info, time_us, flags, sequence);
 
   meta_onscreen_native_notify_frame_complete (onscreen);
-  meta_onscreen_native_swap_drm_fb (onscreen);
+  meta_onscreen_native_promote_posted_frame (onscreen);
   maybe_post_next_frame (onscreen);
 }
 
@@ -309,6 +318,7 @@ page_flip_feedback_ready (MetaKmsCrtc *kms_crtc,
   frame_info->flags |= COGL_FRAME_INFO_FLAG_SYMBOLIC;
 
   meta_onscreen_native_notify_frame_complete (onscreen);
+  meta_onscreen_native_promote_posted_frame (onscreen);
   maybe_post_next_frame (onscreen);
 }
 
@@ -1601,6 +1611,9 @@ maybe_post_next_frame (CoglOnscreen *onscreen)
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (backend);
   MetaOnscreenNative *onscreen_native = META_ONSCREEN_NATIVE (onscreen);
+  MetaOutputKms *output_kms = META_OUTPUT_KMS (onscreen_native->output);
+  MetaKmsConnector *kms_connector =
+    meta_output_kms_get_kms_connector (output_kms);
   MetaPowerSave power_save_mode;
   MetaKmsCrtc *kms_crtc;
   MetaKmsDevice *kms_device;
@@ -1687,9 +1700,10 @@ maybe_post_next_frame (CoglOnscreen *onscreen)
       if (meta_renderer_native_has_pending_mode_sets (renderer_native))
         {
           meta_topic (META_DEBUG_KMS,
-                      "Postponing primary plane composite update for CRTC %u (%s)",
+                      "Postponing primary plane composite update for CRTC %u (%s) to %s",
                       meta_kms_crtc_get_id (kms_crtc),
-                      meta_kms_device_get_path (kms_device));
+                      meta_kms_device_get_path (kms_device),
+                      meta_kms_connector_get_name (kms_connector));
 
           kms_update = meta_frame_native_steal_kms_update (frame_native);
           meta_renderer_native_queue_mode_set_update (renderer_native,
@@ -1729,10 +1743,11 @@ maybe_post_next_frame (CoglOnscreen *onscreen)
     }
 
   meta_topic (META_DEBUG_KMS,
-              "Posting primary plane %s update for CRTC %u (%s)",
+              "Posting primary plane %s update for CRTC %u (%s) to %s",
               is_direct_scanout ? "direct scanout" : "composite",
               meta_kms_crtc_get_id (kms_crtc),
-              meta_kms_device_get_path (kms_device));
+              meta_kms_device_get_path (kms_device),
+              meta_kms_connector_get_name (kms_connector));
 
   kms_update = meta_frame_native_steal_kms_update (frame_native);
 
@@ -2030,6 +2045,7 @@ finish_frame_result_feedback (const MetaKmsFeedback *kms_feedback,
                               gpointer               user_data)
 {
   CoglOnscreen *onscreen = COGL_ONSCREEN (user_data);
+  MetaOnscreenNative *onscreen_native = META_ONSCREEN_NATIVE (onscreen);
   const GError *error;
   CoglFrameInfo *frame_info;
 
@@ -2055,6 +2071,7 @@ finish_frame_result_feedback (const MetaKmsFeedback *kms_feedback,
   frame_info->flags |= COGL_FRAME_INFO_FLAG_SYMBOLIC;
 
   meta_onscreen_native_notify_frame_complete (onscreen);
+  g_clear_pointer (&onscreen_native->posted_frame, clutter_frame_unref);
 }
 
 static const MetaKmsResultListenerVtable finish_frame_result_listener_vtable = {
