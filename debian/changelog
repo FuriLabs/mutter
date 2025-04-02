@@ -1,3 +1,17 @@
+mutter (48.1-1) UNRELEASED; urgency=medium
+
+  * New upstream release 48.1
+  * Drop upstreamed patches:
+    - kms-impl-device-Always-catch-pending-KMS-update-in-_sched.patch
+    - Revert-onscreen-native-Account-for-all-posted-frames.patch
+    - tests-Raise-the-timeout-on-monitor-unit-from-1-minute-to-.patch
+  * Refresh patches:
+    - tests-Do-not-run-screencast-tests.patch
+    - Mark-several-additional-tests-as-flaky.patch
+    - tests-Install-stacking-tests-into-a-subdirectory.patch
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Wed, 02 Apr 2025 13:28:46 +0800
+
 mutter (48.0-1) unstable; urgency=medium
 
   * New upstream release
