@@ -1,7 +1,10 @@
 mutter (48.1-1ubuntu1) UNRELEASED; urgency=medium
 
   * Merge with Debian (unreleased) 48.1-1.
-  * Fix conflicts in x11-Add-support-for-fractional-scaling-using-Randr.patch
+  * Updated x11-Add-support-for-fractional-scaling-using-Randr.patch:
+    - Fixed conflicts with 48.1
+    - Fixed memory-use-after-free in meta_monitor_manager_ensure_configured
+      that manifested as test failures in mutter-cursor-tests.
   * Drop seat-impl-Initialize-the-impl-reverse-pointer-slightly-ea.patch
     because 48.1 fixes the same bug in a different way.
 
