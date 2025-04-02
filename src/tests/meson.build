@@ -25,6 +25,13 @@ mutter_test_sources = [
   'meta-test-utils.h',
 ]
 
+if libevdev_dep.found()
+  mutter_test_sources += [
+    'meta-input-test-utils.c',
+    'meta-input-test-utils.h',
+  ]
+endif
+
 libmutter_test_name = 'mutter-test-' + libmutter_api_version
 
 cogl_test_utils = files (
@@ -52,6 +59,12 @@ tests_deps = [
   wayland_client_dep,
   gvdb_dep,
 ]
+
+if libevdev_dep.found()
+  tests_deps += [
+    libevdev_dep,
+  ]
+endif
 
 libmutter_test = shared_library(libmutter_test_name,
                                 mutter_test_sources,
@@ -265,6 +278,7 @@ test_cases += [
   {
     'name': 'monitor-unit',
     'suite': 'backend',
+    'timeout': 300,
     'sources': [ 'monitor-unit-tests.c', ],
     'depends': [
       test_client,
@@ -694,9 +708,28 @@ kms_test_cases = [
       wayland_test_utils,
     ],
   },
+  {
+    'name': 'drm-lease-monitor',
+    'suite': 'backends/native',
+    'sources': [
+      'drm-lease-monitor-test.c',
+    ],
+  },
 ]
 
 privileged_test_cases += kms_test_cases
+
+if libevdev_dep.found()
+  privileged_test_cases += [
+    {
+      'name': 'a11y-mouse-keys-test',
+      'suite': 'a11y',
+      'sources': [
+        'a11y-mouse-keys-test.c',
+      ],
+    },
+  ]
+endif
 
 # Wayland tests
 wayland_test_cases = [
@@ -879,7 +912,7 @@ foreach test_case: test_cases
     env: test_env,
     depends: test_depends,
     is_parallel: false,
-    timeout: 60,
+    timeout: test_case.get('timeout', 60),
   )
 endforeach
 

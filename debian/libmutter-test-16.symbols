@@ -17,6 +17,7 @@ libmutter-test-16.so libmutter-test-16 #MINVER#
  meta_context_test_wait_for_x11_display@Base 41.0
  meta_create_monitor_test_setup@Base 42~beta
  meta_create_test_context@Base 41.0
+ meta_create_test_keyboard@Base 48.1
  meta_create_test_monitor@Base 42~beta
  meta_crtc_test_disable_gamma_lut@Base 43~rc
  meta_crtc_test_get_type@Base 41.0
@@ -64,6 +65,8 @@ libmutter-test-16.so libmutter-test-16 #MINVER#
  meta_wait_for_orientation@Base 42~beta
  meta_wait_for_paint@Base 42~beta
  meta_wait_for_possible_orientation_change@Base 42~beta
+ meta_wait_for_uinput_device@Base 48.1
+ meta_wait_for_update@Base 48.1
  meta_wait_for_window_cursor@Base 47.4
  meta_wait_for_window_shown@Base 47.4
  meta_wait_test_process@Base 47.4

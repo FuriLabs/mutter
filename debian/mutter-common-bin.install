@@ -2,3 +2,4 @@ usr/bin/gdctl
 usr/libexec/mutter-restart-helper
 usr/libexec/mutter-x11-frames
 usr/share/bash-completion/completions/gdctl
+usr/share/man/man1/gdctl.1

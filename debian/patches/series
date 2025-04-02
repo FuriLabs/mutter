@@ -5,9 +5,6 @@ workarounds/tests-Skip-thread-priority-test.patch
 workarounds/Mark-several-additional-tests-as-flaky.patch
 workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
 clutter-Repick-actors-when-touches-emulate-button-clicks.patch
-kms-impl-device-Always-catch-pending-KMS-update-in-_sched.patch
-Revert-onscreen-native-Account-for-all-posted-frames.patch
-tests-Raise-the-timeout-on-monitor-unit-from-1-minute-to-.patch
 ubuntu/x11-Add-support-for-fractional-scaling-using-Randr.patch
 ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
 ubuntu/Use-access-instead-of-checking-permission-modes-for-tmp-..patch
