@@ -1,3 +1,12 @@
+mutter (48.1-1ubuntu1) UNRELEASED; urgency=medium
+
+  * Merge with Debian (unreleased) 48.1-1.
+  * Fix conflicts in x11-Add-support-for-fractional-scaling-using-Randr.patch
+  * Drop seat-impl-Initialize-the-impl-reverse-pointer-slightly-ea.patch
+    because 48.1 fixes the same bug in a different way.
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Wed, 02 Apr 2025 15:58:12 +0800
+
 mutter (48.1-1) UNRELEASED; urgency=medium
 
   * New upstream release 48.1
