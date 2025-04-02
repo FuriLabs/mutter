@@ -1,6 +1,7 @@
 mutter (48.1-1) UNRELEASED; urgency=medium
 
   * New upstream release 48.1
+    (fixes LP: #2104183, LP: #2103886, LP: #2103983, LP: #2099658)
   * Drop upstreamed patches:
     - kms-impl-device-Always-catch-pending-KMS-update-in-_sched.patch
     - Revert-onscreen-native-Account-for-all-posted-frames.patch
