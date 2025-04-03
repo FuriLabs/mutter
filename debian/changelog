@@ -1,3 +1,10 @@
+mutter (48.1-1ubuntu2) plucky; urgency=medium
+
+  * Add cursor-sprite-xcursor-Reset-current_frame-only-if-xcursor.patch
+    to fix animated cursors (LP: #2106097)
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 03 Apr 2025 16:35:31 +0800
+
 mutter (48.1-1ubuntu1) plucky; urgency=medium
 
   * Merge with Debian (unreleased) 48.1-1.
