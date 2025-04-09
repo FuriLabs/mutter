@@ -1,0 +1,60 @@
+From: =?utf-8?q?Michel_D=C3=A4nzer?= <mdaenzer@redhat.com>
+Date: Tue, 25 Mar 2025 16:57:51 +0100
+Subject: wayland/xdg-shell: Check for NULL xdg_popup->resource
+
+In places where the client may have already destroyed the resource.
+Fixes crash in that case.
+
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4362>
+---
+ src/wayland/meta-wayland-xdg-shell.c | 16 ++++++++++++----
+ 1 file changed, 12 insertions(+), 4 deletions(-)
+
+diff --git a/src/wayland/meta-wayland-xdg-shell.c b/src/wayland/meta-wayland-xdg-shell.c
+index 42c1065..744875e 100644
+--- a/src/wayland/meta-wayland-xdg-shell.c
++++ b/src/wayland/meta-wayland-xdg-shell.c
+@@ -1236,7 +1236,9 @@ finish_popup_setup (MetaWaylandXdgPopup *xdg_popup)
+ 
+   if (!meta_wayland_surface_get_window (parent_surface))
+     {
+-      xdg_popup_send_popup_done (xdg_popup->resource);
++      if (xdg_popup->resource)
++        xdg_popup_send_popup_done (xdg_popup->resource);
++
+       return;
+     }
+ 
+@@ -1302,7 +1304,9 @@ finish_popup_setup (MetaWaylandXdgPopup *xdg_popup)
+ 
+       if (popup == NULL)
+         {
+-          xdg_popup_send_popup_done (xdg_popup->resource);
++          if (xdg_popup->resource)
++            xdg_popup_send_popup_done (xdg_popup->resource);
++
+           meta_wayland_shell_surface_destroy_window (shell_surface);
+           return;
+         }
+@@ -1339,7 +1343,9 @@ dismiss_invalid_popup (MetaWaylandXdgPopup *xdg_popup)
+ 
+           top_xdg_popup = meta_wayland_xdg_popup_from_surface (top_popup_surface);
+ 
+-          xdg_popup_send_popup_done (top_xdg_popup->resource);
++          if (top_xdg_popup->resource)
++            xdg_popup_send_popup_done (top_xdg_popup->resource);
++
+           meta_wayland_popup_dismiss (top_xdg_popup->popup);
+ 
+           if (top_xdg_popup == xdg_popup)
+@@ -1348,7 +1354,9 @@ dismiss_invalid_popup (MetaWaylandXdgPopup *xdg_popup)
+     }
+   else
+     {
+-      xdg_popup_send_popup_done (xdg_popup->resource);
++      if (xdg_popup->resource)
++        xdg_popup_send_popup_done (xdg_popup->resource);
++
+       meta_wayland_xdg_popup_unmap (xdg_popup);
+     }
+ }
