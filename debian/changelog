@@ -1,3 +1,11 @@
+mutter (48.1-1ubuntu3) plucky; urgency=medium
+
+  * Add wayland-xdg-shell-Check-for-NULL-xdg_popup-resource.patch and
+    wayland-xdg-shell-Check-popup-resource-for-parent-unmappe.patch to fix
+    popup crashes (LP: #2043177)
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Wed, 09 Apr 2025 13:47:27 +0800
+
 mutter (48.1-1ubuntu2) plucky; urgency=medium
 
   * Add cursor-sprite-xcursor-Reset-current_frame-only-if-xcursor.patch

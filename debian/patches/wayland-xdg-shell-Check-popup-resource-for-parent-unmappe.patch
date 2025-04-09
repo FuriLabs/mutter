@@ -1,0 +1,84 @@
+From: =?utf-8?q?Michel_D=C3=A4nzer?= <mdaenzer@redhat.com>
+Date: Tue, 25 Mar 2025 11:52:09 +0100
+Subject: wayland/xdg-shell: Check popup resource for parent unmapped signal
+
+If the client already destroyed the xdg_popup resource, there's no need
+to hook up the signal.
+
+Fixes the use-after-free below in this scenario:
+
+1. Client creates xdg_popup resource
+2. Client makes a wl_surface commit which would map the popup
+3. Before the commit from step 2 is applied, the client destroys the
+   xdg_popup resource created in step 1.
+
+==1078108== Invalid read of size 8
+==1078108==    at 0x4FAAD88: g_type_check_instance_cast (gtype.c:3945)
+==1078108==    by 0x4B77D0C: META_WAYLAND_XDG_SURFACE (meta-wayland-xdg-shell.h:23)
+==1078108==    by 0x4B790EE: on_parent_surface_unmapped (meta-wayland-xdg-shell.c:707)
+==1078108==    by 0x4F85A0F: g_closure_invoke (gclosure.c:833)
+==1078108==    by 0x4F99DC2: signal_emit_unlocked_R.isra.0 (gsignal.c:3902)
+==1078108==    by 0x4F9B7E8: signal_emit_valist_unlocked (gsignal.c:3534)
+==1078108==    by 0x4FA1625: g_signal_emit_valist (gsignal.c:3277)
+==1078108==    by 0x4FA16E2: g_signal_emit (gsignal.c:3597)
+==1078108==    by 0x4B63FB8: meta_wayland_surface_notify_unmapped (meta-wayland-surface.c:1572)
+==1078108==    by 0x4B5DC6A: clear_window (meta-wayland-shell-surface.c:117)
+==1078108==    by 0x4B5DCD1: window_unmanaging (meta-wayland-shell-surface.c:127)
+==1078108==    by 0x4F85C40: _g_closure_invoke_va (gclosure.c:896)
+==1078108==  Address 0x22279de0 is 144 bytes inside a block of size 312 free'd
+==1078108==    at 0x484787F: free (vg_replace_malloc.c:989)
+==1078108==    by 0x4FA7274: g_type_free_instance (gtype.c:1973)
+==1078108==    by 0x4F8B595: g_object_unref (gobject.c:4510)
+==1078108==    by 0x4B64058: meta_wayland_surface_dispose (meta-wayland-surface.c:1584)
+==1078108==    by 0x4F8B318: g_object_unref (gobject.c:4423)
+==1078108==    by 0x4B64659: wl_surface_destructor (meta-wayland-surface.c:1674)
+==1078108==    by 0x53F61D6: remove_and_destroy_resource (wayland-server.c:757)
+==1078108==    by 0x4B633C2: wl_surface_destroy (meta-wayland-surface.c:1115)
+==1078108==    by 0x5FC860D: ??? (in /usr/lib/x86_64-linux-gnu/libffi.so.8.1.4)
+==1078108==    by 0x5FC797F: ??? (in /usr/lib/x86_64-linux-gnu/libffi.so.8.1.4)
+==1078108==    by 0x5FC80EA: ffi_call (in /usr/lib/x86_64-linux-gnu/libffi.so.8.1.4)
+==1078108==    by 0x53FBFF0: wl_closure_invoke (connection.c:1228)
+==1078108==  Block was alloc'd at
+==1078108==    at 0x484BBA3: calloc (vg_replace_malloc.c:1675)
+==1078108==    by 0x4C82319: g_malloc0 (gmem.c:133)
+==1078108==    by 0x4FA8774: g_type_create_instance (gtype.c:1873)
+==1078108==    by 0x4F8BB5F: g_object_new_internal.part.0 (gobject.c:2614)
+==1078108==    by 0x4F8DB8D: g_object_new_internal (gobject.c:2611)
+==1078108==    by 0x4F8DB8D: g_object_new_with_properties (gobject.c:2777)
+==1078108==    by 0x4B60EAB: meta_wayland_surface_assign_role (meta-wayland-surface.c:226)
+==1078108==    by 0x4B7BE53: xdg_surface_constructor_get_popup (meta-wayland-xdg-shell.c:2220)
+==1078108==    by 0x5FC860D: ??? (in /usr/lib/x86_64-linux-gnu/libffi.so.8.1.4)
+==1078108==    by 0x5FC797F: ??? (in /usr/lib/x86_64-linux-gnu/libffi.so.8.1.4)
+==1078108==    by 0x5FC80EA: ffi_call (in /usr/lib/x86_64-linux-gnu/libffi.so.8.1.4)
+==1078108==    by 0x53FBFF0: wl_closure_invoke (connection.c:1228)
+==1078108==    by 0x53F6CD1: wl_client_connection_data (wayland-server.c:444)
+
+Closes: https://gitlab.gnome.org/GNOME/mutter/-/issues/3106
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4362>
+---
+ src/wayland/meta-wayland-xdg-shell.c | 12 ++++++++----
+ 1 file changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/src/wayland/meta-wayland-xdg-shell.c b/src/wayland/meta-wayland-xdg-shell.c
+index d256688..42c1065 100644
+--- a/src/wayland/meta-wayland-xdg-shell.c
++++ b/src/wayland/meta-wayland-xdg-shell.c
+@@ -1263,10 +1263,14 @@ finish_popup_setup (MetaWaylandXdgPopup *xdg_popup)
+     }
+ 
+   xdg_popup->parent_surface = parent_surface;
+-  xdg_popup->parent_surface_unmapped_handler_id =
+-    g_signal_connect (parent_surface, "unmapped",
+-                      G_CALLBACK (on_parent_surface_unmapped),
+-                      xdg_popup);
++
++  if (xdg_popup->resource)
++    {
++      xdg_popup->parent_surface_unmapped_handler_id =
++        g_signal_connect (parent_surface, "unmapped",
++                          G_CALLBACK (on_parent_surface_unmapped),
++                          xdg_popup);
++    }
+ 
+   meta_wayland_shell_surface_destroy_window (shell_surface);
+   meta_wayland_actor_surface_reset_actor (META_WAYLAND_ACTOR_SURFACE (surface_role));
