@@ -1,3 +1,10 @@
+mutter (46.2-1ubuntu0.24.04.8) noble; urgency=medium
+
+  * Add clutter-Repick-actors-when-touches-emulate-button-clicks.patch
+    to resolve touchscreen problems on X11 (LP: #2063005, LP: #1904237)
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Wed, 09 Apr 2025 14:13:33 +0800
+
 mutter (46.2-1ubuntu0.24.04.7) noble; urgency=medium
 
   [ Alessandro Astone ]
