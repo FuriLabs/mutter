@@ -11,7 +11,7 @@ Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4362>
  1 file changed, 12 insertions(+), 4 deletions(-)
 
 diff --git a/src/wayland/meta-wayland-xdg-shell.c b/src/wayland/meta-wayland-xdg-shell.c
-index 42c1065..744875e 100644
+index d256688..a94cf7c 100644
 --- a/src/wayland/meta-wayland-xdg-shell.c
 +++ b/src/wayland/meta-wayland-xdg-shell.c
 @@ -1236,7 +1236,9 @@ finish_popup_setup (MetaWaylandXdgPopup *xdg_popup)
@@ -25,7 +25,7 @@ index 42c1065..744875e 100644
        return;
      }
  
-@@ -1302,7 +1304,9 @@ finish_popup_setup (MetaWaylandXdgPopup *xdg_popup)
+@@ -1298,7 +1300,9 @@ finish_popup_setup (MetaWaylandXdgPopup *xdg_popup)
  
        if (popup == NULL)
          {
@@ -36,7 +36,7 @@ index 42c1065..744875e 100644
            meta_wayland_shell_surface_destroy_window (shell_surface);
            return;
          }
-@@ -1339,7 +1343,9 @@ dismiss_invalid_popup (MetaWaylandXdgPopup *xdg_popup)
+@@ -1335,7 +1339,9 @@ dismiss_invalid_popup (MetaWaylandXdgPopup *xdg_popup)
  
            top_xdg_popup = meta_wayland_xdg_popup_from_surface (top_popup_surface);
  
@@ -47,7 +47,7 @@ index 42c1065..744875e 100644
            meta_wayland_popup_dismiss (top_xdg_popup->popup);
  
            if (top_xdg_popup == xdg_popup)
-@@ -1348,7 +1354,9 @@ dismiss_invalid_popup (MetaWaylandXdgPopup *xdg_popup)
+@@ -1344,7 +1350,9 @@ dismiss_invalid_popup (MetaWaylandXdgPopup *xdg_popup)
      }
    else
      {

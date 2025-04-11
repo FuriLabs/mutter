@@ -60,10 +60,10 @@ Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4362>
  1 file changed, 8 insertions(+), 4 deletions(-)
 
 diff --git a/src/wayland/meta-wayland-xdg-shell.c b/src/wayland/meta-wayland-xdg-shell.c
-index d256688..42c1065 100644
+index a94cf7c..744875e 100644
 --- a/src/wayland/meta-wayland-xdg-shell.c
 +++ b/src/wayland/meta-wayland-xdg-shell.c
-@@ -1263,10 +1263,14 @@ finish_popup_setup (MetaWaylandXdgPopup *xdg_popup)
+@@ -1265,10 +1265,14 @@ finish_popup_setup (MetaWaylandXdgPopup *xdg_popup)
      }
  
    xdg_popup->parent_surface = parent_surface;

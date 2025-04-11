@@ -1,3 +1,17 @@
+mutter (48.1-2) unstable; urgency=medium
+
+  [ Daniel van Vugt ]
+  * Cherry-pick cursor-sprite-xcursor-Reset-current_frame-only-if-xcursor.patch
+    to fix animated cursors (LP: #2106097)
+  * Cherry-pick wayland-xdg-shell-Check-for-NULL-xdg_popup-resource.patch
+    and wayland-xdg-shell-Check-popup-resource-for-parent-unmappe.patch to fix
+    popup crashes (LP: #2043177)
+
+  [ Michael Biebl ]
+  * Enable fractional scaling by default as was done in Fedora 41
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Fri, 11 Apr 2025 14:29:16 -0400
+
 mutter (48.1-1) unstable; urgency=medium
 
   * New upstream release 48.1
