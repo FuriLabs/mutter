@@ -605,14 +605,52 @@ import_scanout_gbm_bo (MetaWaylandDmaBufBuffer  *dma_buf,
 }
 #endif
 
+static gboolean
+has_modifier (GArray   *modifiers,
+              uint64_t  drm_modifier)
+{
+  int i;
+
+  for (i = 0; i < modifiers->len; i++)
+    {
+      if (drm_modifier == g_array_index (modifiers, uint64_t, i))
+        return TRUE;
+    }
+  return FALSE;
+}
+
+static gboolean
+crtc_supports_modifier (MetaCrtcKms *crtc_kms,
+                        uint32_t     drm_format,
+                        uint64_t     drm_modifier)
+{
+  MetaKmsPlane *plane = meta_crtc_kms_get_assigned_primary_plane (crtc_kms);
+  GArray *crtc_modifiers;
+
+  g_return_val_if_fail (plane, FALSE);
+
+  crtc_modifiers = meta_kms_plane_get_modifiers_for_format (plane, drm_format);
+  if (!crtc_modifiers)
+    return FALSE;
+
+  if (drm_modifier == DRM_FORMAT_MOD_INVALID)
+    return TRUE;
+
+  return has_modifier (crtc_modifiers, drm_modifier);
+}
+
 CoglScanout *
 meta_wayland_dma_buf_try_acquire_scanout (MetaWaylandBuffer     *buffer,
                                           CoglOnscreen          *onscreen,
+                                          ClutterStageView      *stage_view,
                                           const graphene_rect_t *src_rect,
                                           const MtkRectangle    *dst_rect)
 {
 #ifdef HAVE_NATIVE_BACKEND
   MetaWaylandDmaBufBuffer *dma_buf;
+  MetaRendererView *renderer_view = META_RENDERER_VIEW (stage_view);
+  MetaCrtc *crtc;
+  MetaCrtcKms *crtc_kms;
   MetaContext *context;
   MetaBackend *backend;
   MetaRenderer *renderer;
@@ -630,6 +668,20 @@ meta_wayland_dma_buf_try_acquire_scanout (MetaWaylandBuffer     *buffer,
   dma_buf = meta_wayland_dma_buf_from_buffer (buffer);
   if (!dma_buf)
     return NULL;
+
+  crtc = meta_renderer_view_get_crtc (renderer_view);
+  g_return_val_if_fail (META_IS_CRTC_KMS (crtc), NULL);
+  crtc_kms = META_CRTC_KMS (crtc);
+  if (!crtc_supports_modifier (crtc_kms,
+                               dma_buf->drm_format,
+                               dma_buf->drm_modifier))
+    {
+      meta_topic (META_DEBUG_RENDER,
+                  "DRM format 0x%x (0x%lx) not supported by primary plane",
+                  dma_buf->drm_format,
+                  dma_buf->drm_modifier);
+      return NULL;
+    }
 
   context = meta_wayland_compositor_get_context (dma_buf->manager->compositor);
   backend = meta_context_get_backend (context);
@@ -1297,37 +1349,6 @@ find_scanout_tranche_func (gconstpointer a,
     return -1;
 }
 
-static gboolean
-has_modifier (GArray   *modifiers,
-              uint64_t  drm_modifier)
-{
-  int i;
-
-  for (i = 0; i < modifiers->len; i++)
-    {
-      if (drm_modifier == g_array_index (modifiers, uint64_t, i))
-        return TRUE;
-    }
-  return FALSE;
-}
-
-static gboolean
-crtc_supports_modifier (MetaCrtcKms *crtc_kms,
-                        uint32_t     drm_format,
-                        uint64_t     drm_modifier)
-{
-  MetaKmsPlane *plane = meta_crtc_kms_get_assigned_primary_plane (crtc_kms);
-  GArray *crtc_modifiers;
-
-  g_return_val_if_fail (plane, FALSE);
-
-  crtc_modifiers = meta_kms_plane_get_modifiers_for_format (plane, drm_format);
-  if (!crtc_modifiers)
-    return FALSE;
-
-  return has_modifier (crtc_modifiers, drm_modifier);
-}
-
 static void
 ensure_scanout_tranche (MetaWaylandDmaBufSurfaceFeedback *surface_feedback,
                         MetaCrtc                         *crtc)
@@ -1374,6 +1395,9 @@ ensure_scanout_tranche (MetaWaylandDmaBufSurfaceFeedback *surface_feedback,
             g_array_index (dma_buf_manager->formats,
                            MetaWaylandDmaBufFormat,
                            i);
+
+          if (format.drm_modifier == DRM_FORMAT_MOD_INVALID)
+            continue;
 
           if (!crtc_supports_modifier (crtc_kms,
                                        format.drm_format,
