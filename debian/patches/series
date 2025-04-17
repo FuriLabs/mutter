@@ -5,6 +5,3 @@ workarounds/tests-Skip-thread-priority-test.patch
 workarounds/Mark-several-additional-tests-as-flaky.patch
 workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
 clutter-Repick-actors-when-touches-emulate-button-clicks.patch
-cursor-sprite-xcursor-Reset-current_frame-only-if-xcursor.patch
-wayland-xdg-shell-Check-for-NULL-xdg_popup-resource.patch
-wayland-xdg-shell-Check-popup-resource-for-parent-unmappe.patch
