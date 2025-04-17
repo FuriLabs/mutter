@@ -1,8 +1,9 @@
-mutter (48.2-1) UNRELEASED; urgency=medium
+mutter (48.2-1) unstable; urgency=medium
 
   * New upstream release
+  * Remove 3 patches applied in new release
 
- -- Jeremy Bícha <jbicha@ubuntu.com>  Thu, 17 Apr 2025 13:00:42 -0400
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Thu, 17 Apr 2025 13:30:10 -0400
 
 mutter (48.1-2) unstable; urgency=medium
 
