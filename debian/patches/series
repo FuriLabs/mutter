@@ -44,3 +44,4 @@ cogl-gles-Use-a-premul-required-format-for-opaque-fp16-Co.patch
 cogl-gles-Use-the-GL_BGRA8_EXT-internalformat-instead-of-.patch
 cogl-gles-Revert-to-unsized-GL_BGRA-as-internalformat-for.patch
 clutter-Repick-actors-when-touches-emulate-button-clicks.patch
+onscreen-native-Return-the-correct-number-of-EGL-modifier.patch
