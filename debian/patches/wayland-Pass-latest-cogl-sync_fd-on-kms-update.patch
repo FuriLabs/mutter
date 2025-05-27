@@ -1,0 +1,504 @@
+Description: onscreen/native: Pass latest cogl sync_fd on KMS update
+ From original merge request:
+ .
+ > If the KMS thread is using the deadline timer:
+ > 
+ >     1. The update is deferred, and the deadline timer is left armed, until
+ >        the sync_file descriptor signals (becomes readable).
+ >     2. Implicit synchronization is disabled for the KMS update.
+ > 
+ > This means cursor updates should no longer miss a display refresh cycle due
+ > to mutter's compositing GPU work finishing too late.
+ .
+ This also includes patchsets for related bugfixes, but removed changes for
+ `meta_crtc_kms_get_deadline_evasion` as it is not applicable in GNOME 46.
+ .
+ These patches are recommended by:
+ https://gitlab.freedesktop.org/drm/i915/kernel/-/issues/13759#note_2819658
+Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/mutter/+bug/2111698
+Origin: backport,
+ https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3958
+ https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3999
+---
+ src/backends/native/meta-kms-crtc.c | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+--- a/src/backends/native/meta-kms-impl-device-atomic.c
++++ b/src/backends/native/meta-kms-impl-device-atomic.c
+@@ -643,7 +643,8 @@
+             return FALSE;
+         }
+ 
+-      if (plane_assignment->flags & META_KMS_ASSIGN_PLANE_FLAG_DIRECT_SCANOUT)
++      if (plane_assignment->flags & META_KMS_ASSIGN_PLANE_FLAG_DISABLE_IMPLICIT_SYNC &&
++          !meta_kms_update_get_mode_sets (update))
+         {
+           int signaled_sync_file;
+ 
+--- a/src/backends/native/meta-kms-update.h
++++ b/src/backends/native/meta-kms-update.h
+@@ -39,7 +39,7 @@
+   META_KMS_ASSIGN_PLANE_FLAG_NONE = 0,
+   META_KMS_ASSIGN_PLANE_FLAG_FB_UNCHANGED = 1 << 0,
+   META_KMS_ASSIGN_PLANE_FLAG_ALLOW_FAIL = 1 << 1,
+-  META_KMS_ASSIGN_PLANE_FLAG_DIRECT_SCANOUT = 1 << 2,
++  META_KMS_ASSIGN_PLANE_FLAG_DISABLE_IMPLICIT_SYNC = 1 << 2,
+ } MetaKmsAssignPlaneFlag;
+ 
+ struct _MetaKmsPageFlipListenerVtable
+@@ -157,6 +157,13 @@
+                                      MetaKmsCrtc        *crtc,
+                                      const MetaGammaLut *gamma);
+ 
++int
++meta_kms_update_get_sync_fd (MetaKmsUpdate *update);
++
++void
++meta_kms_update_set_sync_fd (MetaKmsUpdate *update,
++                             int            sync_fd);
++
+ void meta_kms_plane_assignment_set_fb_damage (MetaKmsPlaneAssignment *plane_assignment,
+                                               const int              *rectangles,
+                                               int                     n_rectangles);
+--- a/src/backends/native/meta-onscreen-native.c
++++ b/src/backends/native/meta-onscreen-native.c
+@@ -369,7 +369,11 @@
+   if (error &&
+       !g_error_matches (error,
+                         G_IO_ERROR,
+-                        G_IO_ERROR_PERMISSION_DENIED))
++                        G_IO_ERROR_PERMISSION_DENIED) &&
++      !g_error_matches (error,
++                        META_KMS_ERROR,
++                        META_KMS_ERROR_DISCARDED))
++
+     g_warning ("Page flip discarded: %s", error->message);
+ 
+   frame_info = cogl_onscreen_peek_head_frame_info (onscreen);
+@@ -1701,7 +1705,7 @@
+   assign_primary_plane (crtc_kms,
+                         buffer,
+                         test_update,
+-                        META_KMS_ASSIGN_PLANE_FLAG_DIRECT_SCANOUT,
++                        META_KMS_ASSIGN_PLANE_FLAG_DISABLE_IMPLICIT_SYNC,
+                         &src_rect,
+                         &dst_rect);
+ 
+@@ -1781,6 +1785,7 @@
+   MetaKmsCrtc *kms_crtc;
+   MetaKmsDevice *kms_device;
+   MetaKmsUpdate *kms_update;
++  int sync_fd;
+ 
+   power_save_mode = meta_monitor_manager_get_power_save_mode (monitor_manager);
+   if (power_save_mode != META_POWER_SAVE_ON)
+@@ -1843,7 +1848,7 @@
+                                   onscreen_native->view,
+                                   onscreen_native->crtc,
+                                   kms_update,
+-                                  META_KMS_ASSIGN_PLANE_FLAG_DIRECT_SCANOUT,
++                                  META_KMS_ASSIGN_PLANE_FLAG_DISABLE_IMPLICIT_SYNC,
+                                   NULL,
+                                   0);
+ 
+@@ -1853,6 +1858,8 @@
+               meta_kms_device_get_path (kms_device));
+ 
+   kms_update = meta_frame_native_steal_kms_update (frame_native);
++  sync_fd = cogl_context_get_latest_sync_fd (cogl_context);
++  meta_kms_update_set_sync_fd (kms_update, sync_fd);
+   meta_kms_device_post_update (kms_device, kms_update,
+                                META_KMS_UPDATE_FLAG_NONE);
+   clutter_frame_set_result (frame, CLUTTER_FRAME_RESULT_PENDING_PRESENTED);
+--- a/src/backends/native/meta-kms-update.c
++++ b/src/backends/native/meta-kms-update.c
+@@ -20,6 +20,8 @@
+ #include "backends/native/meta-kms-update.h"
+ #include "backends/native/meta-kms-update-private.h"
+ 
++#include <glib/gstdio.h>
++
+ #include "backends/meta-display-config-shared.h"
+ #include "backends/native/meta-kms-connector.h"
+ #include "backends/native/meta-kms-crtc.h"
+@@ -51,6 +53,8 @@
+   gboolean needs_modeset;
+ 
+   MetaKmsImplDevice *impl_device;
++
++  int sync_fd;
+ };
+ 
+ void
+@@ -1136,6 +1140,8 @@
+   merge_custom_page_flip_from (update, other_update);
+   merge_page_flip_listeners_from (update, other_update);
+   merge_result_listeners_from (update, other_update);
++
++  meta_kms_update_set_sync_fd (update, g_steal_fd (&other_update->sync_fd));
+ }
+ 
+ gboolean
+@@ -1152,6 +1158,7 @@
+   update = g_new0 (MetaKmsUpdate, 1);
+   update->device = device;
+   update->is_latchable = TRUE;
++  update->sync_fd = -1;
+ 
+   return update;
+ }
+@@ -1175,6 +1182,7 @@
+   g_list_free_full (update->crtc_color_updates,
+                     (GDestroyNotify) meta_kms_crtc_color_updates_free);
+   g_clear_pointer (&update->custom_page_flip, meta_kms_custom_page_flip_free);
++  g_clear_fd (&update->sync_fd, NULL);
+ 
+   g_free (update);
+ }
+@@ -1200,6 +1208,23 @@
+   return update->latch_crtc;
+ }
+ 
++int
++meta_kms_update_get_sync_fd (MetaKmsUpdate *update)
++{
++  return update->sync_fd;
++}
++
++void
++meta_kms_update_set_sync_fd (MetaKmsUpdate *update,
++                             int            sync_fd)
++{
++  if (update->sync_fd == sync_fd)
++    return;
++
++  g_clear_fd (&update->sync_fd, NULL);
++  update->sync_fd = sync_fd;
++}
++
+ gboolean
+ meta_kms_update_is_empty (MetaKmsUpdate *update)
+ {
+--- a/src/backends/native/meta-kms-impl-device.c
++++ b/src/backends/native/meta-kms-impl-device.c
+@@ -74,6 +74,13 @@
+     int64_t expected_presentation_time_us;
+     gboolean has_expected_presentation_time;
+   } deadline;
++
++  struct {
++    MetaKmsUpdate *kms_update;
++    MetaKmsUpdateFlag flags;
++    MetaKmsCrtc *latch_crtc;
++    GSource *source;
++  } submitted_update;
+ } CrtcFrame;
+ 
+ typedef enum _MetaDeadlineTimerState
+@@ -1429,6 +1436,8 @@
+   g_clear_fd (&crtc_frame->deadline.timer_fd, NULL);
+   g_clear_pointer (&crtc_frame->deadline.source, g_source_destroy);
+   g_clear_pointer (&crtc_frame->pending_update, meta_kms_update_free);
++  g_clear_pointer (&crtc_frame->submitted_update.kms_update, meta_kms_update_free);
++  g_clear_pointer (&crtc_frame->submitted_update.source, g_source_destroy);
+   g_free (crtc_frame);
+ }
+ 
+@@ -1530,6 +1539,79 @@
+     }
+ }
+ 
++static gpointer
++meta_kms_impl_device_update_ready (MetaThreadImpl  *impl,
++                                   gpointer         user_data,
++                                   GError         **error)
++{
++  CrtcFrame *crtc_frame = user_data;
++  MetaKmsDevice *device = meta_kms_crtc_get_device (crtc_frame->crtc);
++  MetaKmsImplDevice *impl_device = meta_kms_device_get_impl_device (device);
++  MetaKmsImplDevicePrivate *priv =
++    meta_kms_impl_device_get_instance_private (impl_device);
++  MetaKmsUpdate *update;
++  MetaKmsCrtc *latch_crtc;
++  MetaKmsFeedback *feedback;
++
++  meta_assert_in_kms_impl (meta_kms_impl_get_kms (priv->impl));
++
++  g_clear_pointer (&crtc_frame->submitted_update.source, g_source_destroy);
++
++  update = g_steal_pointer (&crtc_frame->submitted_update.kms_update);
++  meta_kms_update_realize (update, impl_device);
++
++  latch_crtc = g_steal_pointer (&crtc_frame->submitted_update.latch_crtc);
++
++  if (crtc_frame->pending_page_flip &&
++      !meta_kms_update_get_mode_sets (update))
++    {
++      g_assert (latch_crtc);
++
++      meta_topic (META_DEBUG_KMS,
++                  "Queuing update on CRTC %u (%s): pending page flip",
++                  meta_kms_crtc_get_id (latch_crtc),
++                  priv->path);
++
++      queue_update (impl_device, crtc_frame, update);
++      return GINT_TO_POINTER (TRUE);
++    }
++
++  if (crtc_frame->pending_update)
++    {
++      meta_kms_update_merge_from (crtc_frame->pending_update, update);
++      meta_kms_update_free (update);
++      update = g_steal_pointer (&crtc_frame->pending_update);
++      disarm_crtc_frame_deadline_timer (crtc_frame);
++    }
++
++  meta_kms_device_handle_flush (priv->device, latch_crtc);
++
++  feedback = do_process (impl_device, latch_crtc, update, crtc_frame->submitted_update.flags);
++
++  if (meta_kms_feedback_did_pass (feedback) &&
++      crtc_frame->deadline.armed)
++    disarm_crtc_frame_deadline_timer (crtc_frame);
++
++  meta_kms_feedback_unref (feedback);
++
++  return GINT_TO_POINTER (TRUE);
++}
++
++static gboolean
++is_fd_readable (int fd)
++{
++  GPollFD poll_fd;
++
++  poll_fd.fd = fd;
++  poll_fd.events = G_IO_IN;
++  poll_fd.revents = 0;
++
++  if (!g_poll (&poll_fd, 1, 0))
++    return FALSE;
++
++  return (poll_fd.revents & (G_IO_IN | G_IO_NVAL)) != 0;
++}
++
+ void
+ meta_kms_impl_device_handle_update (MetaKmsImplDevice *impl_device,
+                                     MetaKmsUpdate     *update,
+@@ -1537,10 +1619,15 @@
+ {
+   MetaKmsImplDevicePrivate *priv =
+     meta_kms_impl_device_get_instance_private (impl_device);
++  MetaKmsImpl *kms_impl = meta_kms_impl_device_get_impl (impl_device);
++  MetaThreadImpl *thread_impl = META_THREAD_IMPL (kms_impl);
+   g_autoptr (GError) error = NULL;
+   MetaKmsCrtc *latch_crtc;
+   CrtcFrame *crtc_frame;
+   MetaKmsFeedback *feedback;
++  g_autoptr (GSource) source = NULL;
++  g_autofree char *name = NULL;
++  int sync_fd = -1;
+ 
+   meta_assert_in_kms_impl (meta_kms_impl_get_kms (priv->impl));
+ 
+@@ -1561,40 +1648,57 @@
+   if (!ensure_device_file (impl_device, &error))
+     goto err;
+ 
+-  meta_kms_update_realize (update, impl_device);
+-
+   crtc_frame = ensure_crtc_frame (impl_device, latch_crtc);
+ 
++  if (crtc_frame->submitted_update.kms_update)
++    {
++      g_set_error (&error, G_IO_ERROR, G_IO_ERROR_PENDING,
++                   "Previously-submitted update wasn't ready yet");
++      goto err;
++    }
++
+   crtc_frame->await_flush = FALSE;
++  crtc_frame->submitted_update.kms_update = update;
++  crtc_frame->submitted_update.flags = flags;
++  crtc_frame->submitted_update.latch_crtc = latch_crtc;
+ 
+-  if (crtc_frame->pending_page_flip &&
+-      !meta_kms_update_get_mode_sets (update))
+-    {
+-      g_assert (latch_crtc);
++  if (is_using_deadline_timer (impl_device))
++    sync_fd = meta_kms_update_get_sync_fd (update);
+ 
+-      meta_topic (META_DEBUG_KMS,
+-                  "Queuing update on CRTC %u (%s): pending page flip",
+-                  meta_kms_crtc_get_id (latch_crtc),
+-                  priv->path);
++  if (sync_fd >= 0)
++    {
++      GList *l;
++      for (l = meta_kms_update_get_plane_assignments (update); l; l = l->next)
++        {
++          MetaKmsPlaneAssignment *assignment = l->data;
+ 
+-      queue_update (impl_device, crtc_frame, update);
+-      return;
++          assignment->flags |= META_KMS_ASSIGN_PLANE_FLAG_DISABLE_IMPLICIT_SYNC;
++        }
+     }
+ 
+-  if (crtc_frame->pending_update)
++  if (sync_fd < 0 ||
++      is_fd_readable (sync_fd))
+     {
+-      meta_kms_update_merge_from (crtc_frame->pending_update, update);
+-      meta_kms_update_free (update);
+-      update = g_steal_pointer (&crtc_frame->pending_update);
++      meta_kms_impl_device_update_ready (thread_impl,
++                                         crtc_frame,
++                                         NULL);
++      return;
+     }
+ 
+-  if (crtc_frame->deadline.armed)
+-    disarm_crtc_frame_deadline_timer (crtc_frame);
++  source = meta_thread_impl_register_fd (thread_impl,
++                                         sync_fd,
++                                         meta_kms_impl_device_update_ready,
++                                         crtc_frame);
++
++  name = g_strdup_printf ("[mutter] KMS update sync_fd (crtc: %u, %s)",
++                          meta_kms_crtc_get_id (latch_crtc),
++                          priv->path);
++  g_source_set_name (source, name);
++  g_source_set_priority (source, G_PRIORITY_HIGH + 1);
++  g_source_set_can_recurse (source, FALSE);
++  g_source_set_ready_time (source, -1);
+ 
+-  meta_kms_device_handle_flush (priv->device, latch_crtc);
+-
+-  feedback = do_process (impl_device, latch_crtc, update, flags);
+-  meta_kms_feedback_unref (feedback);
++  crtc_frame->submitted_update.source = source;
+   return;
+ 
+ err:
+@@ -1690,6 +1794,47 @@
+   meta_kms_device_set_needs_flush (meta_kms_crtc_get_device (crtc), crtc);
+ }
+ 
++static void
++discard_update (MetaKmsImplDevice  *impl_device,
++                MetaKmsUpdate     **update)
++{
++  MetaKmsFeedback *feedback = NULL;
++  GError *error;
++
++  if (!*update)
++    return;
++
++  error = g_error_new (META_KMS_ERROR,
++                       META_KMS_ERROR_DISCARDED,
++                       "Timer disarmed");
++  feedback = meta_kms_feedback_new_failed (NULL, g_steal_pointer (&error));
++  queue_result_feedback (impl_device, *update, feedback);
++  meta_kms_feedback_unref (feedback);
++  g_clear_pointer (update, meta_kms_update_free);
++}
++
++static void
++disarm_all_frame_sources (MetaKmsImplDevice *impl_device)
++{
++  MetaKmsImplDevicePrivate *priv =
++    meta_kms_impl_device_get_instance_private (impl_device);
++  GHashTableIter iter;
++  CrtcFrame *crtc_frame;
++
++  g_hash_table_iter_init (&iter, priv->crtc_frames);
++  while (g_hash_table_iter_next (&iter, NULL, (gpointer *) &crtc_frame))
++    {
++      crtc_frame->deadline.is_deadline_page_flip = FALSE;
++      crtc_frame->await_flush = FALSE;
++      crtc_frame->pending_page_flip = FALSE;
++      disarm_crtc_frame_deadline_timer (crtc_frame);
++
++      discard_update (impl_device, &crtc_frame->pending_update);
++      discard_update (impl_device, &crtc_frame->submitted_update.kms_update);
++      g_clear_pointer (&crtc_frame->submitted_update.source, g_source_destroy);
++    }
++}
++
+ static MetaKmsFeedback *
+ process_mode_set_update (MetaKmsImplDevice *impl_device,
+                          MetaKmsUpdate     *update,
+@@ -1701,37 +1846,30 @@
+   MetaThreadImpl *thread_impl = META_THREAD_IMPL (kms_impl);
+   MetaThread *thread = meta_thread_impl_get_thread (thread_impl);
+   MetaKmsFeedback *feedback;
+-  CrtcFrame *crtc_frame;
+-  GList *l;
+   GHashTableIter iter;
+-
+-  for (l = meta_kms_update_get_mode_sets (update); l; l = l->next)
+-    {
+-      MetaKmsModeSet *mode_set = l->data;
+-      MetaKmsCrtc *crtc = mode_set->crtc;
+-
+-      crtc_frame = get_crtc_frame (impl_device, crtc);
+-      if (!crtc_frame)
+-        continue;
+-
+-      if (!crtc_frame->pending_update)
+-        continue;
+-
+-      meta_kms_update_merge_from (crtc_frame->pending_update, update);
+-      meta_kms_update_free (update);
+-      update = g_steal_pointer (&crtc_frame->pending_update);
+-    }
++  CrtcFrame *crtc_frame;
+ 
+   g_hash_table_iter_init (&iter, priv->crtc_frames);
+   while (g_hash_table_iter_next (&iter, NULL, (gpointer *) &crtc_frame))
+     {
+-      crtc_frame->deadline.is_deadline_page_flip = FALSE;
+-      crtc_frame->await_flush = FALSE;
+-      crtc_frame->pending_page_flip = FALSE;
+-      g_clear_pointer (&crtc_frame->pending_update, meta_kms_update_free);
+-      disarm_crtc_frame_deadline_timer (crtc_frame);
++      if (crtc_frame->submitted_update.kms_update)
++        {
++          meta_kms_update_merge_from (crtc_frame->submitted_update.kms_update,
++                                      update);
++          meta_kms_update_free (update);
++          update = g_steal_pointer (&crtc_frame->submitted_update.kms_update);
++        }
++
++      if (crtc_frame->pending_update)
++        {
++          meta_kms_update_merge_from (crtc_frame->pending_update, update);
++          meta_kms_update_free (update);
++          update = g_steal_pointer (&crtc_frame->pending_update);
++        }
+     }
+ 
++  disarm_all_frame_sources (impl_device);
++
+   meta_thread_inhibit_realtime_in_impl (thread);
+   feedback = do_process (impl_device, NULL, update, flags);
+   meta_thread_uninhibit_realtime_in_impl (thread);
+@@ -1788,6 +1926,8 @@
+   if (!priv->device_file)
+     return;
+ 
++  disarm_all_frame_sources (impl_device);
++
+   meta_kms_impl_device_hold_fd (impl_device);
+   meta_thread_inhibit_realtime_in_impl (thread);
+   klass->disable (impl_device);
+--- a/src/backends/native/meta-kms.h
++++ b/src/backends/native/meta-kms.h
+@@ -29,6 +29,7 @@
+   META_KMS_ERROR_DENY_LISTED,
+   META_KMS_ERROR_NOT_SUPPORTED,
+   META_KMS_ERROR_EMPTY_UPDATE,
++  META_KMS_ERROR_DISCARDED,
+ };
+ 
+ typedef enum _MetaKmsFlags
