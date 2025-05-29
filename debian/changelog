@@ -9,6 +9,8 @@ mutter (46.2-1ubuntu0.24.04.9) UNRELEASED; urgency=medium
   * Add onscreen-native-Return-the-correct-number-of-EGL-modifier.patch
     to fix multi-monitor reverse PRIME support on desktops where Nvidia is
     primary and an integrated GPU is secondary. (LP: #1978905)
+  * Opt out of Debian Salsa CI for ubuntu/noble - it has never been properly
+    set up and is emitting bogus failures.
 
  -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 29 May 2025 13:35:23 +0800
 
