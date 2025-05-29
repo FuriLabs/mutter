@@ -46,3 +46,4 @@ cogl-gles-Revert-to-unsized-GL_BGRA-as-internalformat-for.patch
 clutter-Repick-actors-when-touches-emulate-button-clicks.patch
 onscreen-native-Return-the-correct-number-of-EGL-modifier.patch
 wayland-Pass-latest-cogl-sync_fd-on-kms-update.patch
+prefer-GPUs-with-built-in-panels-connected-when-sele.patch

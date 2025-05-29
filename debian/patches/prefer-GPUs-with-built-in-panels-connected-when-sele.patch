@@ -1,0 +1,94 @@
+From ecbe4a5dada65ca8c753ddb1e9ed43257a89a2e1 Mon Sep 17 00:00:00 2001
+From: Mario Limonciello <mario.limonciello@amd.com>
+Date: Wed, 6 Nov 2024 13:54:55 -0600
+Subject: Prefer GPUs with built-in panels connected when selecting a
+ primary GPU
+
+Some laptops don't have the integrated GPU come earlier in the PCI topology
+which means that when mutter enumerates the GPUs it may select the dGPU
+as the primary.
+
+In a laptop context, this is unlikely to work because the eDP panel can
+only be actively connected to a single GPU at a time.
+
+Closes: https://gitlab.gnome.org/GNOME/mutter/-/issues/3746
+Suggested-by: Jonas Ådahl
+Signed-off-by: Mario Limonciello <mario.limonciello@amd.com>
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4114>
+---
+ src/backends/native/meta-kms-device.c      | 24 ++++++++++++++++++++++
+ src/backends/native/meta-kms-device.h      |  2 ++
+ src/backends/native/meta-renderer-native.c | 15 ++++++++++++++
+ 3 files changed, 41 insertions(+)
+
+--- a/src/backends/native/meta-kms-device.c
++++ b/src/backends/native/meta-kms-device.c
+@@ -710,3 +710,27 @@ meta_kms_device_class_init (MetaKmsDevic
+                   G_TYPE_NONE, 1,
+                   META_TYPE_KMS_CRTC);
+ }
++
++gboolean
++meta_kms_device_has_connected_builtin_panel (MetaKmsDevice *device)
++{
++  GList *l;
++
++  for (l = device->connectors; l; l = l->next)
++    {
++      MetaKmsConnector *connector = META_KMS_CONNECTOR (l->data);
++
++      if (!meta_kms_connector_get_current_state (connector))
++        continue;
++
++      switch (meta_kms_connector_get_connector_type (connector))
++        {
++        case DRM_MODE_CONNECTOR_LVDS:
++        case DRM_MODE_CONNECTOR_eDP:
++        case DRM_MODE_CONNECTOR_DSI:
++          return TRUE;
++        }
++    }
++
++  return FALSE;
++}
+--- a/src/backends/native/meta-kms-device.h
++++ b/src/backends/native/meta-kms-device.h
+@@ -90,3 +90,5 @@ MetaKmsDevice * meta_kms_device_new (Met
+                                      const char         *path,
+                                      MetaKmsDeviceFlag   flags,
+                                      GError            **error);
++
++gboolean meta_kms_device_has_connected_builtin_panel (MetaKmsDevice *device);
+--- a/src/backends/native/meta-renderer-native.c
++++ b/src/backends/native/meta-renderer-native.c
+@@ -1661,7 +1661,6 @@ all_primary_planes_support_format (MetaC
+   return supported;
+ }
+ 
+-
+ static gboolean
+ create_secondary_egl_config (MetaEgl                    *egl,
+                              MetaRendererNativeGpuData  *renderer_gpu_data,
+@@ -2221,6 +2220,22 @@ choose_primary_gpu_unchecked (MetaBacken
+                        meta_gpu_kms_get_file_path (gpu_kms));
+             return gpu_kms;
+           }
++      }
++
++    /* Then prefer a GPU with a builtin panel connected to it. */
++    for (l = gpus; l; l = l->next)
++      {
++        MetaGpuKms *gpu_kms = META_GPU_KMS (l->data);
++        MetaKmsDevice *kms_device = meta_gpu_kms_get_kms_device (gpu_kms);
++
++        if (meta_kms_device_has_connected_builtin_panel (kms_device) &&
++            (allow_sw == 1 ||
++             gpu_kms_is_hardware_rendering (renderer_native, gpu_kms)))
++          {
++            g_message ("GPU %s selected primary from builtin panel presence",
++                       meta_gpu_kms_get_file_path (gpu_kms));
++            return gpu_kms;
++          }
+       }
+ 
+     /* Prefer a platform device */

@@ -1,5 +1,9 @@
 mutter (46.2-1ubuntu0.24.04.9) UNRELEASED; urgency=medium
 
+  [ Chun-Yi Wu ]
+  * Backport patches to fix AMD platform A+N screen freeze in Wayland
+    (LP: #2111902)
+
   [ Yao Wei (魏銘廷) ]
   * d/p/wayland-Pass-latest-cogl-sync_fd-on-kms-update.patch:
     Fix issue where glxgears runs slower than display refresh rate
