@@ -1,10 +1,16 @@
 mutter (46.2-1ubuntu0.24.04.9) UNRELEASED; urgency=medium
 
+  [ Yao Wei (魏銘廷) ]
   * d/p/wayland-Pass-latest-cogl-sync_fd-on-kms-update.patch:
     Fix issue where glxgears runs slower than display refresh rate
     (LP: #2111698)
 
- -- Yao Wei (魏銘廷) <yao.wei@canonical.com>  Tue, 27 May 2025 15:34:01 +0800
+  [ Daniel van Vugt ]
+  * Add onscreen-native-Return-the-correct-number-of-EGL-modifier.patch
+    to fix multi-monitor reverse PRIME support on desktops where Nvidia is
+    primary and an integrated GPU is secondary. (LP: #1978905)
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 29 May 2025 13:35:23 +0800
 
 mutter (46.2-1ubuntu0.24.04.8) noble; urgency=medium
 
