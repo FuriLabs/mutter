@@ -15,6 +15,7 @@ Closes: https://gitlab.gnome.org/GNOME/mutter/-/issues/3746
 Suggested-by: Jonas Ådahl
 Signed-off-by: Mario Limonciello <mario.limonciello@amd.com>
 Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4114>
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/2111902
 ---
  src/backends/native/meta-kms-device.c      | 24 ++++++++++++++++++++++
  src/backends/native/meta-kms-device.h      |  2 ++
