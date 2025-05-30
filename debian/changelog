@@ -1,4 +1,4 @@
-mutter (46.2-1ubuntu0.24.04.9) UNRELEASED; urgency=medium
+mutter (46.2-1ubuntu0.24.04.9) noble; urgency=medium
 
   [ Chun-Yi Wu ]
   * Backport patches to fix AMD platform Nvidia dGPU screen freeze in
@@ -15,7 +15,7 @@ mutter (46.2-1ubuntu0.24.04.9) UNRELEASED; urgency=medium
     to fix multi-monitor reverse PRIME support on desktops where Nvidia is
     primary and an integrated GPU is secondary. (LP: #1978905)
 
- -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 29 May 2025 13:35:23 +0800
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Fri, 30 May 2025 14:17:28 +0800
 
 mutter (46.2-1ubuntu0.24.04.8) noble; urgency=medium
 
