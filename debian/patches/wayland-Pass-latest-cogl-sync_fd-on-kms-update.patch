@@ -15,6 +15,7 @@ Description: onscreen/native: Pass latest cogl sync_fd on KMS update
  .
  These patches are recommended by:
  https://gitlab.freedesktop.org/drm/i915/kernel/-/issues/13759#note_2819658
+Author: Yao Wei (魏銘廷) <mwei@debian.org>
 Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/mutter/+bug/2111698
 Origin: backport,
  https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3958
