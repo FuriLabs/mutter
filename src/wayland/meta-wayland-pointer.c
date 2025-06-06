@@ -699,7 +699,7 @@ handle_button_event (MetaWaylandPointer *pointer,
 {
   gboolean implicit_grab;
 
-  implicit_grab = (clutter_event_type (event) == CLUTTER_BUTTON_PRESS) && (pointer->button_count == 1);
+  implicit_grab = (clutter_event_type (event) == CLUTTER_BUTTON_PRESS) && (count_buttons (event) == 1);
   if (implicit_grab)
     {
       pointer->grab_button = clutter_event_get_button (event);
@@ -928,10 +928,12 @@ meta_wayland_pointer_handle_event (MetaWaylandPointer *pointer,
       return CLUTTER_EVENT_PROPAGATE;
 
     case CLUTTER_TOUCHPAD_PINCH:
-      return meta_wayland_pointer_gesture_pinch_handle_event (pointer, event);
+      meta_wayland_pointer_gesture_pinch_handle_event (pointer, event);
+      return CLUTTER_EVENT_PROPAGATE;
 
     case CLUTTER_TOUCHPAD_HOLD:
-      return meta_wayland_pointer_gesture_hold_handle_event (pointer, event);
+      meta_wayland_pointer_gesture_hold_handle_event (pointer, event);
+      return CLUTTER_EVENT_PROPAGATE;
 
     default:
       return CLUTTER_EVENT_PROPAGATE;
