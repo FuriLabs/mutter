@@ -1,6 +1,68 @@
+mutter (48.3.1-2) UNRELEASED; urgency=medium
+
+  * Add a detailed list of changes to the previous changelog entry
+
+ -- Simon McVittie <smcv@debian.org>  Sun, 08 Jun 2025 17:55:09 +0100
+
 mutter (48.3.1-1) experimental; urgency=medium
 
   * New upstream bugfix release
+    - Improve performance of use-cases like fullscreen video playback
+      on older GPUs such as the one in the Pinebook Pro, by substituting
+      opaque dmabuf formats for their equivalents with alpha, such as
+      XRGB for ARGB (mutter#2471 upstream)
+    - Allocate the correct height for members of a vertical layout by
+      updating size request mode when changing orientation
+      (mutter!4339 upstream)
+    - Only check for xkbfile when supporting X11
+      (no practical effect on Debian, where we do support X11)
+      (mutter!4409 upstream)
+    - Fix several memory leaks, while ensuring objects are still destroyed
+      in the correct order
+      (mutter!4432 upstream)
+    - Don't log a warning when files are removed from the ICC profile
+      directory, fixing one source of flaky automated tests
+      (mutter!4431 upstream)
+    - Don't take control of logind session when running on Xorg, fixing the
+      tty being left in an inconsistent state if mutter is killed
+      (mutter!4391 upstream)
+    - Fix gdctl crash when communicating with Xorg sessions
+      (mutter#4023 upstream)
+    - Avoid unexpectedly low framerate when moving/resizing windows after
+      session locking or after heavy system load
+      (mutter#4029 upstream)
+    - Fix drag and drop of tabs into tiled/maximized state
+      (mutter!4468 upstream)
+    - Fix Xwayland windows becoming unresponsive to events
+      (mutter!4475 upstream)
+    - Use frame-sync candidate that likely matches scanout candidate, making
+      variable refresh rate work better
+      (mutter!4412 upstream)
+    - Add an early-return from build_and_scan_frame_mask() for zero-sized
+      textures, possibly fixing one source of flaky automated tests
+      (mutter!4039 upstream)
+    - Avoid leaking the session manager file's file descriptor down to
+      apps launched by gnome-shell
+      (gnome-shell#8345, mutter!4405 upstream)
+    - Restore tiled/maximized windows to the correct monitor
+      (mutter#3939 upstream)
+    - Let the compositor control drag-and-drop cursor feedback for native
+      Wayland
+      (mutter!4390 upstream)
+      - Note related regression mutter#4033 upstream;
+        see mutter!4433 upstream for a possible fix
+    - Propagate all touchpad gesture events to apps
+      (mutter#3505 upstream)
+    - Fix a race condition when registering an implict grab
+      (mutter#4055 upstream)
+    - Fix Wine games failing to enter fullscreen across multiple monitors
+      (mutter!4389 upstream)
+    - Update window decorations on override-redirect attribute change
+      (mutter!4287 upstream)
+    - In the test suite, fall back to a reasonable pipewire socket name on
+      non-systemd systems
+      (mutter#4044 upstream)
+    - Translation updates: be, sk
 
  -- Jeremy Bícha <jbicha@ubuntu.com>  Fri, 06 Jun 2025 13:51:45 -0400
 
