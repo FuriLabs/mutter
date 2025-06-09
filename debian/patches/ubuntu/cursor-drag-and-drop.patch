@@ -21,8 +21,10 @@ Subject: wayland: Improve interaction of DnD/client cursors after grab
  code, and shuffle the cursor reset operation so it happens before
  the input handler is detached.
  .
+Author: Carlos Garnacho <carlosg@gnome.org>
 Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/4033
 Bug-Bugzilla: https://bugzilla.mozilla.org/show_bug.cgi?id=1699942
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/2111502
 
 --- a/src/wayland/meta-wayland-data-device.c
 +++ b/src/wayland/meta-wayland-data-device.c
