@@ -6,7 +6,7 @@ mutter (48.1-1ubuntu3.1) plucky; urgency=medium
     https://bugzilla.mozilla.org/show_bug.cgi?id=1699942, LP: #2111502.
 
   [ Alessandro Astone ]
-  * Fix crash seen when dismissing many at once from gnome-shell (LP: #2102063)
+  * Fix crash seen when dismissing many notifications at once (LP: #2102063)
 
  -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Mon, 09 Jun 2025 16:28:56 +0800
 
