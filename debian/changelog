@@ -49,8 +49,9 @@ mutter (48.3.1-1) experimental; urgency=medium
     - Let the compositor control drag-and-drop cursor feedback for native
       Wayland
       (mutter!4390 upstream)
-      - Note related regression mutter#4033 upstream;
-        see mutter!4433 upstream for a possible fix
+      - Related issue mutter#4033 upstream, mainly affecting older GTK
+        versions like those in outdated Flatpak and Snap runtimes, is not
+        fixed here; see mutter!4433 upstream for a possible solution
     - Propagate all touchpad gesture events to apps
       (mutter#3505 upstream)
     - Fix a race condition when registering an implict grab
