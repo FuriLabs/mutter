@@ -135,6 +135,13 @@ meta_dbus_session_manager_constructed (GObject *object)
   MetaDbusSessionManagerPrivate *priv =
     meta_dbus_session_manager_get_instance_private (session_manager);
 
+  if (g_strcmp0 (priv->service_name, "org.gnome.Mutter.ScreenCast") == 0)
+    {
+      g_debug ("Skipping bus acquisition for %s", priv->service_name);
+      G_OBJECT_CLASS (meta_dbus_session_manager_parent_class)->constructed (object);
+      return
+    }
+
   priv->dbus_name_id =
     g_bus_own_name (G_BUS_TYPE_SESSION,
                     priv->service_name,
