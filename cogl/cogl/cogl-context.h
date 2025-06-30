@@ -149,7 +149,6 @@ cogl_context_get_display (CoglContext *context);
 COGL_EXPORT CoglRenderer *
 cogl_context_get_renderer (CoglContext *context);
 
-
 /* XXX: not guarded by the EXPERIMENTAL_API defines to avoid
  * upsetting glib-mkenums, but this can still be considered implicitly
  * experimental since it's only useable with experimental API... */
@@ -397,5 +396,9 @@ cogl_context_get_rectangle_indices (CoglContext *context,
 COGL_EXPORT EGLDisplay
 cogl_context_get_egl_display (CoglContext *context);
 #endif /* HAVE_EGL */
+
+COGL_EXPORT gboolean
+cogl_context_format_supports_upload (CoglContext     *ctx,
+                                     CoglPixelFormat  format);
 
 G_END_DECLS

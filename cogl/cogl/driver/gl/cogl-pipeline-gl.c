@@ -85,7 +85,8 @@ CoglTextureUnit *
 _cogl_get_texture_unit (CoglContext *ctx,
                         int          index_)
 {
-  CoglDriverGL *driver_gl = COGL_DRIVER_GL (ctx->driver);
+  CoglDriver *driver = cogl_context_get_driver (ctx);
+  CoglDriverGL *driver_gl = COGL_DRIVER_GL (driver);
   CoglDriverGLPrivate *priv = cogl_driver_gl_get_private (driver_gl);
 
   if (priv->texture_units->len < (index_ + 1))
@@ -110,7 +111,8 @@ void
 _cogl_set_active_texture_unit (CoglContext *ctx,
                                int          unit_index)
 {
-  CoglDriverGL *driver_gl = COGL_DRIVER_GL (ctx->driver);
+  CoglDriver *driver = cogl_context_get_driver (ctx);
+  CoglDriverGL *driver_gl = COGL_DRIVER_GL (driver);
   CoglDriverGLPrivate *priv = cogl_driver_gl_get_private (driver_gl);
 
   if (priv->active_texture_unit != unit_index)
@@ -167,9 +169,10 @@ _cogl_bind_gl_texture_transient (CoglContext *ctx,
 
 void
 _cogl_delete_gl_texture (CoglContext *ctx,
+                         CoglDriver  *driver,
                          GLuint       gl_texture)
 {
-  CoglDriverGL *driver_gl = COGL_DRIVER_GL (ctx->driver);
+  CoglDriverGL *driver_gl = COGL_DRIVER_GL (driver);
   CoglDriverGLPrivate *priv = cogl_driver_gl_get_private (driver_gl);
   int i;
 
@@ -198,7 +201,8 @@ void
 _cogl_pipeline_texture_storage_change_notify (CoglTexture *texture)
 {
   CoglContext *ctx = cogl_texture_get_context (texture);
-  CoglDriverGL *driver_gl = COGL_DRIVER_GL (ctx->driver);
+  CoglDriver *driver = cogl_context_get_driver (ctx);
+  CoglDriverGL *driver_gl = COGL_DRIVER_GL (driver);
   CoglDriverGLPrivate *priv = cogl_driver_gl_get_private (driver_gl);
   int i;
 
@@ -267,7 +271,9 @@ flush_depth_state (CoglContext *ctx,
   if ((ctx->depth_range_near_cache != depth_state->range_near ||
        ctx->depth_range_far_cache != depth_state->range_far))
     {
-      if (ctx->driver_id == COGL_DRIVER_ID_GLES2)
+      CoglRenderer *renderer = cogl_context_get_renderer (ctx);
+
+      if (cogl_renderer_get_driver_id (renderer) == COGL_DRIVER_ID_GLES2)
         GE (ctx, glDepthRangef (depth_state->range_near,
                                 depth_state->range_far));
       else
@@ -393,12 +399,13 @@ get_max_activateable_texture_units (CoglContext *ctx)
 {
   if (G_UNLIKELY (ctx->max_activateable_texture_units == -1))
     {
+      CoglRenderer *renderer = cogl_context_get_renderer (ctx);
       GLint values[3];
       int n_values = 0;
       int i;
 
 #ifdef HAVE_GL
-      if (ctx->driver_id != COGL_DRIVER_ID_GLES2)
+      if (cogl_renderer_get_driver_id (renderer) != COGL_DRIVER_ID_GLES2)
         {
           /* GL_MAX_TEXTURE_COORDS defines the number of texture coordinates
            * that can be uploaded (but doesn't necessarily relate to how many
@@ -411,7 +418,7 @@ get_max_activateable_texture_units (CoglContext *ctx)
 #endif /* HAVE_GL */
 
 #ifdef HAVE_GLES2
-      if (ctx->driver_id == COGL_DRIVER_ID_GLES2)
+      if (cogl_renderer_get_driver_id (renderer) == COGL_DRIVER_ID_GLES2)
         {
           GE (ctx, glGetIntegerv (GL_MAX_VERTEX_ATTRIBS, values + n_values));
           /* Two of the vertex attribs need to be used for the position
@@ -624,7 +631,8 @@ _cogl_pipeline_layer_forward_wrap_modes (CoglPipelineLayer *layer,
 static void
 foreach_texture_unit_update_filter_and_wrap_modes (CoglContext *ctx)
 {
-  CoglDriverGL *driver_gl = COGL_DRIVER_GL (ctx->driver);
+  CoglDriver *driver = cogl_context_get_driver (ctx);
+  CoglDriverGL *driver_gl = COGL_DRIVER_GL (driver);
   CoglDriverGLPrivate *priv = cogl_driver_gl_get_private (driver_gl);
   int i;
 

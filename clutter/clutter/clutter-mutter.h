@@ -33,6 +33,7 @@
 #include "clutter/clutter-input-pointer-a11y-private.h"
 #include "clutter/clutter-macros.h"
 #include "clutter/clutter-private.h"
+#include "clutter/clutter-sprite-private.h"
 #include "clutter/clutter-stage-private.h"
 #include "clutter/clutter-stage-view.h"
 #include "clutter/clutter-stage-view-private.h"
@@ -58,9 +59,6 @@ GList * clutter_stage_peek_stage_views (ClutterStage *stage);
 CLUTTER_EXPORT
 gboolean clutter_actor_is_effectively_on_stage_view (ClutterActor     *self,
                                                      ClutterStageView *view);
-
-CLUTTER_EXPORT
-int64_t clutter_stage_get_frame_counter (ClutterStage *stage);
 
 CLUTTER_EXPORT
 void clutter_stage_capture_view_into (ClutterStage     *stage,
@@ -90,17 +88,6 @@ gboolean clutter_seat_handle_event_post (ClutterSeat        *seat,
                                          const ClutterEvent *event);
 
 CLUTTER_EXPORT
-void clutter_stage_update_device (ClutterStage         *stage,
-                                  ClutterInputDevice   *device,
-                                  ClutterEventSequence *sequence,
-                                  ClutterInputDevice   *source_device,
-                                  graphene_point_t      point,
-                                  uint32_t              time,
-                                  ClutterActor         *new_actor,
-                                  MtkRegion            *region,
-                                  gboolean              emit_crossing);
-
-CLUTTER_EXPORT
 gboolean clutter_stage_get_device_coords (ClutterStage         *stage,
                                           ClutterInputDevice   *device,
                                           ClutterEventSequence *sequence,
@@ -113,5 +100,14 @@ CLUTTER_EXPORT
 void clutter_actor_get_relative_transformation_matrix (ClutterActor      *self,
                                                        ClutterActor      *ancestor,
                                                        graphene_matrix_t *matrix);
+
+CLUTTER_EXPORT
+ClutterSprite * clutter_backend_get_sprite (ClutterBackend     *backend,
+                                            ClutterStage       *stage,
+                                            const ClutterEvent *for_event);
+
+CLUTTER_EXPORT
+void clutter_backend_destroy_sprite (ClutterBackend *backend,
+                                     ClutterSprite  *sprite);
 
 #undef __CLUTTER_H_INSIDE__

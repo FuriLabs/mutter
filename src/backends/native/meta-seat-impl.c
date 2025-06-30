@@ -537,14 +537,18 @@ meta_seat_impl_notify_key_in_impl (MetaSeatImpl       *seat_impl,
   else
     clutter_event_free (event);
 
+  if (update_keys)
+    {
+      meta_keymap_native_update_in_impl (seat_impl->keymap,
+                                         seat_impl,
+                                         seat_impl->xkb);
+    }
+
   if (update_keys && (changed_state & XKB_STATE_LEDS))
     {
       MetaInputDeviceNative *keyboard_native;
       gboolean numlock_active;
 
-      meta_keymap_native_update_in_impl (seat_impl->keymap,
-                                         seat_impl,
-                                         seat_impl->xkb);
       meta_seat_impl_sync_leds_in_impl (seat_impl);
 
       numlock_active =
@@ -1218,7 +1222,7 @@ meta_seat_impl_notify_discrete_scroll_in_impl (MetaSeatImpl        *seat_impl,
   evdev_device->value120.acc_dx += (int32_t) dx_value120;
   evdev_device->value120.acc_dy += (int32_t) dy_value120;
 
-  if (abs (evdev_device->value120.acc_dx) >= 60)
+  if (dx_value120 != 0 && abs (evdev_device->value120.acc_dx) >= 60)
     {
       low_res_value = (evdev_device->value120.acc_dx / 120);
       if (low_res_value == 0)
@@ -1230,7 +1234,7 @@ meta_seat_impl_notify_discrete_scroll_in_impl (MetaSeatImpl        *seat_impl,
       evdev_device->value120.acc_dx -= (low_res_value * 120);
     }
 
-  if (abs (evdev_device->value120.acc_dy) >= 60)
+  if (dy_value120 != 0 && abs (evdev_device->value120.acc_dy) >= 60)
     {
       low_res_value = (evdev_device->value120.acc_dy / 120);
       if (low_res_value == 0)
@@ -1685,6 +1689,30 @@ notify_pad_ring (ClutterInputDevice *input_device,
                                       ring_number,
                                       mode_group,
                                       angle,
+                                      mode);
+
+  queue_event (seat_impl, event);
+}
+
+static void
+notify_pad_dial (ClutterInputDevice *input_device,
+                 uint64_t            time_us,
+                 uint32_t            dial_number,
+                 uint32_t            mode_group,
+                 uint32_t            mode,
+                 double              value)
+{
+  MetaSeatImpl *seat_impl;
+  ClutterEvent *event;
+
+  seat_impl = seat_impl_from_device (input_device);
+
+  event = clutter_event_pad_dial_new (CLUTTER_EVENT_NONE,
+                                      time_us,
+                                      input_device,
+                                      dial_number,
+                                      mode_group,
+                                      value,
                                       mode);
 
   queue_event (seat_impl, event);
@@ -2746,6 +2774,27 @@ process_device_event (MetaSeatImpl          *seat_impl,
         notify_pad_ring (device, time, number, source, group, mode, angle);
         break;
       }
+    case LIBINPUT_EVENT_TABLET_PAD_DIAL:
+      {
+        uint64_t time;
+        uint32_t number, group, mode;
+        struct libinput_tablet_pad_mode_group *mode_group;
+        struct libinput_event_tablet_pad *pad_event =
+          libinput_event_get_tablet_pad_event (event);
+        double delta;
+
+        device = libinput_device_get_user_data (libinput_device);
+        time = libinput_event_tablet_pad_get_time_usec (pad_event);
+        number = libinput_event_tablet_pad_get_dial_number (pad_event);
+        delta = libinput_event_tablet_pad_get_dial_delta_v120 (pad_event);
+
+        mode_group = libinput_event_tablet_pad_get_mode_group (pad_event);
+        group = libinput_tablet_pad_mode_group_get_index (mode_group);
+        mode = libinput_event_tablet_pad_get_mode (pad_event);
+
+        notify_pad_dial (device, time, number, group, mode, delta);
+        break;
+      }
     case LIBINPUT_EVENT_SWITCH_TOGGLE:
       {
         struct libinput_event_switch *switch_event =
@@ -3655,6 +3704,20 @@ meta_seat_impl_reclaim_devices (MetaSeatImpl *seat_impl)
   g_object_unref (task);
 }
 
+gboolean
+meta_seat_impl_set_keyboard_map_finish (MetaSeatImpl  *seat_impl,
+                                        GAsyncResult  *result,
+                                        GError       **error)
+{
+  GTask *task = G_TASK (result);
+
+  g_return_val_if_fail (g_task_is_valid (result, seat_impl), FALSE);
+  g_return_val_if_fail (g_task_get_source_tag (G_TASK (result)) ==
+                        meta_seat_impl_set_keyboard_map_async, FALSE);
+
+  return g_task_propagate_boolean (task, error);
+}
+
 static gboolean
 set_keyboard_map (GTask *task)
 {
@@ -3665,16 +3728,21 @@ set_keyboard_map (GTask *task)
   keymap = seat_impl->keymap;
   meta_keymap_native_set_keyboard_map_in_impl (keymap, xkb_keymap);
 
-  meta_seat_impl_update_xkb_state_in_impl (seat_impl);
+  g_task_set_priority (task, G_PRIORITY_HIGH);
   g_task_return_boolean (task, TRUE);
+
+  meta_seat_impl_update_xkb_state_in_impl (seat_impl);
 
   return G_SOURCE_REMOVE;
 }
 
 /**
- * meta_seat_impl_set_keyboard_map: (skip)
+ * meta_seat_impl_set_keyboard_map_async: (skip)
  * @seat_impl: the #ClutterSeat created by the evdev backend
  * @keymap: the new keymap
+ * @cancellable: a #GCancellable
+ * @callback: callback to call when index has changed
+ * @user_data: user data to pass to the callback
  *
  * Instructs @evdev to use the specified keyboard map. This will cause
  * the backend to drop the state and create a new one with the new
@@ -3682,20 +3750,39 @@ set_keyboard_map (GTask *task)
  * is pressed when calling this function.
  */
 void
-meta_seat_impl_set_keyboard_map (MetaSeatImpl      *seat_impl,
-                                 struct xkb_keymap *xkb_keymap)
+meta_seat_impl_set_keyboard_map_async (MetaSeatImpl        *seat_impl,
+                                       struct xkb_keymap   *xkb_keymap,
+                                       GCancellable        *cancellable,
+                                       GAsyncReadyCallback  callback,
+                                       gpointer             user_data)
 {
   GTask *task;
 
   g_return_if_fail (META_IS_SEAT_IMPL (seat_impl));
   g_return_if_fail (xkb_keymap != NULL);
 
-  task = g_task_new (seat_impl, NULL, NULL, NULL);
+  task = g_task_new (seat_impl, cancellable, callback, user_data);
+  g_task_set_source_tag (task, meta_seat_impl_set_keyboard_map_async);
   g_task_set_task_data (task,
                         xkb_keymap_ref (xkb_keymap),
                         (GDestroyNotify) xkb_keymap_unref);
   meta_seat_impl_run_input_task (seat_impl, task, (GSourceFunc) set_keyboard_map);
   g_object_unref (task);
+}
+
+gboolean
+meta_seat_impl_set_keyboard_layout_index_finish (MetaSeatImpl  *seat_impl,
+                                                 GAsyncResult  *result,
+                                                 GError       **error)
+{
+  GTask *task = G_TASK (result);
+
+  g_return_val_if_fail (g_task_is_valid (result, seat_impl), FALSE);
+  g_return_val_if_fail (g_task_get_source_tag (G_TASK (result)) ==
+                        meta_seat_impl_set_keyboard_layout_index_async,
+                        FALSE);
+
+  return g_task_propagate_boolean (task, error);
 }
 
 static gboolean
@@ -3717,37 +3804,44 @@ set_keyboard_layout_index (GTask *task)
   locked_mods = xkb_state_serialize_mods (state, XKB_STATE_MODS_LOCKED);
 
   xkb_state_update_mask (state, depressed_mods, latched_mods, locked_mods, 0, 0, idx);
+
+  seat_impl->layout_idx = idx;
+
+  g_task_return_boolean (task, TRUE);
+
+  meta_seat_impl_sync_leds_in_impl (seat_impl);
   meta_keymap_native_update_in_impl (seat_impl->keymap,
                                      seat_impl,
                                      seat_impl->xkb);
 
-  seat_impl->layout_idx = idx;
-
-  meta_seat_impl_sync_leds_in_impl (seat_impl);
-
   g_rw_lock_writer_unlock (&seat_impl->state_lock);
-
-  g_task_return_boolean (task, TRUE);
 
   return G_SOURCE_REMOVE;
 }
 
 /**
- * meta_seat_impl_set_keyboard_layout_index: (skip)
+ * meta_seat_impl_set_keyboard_layout_index_async: (skip)
  * @seat_impl: the #ClutterSeat created by the evdev backend
  * @idx: the xkb layout index to set
+ * @cancellable: a #GCancellable
+ * @callback: callback to call when index has changed
+ * @user_data: user data to pass to the callback
  *
  * Sets the xkb layout index on the backend's #xkb_state .
  */
 void
-meta_seat_impl_set_keyboard_layout_index (MetaSeatImpl       *seat_impl,
-                                          xkb_layout_index_t  idx)
+meta_seat_impl_set_keyboard_layout_index_async (MetaSeatImpl        *seat_impl,
+                                                xkb_layout_index_t   idx,
+                                                GCancellable        *cancellable,
+                                                GAsyncReadyCallback  callback,
+                                                gpointer             user_data)
 {
   GTask *task;
 
   g_return_if_fail (META_IS_SEAT_IMPL (seat_impl));
 
-  task = g_task_new (seat_impl, NULL, NULL, NULL);
+  task = g_task_new (seat_impl, cancellable, callback, user_data);
+  g_task_set_source_tag (task, meta_seat_impl_set_keyboard_layout_index_async);
   g_task_set_task_data (task, GUINT_TO_POINTER (idx), NULL);
   meta_seat_impl_run_input_task (seat_impl, task,
                                  (GSourceFunc) set_keyboard_layout_index);

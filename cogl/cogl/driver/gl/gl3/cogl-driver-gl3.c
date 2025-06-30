@@ -33,10 +33,12 @@
 #include <string.h>
 
 #include "cogl/driver/gl/gl3/cogl-driver-gl3-private.h"
+#include "cogl/driver/gl/gl3/cogl-texture-driver-gl3-private.h"
 #include "cogl/cogl-private.h"
 #include "cogl/cogl-feature-private.h"
 #include "cogl/driver/gl/cogl-util-gl-private.h"
 #include "cogl/driver/gl/cogl-texture-2d-gl-private.h"
+#include "cogl/driver/gl/cogl-texture-gl-private.h"
 
 G_DEFINE_FINAL_TYPE (CoglDriverGL3, cogl_driver_gl3, COGL_TYPE_DRIVER_GL);
 
@@ -358,6 +360,74 @@ cogl_driver_gl3_pixel_format_to_gl (CoglDriverGL    *driver,
   return required_format;
 }
 
+/* OpenGL - unlike GLES - can download pixel data into a sub region of
+ * a larger destination buffer */
+static void
+prep_gl_for_pixels_download_full (CoglContext *ctx,
+                                  int image_width,
+                                  int pixels_rowstride,
+                                  int image_height,
+                                  int pixels_src_x,
+                                  int pixels_src_y,
+                                  int pixels_bpp)
+{
+  GE( ctx, glPixelStorei (GL_PACK_ROW_LENGTH, pixels_rowstride / pixels_bpp) );
+
+  GE( ctx, glPixelStorei (GL_PACK_SKIP_PIXELS, pixels_src_x) );
+  GE( ctx, glPixelStorei (GL_PACK_SKIP_ROWS, pixels_src_y) );
+
+  _cogl_texture_gl_prep_alignment_for_pixels_download (ctx,
+                                                       pixels_bpp,
+                                                       image_width,
+                                                       pixels_rowstride);
+}
+static void
+cogl_driver_gl3_prep_gl_for_pixels_download (CoglDriverGL *driver,
+                                             CoglContext  *ctx,
+                                             int           image_width,
+                                             int           pixels_rowstride,
+                                             int           pixels_bpp)
+{
+  prep_gl_for_pixels_download_full (ctx,
+                                    pixels_rowstride,
+                                    image_width,
+                                    0 /* image height */,
+                                    0, 0, /* pixels_src_x/y */
+                                    pixels_bpp);
+}
+
+static gboolean
+cogl_driver_gl3_texture_size_supported (CoglDriverGL *driver,
+                                        CoglContext  *ctx,
+                                        GLenum        gl_target,
+                                        GLenum        gl_intformat,
+                                        GLenum        gl_format,
+                                        GLenum        gl_type,
+                                        int           width,
+                                        int           height)
+{
+  GLenum proxy_target;
+  GLint new_width = 0;
+
+  if (gl_target == GL_TEXTURE_2D)
+    proxy_target = GL_PROXY_TEXTURE_2D;
+  else if (gl_target == GL_TEXTURE_RECTANGLE_ARB)
+    proxy_target = GL_PROXY_TEXTURE_RECTANGLE_ARB;
+  else
+    /* Unknown target, assume it's not supported */
+    return FALSE;
+
+  /* Proxy texture allows for a quick check for supported size */
+  GE( ctx, glTexImage2D (proxy_target, 0, gl_intformat,
+                         width, height, 0 /* border */,
+                         gl_format, gl_type, NULL) );
+
+  GE( ctx, glGetTexLevelParameteriv (proxy_target, 0,
+                                     GL_TEXTURE_WIDTH, &new_width) );
+
+  return new_width != 0;
+}
+
 static CoglPixelFormat
 cogl_driver_gl3_get_read_pixels_format (CoglDriverGL    *driver,
                                         CoglContext     *context,
@@ -596,6 +666,84 @@ cogl_driver_gl3_update_features (CoglDriver   *driver,
   return TRUE;
 }
 
+static gboolean
+cogl_driver_gl3_format_supports_upload (CoglDriver      *driver,
+                                        CoglContext     *ctx,
+                                        CoglPixelFormat  format)
+{
+  switch (format)
+    {
+    case COGL_PIXEL_FORMAT_A_8:
+    case COGL_PIXEL_FORMAT_R_8:
+    case COGL_PIXEL_FORMAT_RG_88:
+    case COGL_PIXEL_FORMAT_BGRX_8888:
+    case COGL_PIXEL_FORMAT_BGRA_8888:
+    case COGL_PIXEL_FORMAT_BGRA_8888_PRE:
+    case COGL_PIXEL_FORMAT_RGB_888:
+    case COGL_PIXEL_FORMAT_BGR_888:
+    case COGL_PIXEL_FORMAT_RGBA_1010102:
+    case COGL_PIXEL_FORMAT_RGBA_1010102_PRE:
+    case COGL_PIXEL_FORMAT_BGRA_1010102:
+    case COGL_PIXEL_FORMAT_BGRA_1010102_PRE:
+    case COGL_PIXEL_FORMAT_XBGR_2101010:
+    case COGL_PIXEL_FORMAT_ABGR_2101010:
+    case COGL_PIXEL_FORMAT_ABGR_2101010_PRE:
+    case COGL_PIXEL_FORMAT_XRGB_2101010:
+    case COGL_PIXEL_FORMAT_ARGB_2101010:
+    case COGL_PIXEL_FORMAT_ARGB_2101010_PRE:
+    case COGL_PIXEL_FORMAT_RGBX_8888:
+    case COGL_PIXEL_FORMAT_RGBA_8888:
+    case COGL_PIXEL_FORMAT_RGBA_8888_PRE:
+    case COGL_PIXEL_FORMAT_XRGB_8888:
+    case COGL_PIXEL_FORMAT_ARGB_8888:
+    case COGL_PIXEL_FORMAT_ARGB_8888_PRE:
+    case COGL_PIXEL_FORMAT_XBGR_8888:
+    case COGL_PIXEL_FORMAT_ABGR_8888:
+    case COGL_PIXEL_FORMAT_ABGR_8888_PRE:
+    case COGL_PIXEL_FORMAT_RGB_565:
+    case COGL_PIXEL_FORMAT_RGBA_4444:
+    case COGL_PIXEL_FORMAT_RGBA_4444_PRE:
+    case COGL_PIXEL_FORMAT_RGBA_5551:
+    case COGL_PIXEL_FORMAT_RGBA_5551_PRE:
+    case COGL_PIXEL_FORMAT_BGRX_FP_16161616:
+    case COGL_PIXEL_FORMAT_BGRA_FP_16161616:
+    case COGL_PIXEL_FORMAT_XRGB_FP_16161616:
+    case COGL_PIXEL_FORMAT_ARGB_FP_16161616:
+    case COGL_PIXEL_FORMAT_XBGR_FP_16161616:
+    case COGL_PIXEL_FORMAT_ABGR_FP_16161616:
+    case COGL_PIXEL_FORMAT_BGRA_FP_16161616_PRE:
+    case COGL_PIXEL_FORMAT_ARGB_FP_16161616_PRE:
+    case COGL_PIXEL_FORMAT_ABGR_FP_16161616_PRE:
+    case COGL_PIXEL_FORMAT_RGBX_FP_16161616:
+    case COGL_PIXEL_FORMAT_RGBA_FP_16161616:
+    case COGL_PIXEL_FORMAT_RGBA_FP_16161616_PRE:
+    case COGL_PIXEL_FORMAT_RGBA_FP_32323232:
+    case COGL_PIXEL_FORMAT_RGBA_FP_32323232_PRE:
+    case COGL_PIXEL_FORMAT_R_16:
+    case COGL_PIXEL_FORMAT_RG_1616:
+    case COGL_PIXEL_FORMAT_RGBA_16161616:
+    case COGL_PIXEL_FORMAT_RGBA_16161616_PRE:
+      return TRUE;
+    case COGL_PIXEL_FORMAT_DEPTH_16:
+    case COGL_PIXEL_FORMAT_DEPTH_24_STENCIL_8:
+    case COGL_PIXEL_FORMAT_ANY:
+    case COGL_PIXEL_FORMAT_YUV:
+      g_assert_not_reached ();
+      return FALSE;
+    }
+
+  g_assert_not_reached ();
+  return FALSE;
+}
+
+static CoglTextureDriver *
+cogl_driver_gl3_create_texture_driver (CoglDriver *driver)
+{
+  return g_object_new (COGL_TYPE_TEXTURE_DRIVER_GL3,
+                       "driver", driver,
+                       NULL);
+}
+
 static void
 cogl_driver_gl3_class_init (CoglDriverGL3Class *klass)
 {
@@ -604,9 +752,13 @@ cogl_driver_gl3_class_init (CoglDriverGL3Class *klass)
 
   driver_klass->context_init = cogl_driver_gl3_context_init;
   driver_klass->update_features = cogl_driver_gl3_update_features;
+  driver_klass->format_supports_upload = cogl_driver_gl3_format_supports_upload;
+  driver_klass->create_texture_driver = cogl_driver_gl3_create_texture_driver;
 
   driver_gl_klass->get_read_pixels_format = cogl_driver_gl3_get_read_pixels_format;
   driver_gl_klass->pixel_format_to_gl = cogl_driver_gl3_pixel_format_to_gl;
+  driver_gl_klass->prep_gl_for_pixels_download = cogl_driver_gl3_prep_gl_for_pixels_download;
+  driver_gl_klass->texture_size_supported = cogl_driver_gl3_texture_size_supported;
 }
 
 static void

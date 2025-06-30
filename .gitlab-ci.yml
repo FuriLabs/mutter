@@ -10,7 +10,7 @@ include:
       job-stage: deploy
       dist-job-name: "dist-mutter-tarball"
       tarball-artifact-path: $TARBALL_ARTIFACT_PATH
-  - component: gitlab.gnome.org/GNOME/citemplates/gnomeos-build-sysext@1.0.0-alpha.1
+  - component: "gitlab.gnome.org/GNOME/citemplates/gnomeos-build-sysext@25.5"
     inputs:
       meson-options:
         -Dxwayland_initfd=enabled
@@ -18,6 +18,7 @@ include:
         -Dbash_completion=false
 
 build-sysext:
+  allow_failure: true
   before_script:
     - .gitlab-ci/install-gnomeos-sysext-dependencies.sh $CI_PROJECT_DIR/extension
   # x86_64_v2 runners hang on pulling the docker image. This should be removed
@@ -110,7 +111,7 @@ variables:
     - .skip-git-clone
   variables:
     FDO_DISTRIBUTION_VERSION: 42
-    BASE_TAG: '2025-03-31.0'
+    BASE_TAG: '2025-06-13.0'
     MUTTER_USER: 'meta-user'
     FDO_DISTRIBUTION_PACKAGES:
       accountsservice-devel
@@ -132,6 +133,7 @@ variables:
       gnome-desktop-testing
       ruff
       mypy
+      umockdev-devel
 
     FDO_DISTRIBUTION_EXEC: |
       set -e
@@ -155,6 +157,7 @@ variables:
       dnf builddep -y wayland --setopt=install_weak_deps=False
 
       ./.gitlab-ci/install-meson-project.sh \
+        --commit 8e69aef1e4bbb79b5806692ea9f0280aae0fda06 \
         https://gitlab.gnome.org/jadahl/catch.git \
         main
 
@@ -180,7 +183,7 @@ variables:
 
       if [[ x"$(uname -m )" = "xx86_64" ]] ; then
         # deprecated header no longer included in openssl-devel
-        dnf install -y openssl-devel-engine
+        dnf install -y virtme-ng openssl-devel-engine
 
         if [ -n "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME" ]; then
           git clone --depth $MUTTER_CLONE_DEPTH \
@@ -196,15 +199,6 @@ variables:
         ninja -C build src/tests/kvm/bzImage
         mkdir -p /opt/mutter
         cp build/src/tests/kvm/bzImage /opt/mutter/bzImage
-
-        git clone https://github.com/arighi/virtme-ng.git
-        cd virtme-ng
-        git fetch --tags
-        git checkout v1.8
-        ./setup.py install --prefix=/usr
-        cd ..
-        rm -rf virtme-ng
-        rm -rf build mutter-src
       fi
   retry:
     max: 2
@@ -391,10 +385,17 @@ check-python-code-style:
 
 .build-mutter-base:
   variables:
+    # Add x11 here to keep the existing test matrix
+    # We already have wayland-only build tests
+    # so adding x11 true is simpler than swapping
+    # all the existing jobs for x11-only
+    # This is temporary anyway as x11 should be going
+    # to live in a farm soon anyway
     BASE_MESON_OPTIONS:
       -Degl_device=true
       -Dwayland_eglstream=true
       -Dcatch=true
+      -Dx11=true
 
 .build-mutter:
   extends:
@@ -480,6 +481,7 @@ build-without-native-backend-and-wayland@x86_64:
         --werror
         --wrap-mode nofallback
         -Dbuildtype=debugoptimized
+        -Dx11=true
         -Dnative_backend=false
         -Dudev=false
         -Dwayland=false
@@ -752,6 +754,10 @@ dist-mutter:
     paths:
       - build/meson-private/dist-build/meson-logs
   rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH =~ /^gnome-[0-9-]+$/'
+      when: on_success
     - if: '$CI_PIPELINE_SOURCE != "merge_request_event"'
       when: manual
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
@@ -777,7 +783,7 @@ installed-tests-mutter@x86_64:
     - meson install -C build --no-rebuild
     - mkdir -m 1777 /tmp/.X11-unix
     - mkdir installed-tests-logs
-    - gnome-desktop-testing-runner -L installed-tests-logs mutter
+    - catch gnome-desktop-testing-runner -L installed-tests-logs mutter
   artifacts:
     expire_in: 7 day
     name: "mutter-${CI_JOB_NAME}-${CI_COMMIT_REF_NAME}"
@@ -785,6 +791,12 @@ installed-tests-mutter@x86_64:
     paths:
       - installed-tests-logs
   rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH =~ /^gnome-[0-9-]+$/'
+      when: on_success
+    - if: '$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /.*installed-tests.*/'
+      when: on_success
     - if: '$CI_PIPELINE_SOURCE != "merge_request_event"'
       when: manual
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'

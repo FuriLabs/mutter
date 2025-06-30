@@ -47,6 +47,7 @@
 
 #include "clutter/clutter.h"
 #include "core/meta-anonymous-file.h"
+#include "wayland/meta-wayland-input-device.h"
 #include "wayland/meta-wayland-types.h"
 
 #define META_TYPE_WAYLAND_KEYBOARD (meta_wayland_keyboard_get_type ())
@@ -81,3 +82,6 @@ gboolean meta_wayland_keyboard_can_grab_surface (MetaWaylandKeyboard *keyboard,
                                                  uint32_t             serial);
 gboolean meta_wayland_keyboard_can_popup (MetaWaylandKeyboard *keyboard,
                                           uint32_t             serial);
+
+META_EXPORT_TEST
+MetaWaylandSurface * meta_wayland_keyboard_get_focus_surface (MetaWaylandKeyboard *keyboard);

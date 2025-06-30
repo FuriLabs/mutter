@@ -28,6 +28,7 @@
 #include "meta/meta-dnd.h"
 #include "meta/meta-idle-monitor.h"
 #include "meta/meta-monitor-manager.h"
+#include "meta/meta-logical-monitor.h"
 #include "meta/meta-orientation-manager.h"
 #include "meta/meta-remote-access-controller.h"
 
@@ -42,15 +43,31 @@ META_EXPORT
 G_DECLARE_DERIVABLE_TYPE (MetaBackend, meta_backend, META, BACKEND, GObject)
 
 META_EXPORT
-void meta_backend_set_keymap (MetaBackend *backend,
-                              const char  *layouts,
-                              const char  *variants,
-                              const char  *options,
-                              const char  *model);
+gboolean meta_backend_set_keymap_finish (MetaBackend   *backend,
+                                         GAsyncResult  *result,
+                                         GError       **error);
 
 META_EXPORT
-void meta_backend_lock_layout_group (MetaBackend *backend,
-                                     guint        idx);
+void meta_backend_set_keymap_async (MetaBackend         *backend,
+                                    const char          *layouts,
+                                    const char          *variants,
+                                    const char          *options,
+                                    const char          *model,
+                                    GCancellable        *cancellable,
+                                    GAsyncReadyCallback  callback,
+                                    gpointer             user_data);
+
+META_EXPORT
+gboolean meta_backend_set_keymap_layout_group_finish (MetaBackend   *backend,
+                                                      GAsyncResult  *result,
+                                                      GError       **error);
+
+META_EXPORT
+void meta_backend_set_keymap_layout_group_async (MetaBackend         *backend,
+                                                 uint32_t             idx,
+                                                 GCancellable        *cancellable,
+                                                 GAsyncReadyCallback  callback,
+                                                 gpointer             user_data);
 
 META_EXPORT
 MetaContext * meta_backend_get_context (MetaBackend *backend);
@@ -102,3 +119,6 @@ void meta_backend_renderdoc_capture (MetaBackend *backend);
 
 META_EXPORT
 MetaCursorTracker * meta_backend_get_cursor_tracker (MetaBackend *backend);
+
+META_EXPORT
+MetaLogicalMonitor * meta_backend_get_current_logical_monitor (MetaBackend *backend);

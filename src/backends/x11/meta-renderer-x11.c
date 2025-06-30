@@ -25,7 +25,7 @@
 #include <glib-object.h>
 
 #include "backends/meta-backend-private.h"
-#include "backends/meta-logical-monitor.h"
+#include "backends/meta-logical-monitor-private.h"
 #include "backends/meta-renderer-view.h"
 #include "backends/meta-renderer.h"
 #include "backends/x11/meta-backend-x11.h"
@@ -54,7 +54,7 @@ get_x11_cogl_winsys_vtable (CoglRenderer *renderer)
     return _cogl_winsys_egl_xlib_get_vtable ();
 #endif
 
-  switch (renderer->driver_id)
+  switch (cogl_renderer_get_driver_id (renderer))
     {
     case COGL_DRIVER_ID_GLES2:
 #ifdef HAVE_EGL_PLATFORM_XLIB

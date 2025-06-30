@@ -52,6 +52,13 @@ typedef enum
   META_SEQUENCE_PENDING_END
 } MetaSequenceState;
 
+typedef enum _MetaEventMode
+{
+  META_EVENT_MODE_KEEP_FROZEN,
+  META_EVENT_MODE_THAW,
+  META_EVENT_MODE_REPLAY,
+} MetaEventMode;
+
 struct _MetaBackendClass
 {
   GObjectClass parent_class;
@@ -117,18 +124,20 @@ struct _MetaBackendClass
                                   ClutterEventSequence *sequence,
                                   MetaSequenceState     state);
 
-  void (* set_keymap) (MetaBackend *backend,
-                       const char  *layouts,
-                       const char  *variants,
-                       const char  *options,
-                       const char  *model);
+  void (* set_keymap_async) (MetaBackend *backend,
+                             const char  *layouts,
+                             const char  *variants,
+                             const char  *options,
+                             const char  *model,
+                             GTask       *task);
 
   struct xkb_keymap * (* get_keymap) (MetaBackend *backend);
 
   xkb_layout_index_t (* get_keymap_layout_group) (MetaBackend *backend);
 
-  void (* lock_layout_group) (MetaBackend *backend,
-                              guint        idx);
+  void (* set_keymap_layout_group_async) (MetaBackend        *backend,
+                                          xkb_layout_index_t  idx,
+                                          GTask              *task);
 
   void (* update_stage) (MetaBackend *backend);
 
@@ -206,10 +215,9 @@ void meta_backend_finish_touch_sequence (MetaBackend          *backend,
                                          MetaSequenceState     state);
 
 META_EXPORT_TEST
-MetaLogicalMonitor * meta_backend_get_current_logical_monitor (MetaBackend *backend);
-
 struct xkb_keymap * meta_backend_get_keymap (MetaBackend *backend);
 
+META_EXPORT_TEST
 xkb_layout_index_t meta_backend_get_keymap_layout_group (MetaBackend *backend);
 
 gboolean meta_backend_is_lid_closed (MetaBackend *backend);

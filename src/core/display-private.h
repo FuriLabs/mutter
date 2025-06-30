@@ -58,14 +58,6 @@ typedef enum
 #define _NET_WM_STATE_ADD           1    /* add/set property */
 #define _NET_WM_STATE_TOGGLE        2    /* toggle property  */
 
-typedef enum
-{
-  META_TILE_NONE,
-  META_TILE_LEFT,
-  META_TILE_RIGHT,
-  META_TILE_MAXIMIZED
-} MetaTileMode;
-
 typedef void (* MetaDisplayWindowFunc) (MetaWindow *window,
                                         gpointer    user_data);
 
@@ -120,11 +112,11 @@ struct _MetaDisplay
   GSList     *pending_pings;
 
   /* Pending focus change */
-  guint       focus_timeout_id;
+  guint focus_timeout_id;
 
   /* Pending autoraise */
-  guint       autoraise_timeout_id;
-  MetaWindow* autoraise_window;
+  guint autoraise_timeout_id;
+  MetaWindow *autoraise_window;
 
   MetaKeyBindingManager key_binding_manager;
 
@@ -157,6 +149,7 @@ struct _MetaDisplay
   guint check_fullscreen_later;
 
   MetaBell *bell;
+  int64_t last_visual_bell_time_us;
   MetaWorkspaceManager *workspace_manager;
 
   MetaSoundPlayer *sound_player;

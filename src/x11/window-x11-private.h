@@ -105,10 +105,6 @@ struct _MetaWindowX11Private
   gboolean has_custom_frame_extents;
   MetaSyncCounter sync_counter;
 
-  /* Used by keybindings.c */
-  gboolean keys_grabbed;     /* normal keybindings grabbed */
-  gboolean grab_on_frame;    /* grabs are on the frame */
-
   char *wm_client_machine;
   char *sm_client_id;
 };
@@ -144,8 +140,8 @@ void meta_window_x11_get_session_geometry (MetaWindow  *window,
                                            int         *width,
                                            int         *height);
 
-gboolean
-meta_window_x11_get_frame_borders (MetaWindow       *window,
-                                   MetaFrameBorders *borders);
+META_EXPORT_TEST
+gboolean meta_window_x11_get_frame_borders (MetaWindow       *window,
+                                            MetaFrameBorders *borders);
 
 G_END_DECLS

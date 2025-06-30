@@ -157,8 +157,10 @@ setup_spans (CoglContext *ctx,
              CoglPixelFormat internal_format,
              GError **error)
 {
-  CoglTextureDriverClass *tex_driver =
-    COGL_TEXTURE_DRIVER_GET_CLASS (ctx->texture_driver);
+  CoglTextureDriver *tex_driver =
+    cogl_texture_get_driver (COGL_TEXTURE (tex_2ds));
+  CoglTextureDriverClass *tex_driver_class =
+    COGL_TEXTURE_DRIVER_GET_CLASS (tex_driver);
   int max_width;
   int max_height;
   int n_x_slices;
@@ -177,11 +179,11 @@ setup_spans (CoglContext *ctx,
       CoglSpan span;
 
       /* Check if size supported else bail out */
-      if (!tex_driver->texture_2d_can_create (ctx->texture_driver,
-                                              ctx,
-                                              max_width,
-                                              max_height,
-                                              internal_format))
+      if (!tex_driver_class->texture_2d_can_create (tex_driver,
+                                                    ctx,
+                                                    max_width,
+                                                    max_height,
+                                                    internal_format))
         {
           g_set_error (error, COGL_TEXTURE_ERROR, COGL_TEXTURE_ERROR_SIZE,
                        "Sliced texture size of %d x %d not possible "
@@ -216,11 +218,11 @@ setup_spans (CoglContext *ctx,
   else
     {
       /* Decrease the size of largest slice until supported by GL */
-      while (!tex_driver->texture_2d_can_create (ctx->texture_driver,
-                                                 ctx,
-                                                 max_width,
-                                                 max_height,
-                                                 internal_format))
+      while (!tex_driver_class->texture_2d_can_create (tex_driver,
+                                                       ctx,
+                                                       max_width,
+                                                       max_height,
+                                                       internal_format))
         {
           /* Alternate between width and height */
           if (max_width > max_height)
@@ -1210,8 +1212,11 @@ _cogl_texture_2d_sliced_create_base (CoglContext *ctx,
                                      CoglPixelFormat internal_format,
                                      CoglTextureLoader *loader)
 {
+  CoglDriver *driver = cogl_context_get_driver (ctx);
+
   CoglTexture2DSliced *tex_2ds = g_object_new (COGL_TYPE_TEXTURE_2D_SLICED,
                                                "context", ctx,
+                                               "texture-driver", cogl_driver_create_texture_driver (driver),
                                                "width", width,
                                                "height", height,
                                                "loader", loader,
