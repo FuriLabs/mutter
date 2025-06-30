@@ -1,9 +1,8 @@
-mutter (48.3.1-3) UNRELEASED; urgency=medium
+mutter (49~alpha.1-1) UNRELEASED; urgency=medium
 
-  * d/gbp.conf: Use upstream/48.x branch for trixie
-  * Revert "debian/watch: watch for development releases"
+  * New upstream release 49.alpha.1
 
- -- Simon McVittie <smcv@debian.org>  Thu, 19 Jun 2025 10:57:53 +0100
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Mon, 30 Jun 2025 17:28:48 +0800
 
 mutter (48.3.1-2) unstable; urgency=medium
 
