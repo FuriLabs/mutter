@@ -1,6 +1,9 @@
 mutter (49~alpha.1-1) UNRELEASED; urgency=medium
 
   * New upstream release 49.alpha.1
+  * Drop patch: clutter-Repick-actors-when-touches-emulate-button-clicks.patch
+    because it is Xorg-specific and 48-specific. But Xorg sessions are
+    being retired so updating it to 49 is not required.
 
  -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Mon, 30 Jun 2025 17:28:48 +0800
 
