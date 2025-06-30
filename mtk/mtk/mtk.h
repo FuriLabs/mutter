@@ -23,10 +23,12 @@
 
 #define __MTK_H_INSIDE__
 
+#include "mtk/mtk-dispose-bin.h"
 #include "mtk/mtk-rectangle.h"
 #include "mtk/mtk-region.h"
 #include "mtk/mtk-macros.h"
 #include "mtk/mtk-monitor-transform.h"
+#include "mtk/mtk-time-utils.h"
 #include "mtk/mtk-utils.h"
 
 #undef __MTK_H_INSIDE__

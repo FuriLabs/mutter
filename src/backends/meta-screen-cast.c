@@ -74,7 +74,7 @@ meta_screen_cast_get_preferred_modifier (MetaScreenCast  *screen_cast,
   CoglRenderer *cogl_renderer =
     cogl_context_get_renderer (cogl_context);
   CoglRendererEGL *cogl_renderer_egl =
-    cogl_renderer->winsys;
+    cogl_renderer_get_winsys (cogl_renderer);
   MetaRendererNativeGpuData *renderer_gpu_data =
     cogl_renderer_egl->platform;
   MetaRenderDevice *render_device =
@@ -387,4 +387,13 @@ meta_screen_cast_class_init (MetaScreenCastClass *klass)
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
   object_class->constructed = meta_screen_cast_constructed;
+}
+
+gboolean
+meta_screen_cast_is_enabled (MetaScreenCast *screen_cast)
+{
+  MetaDbusSessionManager *session_manager =
+    META_DBUS_SESSION_MANAGER (screen_cast);
+
+  return meta_dbus_session_manager_is_enabled (session_manager);
 }

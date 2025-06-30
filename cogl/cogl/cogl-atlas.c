@@ -195,12 +195,9 @@ _cogl_atlas_get_initial_size (CoglContext *ctx,
                               unsigned int *map_width,
                               unsigned int *map_height)
 {
-  CoglDriverGL *driver_gl = COGL_DRIVER_GL (ctx->driver);
+  CoglDriver *driver = cogl_context_get_driver (ctx);
+  CoglDriverGL *driver_gl = COGL_DRIVER_GL (driver);
   CoglDriverGLClass *driver_klass = COGL_DRIVER_GL_GET_CLASS (driver_gl);
-  CoglTextureDriverGL *tex_driver_gl =
-    COGL_TEXTURE_DRIVER_GL (ctx->texture_driver);
-  CoglTextureDriverGLClass *tex_driver_klass =
-    COGL_TEXTURE_DRIVER_GL_GET_CLASS (tex_driver_gl);
   unsigned int size;
   GLenum gl_intformat;
   GLenum gl_format;
@@ -228,13 +225,13 @@ _cogl_atlas_get_initial_size (CoglContext *ctx,
   /* Some platforms might not support this large size so we'll
      decrease the size until it can */
   while (size > 1 &&
-         !tex_driver_klass->size_supported (tex_driver_gl,
-                                            ctx,
-                                            GL_TEXTURE_2D,
-                                            gl_intformat,
-                                            gl_format,
-                                            gl_type,
-                                            size, size))
+         !driver_klass->texture_size_supported (driver_gl,
+                                                ctx,
+                                                GL_TEXTURE_2D,
+                                                gl_intformat,
+                                                gl_format,
+                                                gl_type,
+                                                size, size))
     size >>= 1;
 
   *map_width = size;
@@ -249,12 +246,9 @@ _cogl_atlas_create_map (CoglContext             *ctx,
                         unsigned int             n_textures,
                         CoglAtlasRepositionData *textures)
 {
-  CoglDriverGL *driver_gl = COGL_DRIVER_GL (ctx->driver);
+  CoglDriver *driver = cogl_context_get_driver (ctx);
+  CoglDriverGL *driver_gl = COGL_DRIVER_GL (driver);
   CoglDriverGLClass *driver_klass = COGL_DRIVER_GL_GET_CLASS (driver_gl);
-  CoglTextureDriverGL *tex_driver_gl =
-    COGL_TEXTURE_DRIVER_GL (ctx->texture_driver);
-  CoglTextureDriverGLClass *tex_driver_klass =
-    COGL_TEXTURE_DRIVER_GL_GET_CLASS (tex_driver_gl);
   GLenum gl_intformat;
   GLenum gl_format;
   GLenum gl_type;
@@ -268,13 +262,13 @@ _cogl_atlas_create_map (CoglContext             *ctx,
 
   /* Keep trying increasingly larger atlases until we can fit all of
      the textures */
-  while (tex_driver_klass->size_supported (tex_driver_gl,
-                                           ctx,
-                                           GL_TEXTURE_2D,
-                                           gl_intformat,
-                                           gl_format,
-                                           gl_type,
-                                           map_width, map_height))
+  while (driver_klass->texture_size_supported (driver_gl,
+                                               ctx,
+                                               GL_TEXTURE_2D,
+                                               gl_intformat,
+                                               gl_format,
+                                               gl_type,
+                                               map_width, map_height))
     {
       CoglRectangleMap *new_atlas = _cogl_rectangle_map_new (map_width,
                                                              map_height,

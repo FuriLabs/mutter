@@ -609,18 +609,6 @@ maybe_update_deadline_evasion (MetaKmsCrtc *crtc,
   crtc->deadline_evasion_update_time_us = next_presentation_time_us;
 }
 
-static int64_t
-extrapolate_next_interval_boundary (int64_t base_us,
-                                    int64_t interval_us)
-{
-  int64_t now_us;
-  int64_t num_intervals;
-
-  now_us = g_get_monotonic_time ();
-  num_intervals = MAX ((now_us - base_us + interval_us - 1) / interval_us, 0);
-  return base_us + num_intervals * interval_us;
-}
-
 gboolean
 meta_kms_crtc_determine_deadline (MetaKmsCrtc  *crtc,
                                   int64_t      *out_next_deadline_us,
@@ -705,8 +693,8 @@ meta_kms_crtc_determine_deadline (MetaKmsCrtc  *crtc,
           int64_t skip_us;
 
           skip_us =
-            extrapolate_next_interval_boundary (next_deadline_us,
-                                                refresh_interval_us) -
+            mtk_extrapolate_next_interval_boundary (next_deadline_us,
+                                                    refresh_interval_us) -
             next_deadline_us;
 
           if (meta_is_topic_enabled (META_DEBUG_KMS_DEADLINE))

@@ -124,10 +124,18 @@ then
       master
 fi
 
-#if ! pkgconf --atleast-version 1.41 wayland-protocols
-#then
-#    ./$SCRIPTS_DIR/install-meson-project.sh \
-#      "${OPTIONS[@]}" \
-#      https://gitlab.freedesktop.org/wayland/wayland-protocols.git \
-#      1.41
-#fi
+if ! pkgconf --atleast-version 1.44 wayland-protocols
+then
+    ./$SCRIPTS_DIR/install-meson-project.sh \
+      "${OPTIONS[@]}" \
+      https://gitlab.freedesktop.org/wayland/wayland-protocols.git \
+      1.44
+fi
+
+if ! pkgconf --atleast-version 2.85.0 glib-2.0
+then
+    ./$SCRIPTS_DIR/install-meson-project.sh \
+      "${OPTIONS[@]}" \
+      https://gitlab.gnome.org/GNOME/glib.git \
+      main
+fi

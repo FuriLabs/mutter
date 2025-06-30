@@ -26,8 +26,8 @@
 
 #include "backends/meta-backend-private.h"
 #include "backends/meta-crtc.h"
-#include "backends/meta-logical-monitor.h"
-#include "backends/meta-monitor.h"
+#include "backends/meta-logical-monitor-private.h"
+#include "backends/meta-monitor-private.h"
 #include "backends/meta-output.h"
 #include "backends/meta-renderer.h"
 #include "backends/x11/nested/meta-renderer-x11-nested.h"
@@ -178,7 +178,7 @@ meta_stage_x11_nested_finish_frame (ClutterStageWindow *stage_window,
       draw_view (stage_nested, renderer_view, texture);
     }
 
-  frame_info = cogl_frame_info_new (context, 0, frame->frame_count);
+  frame_info = cogl_frame_info_new (context, frame->frame_count);
   cogl_onscreen_egl_maybe_create_timestamp_query (stage_x11->onscreen,
                                                   frame_info);
   cogl_onscreen_swap_buffers (stage_x11->onscreen, frame_info, frame);

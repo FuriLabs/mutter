@@ -29,7 +29,7 @@
 #include <systemd/sd-login.h>
 #endif
 
-#include "backends/meta-monitor.h"
+#include "backends/meta-monitor-private.h"
 #include "backends/meta-monitor-manager-private.h"
 #include "backends/meta-virtual-monitor.h"
 #include "core/meta-session-manager.h"
@@ -37,12 +37,15 @@
 
 #ifdef HAVE_X11
 #include "backends/x11/cm/meta-backend-x11-cm.h"
-#include "x11/session.h"
 #endif
 
 #ifdef HAVE_NATIVE_BACKEND
 #include "backends/native/meta-backend-native.h"
 #include "backends/native/meta-backend-native-types.h"
+#endif
+
+#ifdef HAVE_DEVKIT
+#include "core/meta-mdk.h"
 #endif
 
 #if defined (HAVE_X11) && defined (HAVE_WAYLAND)
@@ -61,11 +64,6 @@ typedef struct _MetaContextMainOptions
     gboolean sync;
     gboolean force;
   } x11;
-  struct {
-    char *save_file;
-    char *client_id;
-    gboolean disable;
-  } sm;
 #ifdef HAVE_WAYLAND
   gboolean wayland;
   gboolean nested;
@@ -75,6 +73,7 @@ typedef struct _MetaContextMainOptions
 #ifdef HAVE_NATIVE_BACKEND
   gboolean display_server;
   gboolean headless;
+  gboolean devkit;
   GList *virtual_monitor_infos;
 #endif
   char *trace_file;
@@ -92,7 +91,13 @@ struct _MetaContextMain
 
   MetaCompositorType compositor_type;
 
+#ifdef HAVE_NATIVE_BACKEND
   GList *persistent_virtual_monitors;
+#endif
+
+#ifdef HAVE_DEVKIT
+  MetaMdk *mdk;
+#endif
 };
 
 G_DEFINE_TYPE (MetaContextMain, meta_context_main, META_TYPE_CONTEXT)
@@ -130,28 +135,29 @@ check_configuration (MetaContextMain  *context_main,
       return FALSE;
     }
 
-  if (context_main->options.x11.force && context_main->options.headless)
+  if (context_main->options.headless && context_main->options.devkit)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                   "Can't run in both MDK and headless mode");
+      return FALSE;
+    }
+
+  if (context_main->options.x11.force &&
+      (context_main->options.headless || context_main->options.devkit))
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                    "Can't run in X11 mode headlessly");
       return FALSE;
     }
 
-  if (context_main->options.display_server && context_main->options.headless)
+  if (context_main->options.display_server &&
+      (context_main->options.headless || context_main->options.devkit))
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                    "Can't run in display server mode headlessly");
       return FALSE;
     }
 #endif /* HAVE_NATIVE_BACKEND */
-
-  if (context_main->options.sm.save_file &&
-      context_main->options.sm.client_id)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
-                   "Can't specify both SM save file and SM client id");
-      return FALSE;
-    }
 
   return TRUE;
 }
@@ -250,6 +256,7 @@ determine_compositor_type (MetaContextMain  *context_main,
 #ifdef HAVE_NATIVE_BACKEND
       context_main->options.display_server ||
       context_main->options.headless ||
+      context_main->options.devkit ||
 #endif /* HAVE_NATIVE_BACKEND */
       context_main->options.nested)
     return META_COMPOSITOR_TYPE_WAYLAND;
@@ -297,15 +304,6 @@ meta_context_main_configure (MetaContext   *context,
   if (context_main->options.wayland_display)
     meta_wayland_override_display_name (context_main->options.wayland_display);
 #endif
-
-  if (!context_main->options.sm.client_id)
-    {
-      const char *desktop_autostart_id;
-
-      desktop_autostart_id = g_getenv ("DESKTOP_AUTOSTART_ID");
-      if (desktop_autostart_id)
-        context_main->options.sm.client_id = g_strdup (desktop_autostart_id);
-    }
 
 #ifdef HAVE_PROFILER
   meta_context_set_trace_file (context, context_main->options.trace_file);
@@ -414,6 +412,21 @@ add_persistent_virtual_monitors (MetaContextMain  *context_main,
 }
 #endif
 
+#ifdef HAVE_DEVKIT
+static gboolean
+initialize_mdk (MetaContext  *context,
+                GError      **error)
+{
+  MetaContextMain *context_main = META_CONTEXT_MAIN (context);
+
+  context_main->mdk = meta_mdk_new (context, error);
+  if (!context_main->mdk)
+    return FALSE;
+
+  return TRUE;
+}
+#endif
+
 static gboolean
 meta_context_main_setup (MetaContext  *context,
                          GError      **error)
@@ -429,6 +442,14 @@ meta_context_main_setup (MetaContext  *context,
 #ifdef HAVE_NATIVE_BACKEND
   if (!add_persistent_virtual_monitors (context_main, error))
     return FALSE;
+#endif
+
+#ifdef HAVE_DEVKIT
+  if (context_main->options.devkit)
+    {
+      if (!initialize_mdk (context, error))
+        return FALSE;
+    }
 #endif
 
   return TRUE;
@@ -514,7 +535,8 @@ meta_context_main_create_backend (MetaContext  *context,
         return create_nested_backend (context, error);
 #endif
 #ifdef HAVE_NATIVE_BACKEND
-      if (context_main->options.headless)
+      if (context_main->options.headless ||
+          context_main->options.devkit)
         return create_headless_backend (context, error);
 
       return create_native_backend (context, error);
@@ -532,17 +554,6 @@ meta_context_main_notify_ready (MetaContext *context)
 {
   MetaContextMain *context_main = META_CONTEXT_MAIN (context);
   g_autoptr (GError) error = NULL;
-
-#ifdef HAVE_X11
-  if (!context_main->options.sm.disable)
-    {
-      meta_session_init (context,
-                         context_main->options.sm.client_id,
-                         context_main->options.sm.save_file);
-    }
-  g_clear_pointer (&context_main->options.sm.client_id, g_free);
-  g_clear_pointer (&context_main->options.sm.save_file, g_free);
-#endif
 
   context_main->session_manager =
     meta_session_manager_new (meta_context_get_nick (context), &error);
@@ -628,24 +639,6 @@ meta_context_main_add_option_entries (MetaContextMain *context_main)
       "DISPLAY"
     },
     {
-      "sm-disable", 0, 0, G_OPTION_ARG_NONE,
-      &context_main->options.sm.disable,
-      N_("Disable connection to session manager"),
-      NULL
-    },
-    {
-      "sm-client-id", 0, 0, G_OPTION_ARG_STRING,
-      &context_main->options.sm.client_id,
-      N_("Specify session management ID"),
-      "ID"
-    },
-    {
-      "sm-save-file", 0, 0, G_OPTION_ARG_FILENAME,
-      &context_main->options.sm.save_file,
-      N_("Initialize session from savefile"),
-      "FILE"
-    },
-    {
       "sync", 0, 0, G_OPTION_ARG_NONE,
       &context_main->options.x11.sync,
       N_("Make X calls synchronous"),
@@ -666,6 +659,8 @@ meta_context_main_add_option_entries (MetaContextMain *context_main)
       N_("Run as a nested compositor"),
       NULL
     },
+#endif
+#ifdef HAVE_XWAYLAND
     {
       "no-x11", 0, 0, G_OPTION_ARG_NONE,
       &context_main->options.no_x11,
@@ -695,6 +690,13 @@ meta_context_main_add_option_entries (MetaContextMain *context_main)
       "virtual-monitor", 0, 0, G_OPTION_ARG_CALLBACK,
       add_virtual_monitor_cb,
       N_("Add persistent virtual monitor (WxH or WxH@R)")
+    },
+#endif
+#ifdef HAVE_DEVKIT
+    {
+      "devkit", 0, 0, G_OPTION_ARG_NONE,
+      &context_main->options.devkit,
+      N_("Run development kit")
     },
 #endif
     {
@@ -754,6 +756,10 @@ meta_context_main_finalize (GObject *object)
   if (context_main->session_manager)
     meta_session_manager_save_sync (context_main->session_manager, NULL);
   g_clear_object (&context_main->session_manager);
+#endif
+
+#ifdef HAVE_DEVKIT
+  g_clear_object (&context_main->mdk);
 #endif
 
   G_OBJECT_CLASS (meta_context_main_parent_class)->finalize (object);

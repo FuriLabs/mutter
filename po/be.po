@@ -4,8 +4,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: mutter.master\n"
 "Report-Msgid-Bugs-To: https://gitlab.gnome.org/GNOME/mutter/issues/\n"
-"POT-Creation-Date: 2025-05-15 14:22+0000\n"
-"PO-Revision-Date: 2025-05-19 22:14+0300\n"
+"POT-Creation-Date: 2025-06-20 13:57+0000\n"
+"PO-Revision-Date: 2025-06-22 13:21+0300\n"
 "Last-Translator: Yuras Shumovich <shumovichy@gmail.com>\n"
 "Language-Team: Belarusian <i18n-bel-gnome@googlegroups.com>\n"
 "Language: be\n"
@@ -616,26 +616,66 @@ msgstr ""
 "каманднага радка +byteswappedclients/-byteswappedclients для кіравання гэтай "
 "наладай. Каб змены налад уступілі ў сілу, трэба перазапусціць Xwayland."
 
-#: src/backends/meta-monitor.c:266
+#: mdk/mdk-main-window.ui:7
+msgid "_Input"
+msgstr "_Увод"
+
+#: mdk/mdk-main-window.ui:9
+msgid "_Emulate touch"
+msgstr "_Эмуляцыя сэнсарнага ўводу"
+
+#: mdk/mdk-main-window.ui:13
+msgid "_Inhibit system shortcuts"
+msgstr "_Блакіраваць сістэмныя спалучэнні клавіш"
+
+#: mdk/mdk-main-window.ui:19
+msgid "_About Mutter Development Kit"
+msgstr "Пр_а камплект распрацоўкі Mutter"
+
+#: mdk/mdk-main-window.ui:25 mdk/mdk-main.c:85 mdk/mdk-main.c:100
+msgid "Mutter Development Kit"
+msgstr "Камплект распрацоўкі Mutter"
+
+#: mdk/mdk-main-window.ui:35
+msgid "Main Menu"
+msgstr "Галоўнае меню"
+
+#: mdk/mdk-main.c:69
+msgid "The Mutter Team"
+msgstr "Каманда Mutter"
+
+#: mdk/mdk-main.c:91 mdk/mdk-main.c:105
+msgid "Mutter software development kit"
+msgstr "Камплект распрацоўкі ПЗ Mutter"
+
+#: mdk/mdk-main.c:94 mdk/mdk-main.c:108
+msgid "About Mutter Development Kit"
+msgstr "Пра камплект распрацоўкі Mutter"
+
+#: mdk/mdk-monitor.c:672
+msgid "Failed to create monitor"
+msgstr "Не ўдалося стварыць манітор"
+
+#: src/backends/meta-monitor.c:275
 msgid "Built-in display"
 msgstr "Убудаваны дысплэй"
 
-#: src/backends/meta-monitor.c:293
+#: src/backends/meta-monitor.c:302
 msgid "Unknown"
 msgstr "Невядомы"
 
-#: src/backends/meta-monitor.c:295
+#: src/backends/meta-monitor.c:304
 msgid "Unknown Display"
 msgstr "Невядомы дысплэй"
 
-#: src/backends/meta-monitor.c:303
+#: src/backends/meta-monitor.c:312
 #, c-format
 msgctxt ""
 "This is a monitor vendor name, followed by a size in inches, like 'Dell 15\"'"
 msgid "%s %s"
 msgstr "%s %s"
 
-#: src/backends/meta-monitor.c:311
+#: src/backends/meta-monitor.c:320
 #, c-format
 msgctxt ""
 "This is a monitor vendor name followed by product/model name where size in "
@@ -643,7 +683,7 @@ msgctxt ""
 msgid "%s %s"
 msgstr "%s %s"
 
-#: src/core/bell.c:193
+#: src/core/bell.c:237
 msgid "Bell event"
 msgstr "Падзея з сігналам"
 
@@ -655,74 +695,66 @@ msgstr "Прыватнасць экрана ўключана"
 msgid "Privacy Screen Disabled"
 msgstr "Прыватнасць экрана адключана"
 
-#: src/core/meta-context-main.c:621
+#: src/core/meta-context-main.c:632
 msgid "Replace the running window manager"
 msgstr "Замяніць дзейны кіраўнік акон"
 
-#: src/core/meta-context-main.c:627
+#: src/core/meta-context-main.c:638
 msgid "X Display to use"
 msgstr "Патрэбны дысплэй X"
 
-#: src/core/meta-context-main.c:633
-msgid "Disable connection to session manager"
-msgstr "Адключыць злучэнне з кіраўніком сеансаў"
-
-#: src/core/meta-context-main.c:639
-msgid "Specify session management ID"
-msgstr "Вызначыць ідэнтыфікатар для кіравання сеансам"
-
-#: src/core/meta-context-main.c:645
-msgid "Initialize session from savefile"
-msgstr "Ініцыяваць сеанс з файла"
-
-#: src/core/meta-context-main.c:651
+#: src/core/meta-context-main.c:644
 msgid "Make X calls synchronous"
 msgstr "Сінхронна выконваць выклікі X-сістэмы"
 
-#: src/core/meta-context-main.c:659
+#: src/core/meta-context-main.c:652
 msgid "Run as a wayland compositor"
 msgstr "Запусціць у якасці кампазітара wayland"
 
-#: src/core/meta-context-main.c:666
+#: src/core/meta-context-main.c:659
 msgid "Run as a nested compositor"
 msgstr "Запусціць у якасці ўложанага кампазітара"
 
-#: src/core/meta-context-main.c:672
+#: src/core/meta-context-main.c:667
 msgid "Run wayland compositor without starting Xwayland"
 msgstr "Запусціць кампазітар wayland без запуску Xwayland"
 
-#: src/core/meta-context-main.c:679
+#: src/core/meta-context-main.c:674
 msgid "Specify Wayland display name to use"
 msgstr "Вызначыць назву патрэбнага дысплэя Wayland"
 
-#: src/core/meta-context-main.c:687
+#: src/core/meta-context-main.c:682
 msgid "Run as a full display server, rather than nested"
 msgstr "Запусціць у якасці паўнавартаснага сервера дысплэя, я не ўложанага"
 
-#: src/core/meta-context-main.c:692
+#: src/core/meta-context-main.c:687
 msgid "Run as a headless display server"
 msgstr "Запусціць у якасці сервера без дысплэя"
 
-#: src/core/meta-context-main.c:697
+#: src/core/meta-context-main.c:692
 msgid "Add persistent virtual monitor (WxH or WxH@R)"
 msgstr "Дадаць сталы віртуальны манітор (ШxВ або ШxВ@Ч)"
 
-#: src/core/meta-context-main.c:709
+#: src/core/meta-context-main.c:699
+msgid "Run development kit"
+msgstr "Запусціць камплект распрацоўкі (SDK)"
+
+#: src/core/meta-context-main.c:711
 msgid "Run with X11 backend"
 msgstr "Запусціць праз X11 backend"
 
-#: src/core/meta-context-main.c:715
+#: src/core/meta-context-main.c:717
 msgid "Profile performance using trace instrumentation"
 msgstr "Прадукцыйнасць профілю з выкарыстаннем сродкаў трасіравання"
 
-#: src/core/meta-context-main.c:721
+#: src/core/meta-context-main.c:723
 msgid "Enable debug control D-Bus interface"
 msgstr "Уключыць кіраванне адладкай інтэрфейсу D-Bus"
 
 #. TRANSLATORS: This string refers to a button that switches between
 #. * different modes in that button group.
 #.
-#: src/core/meta-pad-action-mapper.c:552
+#: src/core/meta-pad-action-mapper.c:615
 #, c-format
 msgid "Mode Switch (Group %d)"
 msgstr "Пераключыць рэжым (група %d)"
@@ -730,7 +762,7 @@ msgstr "Пераключыць рэжым (група %d)"
 #. TRANSLATORS: This string refers to a button that switches between
 #. * different modes.
 #.
-#: src/core/meta-pad-action-mapper.c:559
+#: src/core/meta-pad-action-mapper.c:622
 #, c-format
 msgid "Mode Switch"
 msgstr "Пераключыць рэжым"
@@ -738,11 +770,11 @@ msgstr "Пераключыць рэжым"
 #. TRANSLATORS: This string refers to an action, cycles drawing tablets'
 #. * mapping through the available outputs.
 #.
-#: src/core/meta-pad-action-mapper.c:582
+#: src/core/meta-pad-action-mapper.c:645
 msgid "Switch monitor"
 msgstr "Пераключыць манітор"
 
-#: src/core/meta-pad-action-mapper.c:584
+#: src/core/meta-pad-action-mapper.c:647
 msgid "Show on-screen help"
 msgstr "Паказаць даведку на экране"
 
@@ -772,12 +804,12 @@ msgstr "Mutter скампілявана без падтрымкі рэжыму �
 msgid "Workspace switched"
 msgstr "Працоўная прастора пераключана"
 
-#: src/wayland/meta-wayland-tablet-pad.c:532
+#: src/wayland/meta-wayland-tablet-pad.c:558
 #, c-format
 msgid "Mode Switch: Mode %d"
 msgstr "Пераключыць рэжым: %d"
 
-#: src/x11/meta-x11-display.c:858
+#: src/x11/meta-x11-display.c:855
 #, c-format
 msgid ""
 "Display “%s” already has a window manager; try using the --replace option to "
@@ -786,19 +818,19 @@ msgstr ""
 "Дысплэй «%s» ужо мае кіраўніка акон. Паспрабуйце выкарыстаць параметр --"
 "replace, каб замяніць бягучы кіраўнік акон."
 
-#: src/x11/meta-x11-display.c:1243
+#: src/x11/meta-x11-display.c:1240
 #, c-format
 msgid "Failed to open X Window System display “%s”"
 msgstr "Не ўдалося адкрыць дысплэй X Window System «%s»"
 
-#: src/x11/meta-x11-display.c:1476
+#: src/x11/meta-x11-display.c:1473
 #, c-format
 msgid "Screen %d on display “%s” is invalid"
 msgstr "Экран %d на дысплэі «%s» няправільны"
 
 #. This probably means that a non-WM compositor like xcompmgr is running;
 #. * we have no way to get it to exit
-#: src/x11/meta-x11-display.c:2799
+#: src/x11/meta-x11-display.c:2801
 #, c-format
 msgid ""
 "Another compositing manager is already running on screen %i on display “%s”."
@@ -809,7 +841,16 @@ msgstr "На экране %i дысплэя «%s» ужо запушчаны і�
 msgid "Format %s not supported"
 msgstr "Фармат %s не падтрымліваецца"
 
-#: src/x11/window-props.c:555
+#: src/x11/window-props.c:564
 #, c-format
 msgid "%s (on %s)"
 msgstr "%s (на %s)"
+
+#~ msgid "Disable connection to session manager"
+#~ msgstr "Адключыць злучэнне з кіраўніком сеансаў"
+
+#~ msgid "Specify session management ID"
+#~ msgstr "Вызначыць ідэнтыфікатар для кіравання сеансам"
+
+#~ msgid "Initialize session from savefile"
+#~ msgstr "Ініцыяваць сеанс з файла"

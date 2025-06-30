@@ -30,8 +30,9 @@
 #include <stdlib.h>
 
 #include "backends/meta-backend-private.h"
-#include "backends/meta-logical-monitor.h"
+#include "backends/meta-logical-monitor-private.h"
 #include "core/boxes-private.h"
+#include "core/window-private.h"
 #include "meta/meta-backend.h"
 #include "meta/prefs.h"
 #include "meta/workspace.h"
@@ -164,16 +165,16 @@ northeast_cmp (gconstpointer a,
 }
 
 static void
-find_next_cascade (MetaWindow *window,
+find_next_cascade (MetaWindow   *window,
+                   MtkRectangle  work_area,
                    /* visible windows on relevant workspaces */
-                   GList      *windows,
-                   int        *new_x,
-                   int        *new_y,
-                   gboolean    place_centered)
+                   GList        *windows,
+                   int           width,
+                   int           height,
+                   int          *new_x,
+                   int          *new_y,
+                   gboolean      place_centered)
 {
-  MetaDisplay *display = meta_window_get_display (window);
-  MetaContext *context = meta_display_get_context (display);
-  MetaBackend *backend = meta_context_get_backend (context);
   GList *tmp;
   GList *sorted;
   int adjusted_center_x, adjusted_center_y;
@@ -182,8 +183,6 @@ find_next_cascade (MetaWindow *window,
   MtkRectangle frame_rect;
   int window_width, window_height;
   int cascade_stage;
-  MtkRectangle work_area;
-  MetaLogicalMonitor *current;
   gboolean ltr = clutter_get_text_direction () == CLUTTER_TEXT_DIRECTION_LTR;
 
   /* This is a "fuzzy" cascade algorithm.
@@ -200,19 +199,17 @@ find_next_cascade (MetaWindow *window,
    * of NW corner of window frame.
    */
 
-  current = meta_backend_get_current_logical_monitor (backend);
-  meta_window_get_work_area_for_logical_monitor (window, current, &work_area);
-
   meta_window_get_frame_rect (window, &frame_rect);
-  window_width = frame_rect.width;
-  window_height = frame_rect.height;
+  window_width = width;
+  window_height = height;
 
   sorted = g_list_copy (windows);
   if (place_centered)
     {
       WindowDistanceComparisonData window_distance_data = {
         .area = work_area,
-        .window = frame_rect,
+        .window = MTK_RECTANGLE_INIT (frame_rect.x, frame_rect.y,
+                                      width, height),
         .ltr = ltr,
       };
 
@@ -637,6 +634,8 @@ find_first_fit (MetaWindow         *window,
                 /* visible windows on relevant workspaces */
                 GList              *windows,
                 MetaLogicalMonitor *logical_monitor,
+                int                 width,
+                int                 height,
                 int                *new_x,
                 int                *new_y)
 {
@@ -651,7 +650,7 @@ find_first_fit (MetaWindow         *window,
   GList *below_sorted;
   GList *end_sorted;
   GList *tmp;
-  MtkRectangle rect;
+  MtkRectangle rect = MTK_RECTANGLE_INIT (0, 0, width, height);
   MtkRectangle work_area;
   gboolean ltr = clutter_get_text_direction () == CLUTTER_TEXT_DIRECTION_LTR;
 
@@ -666,8 +665,6 @@ find_first_fit (MetaWindow         *window,
   end_sorted = g_list_copy (windows);
   end_sorted = g_list_sort (end_sorted, topmost_cmp);
   end_sorted = g_list_sort (end_sorted, ltr ? leftmost_cmp : rightmost_cmp);
-
-  meta_window_get_frame_rect (window, &rect);
 
 #ifdef WITH_VERBOSE_MODE
   {
@@ -844,6 +841,8 @@ meta_window_place (MetaWindow        *window,
                    MetaPlaceFlag      flags,
                    int                x,
                    int                y,
+                   int                new_width,
+                   int                new_height,
                    int               *new_x,
                    int               *new_y)
 {
@@ -853,6 +852,7 @@ meta_window_place (MetaWindow        *window,
   g_autoptr (GList) windows = NULL;
   MetaLogicalMonitor *logical_monitor = NULL;
   gboolean place_centered = FALSE;
+  MtkRectangle work_area;
 
   meta_topic (META_DEBUG_PLACEMENT, "Placing window %s", window->desc);
 
@@ -948,6 +948,15 @@ meta_window_place (MetaWindow        *window,
         }
     }
 
+  if (!window->showing_for_first_time)
+    logical_monitor = meta_window_get_main_logical_monitor (window);
+  else
+    logical_monitor = meta_backend_get_current_logical_monitor (backend);
+
+  meta_window_get_work_area_for_logical_monitor (window,
+                                                 logical_monitor,
+                                                 &work_area);
+
   if (window->type == META_WINDOW_DIALOG ||
       window->type == META_WINDOW_MODAL_DIALOG ||
       (window->client_type == META_WINDOW_CLIENT_TYPE_WAYLAND &&
@@ -957,9 +966,8 @@ meta_window_place (MetaWindow        *window,
 
       if (parent)
         {
-          MtkRectangle frame_rect, parent_frame_rect;
+          MtkRectangle parent_frame_rect;
 
-          meta_window_get_frame_rect (window, &frame_rect);
           meta_window_get_frame_rect (parent, &parent_frame_rect);
 
           y = parent_frame_rect.y;
@@ -967,12 +975,12 @@ meta_window_place (MetaWindow        *window,
           /* center of parent */
           x = parent_frame_rect.x + parent_frame_rect.width / 2;
           /* center of child over center of parent */
-          x -= frame_rect.width / 2;
+          x -= new_width / 2;
 
           /* "visually" center window over parent, leaving twice as
            * much space below as on top.
            */
-          y += (parent_frame_rect.height - frame_rect.height) / 3;
+          y += (parent_frame_rect.height - new_height) / 3;
 
           meta_topic (META_DEBUG_PLACEMENT,
                       "Centered window %s over transient parent",
@@ -980,7 +988,7 @@ meta_window_place (MetaWindow        *window,
 
           avoid_being_obscured_as_second_modal_dialog (window, flags, &x, &y);
 
-          goto done;
+          goto maybe_automaximize;
         }
     }
 
@@ -989,27 +997,19 @@ meta_window_place (MetaWindow        *window,
    */
 
   windows = find_windows_relevant_for_placement (window);
-  logical_monitor = meta_backend_get_current_logical_monitor (backend);
+
   place_centered = window_place_centered (window);
 
   if (place_centered)
     {
-      /* Center on current monitor */
-      MtkRectangle work_area;
-      MtkRectangle frame_rect;
-
-      meta_window_get_work_area_for_logical_monitor (window,
-                                                     logical_monitor,
-                                                     &work_area);
-      meta_window_get_frame_rect (window, &frame_rect);
-
-      x = work_area.x + (work_area.width - frame_rect.width) / 2;
-      y = work_area.y + (work_area.height - frame_rect.height) / 2;
+      x = work_area.x + (work_area.width - new_width) / 2;
+      y = work_area.y + (work_area.height - new_height) / 2;
 
       meta_topic (META_DEBUG_PLACEMENT, "Centered window %s on monitor %d",
                   window->desc, logical_monitor->number);
 
-      find_next_cascade (window, windows, &x, &y, place_centered);
+      find_next_cascade (window, work_area, windows, new_width, new_height,
+                         &x, &y, place_centered);
     }
   else
     {
@@ -1018,33 +1018,12 @@ meta_window_place (MetaWindow        *window,
       y = logical_monitor->rect.y;
 
       /* No good fit? Fall back to cascading... */
-      if (!find_first_fit (window, windows, logical_monitor,
+      if (!find_first_fit (window, windows,
+                           logical_monitor, new_width, new_height,
                            &x, &y))
-        find_next_cascade (window, windows, &x, &y, place_centered);
-    }
-
-  /* Maximize windows if they are too big for their work area (bit of
-   * a hack here). Assume undecorated windows probably don't intend to
-   * be maximized.
-   */
-  if (window->has_maximize_func && window->decorated &&
-      !meta_window_is_fullscreen (window))
-    {
-      MtkRectangle workarea;
-      MtkRectangle frame_rect;
-
-      meta_window_get_work_area_for_logical_monitor (window,
-                                                     logical_monitor,
-                                                     &workarea);
-      meta_window_get_frame_rect (window, &frame_rect);
-
-      /* If the window is bigger than the screen, then automaximize.  Do NOT
-       * auto-maximize the directions independently.  See #419810.
-       */
-      if (frame_rect.width >= workarea.width && frame_rect.height >= workarea.height)
         {
-          window->maximize_horizontally_after_placement = TRUE;
-          window->maximize_vertically_after_placement = TRUE;
+          find_next_cascade (window, work_area, windows, new_width, new_height,
+                             &x, &y, place_centered);
         }
     }
 
@@ -1077,7 +1056,8 @@ meta_window_place (MetaWindow        *window,
           y = logical_monitor->rect.y;
 
           found_fit = find_first_fit (window, focus_window_list,
-                                      logical_monitor, &x, &y);
+                                      logical_monitor, new_width, new_height,
+                                      &x, &y);
           g_list_free (focus_window_list);
         }
 
@@ -1086,6 +1066,21 @@ meta_window_place (MetaWindow        *window,
        */
       if (!found_fit)
         find_most_freespace (window, focus_window, x, y, &x, &y);
+    }
+
+maybe_automaximize:
+  if (meta_prefs_get_auto_maximize () &&
+      window->showing_for_first_time &&
+      window->has_maximize_func)
+    {
+      int window_area;
+      int work_area_area;
+
+      window_area = new_width * new_height;
+      work_area_area = work_area.width * work_area.height;
+
+      if (window_area > work_area_area * MAX_UNMAXIMIZED_WINDOW_AREA)
+        meta_window_queue_auto_maximize (window);
     }
 
 done:

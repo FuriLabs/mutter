@@ -263,7 +263,7 @@ void     meta_window_foreach_ancestor         (MetaWindow            *window,
                                                void                  *user_data);
 
 META_EXPORT
-MetaMaximizeFlags meta_window_get_maximized (MetaWindow *window);
+gboolean          meta_window_is_maximized (MetaWindow *window);
 
 META_EXPORT
 gboolean          meta_window_is_fullscreen (MetaWindow *window);
@@ -286,12 +286,10 @@ void meta_window_set_icon_geometry (MetaWindow   *window,
                                     MtkRectangle *rect);
 
 META_EXPORT
-void meta_window_maximize   (MetaWindow        *window,
-                             MetaMaximizeFlags  directions);
+void meta_window_maximize   (MetaWindow        *window);
 
 META_EXPORT
-void meta_window_unmaximize (MetaWindow        *window,
-                             MetaMaximizeFlags  directions);
+void meta_window_unmaximize (MetaWindow        *window);
 
 META_EXPORT
 void        meta_window_minimize           (MetaWindow  *window);
@@ -439,3 +437,6 @@ META_EXPORT
 void meta_window_protocol_to_stage_rect (MetaWindow *window,
                                          const MtkRectangle *protocol_rect,
                                          MtkRectangle       *stage_rect);
+
+META_EXPORT
+const char * meta_window_get_tag (MetaWindow *window);

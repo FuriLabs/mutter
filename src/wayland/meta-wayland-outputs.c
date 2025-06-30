@@ -26,8 +26,8 @@
 
 #include <string.h>
 
-#include "backends/meta-logical-monitor.h"
-#include "backends/meta-monitor.h"
+#include "backends/meta-logical-monitor-private.h"
+#include "backends/meta-monitor-private.h"
 #include "backends/meta-monitor-manager-private.h"
 #include "wayland/meta-wayland-private.h"
 
@@ -412,8 +412,9 @@ meta_wayland_output_set_monitor (MetaWaylandOutput *wayland_output,
   wayland_output->subpixel_order = meta_monitor_get_subpixel_order (monitor);
   wayland_output->transform =
     meta_logical_monitor_get_transform (logical_monitor);
-  wayland_output->mode = meta_monitor_get_current_mode (monitor);
-  wayland_output->preferred_mode = meta_monitor_get_preferred_mode (monitor);
+  g_set_object (&wayland_output->mode, meta_monitor_get_current_mode (monitor));
+  g_set_object (&wayland_output->preferred_mode,
+                meta_monitor_get_preferred_mode (monitor));
   wayland_output->scale = meta_logical_monitor_get_scale (logical_monitor);
 }
 
@@ -476,7 +477,6 @@ meta_wayland_output_new (MetaWaylandCompositor *compositor,
                                              &wl_output_interface,
                                              META_WL_OUTPUT_VERSION,
                                              wayland_output, bind_output);
-  meta_wayland_compositor_flush_clients (compositor);
   meta_wayland_output_set_monitor (wayland_output, monitor);
 
   return wayland_output;
@@ -575,8 +575,8 @@ meta_wayland_compositor_update_outputs (MetaWaylandCompositor *compositor,
 }
 
 static void
-on_monitors_changed (MetaMonitorManager    *monitors,
-                     MetaWaylandCompositor *compositor)
+on_monitors_changing (MetaMonitorManager    *monitors,
+                      MetaWaylandCompositor *compositor)
 {
   compositor->outputs = meta_wayland_compositor_update_outputs (compositor, monitors);
 }
@@ -593,6 +593,9 @@ meta_wayland_output_finalize (GObject *object)
 
   g_warn_if_fail (!wayland_output->resources);
   g_warn_if_fail (!wayland_output->xdg_output_resources);
+
+  g_clear_object (&wayland_output->mode);
+  g_clear_object (&wayland_output->preferred_mode);
 
   wl_global_destroy (wayland_output->global);
 
@@ -784,7 +787,7 @@ meta_wayland_outputs_finalize (MetaWaylandCompositor *compositor)
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (backend);
 
-  g_signal_handlers_disconnect_by_func (monitor_manager, on_monitors_changed,
+  g_signal_handlers_disconnect_by_func (monitor_manager, on_monitors_changing,
                                         compositor);
 
   g_hash_table_destroy (compositor->outputs);
@@ -798,8 +801,8 @@ meta_wayland_outputs_init (MetaWaylandCompositor *compositor)
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (backend);
 
-  g_signal_connect (monitor_manager, "monitors-changed",
-                    G_CALLBACK (on_monitors_changed), compositor);
+  g_signal_connect (monitor_manager, "monitors-changing",
+                    G_CALLBACK (on_monitors_changing), compositor);
 
   compositor->outputs =
     meta_wayland_compositor_update_outputs (compositor, monitor_manager);

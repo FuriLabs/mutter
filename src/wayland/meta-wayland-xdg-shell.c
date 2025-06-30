@@ -23,7 +23,7 @@
 
 #include "wayland/meta-wayland-xdg-shell.h"
 
-#include "backends/meta-logical-monitor.h"
+#include "backends/meta-logical-monitor-private.h"
 #include "compositor/compositor-private.h"
 #include "core/boxes-private.h"
 #include "core/window-private.h"
@@ -470,8 +470,7 @@ xdg_toplevel_set_maximized (struct wl_client   *client,
   if (!window)
     return;
 
-  meta_window_force_placement (window, META_PLACE_FLAG_FORCE_MOVE);
-  meta_window_maximize (window, META_MAXIMIZE_BOTH);
+  meta_window_maximize (window);
 }
 
 static void
@@ -485,7 +484,7 @@ xdg_toplevel_unset_maximized (struct wl_client   *client,
   if (!window)
     return;
 
-  meta_window_unmaximize (window, META_MAXIMIZE_BOTH);
+  meta_window_unmaximize (window);
 }
 
 static void
@@ -746,6 +745,19 @@ fill_states (MetaWaylandXdgToplevel         *xdg_toplevel,
       if (window->edge_constraints.left != META_EDGE_CONSTRAINT_NONE)
         add_state_value (states, XDG_TOPLEVEL_STATE_TILED_LEFT);
     }
+
+  if (wl_resource_get_version (xdg_toplevel->resource) >=
+      XDG_TOPLEVEL_STATE_CONSTRAINED_LEFT_SINCE_VERSION)
+    {
+      if (window->edge_constraints.top == META_EDGE_CONSTRAINT_MONITOR)
+        add_state_value (states, XDG_TOPLEVEL_STATE_CONSTRAINED_TOP);
+      if (window->edge_constraints.right == META_EDGE_CONSTRAINT_MONITOR)
+        add_state_value (states, XDG_TOPLEVEL_STATE_CONSTRAINED_RIGHT);
+      if (window->edge_constraints.bottom == META_EDGE_CONSTRAINT_MONITOR)
+        add_state_value (states, XDG_TOPLEVEL_STATE_CONSTRAINED_BOTTOM);
+      if (window->edge_constraints.left == META_EDGE_CONSTRAINT_MONITOR)
+        add_state_value (states, XDG_TOPLEVEL_STATE_CONSTRAINED_LEFT);
+    }
 }
 
 static void
@@ -874,7 +886,8 @@ meta_wayland_xdg_toplevel_apply_state (MetaWaylandSurfaceRole  *surface_role,
 
   if (!xdg_surface_priv->configure_sent)
     {
-      MetaWaylandWindowConfiguration *configuration;
+      MetaWindowWayland *wl_window = META_WINDOW_WAYLAND (window);
+      g_autoptr (MetaWaylandWindowConfiguration) configuration = NULL;
       g_autoptr (MetaWindowConfig) window_config = NULL;
       int bounds_width, bounds_height, geometry_scale;
       MtkRectangle rect;
@@ -915,9 +928,7 @@ meta_wayland_xdg_toplevel_apply_state (MetaWaylandSurfaceRole  *surface_role,
                                                              configuration,
                                                              window_config);
 
-      meta_wayland_xdg_toplevel_send_configure (xdg_toplevel, configuration);
-      meta_wayland_window_configuration_free (configuration);
-      return;
+      meta_window_wayland_configure (wl_window, configuration);
     }
 }
 

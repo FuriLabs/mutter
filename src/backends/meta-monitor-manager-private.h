@@ -271,9 +271,6 @@ void                meta_monitor_manager_rebuild_derived (MetaMonitorManager *ma
 META_EXPORT_TEST
 int                 meta_monitor_manager_get_num_logical_monitors (MetaMonitorManager *manager);
 
-META_EXPORT_TEST
-GList *             meta_monitor_manager_get_logical_monitors (MetaMonitorManager *manager);
-
 MetaLogicalMonitor *meta_monitor_manager_get_logical_monitor_from_number (MetaMonitorManager *manager,
                                                                           int                 number);
 
@@ -297,16 +294,13 @@ MetaLogicalMonitor *meta_monitor_manager_get_logical_monitor_neighbor (MetaMonit
 MetaMonitor *       meta_monitor_manager_get_primary_monitor (MetaMonitorManager *manager);
 
 META_EXPORT_TEST
-MetaMonitor *       meta_monitor_manager_get_laptop_panel (MetaMonitorManager *manager);
+MetaMonitor *       meta_monitor_manager_get_builtin_monitor (MetaMonitorManager *manager);
 
 MetaMonitor *       meta_monitor_manager_get_monitor_from_spec (MetaMonitorManager *manager,
                                                                 MetaMonitorSpec    *monitor_spec);
 
 MetaMonitor *       meta_monitor_manager_get_monitor_from_connector (MetaMonitorManager *manager,
                                                                      const char         *connector);
-
-META_EXPORT_TEST
-GList *             meta_monitor_manager_get_monitors      (MetaMonitorManager *manager);
 
 void                meta_monitor_manager_get_screen_size   (MetaMonitorManager *manager,
                                                             int                *width,
@@ -345,14 +339,16 @@ MetaMonitorsConfig * meta_monitor_manager_ensure_configured (MetaMonitorManager 
 
 META_EXPORT_TEST
 void               meta_monitor_manager_update_logical_state (MetaMonitorManager *manager,
-                                                              MetaMonitorsConfig *config);
+                                                              MetaMonitorsConfig *config,
+                                                              MtkDisposeBin      *bin);
 
 void               meta_monitor_manager_update_for_lease_state (MetaMonitorManager *manager,
                                                                 MetaMonitorsConfig *config);
 
 META_EXPORT_TEST
 void               meta_monitor_manager_update_logical_state_derived (MetaMonitorManager *manager,
-                                                                      MetaMonitorsConfig *config);
+                                                                      MetaMonitorsConfig *config,
+                                                                      MtkDisposeBin      *bin);
 
 META_EXPORT_TEST
 void               meta_monitor_manager_lid_is_closed_changed (MetaMonitorManager *manager);
@@ -432,3 +428,6 @@ gboolean meta_monitor_manager_apply_monitors_config (MetaMonitorManager        *
                                                      GError                   **error);
 
 MetaLogicalMonitorLayoutMode meta_monitor_manager_get_layout_mode (MetaMonitorManager *manager);
+
+MetaOutput * meta_monitor_manager_find_output (MetaMonitorManager *monitor_manager,
+                                               MetaOutput         *old_output);

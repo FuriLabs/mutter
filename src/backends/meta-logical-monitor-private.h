@@ -21,11 +21,13 @@
 
 #include <glib-object.h>
 
-#include "backends/meta-monitor.h"
+#include "backends/meta-monitor-private.h"
 #include "backends/meta-monitor-config-manager.h"
 #include "backends/meta-monitor-manager-private.h"
 #include "core/util-private.h"
 #include "meta/boxes.h"
+
+#include "meta/meta-logical-monitor.h"
 
 #define META_MAX_OUTPUTS_PER_MONITOR 4
 
@@ -46,12 +48,6 @@ struct _MetaLogicalMonitor
 
 typedef struct _MetaLogicalMonitorId MetaLogicalMonitorId;
 
-#define META_TYPE_LOGICAL_MONITOR (meta_logical_monitor_get_type ())
-META_EXPORT_TEST
-G_DECLARE_FINAL_TYPE (MetaLogicalMonitor, meta_logical_monitor,
-                      META, LOGICAL_MONITOR,
-                      GObject)
-
 typedef void (* MetaLogicalMonitorCrtcFunc) (MetaLogicalMonitor *logical_monitor,
                                              MetaMonitor        *monitor,
                                              MetaOutput         *output,
@@ -64,7 +60,7 @@ MetaLogicalMonitor * meta_logical_monitor_new (MetaMonitorManager       *monitor
 
 MetaLogicalMonitor * meta_logical_monitor_new_derived (MetaMonitorManager *monitor_manager,
                                                        MetaMonitor        *monitor,
-                                                       MtkRectangle       *layout,
+                                                       MtkRectangle        layout,
                                                        float               scale,
                                                        int                 monitor_number);
 
@@ -84,9 +80,6 @@ MtkMonitorTransform meta_logical_monitor_get_transform (MetaLogicalMonitor *logi
 META_EXPORT_TEST
 MtkRectangle meta_logical_monitor_get_layout (MetaLogicalMonitor *logical_monitor);
 
-META_EXPORT_TEST
-GList * meta_logical_monitor_get_monitors (MetaLogicalMonitor *logical_monitor);
-
 gboolean meta_logical_monitor_has_neighbor (MetaLogicalMonitor   *logical_monitor,
                                             MetaLogicalMonitor   *neighbor,
                                             MetaDisplayDirection  neighbor_dir);
@@ -105,3 +98,15 @@ gboolean meta_logical_monitor_id_equal (const MetaLogicalMonitorId *id,
 const MetaLogicalMonitorId * meta_logical_monitor_get_id (MetaLogicalMonitor *logical_monitor);
 
 MetaLogicalMonitorId * meta_logical_monitor_dup_id (MetaLogicalMonitor *logical_monitor);
+
+MetaMonitorManager * meta_logical_monitor_get_monitor_manager (MetaLogicalMonitor *logical_monitor);
+
+gboolean meta_logical_monitor_update (MetaLogicalMonitor       *logical_monitor,
+                                      MetaLogicalMonitorConfig *logical_monitor_config,
+                                      int                       number);
+
+gboolean meta_logical_monitor_update_derived (MetaLogicalMonitor *logical_monitor,
+                                              int                 number,
+                                              float               global_scale);
+
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (MetaLogicalMonitorId, meta_logical_monitor_id_free)
