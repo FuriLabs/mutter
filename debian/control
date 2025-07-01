@@ -262,8 +262,7 @@ Depends: gir1.2-mutter-16 (= ${binary:Version}),
          libxrandr-dev,
          libxtst-dev,
          ${gir:Depends},
-         ${misc:Depends},
-         ${shlibs:Depends},
+         ${misc:Depends}
 Provides: ${gir:Provides}
 Description: Development files for the Mutter window manager
  Mutter is a Wayland display server and X11 window manager and
