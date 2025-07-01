@@ -9,9 +9,11 @@ libmutter-test-16.so libmutter-test-16 #MINVER#
  meta_backend_test_get_type@Base 41.0
  meta_backend_test_remove_test_device@Base 47~beta
  meta_backend_test_set_is_lid_closed@Base 41.0
+ meta_backlight_test_get_type@Base 49~alpha.1
  meta_check_monitor_configuration@Base 42~beta
  meta_check_monitor_scales@Base 42~beta
  meta_context_test_get_type@Base 41.0
+ meta_context_test_get_udev_testbed@Base 49~alpha.1
  meta_context_test_run_tests@Base 41.0
  meta_context_test_set_background_color@Base 47.4
  meta_context_test_wait_for_x11_display@Base 41.0
@@ -19,6 +21,7 @@ libmutter-test-16.so libmutter-test-16 #MINVER#
  meta_create_test_context@Base 41.0
  meta_create_test_keyboard@Base 48.1
  meta_create_test_monitor@Base 42~beta
+ meta_create_test_mouse@Base 49~alpha.1
  meta_crtc_test_disable_gamma_lut@Base 43~rc
  meta_crtc_test_get_type@Base 41.0
  meta_find_window_from_title@Base 42~beta
@@ -48,6 +51,7 @@ libmutter-test-16.so libmutter-test-16 #MINVER#
  meta_test_client_dov@Base 42~beta
  meta_test_client_error_quark@Base 41.0
  meta_test_client_find_window@Base 41.0
+ meta_test_client_get_client_type@Base 49~alpha.1
  meta_test_client_get_id@Base 41.0
  meta_test_client_new@Base 41.0
  meta_test_client_quit@Base 41.0
