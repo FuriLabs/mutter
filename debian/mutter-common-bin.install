@@ -1,4 +1,6 @@
 usr/bin/gdctl
+usr/libexec/mutter-backlight-helper
 usr/libexec/mutter-x11-frames
 usr/share/bash-completion/completions/gdctl
 usr/share/man/man1/gdctl.1
+usr/share/polkit-1/actions/org.gnome.mutter.backlight-helper.policy
