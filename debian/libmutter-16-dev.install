@@ -9,3 +9,8 @@ usr/lib/${DEB_HOST_MULTIARCH}/pkgconfig/libmutter-${env:MUTTER_API_VERSION}.pc
 usr/lib/${DEB_HOST_MULTIARCH}/pkgconfig/mutter-clutter-${env:MUTTER_API_VERSION}.pc
 usr/lib/${DEB_HOST_MULTIARCH}/pkgconfig/mutter-cogl-${env:MUTTER_API_VERSION}.pc
 usr/lib/${DEB_HOST_MULTIARCH}/pkgconfig/mutter-mtk-${env:MUTTER_API_VERSION}.pc
+usr/libexec/mutter-devkit
+usr/share/applications/org.gnome.Mutter.Mdk.desktop
+usr/share/icons/hicolor/scalable/apps/org.gnome.Mutter.Mdk.Devel.svg
+usr/share/icons/hicolor/scalable/apps/org.gnome.Mutter.Mdk.svg
+usr/share/icons/hicolor/symbolic/apps/org.gnome.Mutter.Mdk-symbolic.svg
