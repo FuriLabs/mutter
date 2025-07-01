@@ -23,6 +23,8 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_backend_get_default_seat@Base 43.0
  meta_backend_get_dnd@Base 43.0
  meta_backend_get_gpus@Base 43.0
+ meta_backend_get_keymap@Base 49~alpha.1
+ meta_backend_get_keymap_layout_group@Base 49~alpha.1
  meta_backend_get_launcher@Base 48~alpha
  meta_backend_get_monitor_manager@Base 43.0
  meta_backend_get_orientation_manager@Base 43.0
@@ -37,14 +39,16 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_backend_is_headless@Base 43.0
  meta_backend_is_hw_cursors_inhibited@Base 47.4
  meta_backend_is_rendering_hardware_accelerated@Base 43.0
- meta_backend_lock_layout_group@Base 43.0
  meta_backend_native_get_device_pool@Base 43.0
  meta_backend_native_get_kms@Base 43.0
  meta_backend_native_get_type@Base 43.0
  meta_backend_pause@Base 48.1
  meta_backend_renderdoc_capture@Base 48~alpha
  meta_backend_resume@Base 48.1
- meta_backend_set_keymap@Base 43.0
+ meta_backend_set_keymap_async@Base 49~alpha.1
+ meta_backend_set_keymap_finish@Base 49~alpha.1
+ meta_backend_set_keymap_layout_group_async@Base 49~alpha.1
+ meta_backend_set_keymap_layout_group_finish@Base 49~alpha.1
  meta_backend_unfreeze_keyboard@Base 46~rc
  meta_backend_ungrab_keyboard@Base 46~rc
  meta_backend_uninhibit_hw_cursor@Base 48.0
@@ -74,6 +78,12 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_background_set_color@Base 43.0
  meta_background_set_file@Base 43.0
  meta_background_set_gradient@Base 43.0
+ meta_backlight_get_brightness@Base 49~alpha.1
+ meta_backlight_get_brightness_info@Base 49~alpha.1
+ meta_backlight_get_type@Base 49~alpha.1
+ meta_backlight_has_pending@Base 49~alpha.1
+ meta_backlight_set_brightness@Base 49~alpha.1
+ meta_backlight_sysfs_new@Base 49~alpha.1
  meta_barrier_destroy@Base 43.0
  meta_barrier_direction_get_type@Base 43.0
  meta_barrier_event_get_type@Base 43.0
@@ -118,6 +128,7 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_compositor_disable_unredirect@Base 48~alpha
  meta_compositor_enable_unredirect@Base 48~alpha
  meta_compositor_get_backend@Base 48~alpha
+ meta_compositor_get_current_window_drag@Base 49~alpha.1
  meta_compositor_get_feedback_group@Base 44~beta
  meta_compositor_get_laters@Base 43.0
  meta_compositor_get_plugin_manager@Base 47.4
@@ -127,6 +138,7 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_compositor_get_window_actors@Base 48~alpha
  meta_compositor_get_window_group@Base 48~alpha
  meta_compositor_type_get_type@Base 43.0
+ meta_connector_type_get_name@Base 49~alpha.1
  meta_context_add_option_entries@Base 43.0
  meta_context_add_option_group@Base 43.0
  meta_context_configure@Base 43.0
@@ -140,7 +152,6 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_context_get_type@Base 43.0
  meta_context_get_wayland_compositor@Base 43.0
  meta_context_is_replacing@Base 43.0
- meta_context_is_x11_sync@Base 43.0
  meta_context_notify_ready@Base 43.0
  meta_context_raise_rlimit_nofile@Base 43.0
  meta_context_restore_rlimit_nofile@Base 43.0
@@ -185,7 +196,8 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_cursor_tracker_get_sprite@Base 43.0
  meta_cursor_tracker_get_type@Base 43.0
  meta_cursor_tracker_has_window_cursor@Base 47.4
- meta_cursor_tracker_set_pointer_visible@Base 43.0
+ meta_cursor_tracker_inhibit_cursor_visibility@Base 49~alpha.1
+ meta_cursor_tracker_uninhibit_cursor_visibility@Base 49~alpha.1
  meta_dbus_session_manager_get_num_sessions@Base 48~beta
  meta_dbus_session_manager_get_session@Base 48~beta
  meta_dbus_session_manager_get_type@Base 48~beta
@@ -312,6 +324,7 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_key_binding_is_reversed@Base 43.0
  meta_keybindings_set_custom_handler@Base 43.0
  meta_keyboard_a11y_flags_get_type@Base 43.0
+ meta_keymap_native_get_type@Base 49~alpha.1
  meta_kms_connector_get_current_state@Base 43.0
  meta_kms_connector_get_device@Base 43.0
  meta_kms_connector_get_preferred_mode@Base 43.0
@@ -388,11 +401,13 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_launch_context_get_type@Base 43.0
  meta_launch_context_set_timestamp@Base 43.0
  meta_launch_context_set_workspace@Base 43.0
+ meta_launcher_get_session_proxy@Base 49~alpha.1
  meta_log@Base 44~beta
  meta_logical_monitor_config_free@Base 43.0
  meta_logical_monitor_configs_have_monitor@Base 43.0
  meta_logical_monitor_get_layout@Base 43.0
  meta_logical_monitor_get_monitors@Base 43.0
+ meta_logical_monitor_get_number@Base 49~alpha.1
  meta_logical_monitor_get_scale@Base 47.4
  meta_logical_monitor_get_type@Base 47.4
  meta_logical_monitor_is_primary@Base 43.0
@@ -429,12 +444,11 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_monitor_config_store_reset@Base 43.0
  meta_monitor_config_store_set_custom@Base 43.0
  meta_monitor_crtc_to_logical_transform@Base 43.0
- meta_monitor_derive_current_mode@Base 43.0
  meta_monitor_get_backlight@Base 47~rc
- meta_monitor_get_backlight_info@Base 47~rc
  meta_monitor_get_connector@Base 43.0
  meta_monitor_get_connector_type@Base 43.0
  meta_monitor_get_current_mode@Base 43.0
+ meta_monitor_get_display_name@Base 49~alpha.1
  meta_monitor_get_edid_checksum_md5@Base 43.0
  meta_monitor_get_edid_info@Base 43.0
  meta_monitor_get_gamma_lut_size@Base 43.0
@@ -453,19 +467,20 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_monitor_get_type@Base 43.0
  meta_monitor_get_vendor@Base 43.0
  meta_monitor_is_active@Base 43.0
+ meta_monitor_is_builtin@Base 49~alpha.1
  meta_monitor_is_for_lease@Base 48~alpha
- meta_monitor_is_laptop_panel@Base 47~rc
  meta_monitor_is_primary@Base 44~beta
+ meta_monitor_is_virtual@Base 49~alpha.1
  meta_monitor_logical_to_crtc_transform@Base 43.0
  meta_monitor_manager_apply_monitors_config@Base 45.1
  meta_monitor_manager_can_switch_config@Base 43.0
  meta_monitor_manager_create_virtual_monitor@Base 43.0
  meta_monitor_manager_ensure_configured@Base 43.0
  meta_monitor_manager_get_backend@Base 43.0
+ meta_monitor_manager_get_builtin_monitor@Base 49~alpha.1
  meta_monitor_manager_get_config_manager@Base 43.0
  meta_monitor_manager_get_display_configuration_timeout@Base 43.0
  meta_monitor_manager_get_is_builtin_display_on@Base 43.0
- meta_monitor_manager_get_laptop_panel@Base 43.0
  meta_monitor_manager_get_logical_monitors@Base 43.0
  meta_monitor_manager_get_monitor_for_connector@Base 43.0
  meta_monitor_manager_get_monitors@Base 43.0
@@ -488,6 +503,7 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_monitor_mode_foreach_output@Base 43.0
  meta_monitor_mode_get_flags@Base 43.0
  meta_monitor_mode_get_id@Base 43.0
+ meta_monitor_mode_get_monitor@Base 49~alpha.1
  meta_monitor_mode_get_refresh_rate@Base 43.0
  meta_monitor_mode_get_refresh_rate_mode@Base 46~rc
  meta_monitor_mode_get_resolution@Base 43.0
@@ -501,6 +517,7 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_monitor_spec_free@Base 43.0
  meta_monitor_switch_config_type_get_type@Base 43.0
  meta_monitor_tiled_get_tile_group_id@Base 43.0
+ meta_monitor_update_current_mode@Base 49~alpha.1
  meta_monitors_config_get_switch_config@Base 43.0
  meta_monitors_config_key_equal@Base 43.0
  meta_monitors_config_key_free@Base 43.0
@@ -510,6 +527,10 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_monitors_config_set_parent_config@Base 43.0
  meta_monitors_config_set_switch_config@Base 43.0
  meta_motion_direction_get_type@Base 43.0
+ meta_multi_texture_add_pipeline_sampling@Base 49~alpha.1
+ meta_multi_texture_alpha_mode_get_type@Base 49~alpha.1
+ meta_multi_texture_chroma_loc_get_type@Base 49~alpha.1
+ meta_multi_texture_coefficients_get_type@Base 49~alpha.1
  meta_multi_texture_format_get_type@Base 45~beta.1
  meta_multi_texture_get_format@Base 45~beta.1
  meta_multi_texture_get_height@Base 45~beta.1
@@ -529,8 +550,8 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_orientation_manager_has_accelerometer@Base 43.0
  meta_orientation_to_transform@Base 47~rc
  meta_output_assign_crtc@Base 43.0
+ meta_output_create_backlight@Base 49~alpha.1
  meta_output_get_assigned_crtc@Base 43.0
- meta_output_get_backlight@Base 47~rc
  meta_output_get_gpu@Base 43.0
  meta_output_get_id@Base 43.0
  meta_output_get_info@Base 43.0
@@ -548,7 +569,6 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_output_is_underscanning@Base 43.0
  meta_output_native_get_type@Base 47~beta
  meta_output_peek_rgb_range@Base 46~beta
- meta_output_set_backlight@Base 47~rc
  meta_output_unassign_crtc@Base 43.0
  meta_pad_direction_get_type@Base 45~beta.1
  meta_pad_feature_type_get_type@Base 45~beta.1
@@ -645,6 +665,7 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_renderer_view_get_type@Base 44~beta
  meta_restart@Base 43.0
  meta_seat_impl_run_input_task@Base 44~beta
+ meta_seat_native_get_keyboard_map@Base 49~alpha.1
  meta_seat_native_get_type@Base 44~beta
  meta_selection_get_mimetypes@Base 43.0
  meta_selection_get_type@Base 43.0
@@ -680,12 +701,12 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_sound_player_get_type@Base 43.0
  meta_sound_player_play_from_file@Base 43.0
  meta_sound_player_play_from_theme@Base 43.0
+ meta_stack_get_top@Base 49~alpha.1
  meta_stack_layer_get_type@Base 43.0
  meta_stack_tracker_get_stack@Base 43.0
  meta_stage_get_type@Base 43.0
  meta_stage_remove_watch@Base 43.0
  meta_stage_watch_view@Base 43.0
- meta_stage_x11_get_type@Base 43.0
  meta_startup_notification_create_launcher@Base 43.0
  meta_startup_notification_get_sequences@Base 43.0
  meta_startup_notification_get_type@Base 43.0
@@ -754,7 +775,9 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_wayland_filter_manager_remove_global@Base 44~beta
  meta_wayland_get_public_xwayland_display_name@Base 43.0
  meta_wayland_get_wayland_display_name@Base 43.0
+ meta_wayland_keyboard_get_focus_surface@Base 49~alpha.1
  meta_wayland_override_display_name@Base 43.0
+ meta_wayland_pointer_get_focus_surface@Base 49~alpha.1
  meta_wayland_surface_get_actor@Base 43.0
  meta_wayland_surface_get_buffer_height@Base 44~rc
  meta_wayland_surface_get_buffer_width@Base 44~rc
@@ -802,6 +825,8 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_window_config_set_rect@Base 48~alpha
  meta_window_config_set_size@Base 48~alpha
  meta_window_delete@Base 43.0
+ meta_window_drag_end@Base 49~alpha.1
+ meta_window_drag_get_window@Base 49~alpha.1
  meta_window_find_monitor_from_frame_rect@Base 43.0
  meta_window_find_root_ancestor@Base 43.0
  meta_window_focus@Base 43.0
@@ -827,7 +852,6 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_window_get_id@Base 43.0
  meta_window_get_layer@Base 43.0
  meta_window_get_main_logical_monitor@Base 47~beta
- meta_window_get_maximized@Base 43.0
  meta_window_get_monitor@Base 43.0
  meta_window_get_mutter_hints@Base 43.0
  meta_window_get_pid@Base 43.0
@@ -835,8 +859,10 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_window_get_sandboxed_app_id@Base 43.0
  meta_window_get_stable_sequence@Base 43.0
  meta_window_get_startup_id@Base 43.0
+ meta_window_get_tag@Base 49~alpha.1
  meta_window_get_tile_match@Base 43.0
  meta_window_get_title@Base 43.0
+ meta_window_get_transient_children@Base 49~alpha.1
  meta_window_get_transient_for@Base 43.0
  meta_window_get_type@Base 43.0
  meta_window_get_user_time@Base 43.0
@@ -858,6 +884,7 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_window_is_attached_dialog@Base 43.0
  meta_window_is_fullscreen@Base 43.0
  meta_window_is_hidden@Base 43.0
+ meta_window_is_maximized@Base 49~alpha.1
  meta_window_is_monitor_sized@Base 43.0
  meta_window_is_on_all_workspaces@Base 43.0
  meta_window_is_on_primary_monitor@Base 43.0
@@ -884,6 +911,7 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_window_set_compositor_private@Base 43.0
  meta_window_set_demands_attention@Base 43.0
  meta_window_set_icon_geometry@Base 43.0
+ meta_window_set_title@Base 49~alpha.1
  meta_window_should_be_showing@Base 46.1
  meta_window_should_show@Base 46.1
  meta_window_showing_on_its_workspace@Base 43.0
@@ -903,6 +931,7 @@ libmutter-16.so.0 libmutter-16-0 #MINVER#
  meta_window_wayland_is_acked_fullscreen@Base 43.1
  meta_window_wayland_peek_configuration@Base 47~beta
  meta_window_x11_get_frame@Base 47~beta
+ meta_window_x11_get_frame_borders@Base 49~alpha.1
  meta_window_x11_get_group@Base 46~beta
  meta_window_x11_get_toplevel_xwindow@Base 44~beta
  meta_window_x11_get_type@Base 44~beta
@@ -1253,10 +1282,12 @@ libmutter-clutter-16.so.0 libmutter-16-0 #MINVER#
  clutter_animatable_set_final_state@Base 43.0
  clutter_animation_mode_get_type@Base 43.0
  clutter_backend_destroy@Base 43.0
+ clutter_backend_destroy_sprite@Base 49~alpha.1
  clutter_backend_get_cogl_context@Base 43.0
  clutter_backend_get_default_seat@Base 43.0
  clutter_backend_get_input_method@Base 43.0
  clutter_backend_get_resolution@Base 43.0
+ clutter_backend_get_sprite@Base 49~alpha.1
  clutter_backend_get_stage_window@Base 43.0
  clutter_backend_get_type@Base 43.0
  clutter_backend_set_fallback_resource_scale@Base 43.0
@@ -1447,6 +1478,7 @@ libmutter-clutter-16.so.0 libmutter-16-0 #MINVER#
  clutter_event_key_new@Base 45~beta.1
  clutter_event_motion_new@Base 45~beta.1
  clutter_event_pad_button_new@Base 45~beta.1
+ clutter_event_pad_dial_new@Base 49~alpha.1
  clutter_event_pad_ring_new@Base 45~beta.1
  clutter_event_pad_strip_new@Base 45~beta.1
  clutter_event_phase_get_type@Base 43.0
@@ -1483,8 +1515,12 @@ libmutter-clutter-16.so.0 libmutter-16-0 #MINVER#
  clutter_flow_layout_set_row_height@Base 43.0
  clutter_flow_layout_set_row_spacing@Base 43.0
  clutter_flow_layout_set_snap_to_grid@Base 43.0
+ clutter_focus_get_type@Base 49~alpha.1
  clutter_frame_clock_add_future_time@Base 48~alpha
  clutter_frame_clock_destroy@Base 43.0
+ clutter_frame_clock_dispatch@Base 49~alpha.1
+ clutter_frame_clock_driver_get_type@Base 49~alpha.1
+ clutter_frame_clock_get_priority@Base 49~alpha.1
  clutter_frame_clock_get_refresh_rate@Base 43.0
  clutter_frame_clock_get_type@Base 43.0
  clutter_frame_clock_inhibit@Base 43.0
@@ -1496,6 +1532,7 @@ libmutter-clutter-16.so.0 libmutter-16-0 #MINVER#
  clutter_frame_clock_schedule_update_now@Base 43.0
  clutter_frame_clock_set_deadline_evasion@Base 47~rc
  clutter_frame_clock_set_mode@Base 46~rc
+ clutter_frame_clock_set_passive@Base 49~alpha.1
  clutter_frame_clock_uninhibit@Base 43.0
  clutter_frame_get_count@Base 44~beta
  clutter_frame_get_frame_deadline@Base 46~beta
@@ -1581,6 +1618,7 @@ libmutter-clutter-16.so.0 libmutter-16-0 #MINVER#
  clutter_input_capabilities_get_type@Base 43.0
  clutter_input_content_hint_flags_get_type@Base 43.0
  clutter_input_content_purpose_get_type@Base 43.0
+ clutter_input_device_get_bus_type@Base 49~alpha.1
  clutter_input_device_get_capabilities@Base 43.0
  clutter_input_device_get_device_mode@Base 43.0
  clutter_input_device_get_device_name@Base 43.0
@@ -1591,6 +1629,7 @@ libmutter-clutter-16.so.0 libmutter-16-0 #MINVER#
  clutter_input_device_get_has_cursor@Base 43.0
  clutter_input_device_get_mode_switch_button_group@Base 43.0
  clutter_input_device_get_n_buttons@Base 43.0
+ clutter_input_device_get_n_dials@Base 49~alpha.1
  clutter_input_device_get_n_mode_groups@Base 43.0
  clutter_input_device_get_n_rings@Base 43.0
  clutter_input_device_get_n_strips@Base 43.0
@@ -1666,9 +1705,11 @@ libmutter-clutter-16.so.0 libmutter-16-0 #MINVER#
  clutter_keyframe_transition_set_modes@Base 43.0
  clutter_keyframe_transition_set_values@Base 43.0
  clutter_keymap_get_caps_lock_state@Base 43.0
+ clutter_keymap_get_layout_index@Base 49~alpha.1
+ clutter_keymap_get_modifier_state@Base 49~alpha.1
  clutter_keymap_get_num_lock_state@Base 43.0
  clutter_keymap_get_type@Base 43.0
- clutter_keymap_set_lock_modifier_state@Base 43.0
+ clutter_keymap_update_state@Base 49~alpha.1
  clutter_keysym_to_unicode@Base 43.0
  clutter_keyval_convert_case@Base 44~beta
  clutter_keyval_name@Base 44~beta
@@ -1869,6 +1910,9 @@ libmutter-clutter-16.so.0 libmutter-16-0 #MINVER#
  clutter_snap_constraint_set_offset@Base 43.0
  clutter_snap_constraint_set_source@Base 43.0
  clutter_snap_edge_get_type@Base 43.0
+ clutter_sprite_get_device@Base 49~alpha.1
+ clutter_sprite_get_sequence@Base 49~alpha.1
+ clutter_sprite_get_type@Base 49~alpha.1
  clutter_stage_capture_view_into@Base 43.0
  clutter_stage_clear_stage_views@Base 43.0
  clutter_stage_ensure_viewport@Base 43.0
@@ -1877,7 +1921,6 @@ libmutter-clutter-16.so.0 libmutter-16-0 #MINVER#
  clutter_stage_get_device_actor@Base 43.0
  clutter_stage_get_device_coords@Base 43.0
  clutter_stage_get_event_actor@Base 43.0
- clutter_stage_get_frame_counter@Base 43.0
  clutter_stage_get_grab_actor@Base 43.0
  clutter_stage_get_key_focus@Base 43.0
  clutter_stage_get_perspective@Base 43.0
@@ -1901,7 +1944,6 @@ libmutter-clutter-16.so.0 libmutter-16-0 #MINVER#
  clutter_stage_schedule_update@Base 43.0
  clutter_stage_set_active@Base 47~rc
  clutter_stage_set_key_focus@Base 43.0
- clutter_stage_update_device@Base 43.0
  clutter_stage_view_accumulate_redraw_clip@Base 43.0
  clutter_stage_view_add_redraw_clip@Base 43.0
  clutter_stage_view_after_paint@Base 43.0
@@ -1917,6 +1959,7 @@ libmutter-clutter-16.so.0 libmutter-16-0 #MINVER#
  clutter_stage_view_get_offscreen_transformation_matrix@Base 43.0
  clutter_stage_view_get_onscreen@Base 43.0
  clutter_stage_view_get_output_color_state@Base 47~beta
+ clutter_stage_view_get_priority@Base 49~alpha.1
  clutter_stage_view_get_refresh_rate@Base 43.0
  clutter_stage_view_get_scale@Base 43.0
  clutter_stage_view_get_transform@Base 47~rc
@@ -2153,9 +2196,7 @@ libmutter-cogl-16.so.0 libmutter-16-0 #MINVER#
  _cogl_winsys_egl_get_vtable@Base 43.0
  _cogl_winsys_egl_make_current@Base 43.0
  _cogl_winsys_egl_renderer_connect_common@Base 43.0
- _cogl_winsys_egl_xlib_get_vtable@Base 43.0
  _cogl_winsys_error_quark@Base 43.0
- _cogl_winsys_glx_get_vtable@Base 43.0
  cogl_atlas_add_reorganize_callback@Base 47~beta
  cogl_atlas_get_type@Base 46~beta
  cogl_atlas_new@Base 47~beta
@@ -2260,7 +2301,6 @@ libmutter-cogl-16.so.0 libmutter-16-0 #MINVER#
  cogl_float_to_half_slow@Base 46~beta
  cogl_frame_closure_get_type@Base 46~beta
  cogl_frame_info_get_frame_counter@Base 43.0
- cogl_frame_info_get_global_frame_counter@Base 43.0
  cogl_frame_info_get_is_symbolic@Base 43.0
  cogl_frame_info_get_presentation_time_us@Base 43.0
  cogl_frame_info_get_refresh_rate@Base 43.0
@@ -2375,7 +2415,6 @@ libmutter-cogl-16.so.0 libmutter-16-0 #MINVER#
  cogl_onscreen_get_frame_counter@Base 43.0
  cogl_onscreen_get_type@Base 43.0
  cogl_onscreen_get_window_handles@Base 48~alpha
- cogl_onscreen_glx_new@Base 43.0
  cogl_onscreen_peek_head_frame_info@Base 43.0
  cogl_onscreen_peek_tail_frame_info@Base 43.0
  cogl_onscreen_pop_head_frame_info@Base 43.0
@@ -2384,7 +2423,6 @@ libmutter-cogl-16.so.0 libmutter-16-0 #MINVER#
  cogl_onscreen_swap_buffers@Base 43.0
  cogl_onscreen_swap_buffers_with_damage@Base 43.0
  cogl_onscreen_swap_region@Base 43.0
- cogl_onscreen_xlib_new@Base 43.0
  cogl_param_color_get_type@Base 47~beta
  cogl_param_spec_color@Base 47~beta
  cogl_pipeline_add_layer_snippet@Base 43.0
@@ -2476,10 +2514,12 @@ libmutter-cogl-16.so.0 libmutter-16-0 #MINVER#
  cogl_renderer_create_dma_buf@Base 43.0
  cogl_renderer_error_get_type@Base 48~alpha
  cogl_renderer_error_quark@Base 43.0
+ cogl_renderer_get_custom_winsys_data@Base 49~alpha.1
  cogl_renderer_get_driver_id@Base 48~alpha
  cogl_renderer_get_implicit_drm_modifier@Base 48~alpha
  cogl_renderer_get_proc_address@Base 47~beta
  cogl_renderer_get_type@Base 46~beta
+ cogl_renderer_get_winsys@Base 49~alpha.1
  cogl_renderer_get_winsys_id@Base 43.0
  cogl_renderer_handle_event@Base 47~beta
  cogl_renderer_is_dma_buf_supported@Base 43.0
@@ -2488,6 +2528,7 @@ libmutter-cogl-16.so.0 libmutter-16-0 #MINVER#
  cogl_renderer_query_drm_modifiers@Base 48~alpha
  cogl_renderer_set_custom_winsys@Base 43.0
  cogl_renderer_set_driver@Base 48~rc
+ cogl_renderer_set_winsys@Base 49~alpha.1
  cogl_scanout_blit_to_framebuffer@Base 43.0
  cogl_scanout_buffer_get_type@Base 46~beta
  cogl_scanout_error_get_type@Base 48~alpha
@@ -2521,7 +2562,6 @@ libmutter-cogl-16.so.0 libmutter-16-0 #MINVER#
  cogl_start_tracing_with_fd@Base 45~beta.1
  cogl_start_tracing_with_path@Base 45~beta.1
  cogl_stop_tracing@Base 45~beta.1
- cogl_sub_texture_get_parent@Base 43.0
  cogl_sub_texture_get_type@Base 46~beta
  cogl_sub_texture_new@Base 43.0
  cogl_system_error_get_type@Base 48~alpha
@@ -2550,40 +2590,34 @@ libmutter-cogl-16.so.0 libmutter-16-0 #MINVER#
  cogl_texture_get_width@Base 43.0
  cogl_texture_is_get_data_supported@Base 43.0
  cogl_texture_is_sliced@Base 43.0
- cogl_texture_pixmap_x11_error_quark@Base 43.0
- cogl_texture_pixmap_x11_get_type@Base 46~beta
- cogl_texture_pixmap_x11_is_using_tfp_extension@Base 43.0
- cogl_texture_pixmap_x11_new@Base 43.0
- cogl_texture_pixmap_x11_new_left@Base 43.0
- cogl_texture_pixmap_x11_new_right@Base 43.0
- cogl_texture_pixmap_x11_update_area@Base 43.0
  cogl_texture_set_components@Base 43.0
  cogl_texture_set_data@Base 43.0
  cogl_texture_set_premultiplied@Base 43.0
  cogl_texture_set_region@Base 43.0
  cogl_texture_set_region_from_bitmap@Base 43.0
- (arch=amd64 arm64 armel armhf mips64el ppc64el riscv64 s390x)cogl_trace_context@Base 43.0
- (arch=amd64 arm64 armel armhf mips64el ppc64el riscv64 s390x)cogl_trace_define_counter_double@Base 47~rc
- (arch=amd64 arm64 armel armhf mips64el ppc64el riscv64 s390x)cogl_trace_define_counter_int@Base 47~rc
- (arch=amd64 arm64 armel armhf mips64el ppc64el riscv64 s390x)cogl_trace_describe@Base 43.0
- (arch=amd64 arm64 armel armhf mips64el ppc64el riscv64 s390x)cogl_trace_end@Base 43.0
- (arch=amd64 arm64 armel armhf mips64el ppc64el riscv64 s390x)cogl_trace_mark@Base 46~beta
- (arch=amd64 arm64 armel armhf mips64el ppc64el riscv64 s390x)cogl_trace_mutex@Base 43.0
- (arch=amd64 arm64 armel armhf mips64el ppc64el riscv64 s390x)cogl_trace_set_counter_double@Base 47~rc
- (arch=amd64 arm64 armel armhf mips64el ppc64el riscv64 s390x)cogl_trace_set_counter_int@Base 47~rc
- (arch=amd64 arm64 armel armhf mips64el ppc64el riscv64 s390x)cogl_trace_thread_data@Base 43.0
+ cogl_trace_context@Base 43.0
+ cogl_trace_define_counter_double@Base 47~rc
+ cogl_trace_define_counter_int@Base 47~rc
+ cogl_trace_describe@Base 43.0
+ cogl_trace_end@Base 43.0
+ cogl_trace_mark@Base 46~beta
+ cogl_trace_mutex@Base 43.0
+ cogl_trace_set_counter_double@Base 47~rc
+ cogl_trace_set_counter_int@Base 47~rc
+ cogl_trace_thread_data@Base 43.0
  cogl_uint16_div_64k_to_half@Base 46~beta
  cogl_value_get_color@Base 47~beta
  cogl_value_set_color@Base 47~beta
  cogl_vertices_mode_get_type@Base 48~alpha
  cogl_winding_get_type@Base 48~alpha
  cogl_winsys_feature_get_type@Base 48~alpha
- cogl_x11_onscreen_get_type@Base 43.0
- cogl_x11_onscreen_get_x11_window@Base 43.0
- cogl_xlib_renderer_set_foreign_display@Base 43.0
 libmutter-mtk-16.so.0 libmutter-16-0 #MINVER#
 * Build-Depends-Package: libmutter-16-dev
  mtk_compute_viewport_matrix@Base 47.4
+ mtk_dispose_bin_add@Base 49~alpha.1
+ mtk_dispose_bin_dispose@Base 49~alpha.1
+ mtk_dispose_bin_new@Base 49~alpha.1
+ mtk_extrapolate_next_interval_boundary@Base 49~alpha.1
  mtk_monitor_transform_from_string@Base 47.4
  mtk_monitor_transform_invert@Base 47~rc
  mtk_monitor_transform_to_string@Base 47.4
@@ -2604,6 +2638,7 @@ libmutter-mtk-16.so.0 libmutter-16-0 #MINVER#
  mtk_rectangle_horiz_overlap@Base 45~rc
  mtk_rectangle_intersect@Base 45~rc
  mtk_rectangle_is_adjacent_to@Base 46~beta
+ mtk_rectangle_is_empty@Base 49~alpha.1
  mtk_rectangle_new@Base 45~rc
  mtk_rectangle_new_empty@Base 46.1
  mtk_rectangle_overlap@Base 45~rc
