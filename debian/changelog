@@ -14,6 +14,10 @@ mutter (49~alpha.1-0ubuntu1) UNRELEASED; urgency=medium
     - tests-Do-not-run-screencast-tests.patch
     - Mark-several-additional-tests-as-flaky.patch
     - tests-Install-stacking-tests-into-a-subdirectory.patch
+  * Disable patch: window-Add-ability-to-override-the-edge-constraints.patch
+    because it doesn't apply anymore and its existence not fully explained.
+    It can't be Ubuntu-specific if in support of Tiling Assistant which is
+    not Ubuntu-specific. Needs to be proposed upstream if required at all.
   * Added new binary package 'mutter-dev-bin' for the missing 'mutter-devkit'
     binary. Four years late.
   * Bump the Mutter API/ABI to 17.

@@ -4,5 +4,5 @@ workarounds/tests-skip-monitor-width-size-check-as-it-may-lead-to-une.patch
 workarounds/tests-Skip-thread-priority-test.patch
 workarounds/Mark-several-additional-tests-as-flaky.patch
 workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
-ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
+#ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
 build-Bump-mutter-API-version.patch
