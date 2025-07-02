@@ -1,4 +1,4 @@
-mutter (49~alpha.1-0ubuntu1) UNRELEASED; urgency=medium
+mutter (49~alpha.1-0ubuntu1) questing; urgency=medium
 
   * New upstream release 49.alpha.1 (LP: #1968901, LP: #2100243, LP: #2102063)
   * Drop Xorg-specific patches:
@@ -22,7 +22,7 @@ mutter (49~alpha.1-0ubuntu1) UNRELEASED; urgency=medium
     binary. Four years late.
   * Bump the Mutter API/ABI to 17.
 
- -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Mon, 30 Jun 2025 17:28:48 +0800
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Wed, 02 Jul 2025 17:41:53 +0800
 
 mutter (48.1-1ubuntu4) questing; urgency=medium
 
