@@ -961,6 +961,7 @@ scanout_destroyed (gpointer  data,
 CoglScanout *
 meta_wayland_buffer_try_acquire_scanout (MetaWaylandBuffer     *buffer,
                                          CoglOnscreen          *onscreen,
+                                         ClutterStageView      *stage_view,
                                          const graphene_rect_t *src_rect,
                                          const MtkRectangle    *dst_rect)
 {
@@ -1002,6 +1003,7 @@ meta_wayland_buffer_try_acquire_scanout (MetaWaylandBuffer     *buffer,
       {
         scanout = meta_wayland_dma_buf_try_acquire_scanout (buffer,
                                                             onscreen,
+                                                            stage_view,
                                                             src_rect,
                                                             dst_rect);
         break;
@@ -1132,6 +1134,8 @@ meta_wayland_init_shm (MetaWaylandCompositor *compositor)
     WL_SHM_FORMAT_NV12,
     WL_SHM_FORMAT_P010,
     WL_SHM_FORMAT_YUV420,
+    WL_SHM_FORMAT_YUV422,
+    WL_SHM_FORMAT_YUV444,
   };
 
   wl_display_init_shm (compositor->wayland_display);

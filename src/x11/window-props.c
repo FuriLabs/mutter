@@ -44,6 +44,7 @@
 #include <string.h>
 
 #include "compositor/compositor-private.h"
+#include "core/meta-window-config-private.h"
 #include "core/meta-workspace-manager-private.h"
 #include "core/util-private.h"
 #include "meta/meta-x11-group.h"
@@ -420,6 +421,14 @@ reload_struts (MetaWindow    *window,
 }
 
 static void
+reload_toplevel_tag (MetaWindow    *window,
+                     MetaPropValue *value,
+                     gboolean       initial)
+{
+  meta_window_set_tag (window, value->v.str);
+}
+
+static void
 reload_wm_window_role (MetaWindow    *window,
                        MetaPropValue *value,
                        gboolean       initial)
@@ -786,6 +795,8 @@ reload_net_wm_state (MetaWindow    *window,
   MetaX11Display *x11_display = window->display->x11_display;
   MetaWindowX11 *window_x11 = META_WINDOW_X11 (window);
   MetaWindowX11Private *priv = meta_window_x11_get_private (window_x11);
+  gboolean maximize_horizontally = FALSE;
+  gboolean maximize_vertically = FALSE;
   int i;
 
   if (!initial)
@@ -796,8 +807,7 @@ reload_net_wm_state (MetaWindow    *window,
       return;
     }
 
-  window->maximized_horizontally = FALSE;
-  window->maximized_vertically = FALSE;
+  meta_window_config_set_maximized_directions (window->config, FALSE, FALSE);
   meta_window_config_set_is_fullscreen (window->config, FALSE);
   priv->wm_state_modal = FALSE;
   priv->wm_state_skip_taskbar = FALSE;
@@ -813,9 +823,9 @@ reload_net_wm_state (MetaWindow    *window,
   while (i < value->v.atom_list.n_atoms)
     {
       if (value->v.atom_list.atoms[i] == x11_display->atom__NET_WM_STATE_MAXIMIZED_HORZ)
-        window->maximize_horizontally_after_placement = TRUE;
+        maximize_horizontally = TRUE;
       else if (value->v.atom_list.atoms[i] == x11_display->atom__NET_WM_STATE_MAXIMIZED_VERT)
-        window->maximize_vertically_after_placement = TRUE;
+        maximize_vertically = TRUE;
       else if (value->v.atom_list.atoms[i] == x11_display->atom__NET_WM_STATE_HIDDEN)
         window->minimize_after_placement = TRUE;
       else if (value->v.atom_list.atoms[i] == x11_display->atom__NET_WM_STATE_MODAL)
@@ -840,6 +850,10 @@ reload_net_wm_state (MetaWindow    *window,
 
       ++i;
     }
+
+  meta_window_config_set_maximized_directions (window->config,
+                                               maximize_horizontally,
+                                               maximize_vertically);
 
   meta_topic (META_DEBUG_X11,
               "Reloaded _NET_WM_STATE for %s",
@@ -1616,6 +1630,49 @@ reload_window_opacity (MetaWindow    *window,
   meta_window_set_opacity (window, opacity);
 }
 
+static void
+reload_fullscreen_monitors (MetaWindow    *window,
+                            MetaPropValue *value,
+                            gboolean       initial)
+{
+  if (value->type != META_PROP_VALUE_INVALID)
+    {
+      if (value->v.cardinal_list.n_cardinals != 4)
+        {
+          meta_topic (META_DEBUG_X11,
+                      "_NET_WM_FULLSCREEN_MONITORS on %s has %d values instead of 4",
+                      window->desc, value->v.cardinal_list.n_cardinals);
+        }
+      else
+        {
+          MetaX11Display *x11_display = window->display->x11_display;
+          int top_xinerama_index, bottom_xinerama_index;
+          int left_xinerama_index, right_xinerama_index;
+          MetaLogicalMonitor *top, *bottom, *left, *right;
+
+          top_xinerama_index = (int)value->v.cardinal_list.cardinals[0];
+          bottom_xinerama_index = (int)value->v.cardinal_list.cardinals[1];
+          left_xinerama_index = (int)value->v.cardinal_list.cardinals[2];
+          right_xinerama_index = (int)value->v.cardinal_list.cardinals[3];
+
+          top =
+            meta_x11_display_xinerama_index_to_logical_monitor (x11_display,
+                                                                top_xinerama_index);
+          bottom =
+            meta_x11_display_xinerama_index_to_logical_monitor (x11_display,
+                                                                bottom_xinerama_index);
+          left =
+            meta_x11_display_xinerama_index_to_logical_monitor (x11_display,
+                                                                left_xinerama_index);
+          right =
+            meta_x11_display_xinerama_index_to_logical_monitor (x11_display,
+                                                                right_xinerama_index);
+
+          meta_window_update_fullscreen_monitors (window, top, bottom, left, right);
+        }
+    }
+}
+
 #define RELOAD_STRING(var_name, propname) \
   static void                                       \
   reload_ ## var_name (MetaWindow    *window,       \
@@ -1709,6 +1766,8 @@ meta_x11_display_init_window_prop_hooks (MetaX11Display *x11_display)
     { x11_display->atom__NET_WM_STRUT_PARTIAL, META_PROP_VALUE_INVALID, reload_struts, NONE },
     { x11_display->atom__NET_WM_BYPASS_COMPOSITOR, META_PROP_VALUE_CARDINAL,  reload_bypass_compositor, LOAD_INIT | INCLUDE_OR },
     { x11_display->atom__NET_WM_WINDOW_OPACITY, META_PROP_VALUE_CARDINAL, reload_window_opacity, LOAD_INIT | INCLUDE_OR },
+    { x11_display->atom__NET_WM_WINDOW_TAG,    META_PROP_VALUE_STRING, reload_toplevel_tag, LOAD_INIT },
+    { x11_display->atom__NET_WM_FULLSCREEN_MONITORS, META_PROP_VALUE_CARDINAL_LIST, reload_fullscreen_monitors, LOAD_INIT | INIT_ONLY },
     { 0 },
   };
   MetaWindowPropHooks *table;

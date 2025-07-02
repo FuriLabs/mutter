@@ -49,7 +49,7 @@
 #include <xcb/randr.h>
 
 #include "backends/meta-crtc.h"
-#include "backends/meta-logical-monitor.h"
+#include "backends/meta-logical-monitor-private.h"
 #include "backends/meta-monitor-config-manager.h"
 #include "backends/meta-output.h"
 #include "backends/x11/meta-backend-x11.h"
@@ -600,7 +600,7 @@ meta_monitor_manager_xrandr_ensure_initial_config (MetaMonitorManager *manager)
   meta_monitor_manager_read_current_state (manager);
 
   config = meta_monitor_config_manager_get_current (config_manager);
-  meta_monitor_manager_update_logical_state_derived (manager, config);
+  meta_monitor_manager_update_logical_state_derived (manager, config, NULL);
 }
 
 static gboolean

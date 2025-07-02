@@ -44,13 +44,14 @@
 #include "backends/meta-cursor-tracker-private.h"
 #include "backends/meta-idle-manager.h"
 #include "backends/meta-keymap-utils.h"
-#include "backends/meta-logical-monitor.h"
+#include "backends/meta-logical-monitor-private.h"
 #include "backends/meta-monitor-manager-private.h"
 #include "backends/meta-pointer-constraint.h"
 #include "backends/meta-settings-private.h"
 #include "backends/meta-stage-private.h"
 #include "backends/native/meta-clutter-backend-native.h"
 #include "backends/native/meta-device-pool-private.h"
+#include "backends/native/meta-drm-lease.h"
 #include "backends/native/meta-kms.h"
 #include "backends/native/meta-kms-device.h"
 #include "backends/native/meta-monitor-manager-native.h"
@@ -94,6 +95,8 @@ typedef struct _MetaBackendNativePrivate
 #ifdef HAVE_EGL_DEVICE
   MetaRenderDeviceEglStream *render_device_egl_stream;
 #endif
+
+  MetaDrmLeaseManager *drm_lease_manager;
 } MetaBackendNativePrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (MetaBackendNative,
@@ -218,6 +221,10 @@ meta_backend_native_init_post (MetaBackend  *backend,
                            backend,
                            G_CONNECT_DEFAULT);
 
+  priv->drm_lease_manager = g_object_new (META_TYPE_DRM_LEASE_MANAGER,
+                                          "backend", backend,
+                                          NULL);
+
   return TRUE;
 }
 
@@ -305,20 +312,45 @@ meta_backend_native_get_current_logical_monitor (MetaBackend *backend)
 }
 
 static void
-meta_backend_native_set_keymap (MetaBackend *backend,
-                                const char  *layouts,
-                                const char  *variants,
-                                const char  *options,
-                                const char  *model)
+set_keyboard_map_cb (GObject      *source_object,
+                     GAsyncResult *result,
+                     gpointer      user_data)
+{
+  MetaSeatNative *seat_native = META_SEAT_NATIVE (source_object);
+  g_autoptr (GTask) task = G_TASK (user_data);
+  g_autoptr (GError) error = NULL;
+  MetaBackend *backend;
+
+  if (!meta_seat_native_set_keyboard_map_finish (seat_native, result, &error))
+    {
+      g_task_return_error (task, error);
+      return;
+    }
+
+  backend = META_BACKEND (g_task_get_source_object (task));
+  meta_backend_notify_keymap_changed (backend);
+
+  g_task_return_boolean (task, TRUE);
+}
+
+static void
+meta_backend_native_set_keymap_async (MetaBackend *backend,
+                                      const char  *layouts,
+                                      const char  *variants,
+                                      const char  *options,
+                                      const char  *model,
+                                      GTask       *task)
 {
   ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
   ClutterSeat *seat;
 
   seat = clutter_backend_get_default_seat (clutter_backend);
-  meta_seat_native_set_keyboard_map (META_SEAT_NATIVE (seat),
-                                     layouts, variants, options, model);
+  meta_seat_native_set_keyboard_map_async (META_SEAT_NATIVE (seat),
+                                           layouts, variants, options, model,
+                                           g_task_get_cancellable (task),
+                                           set_keyboard_map_cb,
+                                           task);
 
-  meta_backend_notify_keymap_changed (backend);
 }
 
 static struct xkb_keymap *
@@ -342,20 +374,51 @@ meta_backend_native_get_keymap_layout_group (MetaBackend *backend)
 }
 
 static void
-meta_backend_native_lock_layout_group (MetaBackend *backend,
-                                       guint        idx)
+set_layout_index_cb (GObject      *source_object,
+                     GAsyncResult *result,
+                     gpointer      user_data)
+{
+  MetaSeatNative *seat_native = META_SEAT_NATIVE (source_object);
+  g_autoptr (GTask) task = G_TASK (user_data);
+  MetaBackend *backend = META_BACKEND (g_task_get_source_object (task));
+  g_autoptr (GError) error = NULL;
+  gboolean index_changed;
+
+  index_changed =
+    meta_seat_native_set_keyboard_layout_index_finish (seat_native,
+                                                       result,
+                                                       &error);
+  if (error)
+    {
+      g_task_return_error (task, error);
+      return;
+    }
+
+  if (index_changed)
+    {
+      xkb_layout_index_t idx;
+
+      idx = meta_seat_native_get_keyboard_layout_index (seat_native);
+      meta_backend_notify_keymap_layout_group_changed (backend, idx);
+    }
+
+  g_task_return_boolean (task, TRUE);
+}
+
+static void
+meta_backend_native_set_keymap_layout_group_async (MetaBackend        *backend,
+                                                   xkb_layout_index_t  idx,
+                                                   GTask              *task)
 {
   ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
-  xkb_layout_index_t old_idx;
   ClutterSeat *seat;
 
-  old_idx = meta_backend_native_get_keymap_layout_group (backend);
-  if (old_idx == idx)
-    return;
-
   seat = clutter_backend_get_default_seat (clutter_backend);
-  meta_seat_native_set_keyboard_layout_index (META_SEAT_NATIVE (seat), idx);
-  meta_backend_notify_keymap_layout_group_changed (backend, idx);
+  meta_seat_native_set_keyboard_layout_index_async (META_SEAT_NATIVE (seat),
+                                                    idx,
+                                                    g_task_get_cancellable (task),
+                                                    set_layout_index_cb,
+                                                    task);
 }
 
 static gboolean
@@ -746,26 +809,47 @@ meta_backend_native_create_launcher (MetaBackend   *backend,
   MetaBackendNativePrivate *priv =
     meta_backend_native_get_instance_private (native);
   g_autoptr (MetaLauncher) launcher = NULL;
+  g_autoptr (GError) local_error = NULL;
 
-  *launcher_out = NULL;
+  /* We don't want to track the session the headless mode got started on. */
+  if (priv->mode == META_BACKEND_NATIVE_MODE_HEADLESS)
+    {
+      *launcher_out = NULL;
+      return TRUE;
+    }
 
-  if (priv->mode == META_BACKEND_NATIVE_MODE_HEADLESS ||
-      priv->mode == META_BACKEND_NATIVE_MODE_TEST_HEADLESS)
-    return TRUE;
+  launcher = meta_launcher_new (backend, &local_error);
 
-  launcher = meta_launcher_new (backend, error);
+  /* Headless test is allowed to run with and without a launcher */
+  if (!launcher && priv->mode == META_BACKEND_NATIVE_MODE_TEST_HEADLESS)
+    {
+      *launcher_out = NULL;
+      return TRUE;
+    }
+
+  /* For everything else we do need a launcher */
   if (!launcher)
-    return FALSE;
+    {
+      g_propagate_error (error, g_steal_pointer (&local_error));
+      return FALSE;
+    }
 
-  if (!meta_launcher_get_seat_id (launcher))
+  /* If we have no seat, go headless without launcher */
+  if (!meta_launcher_get_seat_id (launcher) &&
+      priv->mode == META_BACKEND_NATIVE_MODE_DEFAULT)
     {
       priv->mode = META_BACKEND_NATIVE_MODE_HEADLESS;
       g_message ("No seat assigned, running headlessly");
+
+      *launcher_out = NULL;
+      return TRUE;
     }
-  else if (!meta_launcher_is_session_controller (launcher))
+
+  /* When there is a head (default or vkms modes), we need to take control */
+  if (!meta_launcher_take_control (launcher, error) &&
+      priv->mode != META_BACKEND_NATIVE_MODE_TEST_HEADLESS)
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Native backend mode needs to be session controller");
+      g_prefix_error_literal (error, "Failed to take control of the session: ");
       return FALSE;
     }
 
@@ -854,10 +938,10 @@ meta_backend_native_class_init (MetaBackendNativeClass *klass)
 
   backend_class->get_current_logical_monitor = meta_backend_native_get_current_logical_monitor;
 
-  backend_class->set_keymap = meta_backend_native_set_keymap;
+  backend_class->set_keymap_async = meta_backend_native_set_keymap_async;
   backend_class->get_keymap = meta_backend_native_get_keymap;
   backend_class->get_keymap_layout_group = meta_backend_native_get_keymap_layout_group;
-  backend_class->lock_layout_group = meta_backend_native_lock_layout_group;
+  backend_class->set_keymap_layout_group_async = meta_backend_native_set_keymap_layout_group_async;
   backend_class->update_stage = meta_backend_native_update_stage;
 
   backend_class->set_pointer_constraint = meta_backend_native_set_pointer_constraint;
@@ -900,6 +984,15 @@ meta_backend_native_get_kms (MetaBackendNative *backend_native)
   return priv->kms;
 }
 
+MetaDrmLeaseManager *
+meta_backend_native_get_drm_lease_manager (MetaBackendNative *backend_native)
+{
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (backend_native);
+
+  return priv->drm_lease_manager;
+}
+
 gboolean
 meta_backend_native_activate_vt (MetaBackendNative  *backend_native,
                                  int                 vt,
@@ -928,6 +1021,9 @@ meta_backend_native_activate_vt (MetaBackendNative  *backend_native,
 static void
 meta_backend_native_pause (MetaBackend *backend)
 {
+  MetaBackendNative *backend_native = META_BACKEND_NATIVE (backend);
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (backend_native);
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (backend);
   MetaMonitorManagerNative *monitor_manager_native =
@@ -938,6 +1034,7 @@ meta_backend_native_pause (MetaBackend *backend)
 
   meta_seat_native_release_devices (seat);
   meta_monitor_manager_native_pause (monitor_manager_native);
+  meta_drm_lease_manager_pause (priv->drm_lease_manager);
 
   META_BACKEND_CLASS (meta_backend_native_parent_class)->pause (backend);
 }
@@ -962,6 +1059,7 @@ meta_backend_native_resume (MetaBackend *backend)
 
   meta_monitor_manager_native_resume (monitor_manager_native);
   meta_kms_resume (priv->kms);
+  meta_drm_lease_manager_resume (priv->drm_lease_manager);
 
   meta_seat_native_reclaim_devices (seat);
 

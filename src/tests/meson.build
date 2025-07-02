@@ -58,6 +58,7 @@ tests_deps = [
   locally_compiled_schemas_dep,
   wayland_client_dep,
   gvdb_dep,
+  umockdev_dep,
 ]
 
 if libevdev_dep.found()
@@ -206,8 +207,6 @@ test_runner = executable('mutter-test-runner',
   install_rpath: pkglibdir,
 )
 
-meta_dbus_runner = find_program('meta-dbus-runner.py')
-
 tests_datadir = pkgdatadir / 'tests'
 
 install_data(
@@ -244,6 +243,16 @@ wayland_test_utils = [
   test_driver_protocol_code,
 ]
 
+monitor_tests_common = [
+  'monitor-tests-common.c',
+  'monitor-tests-common.h',
+]
+
+monitor_tests_common_deps = [
+  test_client,
+  x11_frames,
+]
+
 # The test_cases is a list of dictionaries each one representing one test case.
 # It consists of the following keys:
 #  - 'name' - the test name
@@ -254,6 +263,23 @@ test_cases = []
 privileged_test_cases = []
 
 subdir('mtk')
+
+backlight_client = executable('monitor-backlight-client',
+  sources: [
+    'monitor-backlight-client.c',
+    built_dbus_sources['meta-dbus-display-config'],
+  ],
+  include_directories: tests_includes,
+  c_args: [
+    tests_c_args,
+    '-DG_LOG_DOMAIN="mutter-monitor-backlight-test-client"',
+  ],
+  dependencies: [
+    gio_dep,
+  ],
+  install: have_installed_tests,
+  install_dir: mutter_installed_tests_libexecdir,
+)
 
 test_cases += [
   {
@@ -276,13 +302,124 @@ test_cases += [
     ],
   },
   {
-    'name': 'monitor-unit',
+    'name': 'monitor-color-tests',
     'suite': 'backend',
-    'timeout': 300,
-    'sources': [ 'monitor-unit-tests.c', ],
+    'sources': [
+      'monitor-color-tests.c',
+      monitor_tests_common,
+    ],
     'depends': [
-      test_client,
-      x11_frames,
+      monitor_tests_common_deps,
+    ],
+  },
+  {
+    'name': 'monitor-storage-tests',
+    'suite': 'backend',
+    'sources': [
+      'monitor-storage-tests.c',
+      monitor_tests_common,
+    ],
+    'depends': [
+      monitor_tests_common_deps,
+    ],
+  },
+  {
+    'name': 'monitor-config-tests',
+    'suite': 'backend',
+    'sources': [
+      'monitor-config-tests.c',
+      monitor_tests_common,
+    ],
+    'depends': [
+      monitor_tests_common_deps,
+    ],
+  },
+  {
+    'name': 'monitor-orientation-tests',
+    'suite': 'backend',
+    'sources': [
+      'monitor-orientation-tests.c',
+      monitor_tests_common,
+    ],
+    'depends': [
+      monitor_tests_common_deps,
+    ],
+  },
+  {
+    'name': 'monitor-custom-config-tests',
+    'suite': 'backend',
+    'sources': [
+      'monitor-custom-config-tests.c',
+      monitor_tests_common,
+    ],
+    'depends': [
+      monitor_tests_common_deps,
+    ],
+  },
+  {
+    'name': 'monitor-scale-tests',
+    'suite': 'backend',
+    'sources': [
+      'monitor-scale-tests.c',
+      monitor_tests_common,
+    ],
+    'depends': [
+      monitor_tests_common_deps,
+    ],
+  },
+  {
+    'name': 'monitor-config-migration-tests',
+    'suite': 'backend',
+    'sources': [
+      'monitor-config-migration-tests.c',
+      monitor_tests_common,
+    ],
+    'depends': [
+      monitor_tests_common_deps,
+    ],
+  },
+  {
+    'name': 'monitor-config-policy-tests',
+    'suite': 'backend',
+    'sources': [
+      'monitor-config-policy-tests.c',
+      monitor_tests_common,
+    ],
+    'depends': [
+      monitor_tests_common_deps,
+    ],
+  },
+  {
+    'name': 'monitor-dbus-tests',
+    'suite': 'backend',
+    'sources': [
+      'monitor-dbus-tests.c',
+      monitor_tests_common,
+    ],
+    'depends': [
+      monitor_tests_common_deps,
+    ],
+  },
+  {
+    'name': 'monitor-abstraction-tests',
+    'suite': 'backend',
+    'sources': [
+      'monitor-abstraction-tests.c',
+      monitor_tests_common,
+    ],
+    'depends': [
+      monitor_tests_common_deps,
+    ],
+  },
+  {
+    'name': 'tiling-hotplug-test',
+    'suite': 'backend',
+    'sources': [
+      'tiling-hotplug-test.c',
+      monitor_tests_common,
+    ],
+    'depends': [
+      monitor_tests_common_deps,
     ],
   },
   {
@@ -293,12 +430,15 @@ test_cases += [
   {
     'name': 'monitor-backlight',
     'suite': 'backend',
-    'sources': [ 'monitor-backlight-tests.c', ]
+    'sources': [ 'monitor-backlight-tests.c', ],
+    'depends': [
+      backlight_client,
+    ],
   },
   {
-    'name': 'monitor-dbus',
+    'name': 'monitor-gdctl',
     'suite': 'backend',
-    'sources': [ 'monitor-dbus-tests.c', ],
+    'sources': [ 'monitor-gdctl-tests.c', ],
     'args': gdctl.full_path(),
     'installed_args': bindir / 'gdctl',
   },
@@ -383,21 +523,24 @@ screen_cast_client = executable('mutter-screen-cast-client',
   install_rpath: pkglibdir,
 )
 
-backlight_client = executable('monitor-backlight-client',
+screen_cast_client_driver = executable('mutter-screen-cast-client-driver',
   sources: [
-    'monitor-backlight-client.c',
-    built_dbus_sources['meta-dbus-display-config'],
+    'screen-cast-client-driver.c',
+    built_dbus_sources['meta-dbus-remote-desktop'],
+    built_dbus_sources['meta-dbus-screen-cast'],
   ],
   include_directories: tests_includes,
   c_args: [
     tests_c_args,
-    '-DG_LOG_DOMAIN="mutter-monitor-backlight-test-client"',
+    '-DG_LOG_DOMAIN="mutter-screen-cast-client-driver"',
   ],
   dependencies: [
     gio_dep,
+    libpipewire_dep,
   ],
   install: have_installed_tests,
   install_dir: mutter_installed_tests_libexecdir,
+  install_rpath: pkglibdir,
 )
 
 input_capture_client = executable('mutter-input-capture-test-client',
@@ -485,6 +628,7 @@ test_cases += [
     ],
     'depends': [
       screen_cast_client,
+      screen_cast_client_driver,
     ],
   },
   {
@@ -567,6 +711,13 @@ test_cases += [
       remote_desktop_tests_client,
     ],
   },
+  {
+    'name': 'keyboard-map-tests',
+    'suite': 'backends/native',
+    'sources': [
+      'keyboard-map-tests.c',
+    ],
+  }
 ]
 
 # KMS tests
@@ -813,11 +964,13 @@ wayland_test_cases = [
       test_client_executables.get('subsurface-remap-toplevel'),
       test_client_executables.get('subsurface-reparenting'),
       test_client_executables.get('xdg-activation'),
+      test_client_executables.get('xdg-activation-before-mapped'),
       test_client_executables.get('xdg-apply-limits'),
       test_client_executables.get('xdg-foreign'),
       test_client_executables.get('xdg-toplevel-bounds'),
       test_client_executables.get('xdg-session-management'),
       test_client_executables.get('xdg-session-management-replace'),
+      test_client_executables.get('xdg-toplevel-tag'),
       test_client_executables.get('ycbcr'),
     ],
   },
@@ -849,7 +1002,6 @@ if have_xwayland
         'wayland-x11-interop-tests.c',
         wayland_test_client_utils,
         wayland_test_utils,
-        wayland_protocol_files['mutter-x11-interop']['protocol-code'],
         built_dbus_sources['meta-dbus-service-channel'],
       ],
       'depends': [
@@ -966,6 +1118,17 @@ stacking_tests = [
   'sticky-transients',
   'strut-monitor-changes',
   'window-placement',
+  'x11-move',
+  'map-maximized',
+  'map-fullscreen',
+  'tiling',
+  'interactive-move',
+  'map-on-monitor',
+  'popups',
+  'popup-positions',
+  'popup-focus',
+  'auto-maximize',
+  'auto-maximize-dialog',
 ]
 
 foreach stacking_test: stacking_tests
@@ -1008,8 +1171,13 @@ if have_kvm_tests or have_tty_tests
     )
 
     foreach variant: variants
+      variables = variant[1] + {
+        'META_DBUS_RUNNER_DISABLE_UMOCKDEV': '1',
+        'META_DBUS_RUNNER_DISABLE_LOGIND_PASSTHROUGH': '1',
+      }
+
       variant_env = environment()
-      foreach name, value: variant[1]
+      foreach name, value: variables
         variant_env.set(name, value)
       endforeach
       privileged_tests += [
@@ -1017,7 +1185,7 @@ if have_kvm_tests or have_tty_tests
           'name': '@0@@1@'.format(test_case['name'], variant[0]),
           'suite': test_case['suite'],
           'executable': test_executable,
-          'variables': variant[1],
+          'variables': variables,
           'env': variant_env,
         },
       ]

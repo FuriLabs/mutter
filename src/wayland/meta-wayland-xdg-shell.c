@@ -23,7 +23,7 @@
 
 #include "wayland/meta-wayland-xdg-shell.h"
 
-#include "backends/meta-logical-monitor.h"
+#include "backends/meta-logical-monitor-private.h"
 #include "compositor/compositor-private.h"
 #include "core/boxes-private.h"
 #include "core/window-private.h"
@@ -470,8 +470,7 @@ xdg_toplevel_set_maximized (struct wl_client   *client,
   if (!window)
     return;
 
-  meta_window_force_placement (window, META_PLACE_FLAG_FORCE_MOVE);
-  meta_window_maximize (window, META_MAXIMIZE_BOTH);
+  meta_window_maximize (window);
 }
 
 static void
@@ -485,7 +484,7 @@ xdg_toplevel_unset_maximized (struct wl_client   *client,
   if (!window)
     return;
 
-  meta_window_unmaximize (window, META_MAXIMIZE_BOTH);
+  meta_window_unmaximize (window);
 }
 
 static void
@@ -746,6 +745,19 @@ fill_states (MetaWaylandXdgToplevel         *xdg_toplevel,
       if (window->edge_constraints.left != META_EDGE_CONSTRAINT_NONE)
         add_state_value (states, XDG_TOPLEVEL_STATE_TILED_LEFT);
     }
+
+  if (wl_resource_get_version (xdg_toplevel->resource) >=
+      XDG_TOPLEVEL_STATE_CONSTRAINED_LEFT_SINCE_VERSION)
+    {
+      if (window->edge_constraints.top == META_EDGE_CONSTRAINT_MONITOR)
+        add_state_value (states, XDG_TOPLEVEL_STATE_CONSTRAINED_TOP);
+      if (window->edge_constraints.right == META_EDGE_CONSTRAINT_MONITOR)
+        add_state_value (states, XDG_TOPLEVEL_STATE_CONSTRAINED_RIGHT);
+      if (window->edge_constraints.bottom == META_EDGE_CONSTRAINT_MONITOR)
+        add_state_value (states, XDG_TOPLEVEL_STATE_CONSTRAINED_BOTTOM);
+      if (window->edge_constraints.left == META_EDGE_CONSTRAINT_MONITOR)
+        add_state_value (states, XDG_TOPLEVEL_STATE_CONSTRAINED_LEFT);
+    }
 }
 
 static void
@@ -874,7 +886,8 @@ meta_wayland_xdg_toplevel_apply_state (MetaWaylandSurfaceRole  *surface_role,
 
   if (!xdg_surface_priv->configure_sent)
     {
-      MetaWaylandWindowConfiguration *configuration;
+      MetaWindowWayland *wl_window = META_WINDOW_WAYLAND (window);
+      g_autoptr (MetaWaylandWindowConfiguration) configuration = NULL;
       g_autoptr (MetaWindowConfig) window_config = NULL;
       int bounds_width, bounds_height, geometry_scale;
       MtkRectangle rect;
@@ -915,9 +928,7 @@ meta_wayland_xdg_toplevel_apply_state (MetaWaylandSurfaceRole  *surface_role,
                                                              configuration,
                                                              window_config);
 
-      meta_wayland_xdg_toplevel_send_configure (xdg_toplevel, configuration);
-      meta_wayland_window_configuration_free (configuration);
-      return;
+      meta_window_wayland_configure (wl_window, configuration);
     }
 }
 
@@ -1236,7 +1247,9 @@ finish_popup_setup (MetaWaylandXdgPopup *xdg_popup)
 
   if (!meta_wayland_surface_get_window (parent_surface))
     {
-      xdg_popup_send_popup_done (xdg_popup->resource);
+      if (xdg_popup->resource)
+        xdg_popup_send_popup_done (xdg_popup->resource);
+
       return;
     }
 
@@ -1263,10 +1276,14 @@ finish_popup_setup (MetaWaylandXdgPopup *xdg_popup)
     }
 
   xdg_popup->parent_surface = parent_surface;
-  xdg_popup->parent_surface_unmapped_handler_id =
-    g_signal_connect (parent_surface, "unmapped",
-                      G_CALLBACK (on_parent_surface_unmapped),
-                      xdg_popup);
+
+  if (xdg_popup->resource)
+    {
+      xdg_popup->parent_surface_unmapped_handler_id =
+        g_signal_connect (parent_surface, "unmapped",
+                          G_CALLBACK (on_parent_surface_unmapped),
+                          xdg_popup);
+    }
 
   meta_wayland_shell_surface_destroy_window (shell_surface);
   meta_wayland_actor_surface_reset_actor (META_WAYLAND_ACTOR_SURFACE (surface_role));
@@ -1298,7 +1315,9 @@ finish_popup_setup (MetaWaylandXdgPopup *xdg_popup)
 
       if (popup == NULL)
         {
-          xdg_popup_send_popup_done (xdg_popup->resource);
+          if (xdg_popup->resource)
+            xdg_popup_send_popup_done (xdg_popup->resource);
+
           meta_wayland_shell_surface_destroy_window (shell_surface);
           return;
         }
@@ -1335,7 +1354,9 @@ dismiss_invalid_popup (MetaWaylandXdgPopup *xdg_popup)
 
           top_xdg_popup = meta_wayland_xdg_popup_from_surface (top_popup_surface);
 
-          xdg_popup_send_popup_done (top_xdg_popup->resource);
+          if (top_xdg_popup->resource)
+            xdg_popup_send_popup_done (top_xdg_popup->resource);
+
           meta_wayland_popup_dismiss (top_xdg_popup->popup);
 
           if (top_xdg_popup == xdg_popup)
@@ -1344,7 +1365,9 @@ dismiss_invalid_popup (MetaWaylandXdgPopup *xdg_popup)
     }
   else
     {
-      xdg_popup_send_popup_done (xdg_popup->resource);
+      if (xdg_popup->resource)
+        xdg_popup_send_popup_done (xdg_popup->resource);
+
       meta_wayland_xdg_popup_unmap (xdg_popup);
     }
 }

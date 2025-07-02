@@ -11868,6 +11868,7 @@ clutter_actor_event (ClutterActor       *actor,
     case CLUTTER_PAD_BUTTON_RELEASE:
     case CLUTTER_PAD_STRIP:
     case CLUTTER_PAD_RING:
+    case CLUTTER_PAD_DIAL:
       signal_num = -1;
       detail = quark_pad;
       break;
@@ -12433,8 +12434,6 @@ clutter_actor_set_final_state (ClutterAnimatable *animatable,
             g_object_set_property (G_OBJECT (animatable), pspec->name, final);
         }
     }
-
-  clutter_actor_update_devices (actor);
 }
 
 static ClutterActor *
@@ -15074,7 +15073,7 @@ clutter_actor_pick_frame_clock (ClutterActor  *self,
 {
   ClutterActorPrivate *priv = self->priv;
   GList *stage_views_list;
-  float max_refresh_rate = 0.0;
+  int max_priority = -1;
   ClutterStageView *best_view = NULL;
   GList *l;
 
@@ -15091,13 +15090,13 @@ clutter_actor_pick_frame_clock (ClutterActor  *self,
   for (l = stage_views_list; l; l = l->next)
     {
       ClutterStageView *view = CLUTTER_STAGE_VIEW (l->data);
-      float refresh_rate;
+      int priority;
 
-      refresh_rate = clutter_stage_view_get_refresh_rate (view);
-      if (refresh_rate > max_refresh_rate)
+      priority = clutter_stage_view_get_priority (view);
+      if (priority > max_priority)
         {
           best_view = view;
-          max_refresh_rate = refresh_rate;
+          max_priority = priority;
         }
     }
 
@@ -16482,6 +16481,7 @@ on_transition_stopped (ClutterTransition *transition,
                     _clutter_actor_get_debug_name (actor));
 
       g_signal_emit (actor, actor_signals[TRANSITIONS_COMPLETED], 0);
+      clutter_actor_update_devices (actor);
     }
 }
 

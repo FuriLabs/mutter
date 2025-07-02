@@ -125,6 +125,11 @@ set_up_frame (MetaWindowTracker *window_tracker,
   unsigned long data[1];
   GtkWidget *frame;
 
+  frame = g_hash_table_lookup (window_tracker->client_windows,
+                               GUINT_TO_POINTER (xwindow));
+  if (frame)
+    return;
+
   /* Double check it's not a request for a frame of our own. */
   if (g_hash_table_contains (window_tracker->frames,
                              GUINT_TO_POINTER (xwindow)))
@@ -263,6 +268,24 @@ on_xevent (GdkDisplay *display,
       xwindow = xevent->xcreatewindow.window;
       listen_set_up_frame (window_tracker, xwindow);
     }
+  else if (xevent->type == ConfigureNotify &&
+           xevent->xconfigure.event == xroot &&
+           xevent->xconfigure.window != xroot &&
+           !g_hash_table_contains (window_tracker->frames,
+                                   GUINT_TO_POINTER (xevent->xconfigure.window)))
+    {
+      gboolean has_frame;
+
+      xwindow = xevent->xconfigure.window;
+      has_frame =
+        g_hash_table_contains (window_tracker->client_windows,
+                               GUINT_TO_POINTER (xwindow));
+
+      if (!xevent->xconfigure.override_redirect && !has_frame)
+        listen_set_up_frame (window_tracker, xwindow);
+      else if (xevent->xconfigure.override_redirect && has_frame)
+        remove_frame (window_tracker, xwindow);
+    }
   else if (xevent->type == DestroyNotify)
     {
       xwindow = xevent->xdestroywindow.window;
@@ -272,13 +295,9 @@ on_xevent (GdkDisplay *display,
            xevent->xproperty.atom ==
            gdk_x11_get_xatom_by_name_for_display (display, "_MUTTER_NEEDS_FRAME"))
     {
-      if (xevent->xproperty.state == PropertyNewValue &&
-          !g_hash_table_contains (window_tracker->client_windows,
-                                  GUINT_TO_POINTER (xwindow)))
+      if (xevent->xproperty.state == PropertyNewValue)
         set_up_frame (window_tracker, xwindow);
-      else if (xevent->xproperty.state == PropertyDelete &&
-               g_hash_table_contains (window_tracker->client_windows,
-                                      GUINT_TO_POINTER (xwindow)))
+      else if (xevent->xproperty.state == PropertyDelete)
         remove_frame (window_tracker, xwindow);
     }
   else if (xevent->type == PropertyNotify)

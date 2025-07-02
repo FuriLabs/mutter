@@ -24,7 +24,7 @@
 #include "backends/meta-cursor.h"
 #include "backends/meta-cursor-renderer.h"
 #include "backends/meta-cursor-tracker-private.h"
-#include "backends/meta-logical-monitor.h"
+#include "backends/meta-logical-monitor-private.h"
 #include "clutter/clutter.h"
 #include "cogl/cogl.h"
 #include "meta/prefs.h"
@@ -500,12 +500,11 @@ load_cursor_from_theme (MetaCursorSprite *sprite)
                            xcursor_images);
     }
 
-  sprite_xcursor->current_frame = 0;
-
   if (sprite_xcursor->xcursor_images == xcursor_images)
     return FALSE;
 
   sprite_xcursor->xcursor_images = xcursor_images;
+  sprite_xcursor->current_frame = 0;
   load_from_current_xcursor_image (sprite_xcursor);
   return TRUE;
 }

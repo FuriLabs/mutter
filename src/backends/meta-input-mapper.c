@@ -23,7 +23,7 @@
 #include "backends/meta-input-device-private.h"
 #include "backends/meta-input-mapper-private.h"
 #include "backends/meta-monitor-manager-private.h"
-#include "backends/meta-logical-monitor.h"
+#include "backends/meta-logical-monitor-private.h"
 #include "backends/meta-backend-private.h"
 
 #include "meta-dbus-input-mapping.h"
@@ -134,7 +134,8 @@ G_DEFINE_TYPE_WITH_CODE (MetaInputMapper, meta_input_mapper,
 static GSettings *
 get_device_settings (ClutterInputDevice *device)
 {
-  const char *group, *schema, *vendor, *product;
+  const char *group, *schema;
+  guint vendor, product;
   ClutterInputDeviceType type;
   GSettings *settings;
   char *path;
@@ -162,7 +163,7 @@ get_device_settings (ClutterInputDevice *device)
 
   vendor = clutter_input_device_get_vendor_id (device);
   product = clutter_input_device_get_product_id (device);
-  path = g_strdup_printf ("/org/gnome/desktop/peripherals/%s/%s:%s/",
+  path = g_strdup_printf ("/org/gnome/desktop/peripherals/%s/%.4x:%.4x/",
                           group, vendor, product);
 
   settings = g_settings_new_with_path (schema, path);
@@ -388,7 +389,7 @@ static gboolean
 match_builtin (MetaInputMapper *mapper,
                MetaMonitor     *monitor)
 {
-  return monitor == meta_monitor_manager_get_laptop_panel (mapper->monitor_manager);
+  return monitor == meta_monitor_manager_get_builtin_monitor (mapper->monitor_manager);
 }
 
 static gboolean
@@ -532,7 +533,7 @@ guess_candidates (MetaInputMapper     *mapper,
           DeviceMatch match = { 0 };
 
           match.monitor =
-            meta_monitor_manager_get_laptop_panel (mapper->monitor_manager);
+            meta_monitor_manager_get_builtin_monitor (mapper->monitor_manager);
 
           if (match.monitor != NULL)
             g_array_append_val (info->matches, match);
@@ -705,7 +706,7 @@ input_mapper_power_save_mode_changed_cb (MetaMonitorManager        *monitor_mana
     meta_monitor_manager_get_power_save_mode (mapper->monitor_manager);
   on = power_save_mode == META_POWER_SAVE_ON;
 
-  builtin = meta_monitor_manager_get_laptop_panel (monitor_manager);
+  builtin = meta_monitor_manager_get_builtin_monitor (monitor_manager);
   if (!builtin)
     return;
 

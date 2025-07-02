@@ -40,32 +40,6 @@
 
 typedef const CoglWinsysVtable *(*CoglCustomWinsysVtableGetter) (CoglRenderer *renderer);
 
-struct _CoglRenderer
-{
-  GObject parent_instance;
-
-  CoglDisplay *display;
-
-  gboolean connected;
-  CoglDriverId driver_override;
-  CoglDriver *driver;
-  CoglTextureDriver *texture_driver;
-  const CoglWinsysVtable *winsys_vtable;
-  void *custom_winsys_user_data;
-  CoglCustomWinsysVtableGetter custom_winsys_vtable_getter;
-
-  CoglList idle_closures;
-
-  CoglDriverId driver_id;
-  unsigned long private_features
-    [COGL_FLAGS_N_LONGS_FOR_SIZE (COGL_N_PRIVATE_FEATURES)];
-  GModule *libgl_module;
-
-  /* List of callback functions that will be given every native event */
-  GSList *event_filters;
-  void *winsys;
-};
-
 typedef CoglFilterReturn (* CoglNativeFilterFunc) (void *native_event,
                                                    void *data);
 
@@ -78,3 +52,23 @@ void
 _cogl_renderer_remove_native_filter (CoglRenderer *renderer,
                                      CoglNativeFilterFunc func,
                                      void *data);
+
+CoglDriver * cogl_renderer_get_driver (CoglRenderer *renderer);
+
+const CoglWinsysVtable * cogl_renderer_get_winsys_vtable (CoglRenderer *renderer);
+
+void cogl_renderer_set_custom_winsys_data (CoglRenderer *renderer,
+                                           void         *winsys_data);
+
+CoglClosure * cogl_renderer_add_idle_closure (CoglRenderer  *renderer,
+                                              void (*closure)(void *),
+                                              gpointer       data);
+
+CoglList * cogl_renderer_get_idle_closures (CoglRenderer *renderer);
+
+GModule * cogl_renderer_get_gl_module (CoglRenderer *renderer);
+
+void cogl_renderer_set_display (CoglRenderer *renderer,
+                                CoglDisplay   *display);
+
+CoglDisplay * cogl_renderer_get_display (CoglRenderer *renderer);

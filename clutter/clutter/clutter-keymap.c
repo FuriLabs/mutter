@@ -38,6 +38,12 @@ typedef struct _ClutterKeymapPrivate
 {
   gboolean caps_lock_state;
   gboolean num_lock_state;
+
+  xkb_mod_mask_t depressed_mods;
+  xkb_mod_mask_t latched_mods;
+  xkb_mod_mask_t locked_mods;
+
+  xkb_layout_index_t locked_layout_group;
 } ClutterKeymapPrivate;
 
 G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (ClutterKeymap, clutter_keymap,
@@ -154,15 +160,28 @@ clutter_keymap_get_direction (ClutterKeymap *keymap)
 }
 
 void
-clutter_keymap_set_lock_modifier_state (ClutterKeymap *keymap,
-                                        gboolean       caps_lock_state,
-                                        gboolean       num_lock_state)
+clutter_keymap_update_state (ClutterKeymap      *keymap,
+                             gboolean            caps_lock_state,
+                             gboolean            num_lock_state,
+                             xkb_layout_index_t  locked_layout_group,
+                             xkb_mod_mask_t      depressed_mods,
+                             xkb_mod_mask_t      latched_mods,
+                             xkb_mod_mask_t      locked_mods)
 {
   ClutterKeymapPrivate *priv = clutter_keymap_get_instance_private (keymap);
 
   if (priv->caps_lock_state == caps_lock_state &&
-      priv->num_lock_state == num_lock_state)
+      priv->num_lock_state == num_lock_state &&
+      priv->locked_layout_group == locked_layout_group &&
+      priv->depressed_mods == depressed_mods &&
+      priv->latched_mods == latched_mods &&
+      priv->locked_mods == locked_mods)
     return;
+
+  priv->locked_layout_group = locked_layout_group;
+  priv->depressed_mods = depressed_mods;
+  priv->latched_mods = latched_mods;
+  priv->locked_mods = locked_mods;
 
   if (priv->caps_lock_state != caps_lock_state)
     {
@@ -183,4 +202,25 @@ clutter_keymap_set_lock_modifier_state (ClutterKeymap *keymap,
            priv->caps_lock_state ? "set" : "unset");
 
   g_signal_emit (keymap, signals[STATE_CHANGED], 0);
+}
+
+void
+clutter_keymap_get_modifier_state (ClutterKeymap  *keymap,
+                                   xkb_mod_mask_t *depressed_mods,
+                                   xkb_mod_mask_t *latched_mods,
+                                   xkb_mod_mask_t *locked_mods)
+{
+  ClutterKeymapPrivate *priv = clutter_keymap_get_instance_private (keymap);
+
+  *depressed_mods = priv->depressed_mods;
+  *latched_mods = priv->latched_mods;
+  *locked_mods = priv->locked_mods;
+}
+
+xkb_layout_index_t
+clutter_keymap_get_layout_index (ClutterKeymap *keymap)
+{
+  ClutterKeymapPrivate *priv = clutter_keymap_get_instance_private (keymap);
+
+  return priv->locked_layout_group;
 }

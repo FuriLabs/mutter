@@ -33,7 +33,7 @@
 #include <X11/extensions/Xcomposite.h>
 #include <xcb/res.h>
 
-#include "backends/meta-logical-monitor.h"
+#include "backends/meta-logical-monitor-private.h"
 #include "backends/x11/meta-backend-x11.h"
 #include "compositor/compositor-private.h"
 #include "compositor/meta-window-actor-private.h"
@@ -56,8 +56,6 @@
 #include "x11/meta-x11-display-private.h"
 #include "x11/meta-x11-frame.h"
 #include "x11/meta-x11-group-private.h"
-#include "x11/meta-x11-keybindings-private.h"
-#include "x11/session.h"
 #include "x11/window-props.h"
 #include "x11/xprops.h"
 
@@ -495,138 +493,6 @@ adjust_for_gravity (MetaWindow   *window,
 }
 
 static void
-meta_window_apply_session_info (MetaWindow *window,
-                                const MetaWindowSessionInfo *info)
-{
-  if (info->stack_position_set)
-    {
-      meta_topic (META_DEBUG_SM,
-                  "Restoring stack position %d for window %s",
-                  info->stack_position, window->desc);
-
-      /* FIXME well, I'm not sure how to do this. */
-    }
-
-  if (info->minimized_set)
-    {
-      meta_topic (META_DEBUG_SM,
-                  "Restoring minimized state %d for window %s",
-                  info->minimized, window->desc);
-
-      if (info->minimized)
-        meta_window_minimize (window);
-    }
-
-  if (info->maximized_set)
-    {
-      meta_topic (META_DEBUG_SM,
-                  "Restoring maximized state %d for window %s",
-                  info->maximized, window->desc);
-
-      if (window->has_maximize_func && info->maximized)
-        {
-          meta_window_maximize (window, META_MAXIMIZE_BOTH);
-
-          if (info->saved_rect_set)
-            {
-              meta_topic (META_DEBUG_SM,
-                          "Restoring saved rect %d,%d %dx%d for window %s",
-                          info->saved_rect.x,
-                          info->saved_rect.y,
-                          info->saved_rect.width,
-                          info->saved_rect.height,
-                          window->desc);
-
-              window->saved_rect.x = info->saved_rect.x;
-              window->saved_rect.y = info->saved_rect.y;
-              window->saved_rect.width = info->saved_rect.width;
-              window->saved_rect.height = info->saved_rect.height;
-            }
-	}
-    }
-
-  if (info->on_all_workspaces_set)
-    {
-      window->on_all_workspaces_requested = info->on_all_workspaces;
-      meta_window_on_all_workspaces_changed (window);
-      meta_topic (META_DEBUG_SM,
-                  "Restoring sticky state %d for window %s",
-                  window->on_all_workspaces_requested, window->desc);
-    }
-
-  if (info->workspace_indices)
-    {
-      GSList *tmp;
-      GSList *spaces;
-
-      spaces = NULL;
-
-      tmp = info->workspace_indices;
-      while (tmp != NULL)
-        {
-          MetaWorkspaceManager *workspace_manager = window->display->workspace_manager;
-          MetaWorkspace *space;
-
-          space =
-            meta_workspace_manager_get_workspace_by_index (workspace_manager,
-                                                           GPOINTER_TO_INT (tmp->data));
-
-          if (space)
-            spaces = g_slist_prepend (spaces, space);
-
-          tmp = tmp->next;
-        }
-
-      if (spaces)
-        {
-          /* XXX: What should we do if there's more than one workspace
-           * listed? We only support one workspace for each window.
-           *
-           * For now, just choose the first one.
-           */
-          MetaWorkspace *workspace = spaces->data;
-
-          meta_window_change_workspace (window, workspace);
-          window->initial_workspace_set = TRUE;
-
-          meta_topic (META_DEBUG_SM,
-                      "Restoring saved window %s to workspace %d",
-                      window->desc,
-                      meta_workspace_index (workspace));
-
-          g_slist_free (spaces);
-        }
-    }
-
-  if (info->geometry_set)
-    {
-      MtkRectangle rect;
-      MetaMoveResizeFlags flags;
-      MetaGravity gravity;
-
-      window->placed = TRUE; /* don't do placement algorithms later */
-
-      rect.x = info->rect.x;
-      rect.y = info->rect.y;
-
-      rect.width = window->size_hints.base_width + info->rect.width * window->size_hints.width_inc;
-      rect.height = window->size_hints.base_height + info->rect.height * window->size_hints.height_inc;
-
-      /* Force old gravity, ignoring anything now set */
-      window->size_hints.win_gravity = info->gravity;
-      gravity = window->size_hints.win_gravity;
-
-      flags = (META_MOVE_RESIZE_MOVE_ACTION |
-               META_MOVE_RESIZE_RESIZE_ACTION |
-               META_MOVE_RESIZE_CONSTRAIN);
-
-      adjust_for_gravity (window, FALSE, gravity, &rect);
-      meta_window_client_rect_to_frame_rect (window, &rect, &rect);
-      meta_window_move_resize (window, flags, rect);
-    }
-}
-
-static void
 meta_window_x11_manage (MetaWindow *window)
 {
   MetaDisplay *display = window->display;
@@ -661,19 +527,6 @@ meta_window_x11_initialize_state (MetaWindow *window)
   MetaWindowX11 *window_x11 = META_WINDOW_X11 (window);
   MetaWindowX11Private *priv = meta_window_x11_get_instance_private (window_x11);
 
-  /* Now try applying saved stuff from the session */
-  {
-    const MetaWindowSessionInfo *info;
-
-    info = meta_window_lookup_saved_state (window);
-
-    if (info)
-      {
-        meta_window_apply_session_info (window, info);
-        meta_window_release_saved_state (info);
-      }
-  }
-
   /* For override-redirect windows, save the client rect
    * directly. window->config->rect was assigned from the XWindowAttributes
    * in the main meta_window_shared_new.
@@ -689,6 +542,7 @@ meta_window_x11_initialize_state (MetaWindow *window)
       MtkRectangle rect;
       MetaMoveResizeFlags flags;
       MetaGravity gravity = window->size_hints.win_gravity;
+      MetaPlaceFlag place_flags = META_PLACE_FLAG_NONE;
 
       rect.x = window->size_hints.x;
       rect.y = window->size_hints.y;
@@ -700,9 +554,13 @@ meta_window_x11_initialize_state (MetaWindow *window)
                META_MOVE_RESIZE_RESIZE_ACTION |
                META_MOVE_RESIZE_CONSTRAIN);
 
+      if (!(window->size_hints.flags & META_SIZE_HINTS_USER_POSITION))
+        flags |= META_MOVE_RESIZE_RECT_INVALID;
+
       adjust_for_gravity (window, TRUE, gravity, &rect);
       meta_window_client_rect_to_frame_rect (window, &rect, &rect);
-      meta_window_move_resize (window, flags, rect);
+
+      meta_window_move_resize_internal (window, flags, place_flags, rect);
     }
 
   meta_window_x11_update_shape_region (window);
@@ -792,12 +650,6 @@ meta_window_x11_unmanage (MetaWindow *window)
 
   if (META_X11_DISPLAY_HAS_SHAPE (x11_display))
     XShapeSelectInput (x11_display->xdisplay, priv->xwindow, NoEventMask);
-
-  meta_window_ungrab_keys (window);
-  meta_x11_keybindings_ungrab_window_buttons (&window->display->key_binding_manager,
-                                              window);
-  meta_x11_keybindings_ungrab_focus_window_button (&window->display->key_binding_manager,
-                                                   window);
 
   mtk_x11_error_trap_pop (x11_display->xdisplay);
 
@@ -1639,6 +1491,7 @@ meta_window_x11_move_resize_internal (MetaWindow                *window,
     *result |= META_MOVE_RESIZE_RESULT_RESIZED;
   if (flags & META_MOVE_RESIZE_STATE_CHANGED)
     *result |= META_MOVE_RESIZE_RESULT_STATE_CHANGED;
+  *result |= META_MOVE_RESIZE_RESULT_UPDATE_UNCONSTRAINED;
 
   update_gtk_edge_constraints (window);
 }
@@ -1846,7 +1699,8 @@ static void
 meta_window_x11_update_main_monitor (MetaWindow                   *window,
                                      MetaWindowUpdateMonitorFlags  flags)
 {
-  window->monitor = meta_window_find_monitor_from_frame_rect (window);
+  g_set_object (&window->monitor,
+                meta_window_find_monitor_from_frame_rect (window));
 }
 
 static void
@@ -2376,12 +2230,12 @@ meta_window_x11_set_net_wm_state (MetaWindow *window)
       data[i] = x11_display->atom__NET_WM_STATE_SKIP_TASKBAR;
       ++i;
     }
-  if (window->maximized_horizontally)
+  if (meta_window_config_is_maximized_horizontally (window->config))
     {
       data[i] = x11_display->atom__NET_WM_STATE_MAXIMIZED_HORZ;
       ++i;
     }
-  if (window->maximized_vertically)
+  if (meta_window_config_is_maximized_vertically (window->config))
     {
       data[i] = x11_display->atom__NET_WM_STATE_MAXIMIZED_VERT;
       ++i;
@@ -3468,9 +3322,10 @@ meta_window_x11_client_message (MetaWindow *window,
           gboolean max;
           MetaMaximizeFlags directions = 0;
 
-          max = (action == _NET_WM_STATE_ADD ||
-                 (action == _NET_WM_STATE_TOGGLE &&
-                  !window->maximized_horizontally));
+          max =
+            (action == _NET_WM_STATE_ADD ||
+             (action == _NET_WM_STATE_TOGGLE &&
+              !meta_window_config_is_maximized_horizontally (window->config)));
 
           if (first == x11_display->atom__NET_WM_STATE_MAXIMIZED_HORZ ||
               second == x11_display->atom__NET_WM_STATE_MAXIMIZED_HORZ)
@@ -3484,13 +3339,13 @@ meta_window_x11_client_message (MetaWindow *window,
             {
               if (meta_prefs_get_raise_on_click ())
                 meta_window_raise (window);
-              meta_window_maximize (window, directions);
+              meta_window_set_maximize_flags (window, directions);
             }
           else
             {
               if (meta_prefs_get_raise_on_click ())
                 meta_window_raise (window);
-              meta_window_unmaximize (window, directions);
+              meta_window_set_unmaximize_flags (window, directions);
             }
         }
 
@@ -4228,13 +4083,6 @@ meta_window_x11_new (MetaDisplay       *display,
        * been iconic its whole life, we have no way of knowing.
        */
       window->placed = TRUE;
-    }
-
-  meta_window_grab_keys (window);
-  if (window->type != META_WINDOW_DOCK && !window->override_redirect)
-    {
-      meta_x11_keybindings_grab_window_buttons (&window->display->key_binding_manager, window);
-      meta_x11_keybindings_grab_focus_window_button (&window->display->key_binding_manager, window);
     }
 
   mtk_x11_error_trap_pop (x11_display->xdisplay); /* pop the XSync()-reducing trap */

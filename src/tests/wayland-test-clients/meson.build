@@ -22,6 +22,9 @@ wayland_test_clients = [
     'name': 'color-management',
   },
   {
+    'name': 'color-representation',
+  },
+  {
     'name': 'cursor-shape',
   },
   {
@@ -104,6 +107,12 @@ wayland_test_clients = [
   },
   {
     'name': 'xdg-toplevel-suspended',
+    'extra_deps': [
+      libmutter_mtk_dep,
+    ],
+  },
+  {
+    'name': 'xdg-toplevel-tag',
   },
   {
     'name': 'ycbcr',
@@ -120,6 +129,9 @@ wayland_test_clients = [
     'extra_deps': [
       wayland_cursor_dep,
     ],
+  },
+  {
+    'name': 'xdg-activation-before-mapped',
   },
 ]
 

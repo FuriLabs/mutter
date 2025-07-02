@@ -181,7 +181,8 @@ meta_wayland_keyboard_take_keymap (MetaWaylandKeyboard *keyboard,
 
   g_clear_pointer (&xkb_info->keymap_rofile, meta_anonymous_file_free);
   xkb_info->keymap_rofile =
-    meta_anonymous_file_new (keymap_size, (const uint8_t *) keymap_string);
+    meta_anonymous_file_new ("wayland-keymap",
+                             keymap_size, (const uint8_t *) keymap_string);
 
   free (keymap_string);
 
@@ -807,10 +808,16 @@ meta_wayland_keyboard_set_focus (MetaWaylandKeyboard *keyboard,
                           &keyboard->focus_resource_list);
         }
 
+      if (!surface ||
+          wl_resource_get_client (keyboard->focus_surface->resource) !=
+          wl_resource_get_client (surface->resource))
+        {
+          g_hash_table_remove_all (keyboard->key_down_serials);
+          keyboard->last_key_up_serial = 0;
+        }
+
       wl_list_remove (&keyboard->focus_surface_listener.link);
       keyboard->focus_surface = NULL;
-      g_hash_table_remove_all (keyboard->key_down_serials);
-      keyboard->last_key_up_serial = 0;
     }
 
   if (surface != NULL)
@@ -944,4 +951,10 @@ meta_wayland_keyboard_class_init (MetaWaylandKeyboardClass *klass)
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
   object_class->finalize = meta_wayland_keyboard_finalize;
+}
+
+MetaWaylandSurface *
+meta_wayland_keyboard_get_focus_surface (MetaWaylandKeyboard *keyboard)
+{
+  return keyboard->focus_surface;
 }

@@ -37,7 +37,7 @@
  *     and its possible pointer constraint (using #MetaPointerConstraint)
  * - Setting the cursor sprite (using #MetaCursorRenderer)
  * - Interacting with logind (using the appropriate D-Bus interface)
- * - Querying UPower (over D-Bus) to know when the lid is closed
+ * - Querying logind (over D-Bus) to know when the lid is closed
  * - Setup Remote Desktop / Screencasting (#MetaRemoteDesktop)
  * - Setup the #MetaEgl object
  *
@@ -63,7 +63,7 @@
 #include "backends/meta-input-capture.h"
 #include "backends/meta-input-mapper-private.h"
 #include "backends/meta-input-settings-private.h"
-#include "backends/meta-logical-monitor.h"
+#include "backends/meta-logical-monitor-private.h"
 #include "backends/meta-monitor-manager-dummy.h"
 #include "backends/meta-remote-access-controller-private.h"
 #include "backends/meta-renderdoc.h"
@@ -123,8 +123,6 @@ enum
   LID_IS_CLOSED_CHANGED,
   GPU_ADDED,
   PREPARE_SHUTDOWN,
-  PAUSE,
-  RESUME,
 
   N_SIGNALS
 };
@@ -199,8 +197,8 @@ struct _MetaBackendPrivate
   MetaPointerConstraint *client_pointer_constraint;
   MetaDnd *dnd;
 
-  guint upower_watch_id;
-  GDBusProxy *upower_proxy;
+  guint logind_watch_id;
+  GDBusProxy *logind_proxy;
   gboolean lid_is_closed;
   gboolean on_battery;
 
@@ -211,6 +209,8 @@ struct _MetaBackendPrivate
   uint32_t last_pointer_motion;
 
   MetaRenderdoc *renderdoc;
+
+  gboolean cursor_visible;
 };
 typedef struct _MetaBackendPrivate MetaBackendPrivate;
 
@@ -256,11 +256,13 @@ meta_backend_dispose (GObject *object)
   g_clear_pointer (&priv->default_seat, clutter_seat_destroy);
   g_clear_pointer (&priv->stage, clutter_actor_destroy);
   g_clear_pointer (&priv->idle_manager, meta_idle_manager_free);
+  if (priv->renderer)
+    g_object_run_dispose (G_OBJECT (priv->renderer));
+  g_clear_pointer (&priv->clutter_context, clutter_context_destroy);
   g_clear_object (&priv->renderer);
   /* the renderer keeps references to color devices which keep references
    * to the color manager. */
   g_clear_object (&priv->color_manager);
-  g_clear_pointer (&priv->clutter_context, clutter_context_destroy);
   g_clear_list (&priv->gpus, g_object_unref);
 
   G_OBJECT_CLASS (meta_backend_parent_class)->dispose (object);
@@ -289,13 +291,8 @@ meta_backend_finalize (GObject *object)
       priv->sleep_signal_id = 0;
     }
   g_clear_object (&priv->system_bus);
-
-  if (priv->upower_watch_id)
-    {
-      g_bus_unwatch_name (priv->upower_watch_id);
-      priv->upower_watch_id = 0;
-    }
-  g_clear_object (&priv->upower_proxy);
+  g_clear_handle_id (&priv->logind_watch_id, g_bus_unwatch_name);
+  g_clear_object (&priv->logind_proxy);
 
   g_clear_object (&priv->settings);
  #ifdef HAVE_EGL
@@ -396,9 +393,6 @@ update_cursors (MetaBackend *backend)
 void
 meta_backend_monitors_changed (MetaBackend *backend)
 {
-  MetaColorManager *color_manager = meta_backend_get_color_manager (backend);
-
-  meta_color_manager_monitors_changed (color_manager);
   meta_backend_update_stage (backend);
   update_cursors (backend);
 }
@@ -473,6 +467,24 @@ determine_hotplug_pointer_visibility (ClutterSeat *seat)
 }
 
 static void
+set_cursor_visible (MetaBackend *backend,
+                    gboolean     visible)
+{
+  MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
+  MetaCursorTracker *cursor_tracker = priv->cursor_tracker;
+
+  if (priv->cursor_visible == visible)
+    return;
+
+  priv->cursor_visible = visible;
+
+  if (priv->cursor_visible)
+    meta_cursor_tracker_uninhibit_cursor_visibility (cursor_tracker);
+  else
+    meta_cursor_tracker_inhibit_cursor_visibility (cursor_tracker);
+}
+
+static void
 on_device_added (ClutterSeat        *seat,
                  ClutterInputDevice *device,
                  gpointer            user_data)
@@ -491,8 +503,8 @@ on_device_added (ClutterSeat        *seat,
       (device_type == CLUTTER_TOUCHSCREEN_DEVICE ||
        device_type == CLUTTER_POINTER_DEVICE))
     {
-      meta_cursor_tracker_set_pointer_visible (priv->cursor_tracker,
-                                               determine_hotplug_pointer_visibility (seat));
+      set_cursor_visible (backend,
+                          determine_hotplug_pointer_visibility (seat));
     }
 
   if (device_type == CLUTTER_TOUCHSCREEN_DEVICE ||
@@ -525,13 +537,11 @@ on_device_removed (ClutterSeat        *seat,
    */
   if (priv->current_device == device)
     {
-      MetaCursorTracker *cursor_tracker = priv->cursor_tracker;
-
       g_clear_object (&priv->current_device);
       g_clear_handle_id (&priv->device_update_idle_id, g_source_remove);
 
-      meta_cursor_tracker_set_pointer_visible (cursor_tracker,
-                                               determine_hotplug_pointer_visibility (seat));
+      set_cursor_visible (backend,
+                          determine_hotplug_pointer_visibility (seat));
     }
 
   if (priv->current_device == device)
@@ -603,8 +613,8 @@ on_started (MetaContext *context,
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
   ClutterSeat *seat = priv->default_seat;
 
-  meta_cursor_tracker_set_pointer_visible (priv->cursor_tracker,
-                                           determine_hotplug_pointer_visibility (seat));
+  set_cursor_visible (backend,
+                      determine_hotplug_pointer_visibility (seat));
 }
 
 static gboolean
@@ -720,7 +730,7 @@ meta_backend_is_headless (MetaBackend *backend)
 }
 
 static void
-upower_properties_changed (GDBusProxy *proxy,
+logind_properties_changed (GDBusProxy *proxy,
                            GVariant   *changed_properties,
                            GStrv       invalidated_properties,
                            gpointer    user_data)
@@ -731,7 +741,7 @@ upower_properties_changed (GDBusProxy *proxy,
   gboolean reset_idle_time = FALSE;
 
   v = g_variant_lookup_value (changed_properties,
-                              "LidIsClosed",
+                              "LidClosed",
                               G_VARIANT_TYPE_BOOLEAN);
   if (v)
     {
@@ -752,13 +762,13 @@ upower_properties_changed (GDBusProxy *proxy,
     }
 
   v = g_variant_lookup_value (changed_properties,
-                              "OnBattery",
+                              "OnExternalPower",
                               G_VARIANT_TYPE_BOOLEAN);
   if (v)
     {
       gboolean on_battery;
 
-      on_battery = g_variant_get_boolean (v);
+      on_battery = !g_variant_get_boolean (v);
       g_variant_unref (v);
 
       if (on_battery != priv->on_battery)
@@ -773,7 +783,7 @@ upower_properties_changed (GDBusProxy *proxy,
 }
 
 static void
-upower_ready_cb (GObject      *source_object,
+logind_ready_cb (GObject      *source_object,
                  GAsyncResult *res,
                  gpointer      user_data)
 {
@@ -787,7 +797,7 @@ upower_ready_cb (GObject      *source_object,
   if (!proxy)
     {
       if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
-        g_warning ("Failed to create UPower proxy: %s", error->message);
+        g_warning ("Failed to create logind proxy: %s", error->message);
       g_error_free (error);
       return;
     }
@@ -795,11 +805,11 @@ upower_ready_cb (GObject      *source_object,
   backend = META_BACKEND (user_data);
   priv = meta_backend_get_instance_private (backend);
 
-  priv->upower_proxy = proxy;
+  priv->logind_proxy = proxy;
   g_signal_connect (proxy, "g-properties-changed",
-                    G_CALLBACK (upower_properties_changed), backend);
+                    G_CALLBACK (logind_properties_changed), backend);
 
-  v = g_dbus_proxy_get_cached_property (proxy, "LidIsClosed");
+  v = g_dbus_proxy_get_cached_property (proxy, "LidClosed");
   if (v)
     {
       priv->lid_is_closed = g_variant_get_boolean (v);
@@ -812,16 +822,16 @@ upower_ready_cb (GObject      *source_object,
         }
     }
 
-  v = g_dbus_proxy_get_cached_property (proxy, "OnBattery");
+  v = g_dbus_proxy_get_cached_property (proxy, "OnExternalPower");
   if (v)
     {
-      priv->on_battery = g_variant_get_boolean (v);
+      priv->on_battery = !g_variant_get_boolean (v);
       g_variant_unref (v);
     }
 }
 
 static void
-upower_appeared (GDBusConnection *connection,
+logind_appeared (GDBusConnection *connection,
                  const gchar     *name,
                  const gchar     *name_owner,
                  gpointer         user_data)
@@ -832,23 +842,23 @@ upower_appeared (GDBusConnection *connection,
   g_dbus_proxy_new (connection,
                     G_DBUS_PROXY_FLAGS_NONE,
                     NULL,
-                    "org.freedesktop.UPower",
-                    "/org/freedesktop/UPower",
-                    "org.freedesktop.UPower",
+                    "org.freedesktop.login1",
+                    "/org/freedesktop/login1",
+                    "org.freedesktop.login1.Manager",
                     priv->cancellable,
-                    upower_ready_cb,
+                    logind_ready_cb,
                     backend);
 }
 
 static void
-upower_vanished (GDBusConnection *connection,
+logind_vanished (GDBusConnection *connection,
                  const gchar     *name,
                  gpointer         user_data)
 {
   MetaBackend *backend = META_BACKEND (user_data);
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
 
-  g_clear_object (&priv->upower_proxy);
+  g_clear_object (&priv->logind_proxy);
 }
 
 static void
@@ -974,20 +984,6 @@ meta_backend_class_init (MetaBackendClass *klass)
                   0,
                   NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
-  signals[PAUSE] =
-    g_signal_new ("pause",
-                  G_TYPE_FROM_CLASS (klass),
-                  G_SIGNAL_RUN_LAST,
-                  0,
-                  NULL, NULL, NULL,
-                  G_TYPE_NONE, 0);
-  signals[RESUME] =
-    g_signal_new ("resume",
-                  G_TYPE_FROM_CLASS (klass),
-                  G_SIGNAL_RUN_LAST,
-                  0,
-                  NULL, NULL, NULL,
-                  G_TYPE_NONE, 0);
 }
 
 #ifdef HAVE_LOGIND
@@ -997,7 +993,6 @@ meta_backend_pause (MetaBackend *backend)
   COGL_TRACE_BEGIN_SCOPED (MetaBackendPause,
                            "Meta::Backend::pause()");
 
-  g_signal_emit (backend, signals[PAUSE], 0);
   META_BACKEND_GET_CLASS (backend)->pause (backend);
 }
 
@@ -1008,7 +1003,6 @@ meta_backend_resume (MetaBackend *backend)
                            "Meta::Backend::resume()");
 
   META_BACKEND_GET_CLASS (backend)->resume (backend);
-  g_signal_emit (backend, signals[RESUME], 0);
 }
 
 static void
@@ -1148,7 +1142,6 @@ update_pointer_visibility_from_event (MetaBackend  *backend,
                                       ClutterEvent *event)
 {
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
-  MetaCursorTracker *cursor_tracker = priv->cursor_tracker;
   ClutterInputDevice *device;
   ClutterInputDeviceType device_type;
   uint32_t time_ms;
@@ -1165,12 +1158,12 @@ update_pointer_visibility_from_event (MetaBackend  *backend,
   switch (device_type)
     {
     case CLUTTER_TOUCHSCREEN_DEVICE:
-      meta_cursor_tracker_set_pointer_visible (cursor_tracker, FALSE);
+      set_cursor_visible (backend, FALSE);
       break;
     case CLUTTER_POINTER_DEVICE:
     case CLUTTER_TOUCHPAD_DEVICE:
       priv->last_pointer_motion = time_ms;
-      meta_cursor_tracker_set_pointer_visible (cursor_tracker, TRUE);
+      set_cursor_visible (backend, TRUE);
       break;
     case CLUTTER_TABLET_DEVICE:
     case CLUTTER_PEN_DEVICE:
@@ -1178,7 +1171,7 @@ update_pointer_visibility_from_event (MetaBackend  *backend,
     case CLUTTER_CURSOR_DEVICE:
       if (meta_is_wayland_compositor () &&
           time_ms > priv->last_pointer_motion + HIDDEN_POINTER_TIMEOUT)
-        meta_cursor_tracker_set_pointer_visible (cursor_tracker, FALSE);
+        set_cursor_visible (backend, FALSE);
       break;
     case CLUTTER_KEYBOARD_DEVICE:
     case CLUTTER_PAD_DEVICE:
@@ -1373,8 +1366,6 @@ meta_backend_initable_init (GInitable     *initable,
 
   priv->orientation_manager = g_object_new (META_TYPE_ORIENTATION_MANAGER, NULL);
 
-  priv->cursor_tracker = meta_backend_create_cursor_tracker (backend);
-
   debug_control = meta_context_get_debug_control (priv->context);
   g_signal_connect (debug_control, "notify::inhibit-hw-cursor",
                     G_CALLBACK (on_debug_control_inhibit_hw_cursor_changed),
@@ -1383,11 +1374,11 @@ meta_backend_initable_init (GInitable     *initable,
   if (META_BACKEND_GET_CLASS (backend)->is_lid_closed ==
       meta_backend_real_is_lid_closed)
     {
-      priv->upower_watch_id = g_bus_watch_name (G_BUS_TYPE_SYSTEM,
-                                                "org.freedesktop.UPower",
+      priv->logind_watch_id = g_bus_watch_name (G_BUS_TYPE_SYSTEM,
+                                                "org.freedesktop.login1",
                                                 G_BUS_NAME_WATCHER_FLAGS_NONE,
-                                                upower_appeared,
-                                                upower_vanished,
+                                                logind_appeared,
+                                                logind_vanished,
                                                 backend,
                                                 NULL);
     }
@@ -1421,6 +1412,8 @@ meta_backend_initable_init (GInitable     *initable,
 
   if (!init_clutter (backend, error))
     return FALSE;
+
+  priv->cursor_tracker = meta_backend_create_cursor_tracker (backend);
 
   g_signal_connect_object (priv->default_seat, "device-added",
                            G_CALLBACK (on_device_added), backend, 0);
@@ -1504,6 +1497,9 @@ initable_iface_init (GInitableIface *initable_iface)
 static void
 meta_backend_init (MetaBackend *backend)
 {
+  MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
+
+  priv->cursor_visible = TRUE;
 }
 
 MetaIdleMonitor *
@@ -1778,25 +1774,59 @@ meta_backend_finish_touch_sequence (MetaBackend          *backend,
                                                              state);
 }
 
+/**
+ * meta_backend_get_current_logical_monitor:
+ * @backend: A #MetaBackend
+ *
+ * Returns the [class@Meta.LogicalMonitor] that currently has the mouse pointer.
+ *
+ * Returns: (transfer none) (nullable): The current [class@Meta.LogicalMonitor].
+ */
 MetaLogicalMonitor *
 meta_backend_get_current_logical_monitor (MetaBackend *backend)
 {
   return META_BACKEND_GET_CLASS (backend)->get_current_logical_monitor (backend);
 }
 
-void
-meta_backend_set_keymap (MetaBackend *backend,
-                         const char  *layouts,
-                         const char  *variants,
-                         const char  *options,
-                         const char  *model)
+gboolean
+meta_backend_set_keymap_finish (MetaBackend   *backend,
+                                GAsyncResult  *result,
+                                GError       **error)
 {
-  META_BACKEND_GET_CLASS (backend)->set_keymap (backend, layouts, variants, options, model);
+  GTask *task = G_TASK (result);
+
+  g_return_val_if_fail (g_task_is_valid (result, backend), FALSE);
+  g_return_val_if_fail (g_task_get_source_tag (G_TASK (result)) ==
+                        meta_backend_set_keymap_async, FALSE);
+
+  return g_task_propagate_boolean (task, error);
+}
+
+void
+meta_backend_set_keymap_async (MetaBackend         *backend,
+                               const char          *layouts,
+                               const char          *variants,
+                               const char          *options,
+                               const char          *model,
+                               GCancellable        *cancellable,
+                               GAsyncReadyCallback  callback,
+                               gpointer             user_data)
+{
+  GTask *task;
+
+  task = g_task_new (G_OBJECT (backend), cancellable, callback, user_data);
+  g_task_set_source_tag (task, meta_backend_set_keymap_async);
+
+  META_BACKEND_GET_CLASS (backend)->set_keymap_async (backend,
+                                                      layouts,
+                                                      variants,
+                                                      options,
+                                                      model,
+                                                      task);
 }
 
 struct xkb_keymap *
 meta_backend_get_keymap (MetaBackend *backend)
-
 {
   return META_BACKEND_GET_CLASS (backend)->get_keymap (backend);
 }
@@ -1807,11 +1837,35 @@ meta_backend_get_keymap_layout_group (MetaBackend *backend)
   return META_BACKEND_GET_CLASS (backend)->get_keymap_layout_group (backend);
 }
 
-void
-meta_backend_lock_layout_group (MetaBackend *backend,
-                                guint idx)
+gboolean
+meta_backend_set_keymap_layout_group_finish (MetaBackend   *backend,
+                                             GAsyncResult  *result,
+                                             GError       **error)
 {
-  META_BACKEND_GET_CLASS (backend)->lock_layout_group (backend, idx);
+  GTask *task = G_TASK (result);
+
+  g_return_val_if_fail (g_task_is_valid (result, backend), FALSE);
+  g_return_val_if_fail (g_task_get_source_tag (G_TASK (result)) ==
+                        meta_backend_set_keymap_layout_group_async, FALSE);
+
+  return g_task_propagate_boolean (task, error);
+}
+
+void
+meta_backend_set_keymap_layout_group_async (MetaBackend         *backend,
+                                            uint32_t             idx,
+                                            GCancellable        *cancellable,
+                                            GAsyncReadyCallback  callback,
+                                            gpointer             user_data)
+{
+  GTask *task;
+
+  task = g_task_new (G_OBJECT (backend), cancellable, callback, user_data);
+  g_task_set_source_tag (task, meta_backend_set_keymap_layout_group_async);
+
+  META_BACKEND_GET_CLASS (backend)->set_keymap_layout_group_async (backend,
+                                                                   idx,
+                                                                   task);
 }
 
 /**

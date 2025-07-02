@@ -20,6 +20,7 @@
 #include <glib-object.h>
 
 #include "backends/meta-backend-types.h"
+#include "core/util-private.h"
 
 #define META_TYPE_LAUNCHER (meta_launcher_get_type ())
 G_DECLARE_FINAL_TYPE (MetaLauncher,
@@ -38,10 +39,12 @@ gboolean meta_launcher_activate_vt (MetaLauncher  *self,
 
 gboolean meta_launcher_is_session_active (MetaLauncher *launcher);
 
-gboolean meta_launcher_is_session_controller (MetaLauncher *launcher);
+gboolean meta_launcher_take_control (MetaLauncher  *launcher,
+                                     GError       **error);
 
 const char * meta_launcher_get_seat_id (MetaLauncher *launcher);
 
+META_EXPORT_TEST
 MetaDBusLogin1Session * meta_launcher_get_session_proxy (MetaLauncher *launcher);
 
 MetaBackend * meta_launcher_get_backend (MetaLauncher *launcher);

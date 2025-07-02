@@ -30,8 +30,12 @@ def get_subprocess_stdout():
     if os.getenv('META_DBUS_RUNNER_VERBOSE') == '1':
         return sys.stderr
     else:
-        return subprocess.DEVNULL;
+        return subprocess.DEVNULL
 
+def generate_file_name(args):
+    args_string = '_'.join(args)
+    args_string = args_string.replace('/', '_')
+    return 'session-{}-service-{}.log'.format(os.getpid(), args_string)
 
 class MutterDBusRunner(DBusTestCase):
     @classmethod
@@ -47,6 +51,10 @@ class MutterDBusRunner(DBusTestCase):
         host_system_bus_address = os.getenv('DBUS_SYSTEM_BUS_ADDRESS')
         if host_system_bus_address is None:
             host_system_bus_address = 'unix:path=/run/dbus/system_bus_socket'
+
+        disable_passthrough = os.getenv('META_DBUS_RUNNER_DISABLE_LOGIND_PASSTHROUGH')
+        if disable_passthrough:
+            host_system_bus_address = ''
 
         print('Starting D-Bus daemons (session & system)...', file=sys.stderr)
         DBusTestCase.setUpClass()
@@ -149,8 +157,22 @@ class MutterDBusRunner(DBusTestCase):
 
     @classmethod
     def launch_service(klass, args, env=None, pass_fds=()):
-        print('  - Launching {}'.format(' '.join(args)), file=sys.stderr)
-        klass.service_processes += [subprocess.Popen(args, env=env, pass_fds=pass_fds)]
+        if 'MUTTER_TEST_LOG_DIR' in os.environ:
+            service_log_dir = os.environ['MUTTER_TEST_LOG_DIR']
+        else:
+            service_log_dir = '/tmp'
+        service_log_path = os.path.join(service_log_dir, generate_file_name(args))
+        print('  - Launching {} (log file: {})'.format(' '.join(args),
+                                                       service_log_path),
+              file=sys.stderr)
+
+        service_log = open(service_log_path, 'w')
+        klass.service_processes += [subprocess.Popen(args,
+                                                     env=env,
+                                                     pass_fds=pass_fds,
+                                                     stdout=service_log,
+                                                     stderr=service_log)]
+        service_log.close()
 
     @classmethod
     def poll_pipewire_sockets_in_thread(klass, sockets):
@@ -172,7 +194,7 @@ class MutterDBusRunner(DBusTestCase):
         if not should_spawn:
             return
 
-        print("Noticed activity on a PipeWire socket, launching services...", file=sys.stderr);
+        print("Noticed activity on a PipeWire socket, launching services...", file=sys.stderr)
 
         pipewire_env = os.environ
         pipewire_env['LISTEN_FDS'] = f'{len(sockets)}'
@@ -191,16 +213,21 @@ class MutterDBusRunner(DBusTestCase):
     @classmethod
     def get_pipewire_socket_names(klass):
         pipewire_socket_unit = '/usr/lib/systemd/user/pipewire.socket'
-
-        config = configparser.ConfigParser(strict=False,
-                                           empty_lines_in_values=False,
-                                           dict_type=MultiOrderedDict,
-                                           interpolation=None)
-        res = config.read([pipewire_socket_unit])
-
+        if os.path.exists(pipewire_socket_unit):
+            config = configparser.ConfigParser(strict=False,
+                                               empty_lines_in_values=False,
+                                               dict_type=MultiOrderedDict,
+                                               interpolation=None)
+            config.read([pipewire_socket_unit])
+            socket_names = config.get('Socket', 'ListenStream')
+        else:
+            # The pipewire.socket file was not found, use the default
+            # value used by pipewire as a fallback (c.f. 'man
+            # pipewire.conf'):
+            socket_names = ['%t/pipewire-0']
         runtime_dir = os.environ['XDG_RUNTIME_DIR']
         return [socket_name.replace('%t', runtime_dir)
-                for socket_name in config.get('Socket', 'ListenStream')]
+                for socket_name in socket_names]
 
     @classmethod
     def enable_pipewire_sockets(klass):
@@ -247,6 +274,9 @@ def run_test(args, extra_env):
         env |= extra_env
 
     wrapper = os.getenv('META_DBUS_RUNNER_WRAPPER')
+
+    if not os.getenv('META_DBUS_RUNNER_DISABLE_UMOCKDEV'):
+        args = ['umockdev-wrapper'] + args
 
     if wrapper == 'gdb':
         args = ['gdb', '-ex', 'r', '-ex', 'bt full', '--args'] + args

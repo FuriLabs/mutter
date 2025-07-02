@@ -162,6 +162,7 @@ find_scanout_candidate (MetaCompositorView  *compositor_view,
   ClutterColorState *output_color_state;
   ClutterColorState *surface_color_state;
   MetaWaylandSurface *surface;
+  MetaMultiTextureCoefficients coeffs;
 
   if (meta_get_debug_paint_flags () & META_DEBUG_PAINT_DISABLE_DIRECT_SCANOUT)
     return FALSE;
@@ -318,6 +319,16 @@ find_scanout_candidate (MetaCompositorView  *compositor_view,
       return FALSE;
     }
 
+  coeffs = surface->applied_state.coeffs;
+  if (coeffs != META_MULTI_TEXTURE_COEFFICIENTS_NONE &&
+      coeffs != META_MULTI_TEXTURE_COEFFICIENTS_IDENTITY_FULL &&
+      coeffs != META_MULTI_TEXTURE_COEFFICIENTS_BT709_LIMITED)
+    {
+      meta_topic (META_DEBUG_RENDER,
+                  "No direct scanout candidate: unsupported color model");
+      return FALSE;
+    }
+
   *crtc_out = crtc;
   *onscreen_out = COGL_ONSCREEN (framebuffer);
   *surface_out = surface;
@@ -344,6 +355,7 @@ try_assign_next_scanout (MetaCompositorView *compositor_view,
       return;
     }
 
+  meta_topic (META_DEBUG_RENDER, "Assigning scanout to stage view");
   clutter_stage_view_assign_next_scanout (stage_view, scanout);
 }
 
@@ -377,11 +389,12 @@ static MetaSurfaceActor *
 find_frame_sync_candidate (MetaCompositorView *compositor_view,
                            MetaCompositor     *compositor)
 {
+  ClutterStageView *stage_view =
+    meta_compositor_view_get_stage_view (compositor_view);
   MetaWindowActor *window_actor;
-  MetaWindow *window;
-  ClutterStageView *stage_view;
-  MtkRectangle view_layout;
   MetaSurfaceActor *surface_actor;
+  MtkRectangle view_rect;
+  ClutterActorBox actor_box;
 
   if (meta_compositor_is_unredirect_inhibited (compositor))
     {
@@ -420,23 +433,31 @@ find_frame_sync_candidate (MetaCompositorView *compositor_view,
       return NULL;
     }
 
-  window = meta_window_actor_get_meta_window (window_actor);
-  if (!window)
+  clutter_stage_view_get_layout (stage_view, &view_rect);
+
+  if (!clutter_actor_get_paint_box (CLUTTER_ACTOR (window_actor),
+                                    &actor_box))
     {
       meta_topic (META_DEBUG_RENDER,
-                  "No frame sync candidate: no meta-window");
+                  "No frame sync candidate: no window actor paint-box");
       return NULL;
     }
 
-  stage_view = meta_compositor_view_get_stage_view (compositor_view);
-
-  clutter_stage_view_get_layout (stage_view, &view_layout);
-
-  if (!meta_window_geometry_contains_rect (window, &view_layout))
+  if (!G_APPROX_VALUE (actor_box.x1, view_rect.x,
+                       CLUTTER_COORDINATE_EPSILON) ||
+      !G_APPROX_VALUE (actor_box.y1, view_rect.y,
+                       CLUTTER_COORDINATE_EPSILON) ||
+      !G_APPROX_VALUE (actor_box.x2, view_rect.x + view_rect.width,
+                       CLUTTER_COORDINATE_EPSILON) ||
+      !G_APPROX_VALUE (actor_box.y2, view_rect.y + view_rect.height,
+                       CLUTTER_COORDINATE_EPSILON))
     {
       meta_topic (META_DEBUG_RENDER,
-                  "No frame sync candidate: stage-view layout not covered "
-                  "by meta-window frame");
+                  "No frame sync candidate: paint-box (%f,%f,%f,%f) does "
+                  "not match stage-view layout (%d,%d,%d,%d)",
+                  actor_box.x1, actor_box.y1,
+                  actor_box.x2 - actor_box.x1, actor_box.y2 - actor_box.y1,
+                  view_rect.x, view_rect.y, view_rect.width, view_rect.height);
       return NULL;
     }
 
@@ -448,19 +469,17 @@ find_frame_sync_candidate (MetaCompositorView *compositor_view,
       return NULL;
     }
 
+  if (meta_surface_actor_is_effectively_obscured (surface_actor))
+    {
+      meta_topic (META_DEBUG_RENDER,
+                  "No frame sync candidate: surface-actor is obscured");
+      return NULL;
+    }
+
   if (meta_surface_actor_is_frozen (surface_actor))
     {
       meta_topic (META_DEBUG_RENDER,
                   "No frame sync candidate: surface-actor is frozen");
-      return NULL;
-    }
-
-  if (!meta_surface_actor_contains_rect (surface_actor,
-                                         &view_layout))
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "No frame sync candidate: stage-view layout not covered "
-                  "by surface-actor");
       return NULL;
     }
 

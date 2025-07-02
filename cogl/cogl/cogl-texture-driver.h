@@ -35,6 +35,8 @@
 #include "cogl/cogl-pixel-format.h"
 #include "cogl/cogl-types.h"
 
+typedef struct _CoglDriver CoglDriver;
+
 G_DECLARE_DERIVABLE_TYPE (CoglTextureDriver,
                           cogl_texture_driver,
                           COGL,
@@ -46,11 +48,6 @@ G_DECLARE_DERIVABLE_TYPE (CoglTextureDriver,
 struct _CoglTextureDriverClass
 {
   GObjectClass parent_class;
-
-  gboolean (* format_supports_upload) (CoglTextureDriver *driver,
-                                       CoglContext       *ctx,
-                                       CoglPixelFormat    format);
-
 
   /* Destroys any driver specific resources associated with the given
   * 2D texture. */
@@ -65,14 +62,6 @@ struct _CoglTextureDriverClass
                                       int                width,
                                       int                height,
                                       CoglPixelFormat    internal_format);
-
-  /* Initializes driver private state before allocating any specific
-  * storage for a 2D texture, where base texture and texture 2D
-  * members will already be initialized before passing control to
-  * the driver.
-  */
-  void (* texture_2d_init) (CoglTextureDriver *driver,
-                            CoglTexture2D     *tex_2d);
 
   /* Allocates (uninitialized) storage for the given texture according
   * to the configured size and format of the texture */
@@ -93,14 +82,6 @@ struct _CoglTextureDriverClass
                                              int                dst_x,
                                              int                dst_y,
                                              int                level);
-
-  /* If the given texture has a corresponding OpenGL texture handle
-  * then return that.
-  *
-  * This is optional
-  */
-  unsigned int (* texture_2d_get_gl_handle) (CoglTextureDriver *driver,
-                                             CoglTexture2D     *tex_2d);
 
   /* Update all mipmap levels > 0 */
   void (* texture_2d_generate_mipmap) (CoglTextureDriver *driver,
@@ -138,3 +119,5 @@ struct _CoglTextureDriverClass
                                 int                rowstride,
                                 uint8_t           *data);
 };
+
+CoglDriver * cogl_texture_driver_get_driver (CoglTextureDriver *tex_driver);

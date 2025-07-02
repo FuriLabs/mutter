@@ -20,6 +20,7 @@
 #include "config.h"
 
 #include <errno.h>
+#include <glib/gstdio.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 
@@ -27,6 +28,7 @@
 
 struct _MetaAnonymousFile
 {
+  char *name;
   int fd;
   size_t size;
 };
@@ -91,12 +93,15 @@ create_tmpfile_cloexec (char *tmpname)
  * sure SIGBUS can't happen. It also avoids requiring XDG_RUNTIME_DIR.
  */
 static int
-create_anonymous_file (off_t size)
+create_anonymous_file (const char *name,
+                       off_t       size)
 {
+  g_autofree char *memfd_name = NULL;
   int fd, ret;
 
 #if defined(HAVE_MEMFD_CREATE)
-  fd = memfd_create ("mutter-shared", MFD_CLOEXEC | MFD_ALLOW_SEALING);
+  memfd_name = g_strdup_printf ("mutter-anonymous-file-%s", name);
+  fd = memfd_create (memfd_name, MFD_CLOEXEC | MFD_ALLOW_SEALING);
   if (fd >= 0)
     {
       /* We can add this seal before calling posix_fallocate(), as
@@ -110,27 +115,20 @@ create_anonymous_file (off_t size)
   else
 #endif
     {
-      static const char template[] = "/mutter-shared-XXXXXX";
+      g_autofree char *template = NULL;
       const char *path;
-      char *name;
+      g_autofree char *filename = NULL;
 
-      path = getenv ("XDG_RUNTIME_DIR");
+      path = g_get_user_runtime_dir ();
       if (!path)
         {
           errno = ENOENT;
           return -1;
         }
 
-      name = g_malloc (strlen (path) + sizeof (template));
-      if (!name)
-        return -1;
-
-      strcpy (name, path);
-      strcat (name, template);
-
-      fd = create_tmpfile_cloexec (name);
-
-      g_free (name);
+      template = g_strdup_printf ("mutter-anonymous-file-%s-XXXXXX", name);
+      filename = g_strconcat (path, template, NULL);
+      fd = create_tmpfile_cloexec (filename);
 
       if (fd < 0)
         return -1;
@@ -171,6 +169,7 @@ create_anonymous_file (off_t size)
 
 /**
  * meta_anonymous_file_new: (skip)
+ * @name: Name of the file
  * @size: The size of @data
  * @data: The data of the file with the size @size
  *
@@ -182,26 +181,24 @@ create_anonymous_file (off_t size)
  *
  * If this function fails errno is set.
  *
+ * The name is used to as part of the file name.
+ *
  * Returns: The newly created #MetaAnonymousFile, or NULL on failure. Use
  *   meta_anonymous_file_free() to free the resources when done.
  */
 MetaAnonymousFile *
-meta_anonymous_file_new (size_t         size,
+meta_anonymous_file_new (const char    *name,
+                         size_t         size,
                          const uint8_t *data)
 {
-  MetaAnonymousFile *file;
+  g_autoptr (MetaAnonymousFile) file = NULL;
 
   file = g_malloc0 (sizeof *file);
-  if (!file)
-    {
-      errno = ENOMEM;
-      return NULL;
-    }
-
+  file->name = g_strdup (name);
   file->size = size;
-  file->fd = create_anonymous_file (size);
+  file->fd = create_anonymous_file (name, size);
   if (file->fd == -1)
-    goto err_free;
+    return NULL;
 
   if (size > 0)
     {
@@ -209,7 +206,7 @@ meta_anonymous_file_new (size_t         size,
 
       map = mmap (NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, file->fd, 0);
       if (map == MAP_FAILED)
-        goto err_close;
+        return NULL;
 
       memcpy (map, data, size);
       munmap (map, size);
@@ -225,13 +222,7 @@ meta_anonymous_file_new (size_t         size,
   fcntl (file->fd, F_ADD_SEALS, READONLY_SEALS);
 #endif
 
-  return file;
-
-err_close:
-  close (file->fd);
-err_free:
-  g_free (file);
-  return NULL;
+  return g_steal_pointer (&file);
 }
 
 
@@ -244,7 +235,7 @@ err_free:
 void
 meta_anonymous_file_free (MetaAnonymousFile *file)
 {
-  close (file->fd);
+  g_clear_fd (&file->fd, NULL);
   g_free (file);
 }
 
@@ -312,7 +303,7 @@ meta_anonymous_file_open_fd (MetaAnonymousFile        *file,
   /* for all other cases we create a new anonymous file that can be mapped
    * with MAP_SHARED and copy the contents to it and return that instead
    */
-  fd = create_anonymous_file (file->size);
+  fd = create_anonymous_file (file->name, file->size);
   if (fd == -1)
     return fd;
 

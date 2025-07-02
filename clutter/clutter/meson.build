@@ -114,6 +114,7 @@ clutter_sources = [
   'clutter-fixed-layout.c',
   'clutter-flatten-effect.c',
   'clutter-flow-layout.c',
+  'clutter-focus.c',
   'clutter-frame-clock.c',
   'clutter-frame.c',
   'clutter-gesture-action.c',
@@ -134,6 +135,7 @@ clutter_sources = [
   'clutter-keymap.c',
   'clutter-keysyms-table.c',
   'clutter-keyval.c',
+  'clutter-key-focus.c',
   'clutter-layout-manager.c',
   'clutter-layout-meta.c',
   'clutter-main.c',
@@ -154,6 +156,7 @@ clutter_sources = [
   'clutter-shader-types.c',
   'clutter-swipe-action.c',
   'clutter-snap-constraint.c',
+  'clutter-sprite.c',
   'clutter-stage-accessible.c',
   'clutter-stage.c',
   'clutter-stage-manager-accessible.c',
@@ -185,6 +188,7 @@ clutter_private_headers = [
   'clutter-effect-private.h',
   'clutter-event-private.h',
   'clutter-flatten-effect.h',
+  'clutter-focus-private.h',
   'clutter-frame-private.h',
   'clutter-input-device-private.h',
   'clutter-input-focus-private.h',
@@ -193,12 +197,14 @@ clutter_private_headers = [
   'clutter-input-only-action.h',
   'clutter-input-only-actor.h',
   'clutter-keymap-private.h',
+  'clutter-key-focus-private.h',
   'clutter-mutter.h',
   'clutter-paint-context-private.h',
   'clutter-paint-node-private.h',
   'clutter-paint-volume-private.h',
   'clutter-private.h',
   'clutter-settings-private.h',
+  'clutter-sprite-private.h',
   'clutter-stage-accessible-private.h',
   'clutter-stage-manager-accessible-private.h',
   'clutter-stage-manager-private.h',
@@ -314,11 +320,10 @@ if have_introspection
     '-DCLUTTER_COMPILATION=1',
     '-DG_LOG_DOMAIN="Clutter"'
   ]
-
-  extra_args = clutter_introspection_args + ['--c-include=clutter/clutter.h']
+  gi_headers = ['clutter/clutter.h']
   if have_fonts
-    extra_args += [
-      '--c-include=clutter/clutter-pango.h'
+    gi_headers += [
+      'clutter/clutter-pango.h'
     ]
   endif
 
@@ -347,7 +352,8 @@ if have_introspection
       'Pango-1.0',
     ],
     dependencies: [cogl_deps],
-    extra_args: extra_args,
+    header: gi_headers,
+    extra_args: clutter_introspection_args,
     kwargs: introspection_common,
   )
 endif

@@ -262,29 +262,29 @@ gtk_surface_titlebar_gesture (struct wl_client   *client,
         break;
 
       if (meta_window_is_maximized (window))
-        meta_window_unmaximize (window, META_MAXIMIZE_BOTH);
+        meta_window_unmaximize (window);
       else
-        meta_window_maximize (window, META_MAXIMIZE_BOTH);
+        meta_window_maximize (window);
       break;
 
     case G_DESKTOP_TITLEBAR_ACTION_TOGGLE_MAXIMIZE_HORIZONTALLY:
       if (!window->has_maximize_func)
         break;
 
-      if (meta_window_get_maximized (window) & META_MAXIMIZE_HORIZONTAL)
-        meta_window_unmaximize (window, META_MAXIMIZE_HORIZONTAL);
+      if (meta_window_get_maximize_flags (window) & META_MAXIMIZE_HORIZONTAL)
+        meta_window_set_unmaximize_flags (window, META_MAXIMIZE_HORIZONTAL);
       else
-        meta_window_maximize (window, META_MAXIMIZE_HORIZONTAL);
+        meta_window_set_maximize_flags (window, META_MAXIMIZE_HORIZONTAL);
       break;
 
     case G_DESKTOP_TITLEBAR_ACTION_TOGGLE_MAXIMIZE_VERTICALLY:
       if (!window->has_maximize_func)
         break;
 
-      if (meta_window_get_maximized (window) & META_MAXIMIZE_VERTICAL)
-        meta_window_unmaximize (window, META_MAXIMIZE_VERTICAL);
+      if (meta_window_get_maximize_flags (window) & META_MAXIMIZE_VERTICAL)
+        meta_window_set_unmaximize_flags (window, META_MAXIMIZE_VERTICAL);
       else
-        meta_window_maximize (window, META_MAXIMIZE_VERTICAL);
+        meta_window_set_maximize_flags (window, META_MAXIMIZE_VERTICAL);
       break;
 
     case G_DESKTOP_TITLEBAR_ACTION_MINIMIZE:
@@ -395,13 +395,14 @@ fill_states (struct wl_array    *states,
              MetaWindow         *window,
              struct wl_resource *resource)
 {
+  MetaTileMode tile_mode = meta_window_config_get_tile_mode (window->config);
   int version;
 
   version = wl_resource_get_version (resource);
 
   if (version < GTK_SURFACE1_CONFIGURE_EDGES_SINCE_VERSION &&
-      (window->tile_mode == META_TILE_LEFT ||
-       window->tile_mode == META_TILE_RIGHT))
+      (tile_mode == META_TILE_LEFT ||
+       tile_mode == META_TILE_RIGHT))
     add_state_value (states, GTK_SURFACE1_STATE_TILED);
 
   if (version >= GTK_SURFACE1_STATE_TILED_TOP_SINCE_VERSION &&

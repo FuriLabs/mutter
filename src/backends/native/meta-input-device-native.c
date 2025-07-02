@@ -1368,11 +1368,12 @@ update_pad_features (MetaInputDeviceNative *device_native)
   ClutterInputDevice *device = CLUTTER_INPUT_DEVICE (device_native);
   struct libinput_device *libinput_device;
   struct libinput_tablet_pad_mode_group *mode_group;
-  int n_groups, n_buttons, n_rings, n_strips, n_modes, i, j;
+  int n_groups, n_buttons, n_rings, n_strips, n_dials, n_modes, i, j;
 
   libinput_device = meta_input_device_native_get_libinput_device (device);
   n_rings = libinput_device_tablet_pad_get_num_rings (libinput_device);
   n_strips = libinput_device_tablet_pad_get_num_strips (libinput_device);
+  n_dials = libinput_device_tablet_pad_get_num_dials (libinput_device);
   n_groups = libinput_device_tablet_pad_get_num_mode_groups (libinput_device);
   n_buttons = libinput_device_tablet_pad_get_num_buttons (libinput_device);
 
@@ -1410,6 +1411,14 @@ update_pad_features (MetaInputDeviceNative *device_native)
           PadFeature feature = { CLUTTER_PAD_FEATURE_STRIP, j, i };
 
           if (libinput_tablet_pad_mode_group_has_strip (mode_group, j))
+            g_array_append_val (device_native->pad_features, feature);
+        }
+
+      for (j = 0; j < n_dials; j++)
+        {
+          PadFeature feature = { CLUTTER_PAD_FEATURE_DIAL, j, i };
+
+          if (libinput_tablet_pad_mode_group_has_dial (mode_group, j))
             g_array_append_val (device_native->pad_features, feature);
         }
     }
@@ -1508,15 +1517,16 @@ meta_input_device_native_new_in_impl (MetaSeatImpl           *seat_impl,
   ClutterInputDeviceType type;
   ClutterInputCapabilities capabilities;
   ClutterInputMode mode;
-  char *vendor, *product;
-  int n_rings = 0, n_strips = 0, n_groups = 1, n_buttons = 0;
+  unsigned int vendor, product, bustype;
+  int n_rings = 0, n_strips = 0, n_dials = 0, n_groups = 1, n_buttons = 0;
   char *node_path;
   double width, height;
 
   capabilities = translate_device_capabilities (libinput_device);
   type = determine_device_type (libinput_device);
-  vendor = g_strdup_printf ("%.4x", libinput_device_get_id_vendor (libinput_device));
-  product = g_strdup_printf ("%.4x", libinput_device_get_id_product (libinput_device));
+  vendor = libinput_device_get_id_vendor (libinput_device);
+  product = libinput_device_get_id_product (libinput_device);
+  bustype = libinput_device_get_id_bustype (libinput_device);
   node_path = g_strdup_printf ("/dev/input/%s", libinput_device_get_sysname (libinput_device));
 
   if (libinput_device_has_capability (libinput_device,
@@ -1530,6 +1540,7 @@ meta_input_device_native_new_in_impl (MetaSeatImpl           *seat_impl,
     {
       n_rings = libinput_device_tablet_pad_get_num_rings (libinput_device);
       n_strips = libinput_device_tablet_pad_get_num_strips (libinput_device);
+      n_dials = libinput_device_tablet_pad_get_num_dials (libinput_device);
       n_groups = libinput_device_tablet_pad_get_num_mode_groups (libinput_device);
       n_buttons = libinput_device_tablet_pad_get_num_buttons (libinput_device);
     }
@@ -1542,8 +1553,10 @@ meta_input_device_native_new_in_impl (MetaSeatImpl           *seat_impl,
                          "device-mode", mode,
                          "vendor-id", vendor,
                          "product-id", product,
+                         "bus-type", bustype,
                          "n-rings", n_rings,
                          "n-strips", n_strips,
+                         "n-dials", n_dials,
                          "n-mode-groups", n_groups,
                          "n-buttons", n_buttons,
                          "device-node", node_path,
@@ -1554,8 +1567,6 @@ meta_input_device_native_new_in_impl (MetaSeatImpl           *seat_impl,
 
   libinput_device_set_user_data (libinput_device, device);
   libinput_device_ref (libinput_device);
-  g_free (vendor);
-  g_free (product);
   g_free (node_path);
 
   if (libinput_device_has_capability (libinput_device,

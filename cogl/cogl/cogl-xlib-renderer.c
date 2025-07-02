@@ -46,12 +46,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-static void
-_xlib_renderer_data_free (CoglXlibRenderer *data)
-{
-  g_free (data);
-}
-
 CoglXlibRenderer *
 _cogl_xlib_renderer_get_data (CoglRenderer *renderer)
 {
@@ -61,10 +55,10 @@ _cogl_xlib_renderer_get_data (CoglRenderer *renderer)
      need the EGL winsys data but only one of them wants the Xlib
      data. */
 
-  if (!renderer->custom_winsys_user_data)
-    renderer->custom_winsys_user_data = g_new0 (CoglXlibRenderer, 1);
+  if (!cogl_renderer_get_custom_winsys_data (renderer))
+    cogl_renderer_set_custom_winsys_data (renderer,  g_new0 (CoglXlibRenderer, 1));
 
-  return renderer->custom_winsys_user_data;
+  return cogl_renderer_get_custom_winsys_data (renderer);
 }
 
 static void
@@ -273,7 +267,7 @@ update_outputs (CoglRenderer *renderer,
 
   if (changed)
     {
-      const CoglWinsysVtable *winsys = renderer->winsys_vtable;
+      const CoglWinsysVtable *winsys = cogl_renderer_get_winsys_vtable (renderer);
 
       if (notify)
         COGL_NOTE (WINSYS, "Outputs changed:");
@@ -386,8 +380,6 @@ _cogl_xlib_renderer_disconnect (CoglRenderer *renderer)
 
   g_list_free_full (xlib_renderer->outputs, (GDestroyNotify) free_xlib_output);
   xlib_renderer->outputs = NULL;
-
-  g_clear_pointer (&renderer->custom_winsys_user_data, _xlib_renderer_data_free);
 }
 
 Display *

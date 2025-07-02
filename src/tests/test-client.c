@@ -33,6 +33,7 @@
 
 const char *client_id = "0";
 static gboolean wayland;
+static gboolean dont_exit_on_eof;
 GHashTable *windows;
 GQuark event_source_quark;
 GQuark event_handlers_quark;
@@ -279,6 +280,111 @@ text_clear_func (GtkClipboard *clipboard,
                  gpointer      data)
 {
   g_free (data);
+}
+
+static void
+calculate_anchors (const char *position,
+                   GdkGravity *rect_anchor,
+                   GdkGravity *window_anchor)
+{
+  if (g_strcmp0 (position, "center") == 0)
+    {
+      *rect_anchor = GDK_GRAVITY_CENTER;
+      *window_anchor = GDK_GRAVITY_CENTER;
+    }
+  else if (g_strcmp0 (position, "top") == 0)
+    {
+      *rect_anchor = GDK_GRAVITY_NORTH;
+      *window_anchor = GDK_GRAVITY_SOUTH;
+    }
+  else if (g_strcmp0 (position, "bottom") == 0)
+    {
+      *rect_anchor = GDK_GRAVITY_SOUTH;
+      *window_anchor = GDK_GRAVITY_NORTH;
+    }
+  else if (g_strcmp0 (position, "left") == 0)
+    {
+      *rect_anchor = GDK_GRAVITY_WEST;
+      *window_anchor = GDK_GRAVITY_EAST;
+    }
+  else if (g_strcmp0 (position, "right") == 0)
+    {
+      *rect_anchor = GDK_GRAVITY_EAST;
+      *window_anchor = GDK_GRAVITY_WEST;
+    }
+  else
+    {
+      g_assert_not_reached ();
+    }
+}
+
+static void
+prepare_popup_window (GdkSeat   *seat,
+                      GdkWindow *window,
+                      gpointer   user_data)
+{
+  GtkWidget *popup = user_data;
+
+  gtk_widget_show (popup);
+}
+
+static void
+popup_at (GtkWidget  *parent,
+          const char *popup_id,
+          const char *position,
+          int         width,
+          int         height,
+          gboolean    grab)
+{
+  GtkWidget *popup;
+  g_autofree char *title;
+  GdkWindow *gdk_window;
+  GdkRectangle window_rect;
+  GdkGravity rect_anchor, window_anchor;
+
+  popup = g_object_new (GTK_TYPE_WINDOW,
+                        "type", GTK_WINDOW_POPUP,
+                        "type-hint", GDK_WINDOW_TYPE_HINT_POPUP_MENU,
+                        NULL);
+
+  title = g_strdup_printf ("test/%s/%s", client_id, popup_id);
+  gtk_window_set_transient_for (GTK_WINDOW (popup), GTK_WINDOW (parent));
+  gtk_window_set_title (GTK_WINDOW (popup), title);
+  g_hash_table_insert (windows, g_strdup (popup_id), popup);
+
+  gtk_window_resize (GTK_WINDOW (popup), width, height);
+
+  gtk_widget_realize (popup);
+  gdk_window = gtk_widget_get_window (popup);
+
+  gtk_widget_get_allocation (popup, &window_rect);
+
+  calculate_anchors (position, &rect_anchor, &window_anchor);
+  gdk_window_move_to_rect (gdk_window,
+                           &window_rect,
+                           rect_anchor,
+                           window_anchor,
+                           0, 0, 0);
+
+  if (grab)
+    {
+      GdkSeat *seat =
+        gdk_display_get_default_seat (gtk_widget_get_display (popup));
+      GdkGrabStatus grab_status;
+
+      grab_status = gdk_seat_grab (seat, gdk_window,
+                                   (GDK_SEAT_CAPABILITY_POINTER |
+                                    GDK_SEAT_CAPABILITY_TABLET_STYLUS |
+                                    GDK_SEAT_CAPABILITY_KEYBOARD),
+                                   TRUE,
+                                   NULL, NULL,
+                                   prepare_popup_window, popup);
+      g_assert_cmpint (grab_status, ==, GDK_GRAB_SUCCESS);
+    }
+  else
+    {
+      gtk_widget_show (popup);
+    }
 }
 
 static void
@@ -592,11 +698,14 @@ process_line (const char *line)
 
       gtk_window_present (GTK_WINDOW (window));
     }
-  else if (strcmp (argv[0], "resize") == 0)
+  else if (strcmp (argv[0], "resize") == 0 ||
+           strcmp (argv[0], "resize_ignore_titlebar") == 0)
     {
+      int titlebar_height;
+
       if (argc != 4)
         {
-          g_print ("usage: resize <id> <width> <height>\n");
+          g_print ("usage: %s <id> <width> <height>\n", argv[0]);
           goto out;
         }
 
@@ -606,10 +715,27 @@ process_line (const char *line)
 
       int width = atoi (argv[2]);
       int height = atoi (argv[3]);
-      int titlebar_height = calculate_titlebar_height (GTK_WINDOW (window));
+
+      if (strcmp (argv[0], "resize_ignore_titlebar") == 0)
+        titlebar_height = 0;
+      else
+        titlebar_height = calculate_titlebar_height (GTK_WINDOW (window));
+
       gtk_window_resize (GTK_WINDOW (window),
                          width,
                          height - titlebar_height);
+    }
+  else if (strcmp (argv[0], "x11_geometry") == 0)
+    {
+      GtkWidget *window;
+
+      window = lookup_window (argv[1]);
+      if (!window)
+        goto out;
+
+      G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+      gtk_window_parse_geometry (GTK_WINDOW (window), argv[2]);
+      G_GNUC_END_IGNORE_DEPRECATIONS
     }
   else if (strcmp (argv[0], "raise") == 0)
     {
@@ -908,6 +1034,8 @@ process_line (const char *line)
 
       expected_name = argv[1];
 
+      gdk_display_sync (gdk_display_get_default ());
+
       resources = XRRGetScreenResourcesCurrent (xdisplay, root_xwindow);
       if (!resources)
         {
@@ -993,6 +1121,84 @@ process_line (const char *line)
                                    g_strdup (argv[2]));
       gtk_target_table_free (targets, n_targets);
     }
+  else if (strcmp (argv[0], "popup_at") == 0)
+    {
+      GtkWidget *parent;
+      int width, height;
+      gboolean grab;
+
+      if (argc != 6 &&
+          argc != 7)
+        {
+          g_print ("usage: popup <popup-id> <parent-id> <top|bottom|left|right|center> <width> <height> [grab]\n");
+          goto out;
+        }
+
+      parent = lookup_window (argv[2]);
+      if (!parent)
+        {
+          g_print ("Parent not found\n");
+          goto out;
+        }
+
+      width = atoi (argv[4]);
+      height = atoi (argv[5]);
+
+      if (argc == 7)
+        {
+          if (g_strcmp0 (argv[6], "grab") == 0)
+            {
+              grab = TRUE;
+            }
+          else
+            {
+              g_print ("Unknown argument '%s'", argv[6]);
+              goto out;
+            }
+        }
+      else
+        {
+          grab = FALSE;
+        }
+
+      popup_at (parent, argv[1], argv[3], width, height, grab);
+    }
+  else if (strcmp (argv[0], "popup") == 0)
+    {
+      GtkWidget *parent;
+
+      if (argc != 3)
+        {
+          g_print ("usage: popup <popup-id> <parent-id>\n");
+          goto out;
+        }
+
+      parent = lookup_window (argv[2]);
+      if (!parent)
+        {
+          g_print ("Parent not found\n");
+          goto out;
+        }
+
+      popup_at (parent, argv[1], "center", 100, 100, FALSE);
+    }
+  else if (strcmp (argv[0], "dismiss") == 0)
+    {
+      GtkWidget *popup;
+
+      if (argc != 2)
+        {
+          g_print ("usage: popup <popup-id>\n");
+          goto out;
+        }
+
+      popup = lookup_window (argv[1]);
+      if (!popup)
+        goto out;
+
+      g_hash_table_remove (windows, argv[1]);
+      gtk_widget_destroy (popup);
+    }
   else
     {
       g_print ("Unknown command %s\n", argv[0]);
@@ -1019,7 +1225,8 @@ on_line_received (GObject      *source,
     {
       if (error != NULL)
         g_printerr ("Error reading from stdin: %s\n", error->message);
-      gtk_main_quit ();
+      if (!dont_exit_on_eof)
+        gtk_main_quit ();
       return;
     }
 
@@ -1045,7 +1252,8 @@ read_next_line (GDataInputStream *in)
         {
           if (error)
             g_printerr ("Error reading from stdin: %s\n", error->message);
-          gtk_main_quit ();
+          if (!dont_exit_on_eof)
+            gtk_main_quit ();
           return;
         }
 
@@ -1064,6 +1272,12 @@ const GOptionEntry options[] = {
     "wayland", 0, 0, G_OPTION_ARG_NONE,
     &wayland,
     "Create a wayland client, not an X11 one",
+    NULL
+  },
+  {
+    "dont-exit-on-eof", 0, 0, G_OPTION_ARG_NONE,
+    &dont_exit_on_eof,
+    "Don't terminate client when reaching end of file",
     NULL
   },
   {

@@ -1131,11 +1131,13 @@ meta_kms_impl_device_update_states (MetaKmsImplDevice *impl_device,
   drmModeRes *drm_resources;
   MetaKmsResourceChanges changes;
   GList *l;
+  gboolean had_fd_open;
 
   meta_assert_in_kms_impl (meta_kms_impl_get_kms (priv->impl));
 
   meta_topic (META_DEBUG_KMS, "Updating device state for %s", priv->path);
 
+  had_fd_open = !!priv->device_file;
   if (!ensure_device_file (impl_device, &error))
     {
       g_warning ("Failed to reopen '%s': %s", priv->path, error->message);
@@ -1171,6 +1173,9 @@ meta_kms_impl_device_update_states (MetaKmsImplDevice *impl_device,
   meta_thread_uninhibit_realtime_in_impl (thread);
 
   drmModeFreeResources (drm_resources);
+
+  if (changes == META_KMS_RESOURCE_CHANGE_NONE && !had_fd_open)
+    clear_latched_fd_hold (impl_device);
 
   return changes;
 
@@ -1781,11 +1786,14 @@ ensure_crtc_frame (MetaKmsImplDevice *impl_device,
   crtc_frame = get_crtc_frame (impl_device, latch_crtc);
   if (!crtc_frame)
     {
+      const MetaKmsCrtcState *crtc_state =
+        meta_kms_crtc_get_current_state (latch_crtc);
+
       crtc_frame = g_new0 (CrtcFrame, 1);
       crtc_frame->impl_device = impl_device;
       crtc_frame->crtc = latch_crtc;
       crtc_frame->deadline.timer_fd = -1;
-      crtc_frame->await_flush = TRUE;
+      crtc_frame->await_flush = !crtc_state->is_active;
       g_hash_table_insert (priv->crtc_frames, latch_crtc, crtc_frame);
     }
 

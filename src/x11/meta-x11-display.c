@@ -48,7 +48,7 @@
 #include "backends/meta-backend-private.h"
 #include "backends/meta-dnd-private.h"
 #include "backends/meta-cursor-sprite-xcursor.h"
-#include "backends/meta-logical-monitor.h"
+#include "backends/meta-logical-monitor-private.h"
 #include "backends/meta-settings-private.h"
 #include "backends/x11/meta-backend-x11.h"
 #include "backends/x11/meta-stage-x11.h"
@@ -61,7 +61,6 @@
 #include "x11/events.h"
 #include "x11/group-props.h"
 #include "x11/meta-x11-frame.h"
-#include "x11/meta-x11-keybindings-private.h"
 #include "x11/meta-x11-selection-private.h"
 #include "x11/window-props.h"
 #include "x11/window-x11.h"
@@ -287,8 +286,6 @@ meta_x11_display_dispose (GObject *object)
   meta_x11_startup_notification_release (x11_display);
 
   meta_prefs_remove_listener (prefs_changed_callback, x11_display);
-
-  meta_x11_display_ungrab_keys (x11_display);
 
   g_clear_object (&x11_display->x11_stack);
 
@@ -1634,9 +1631,6 @@ meta_x11_display_new (MetaDisplay  *display,
 
   x11_display->x11_stack = meta_x11_stack_new (x11_display);
 
-  x11_display->keys_grabbed = FALSE;
-  meta_x11_display_grab_keys (x11_display);
-
   meta_x11_display_update_workspace_layout (x11_display);
 
   if (meta_prefs_get_dynamic_workspaces ())
@@ -2261,6 +2255,14 @@ meta_x11_display_update_active_window_hint (MetaX11Display *x11_display)
 
   if (focus_window)
     data[0] = meta_window_x11_get_xwindow (focus_window);
+#ifdef HAVE_XWAYLAND
+  else if (x11_display->focus_xwindow && meta_is_wayland_compositor ())
+    /* On Wayland, when a Wayland window is focused, indicate that an
+     * actual window is focused rather than None, as None is otherwise
+     * also used during transient focus changes.
+     */
+    data[0] = x11_display->no_focus_window;
+#endif
   else
     data[0] = None;
 

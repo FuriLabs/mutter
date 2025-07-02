@@ -35,9 +35,9 @@ struct _MetaKeymapNative
 {
   ClutterKeymap parent_instance;
 
-  struct xkb_keymap *keymap;
-  gboolean num_lock;
-  gboolean caps_lock;
+  struct {
+    struct xkb_keymap *keymap;
+  } impl;
 };
 
 G_DEFINE_TYPE (MetaKeymapNative, meta_keymap_native,
@@ -48,7 +48,7 @@ meta_keymap_native_finalize (GObject *object)
 {
   MetaKeymapNative *keymap = META_KEYMAP_NATIVE (object);
 
-  xkb_keymap_unref (keymap->keymap);
+  xkb_keymap_unref (keymap->impl.keymap);
 
   G_OBJECT_CLASS (meta_keymap_native_parent_class)->finalize (object);
 }
@@ -84,7 +84,7 @@ meta_keymap_native_init (MetaKeymapNative *keymap)
 
   ctx = meta_create_xkb_context ();
   g_assert (ctx);
-  keymap->keymap = xkb_keymap_new_from_names (ctx, &names, 0);
+  keymap->impl.keymap = xkb_keymap_new_from_names (ctx, &names, 0);
   xkb_context_unref (ctx);
 }
 
@@ -94,32 +94,51 @@ meta_keymap_native_set_keyboard_map_in_impl (MetaKeymapNative  *keymap,
 {
   g_return_if_fail (xkb_keymap != NULL);
 
-  if (keymap->keymap)
-    xkb_keymap_unref (keymap->keymap);
-  keymap->keymap = xkb_keymap_ref (xkb_keymap);
+  g_clear_pointer (&keymap->impl.keymap, xkb_keymap_unref);
+  keymap->impl.keymap = xkb_keymap_ref (xkb_keymap);
 }
 
 struct xkb_keymap *
 meta_keymap_native_get_keyboard_map_in_impl (MetaKeymapNative *keymap)
 {
-  return keymap->keymap;
+  return keymap->impl.keymap;
 }
 
 typedef struct
 {
   MetaKeymapNative *keymap_native;
-  gboolean num_lock_state;
-  gboolean caps_lock_state;
+
+  xkb_mod_mask_t depressed_mods;
+  xkb_mod_mask_t latched_mods;
+  xkb_mod_mask_t locked_mods;
+
+  xkb_layout_index_t locked_layout_group;
 } UpdateLockedModifierStateData;
 
 static gboolean
-update_locked_modifier_state_in_main (gpointer user_data)
+update_state_in_main (gpointer user_data)
 {
   UpdateLockedModifierStateData *data = user_data;
+  MetaKeymapNative *keymap_native = data->keymap_native;
+  gboolean caps_lock_state;
+  gboolean num_lock_state;
 
-  clutter_keymap_set_lock_modifier_state (CLUTTER_KEYMAP (data->keymap_native),
-                                          data->caps_lock_state,
-                                          data->num_lock_state);
+  num_lock_state =
+    !!((data->latched_mods | data->locked_mods) &
+       (1 << xkb_keymap_mod_get_index (keymap_native->impl.keymap,
+                                       XKB_MOD_NAME_NUM)));
+  caps_lock_state =
+    !!((data->latched_mods | data->locked_mods) &
+       (1 << xkb_keymap_mod_get_index (keymap_native->impl.keymap,
+                                       XKB_MOD_NAME_CAPS)));
+
+  clutter_keymap_update_state (CLUTTER_KEYMAP (keymap_native),
+                               caps_lock_state,
+                               num_lock_state,
+                               data->locked_layout_group,
+                               data->depressed_mods,
+                               data->latched_mods,
+                               data->locked_mods);
 
   return G_SOURCE_REMOVE;
 }
@@ -133,18 +152,18 @@ meta_keymap_native_update_in_impl (MetaKeymapNative *keymap_native,
 
   data = g_new0 (UpdateLockedModifierStateData, 1);
   data->keymap_native = keymap_native;
-  data->num_lock_state =
-    xkb_state_mod_name_is_active (xkb_state,
-                                  XKB_MOD_NAME_NUM,
-                                  XKB_STATE_MODS_LATCHED |
-                                  XKB_STATE_MODS_LOCKED);
-  data->caps_lock_state =
-    xkb_state_mod_name_is_active (xkb_state,
-                                  XKB_MOD_NAME_CAPS,
-                                  XKB_STATE_MODS_LATCHED |
-                                  XKB_STATE_MODS_LOCKED);
+
+  data->depressed_mods =
+    xkb_state_serialize_mods (xkb_state, XKB_STATE_MODS_DEPRESSED);
+  data->latched_mods =
+    xkb_state_serialize_mods (xkb_state, XKB_STATE_MODS_LATCHED);
+  data->locked_mods =
+    xkb_state_serialize_mods (xkb_state, XKB_STATE_MODS_LOCKED);
+
+  data->locked_layout_group =
+    xkb_state_serialize_layout (xkb_state, XKB_STATE_LAYOUT_LOCKED);
 
   meta_seat_impl_queue_main_thread_idle (seat_impl,
-                                         update_locked_modifier_state_in_main,
+                                         update_state_in_main,
                                          data, g_free);
 }

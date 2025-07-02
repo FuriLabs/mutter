@@ -114,19 +114,12 @@ endif
 
 if have_x11
   mutter_pkg_private_deps += [
-    ice_dep,
     fribidi_dep,
     xcb_randr_dep,
     xkbfile_dep,
     xkbcommon_x11_dep,
     xtst_dep,
   ]
-
-  if have_sm
-    mutter_pkg_private_deps += [
-      sm_dep,
-    ]
-  endif
 endif
 
 if have_wayland
@@ -190,6 +183,10 @@ mutter_sources = [
   'backends/meta-a11y-manager.h',
   'backends/meta-backend.c',
   'backends/meta-backend-private.h',
+  'backends/meta-backlight.c',
+  'backends/meta-backlight-private.h',
+  'backends/meta-backlight-ref-white.c',
+  'backends/meta-backlight-ref-white-private.h',
   'backends/meta-barrier.c',
   'backends/meta-barrier-private.h',
   'backends/meta-color-device.c',
@@ -201,6 +198,8 @@ mutter_sources = [
   'backends/meta-color-profile.h',
   'backends/meta-color-store.c',
   'backends/meta-color-store.h',
+  'backends/meta-connector.c',
+  'backends/meta-connector.h',
   'backends/meta-crtc-mode.c',
   'backends/meta-crtc-mode.h',
   'backends/meta-crtc.c',
@@ -245,7 +244,7 @@ mutter_sources = [
   'backends/meta-keymap-utils.c',
   'backends/meta-keymap-utils.h',
   'backends/meta-logical-monitor.c',
-  'backends/meta-logical-monitor.h',
+  'backends/meta-logical-monitor-private.h',
   'backends/meta-monitor.c',
   'backends/meta-monitor-config-manager.c',
   'backends/meta-monitor-config-manager.h',
@@ -253,7 +252,7 @@ mutter_sources = [
   'backends/meta-monitor-config-store.h',
   'backends/meta-monitor-config-utils.c',
   'backends/meta-monitor-config-utils.h',
-  'backends/meta-monitor.h',
+  'backends/meta-monitor-private.h',
   'backends/meta-monitor-manager.c',
   'backends/meta-monitor-manager-dummy.c',
   'backends/meta-monitor-manager-dummy.h',
@@ -275,6 +274,7 @@ mutter_sources = [
   'backends/meta-screen-cast-window.h',
   'backends/meta-settings.c',
   'backends/meta-settings-private.h',
+  'backends/meta-sprite.c',
   'backends/meta-stage.c',
   'backends/meta-stage-impl.c',
   'backends/meta-stage-impl-private.h',
@@ -411,6 +411,8 @@ if have_x11
     'backends/x11/cm/meta-renderer-x11-cm.h',
     'backends/x11/meta-backend-x11.c',
     'backends/x11/meta-backend-x11.h',
+    'backends/x11/meta-backlight-x11.c',
+    'backends/x11/meta-backlight-x11.h',
     'backends/x11/meta-barrier-x11.c',
     'backends/x11/meta-barrier-x11.h',
     'backends/x11/meta-clutter-backend-x11.c',
@@ -443,6 +445,8 @@ if have_x11
     'backends/x11/meta-output-xrandr.h',
     'backends/x11/meta-renderer-x11.c',
     'backends/x11/meta-renderer-x11.h',
+    'backends/x11/meta-sprite-x11.c',
+    'backends/x11/meta-sprite-x11.h',
     'backends/x11/meta-stage-x11.c',
     'backends/x11/meta-stage-x11.h',
     'backends/x11/meta-virtual-input-device-x11.c',
@@ -453,6 +457,8 @@ if have_x11
     'backends/x11/nested/meta-backend-x11-nested.h',
     'backends/x11/nested/meta-cursor-renderer-x11-nested.c',
     'backends/x11/nested/meta-cursor-renderer-x11-nested.h',
+    'backends/x11/nested/meta-sprite-x11-nested.c',
+    'backends/x11/nested/meta-sprite-x11-nested.h',
     'backends/x11/nested/meta-stage-x11-nested.c',
     'backends/x11/nested/meta-stage-x11-nested.h',
     'backends/x11/nested/meta-renderer-x11-nested.c',
@@ -492,8 +498,6 @@ if have_x11_client
     'x11/meta-x11-frame.h',
     'x11/meta-x11-group.c',
     'x11/meta-x11-group-private.h',
-    'x11/meta-x11-keybindings-private.h',
-    'x11/meta-x11-keybindings.c',
     'x11/meta-x11-selection.c',
     'x11/meta-x11-selection-private.h',
     'x11/meta-x11-selection-input-stream.c',
@@ -503,8 +507,6 @@ if have_x11_client
     'x11/meta-x11-stack.c',
     'x11/meta-x11-stack-private.h',
     'x11/mutter-Xatomtype.h',
-    'x11/session.c',
-    'x11/session.h',
     'x11/window-props.c',
     'x11/window-props.h',
     'x11/window-x11.c',
@@ -607,6 +609,8 @@ if have_wayland
     'wayland/meta-wayland-client-private.h',
     'wayland/meta-wayland-color-management.c',
     'wayland/meta-wayland-color-management.h',
+    'wayland/meta-wayland-color-representation.c',
+    'wayland/meta-wayland-color-representation.h',
     'wayland/meta-wayland-commit-timing.c',
     'wayland/meta-wayland-cursor-shape.c',
     'wayland/meta-wayland-cursor-shape.h',
@@ -695,6 +699,8 @@ if have_wayland
     'wayland/meta-wayland-tablet-pad-group.c',
     'wayland/meta-wayland-tablet-pad-group.h',
     'wayland/meta-wayland-tablet-pad.h',
+    'wayland/meta-wayland-tablet-pad-dial.c',
+    'wayland/meta-wayland-tablet-pad-dial.h',
     'wayland/meta-wayland-tablet-pad-ring.c',
     'wayland/meta-wayland-tablet-pad-ring.h',
     'wayland/meta-wayland-tablet-pad-strip.c',
@@ -730,6 +736,8 @@ if have_wayland
     'wayland/meta-wayland-xdg-shell.h',
     'wayland/meta-wayland-xdg-dialog.c',
     'wayland/meta-wayland-xdg-dialog.h',
+    'wayland/meta-wayland-xdg-toplevel-tag.c',
+    'wayland/meta-wayland-xdg-toplevel-tag.h',
     'wayland/meta-window-wayland.c',
     'wayland/meta-window-wayland.h',
   ]
@@ -808,6 +816,7 @@ if have_native_backend
     'backends/native/meta-input-device-tool-native.h',
     'backends/native/meta-input-settings-native.c',
     'backends/native/meta-input-settings-native.h',
+    'backends/native/meta-keymap-native-private.h',
     'backends/native/meta-keymap-native.c',
     'backends/native/meta-keymap-native.h',
     'backends/native/meta-monitor-manager-native.c',
@@ -880,6 +889,8 @@ if have_native_backend
     'backends/native/meta-seat-impl.h',
     'backends/native/meta-seat-native.c',
     'backends/native/meta-seat-native.h',
+    'backends/native/meta-sprite-native.c',
+    'backends/native/meta-sprite-native.h',
     'backends/native/meta-stage-native.c',
     'backends/native/meta-stage-native.h',
     'backends/native/meta-thread-impl.c',
@@ -898,6 +909,13 @@ if have_native_backend
     'compositor/meta-compositor-native.h',
     'compositor/meta-compositor-view-native.c',
     'compositor/meta-compositor-view-native.h',
+  ]
+endif
+
+if have_devkit
+  mutter_sources += [
+    'core/meta-mdk.c',
+    'core/meta-mdk.h',
   ]
 endif
 
@@ -921,6 +939,8 @@ endif
 
 if have_libgudev
   mutter_sources += [
+    'backends/meta-backlight-sysfs.c',
+    'backends/meta-backlight-sysfs-private.h',
     'backends/meta-udev.c',
     'backends/meta-udev.h',
   ]
@@ -1110,132 +1130,99 @@ wayland_protocol_server_headers = []
 wayland_protocol_client_headers = []
 wayland_protocol_sources = []
 
-wayland_protocol_files = {}
-
 if have_wayland
   # Format:
   #  - protocol name
-  #  - protocol stability ('private', 'stable' or 'unstable')
-  #  - protocol version (if stability is 'unstable')
+  #  - protocol type ('stable', 'staging', 'unstable', 'private', 'eglstreams')
+  #    * 'stable', 'staging' and 'unstable' are from wayland-protocols
+  #    * 'private' are shipped in this repo
+  #    * 'eglstreams' are from wayland-eglstream-protocols
+  #  - protocol version (optional for 'stable', 'staging' and 'unstable')
   wayland_protocols = [
-    ['color-management', 'staging', 'v1', ],
-    ['commit-timing', 'staging', 'v1', ],
+    ['color-management', 'staging', 1, ],
+    ['color-representation', 'staging', 1, ],
+    ['commit-timing', 'staging', 1, ],
     ['cursor-shape-v1', 'private', ],
-    ['drm-lease', 'staging', 'v1', ],
-    ['fractional-scale', 'staging', 'v1', ],
-    ['fifo', 'staging', 'v1', ],
+    ['drm-lease', 'staging', 1, ],
+    ['fractional-scale', 'staging', 1, ],
+    ['fifo', 'staging', 1, ],
     ['gtk-shell', 'private', ],
-    ['idle-inhibit', 'unstable', 'v1', ],
-    ['keyboard-shortcuts-inhibit', 'unstable', 'v1', ],
-    ['linux-dmabuf', 'stable', 'v1', ],
+    ['idle-inhibit', 'unstable', 1, ],
+    ['keyboard-shortcuts-inhibit', 'unstable', 1, ],
+    ['linux-dmabuf', 'stable', 1, ],
     ['linux-drm-syncobj-v1', 'private', ],
-    ['pointer-constraints', 'unstable', 'v1', ],
-    ['pointer-gestures', 'unstable', 'v1', ],
+    ['pointer-constraints', 'unstable', 1, ],
+    ['pointer-gestures', 'unstable', 1, ],
     ['presentation-time', 'stable', ],
-    ['primary-selection', 'unstable', 'v1', ],
-    ['relative-pointer', 'unstable', 'v1', ],
+    ['primary-selection', 'unstable', 1, ],
+    ['relative-pointer', 'unstable', 1, ],
     ['session-management-v1', 'private', ],
-    ['single-pixel-buffer', 'staging', 'v1', ],
-    ['tablet', 'unstable', 'v2', ],
-    ['text-input', 'unstable', 'v3', ],
+    ['single-pixel-buffer', 'staging', 1, ],
+    ['tablet', 'stable', 2, ],
+    ['text-input', 'unstable', 3, ],
     ['viewporter', 'stable', ],
-    ['xdg-activation', 'staging', 'v1', ],
-    ['xdg-dialog', 'staging', 'v1', ],
-    ['xdg-foreign', 'unstable', 'v1', ],
-    ['xdg-foreign', 'unstable', 'v2', ],
-    ['xdg-output', 'unstable', 'v1', ],
+    ['xdg-activation', 'staging', 1, ],
+    ['xdg-dialog', 'staging', 1, ],
+    ['xdg-foreign', 'unstable', 1, ],
+    ['xdg-foreign', 'unstable', 2, ],
+    ['xdg-output', 'unstable', 1, ],
     ['xdg-shell', 'stable', ],
-    ['xdg-system-bell', 'staging', 'v1', ],
-    ['xdg-toplevel-drag', 'staging', 'v1'],
-    ['xwayland-keyboard-grab', 'unstable', 'v1', ],
+    ['xdg-system-bell', 'staging', 1, ],
+    ['xdg-toplevel-drag', 'staging', 1, ],
+    ['xdg-toplevel-tag', 'staging', 1, ],
+    ['xwayland-keyboard-grab', 'unstable', 1, ],
   ]
-  if have_wayland_eglstream
-    wayland_eglstream_protocols_dir = wayland_eglstream_protocols_dep.get_variable('pkgdatadir')
-    wayland_protocols += [
-      ['wayland-eglstream-controller', 'third-party', wayland_eglstream_protocols_dir],
-    ]
-  endif
   if have_xwayland
     wayland_protocols += [
       ['mutter-x11-interop', 'private', ],
     ]
   endif
+  if have_wayland_eglstream
+    wayland_protocols += [
+      ['wayland-eglstream-controller', 'eglstreams', ],
+    ]
+    wayland_eglstream_protocols_dir = wayland_eglstream_protocols_dep.get_variable('pkgdatadir')
+  endif
 
-  wayland_scanner = find_program('wayland-scanner')
-  protocols_dir = wayland_protocols_dep.get_variable('pkgdatadir')
-  assert(protocols_dir != '', 'Could not get pkgdatadir from wayland-protocols.pc')
+  protocol_xmls = files()
 
   foreach p: wayland_protocols
     protocol_name = p.get(0)
     protocol_type = p.get(1)
 
-    if protocol_type == 'stable'
-      if p.length() == 3
-        protocol_version = p.get(2)
-        output_base = '@0@-@1@'.format(protocol_name, protocol_version)
-      else
-        output_base = protocol_name
-      endif
-      input = protocols_dir / protocol_type / protocol_name / '@0@.xml'.format(output_base)
-    elif protocol_type == 'staging'
-      protocol_version = p.get(2)
-      output_base = '@0@-@1@'.format(protocol_name, protocol_version)
-      input = protocols_dir / protocol_type / protocol_name / '@0@.xml'.format(output_base)
-    elif protocol_type == 'private'
-      output_base = protocol_name
-      input = 'wayland/protocol/@0@.xml'.format(protocol_name)
-    elif protocol_type == 'third-party'
-      output_base = protocol_name
-      protocol_dir = p.get(2)
-      input = protocol_dir / '@0@.xml'.format(protocol_name)
+    if protocol_type == 'private'
+      protocol_xmls += files(
+        'wayland/protocol/@0@.xml'.format(protocol_name)
+      )
+    elif protocol_type == 'eglstreams'
+      protocol_xmls += files(
+        '@0@/@1@.xml'.format(wayland_eglstream_protocols_dir, protocol_name)
+      )
     else
-      protocol_version = p.get(2)
-      output_base = '@0@-@1@-@2@'.format(protocol_name,
-                                         protocol_type,
-                                         protocol_version)
-      input = protocols_dir / protocol_type / protocol_name / '@0@.xml'.format(output_base)
+      if p.length() > 2
+        protocol_xmls += wl_mod.find_protocol(
+          protocol_name,
+          state: protocol_type,
+          version: p.get(2))
+      else
+        protocol_xmls += wl_mod.find_protocol(
+          protocol_name,
+          state: protocol_type)
+      endif
     endif
-
-    server_header = custom_target('@0@ server header'.format(output_base),
-      input: input,
-      output: '@0@-server-protocol.h'.format(output_base),
-      command: [
-        wayland_scanner,
-        'server-header',
-        '@INPUT@', '@OUTPUT@',
-      ]
-    )
-    client_header = custom_target('@0@ client header'.format(output_base),
-      input: input,
-      output: '@0@-client-protocol.h'.format(output_base),
-      command: [
-        wayland_scanner,
-        'client-header',
-        '@INPUT@', '@OUTPUT@',
-      ]
-    )
-    protocol_code = custom_target('@0@ source'.format(output_base),
-      input: input,
-      output: '@0@-protocol.c'.format(output_base),
-      command: [
-        wayland_scanner,
-        'private-code',
-        '@INPUT@', '@OUTPUT@',
-      ]
-    )
-
-    wayland_protocol_files += {
-      protocol_name: {
-        'server-header': server_header,
-        'client-header': client_header,
-        'protocol-code': protocol_code,
-      },
-    }
-
-    wayland_protocol_server_headers += server_header
-    wayland_protocol_client_headers += client_header
-    wayland_protocol_sources += protocol_code
   endforeach
+
+  foreach xml: protocol_xmls
+    generated = wl_mod.scan_xml(xml,
+      client: true,
+      server: true)
+
+    wayland_protocol_sources += generated[0]
+    wayland_protocol_client_headers += generated[1]
+    wayland_protocol_server_headers += generated[2]
+  endforeach
+
+  message('Generated code for @0@ wayland protocols'.format(wayland_protocol_sources.length()))
 endif
 
 mutter_built_sources += wayland_protocol_server_headers
@@ -1251,6 +1238,8 @@ foreach built_source : mutter_built_sources
     mutter_built_headers += [built_source]
   endif
 endforeach
+
+subdir('helpers')
 
 subdir('third_party')
 
@@ -1300,26 +1289,6 @@ mutter = executable('mutter',
   install_dir: bindir,
   install: true,
 )
-if have_x11
-  executable('mutter-restart-helper',
-    sources: [
-      files('core/restart-helper.c'),
-    ],
-    include_directories: [
-      top_includepath,
-    ],
-    c_args: [
-      mutter_c_args,
-      '-DG_LOG_DOMAIN="mutter-restart-helper"',
-    ],
-    dependencies: [
-      x11_dep,
-      xcomposite_dep,
-    ],
-    install_dir: libexecdir,
-    install: true,
-  )
-endif
 
 if have_introspection
   mutter_introspected_sources = []

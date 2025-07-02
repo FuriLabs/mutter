@@ -24,7 +24,7 @@
 #include "tests/meta-monitor-manager-test.h"
 #include "tests/meta-test-utils.h"
 #include "backends/meta-crtc.h"
-#include "backends/meta-monitor.h"
+#include "backends/meta-monitor-private.h"
 #include "backends/meta-output.h"
 
 #define MAX_N_MODES 25
@@ -105,7 +105,8 @@ typedef struct _MonitorTestCaseOutput
   MetaTileInfo tile_info;
   gboolean dynamic_scale;
   float scale;
-  gboolean is_laptop_panel;
+  MetaConnectorType connector_type;
+  int connector_number;
   gboolean is_underscanning;
   unsigned int max_bpc;
   MetaOutputRGBRange rgb_range;
@@ -116,6 +117,7 @@ typedef struct _MonitorTestCaseOutput
   int suggested_y;
   int backlight_min;
   int backlight_max;
+  const char *sysfs_backlight;
   gboolean has_edid_info;
   MetaEdidInfo edid_info;
   uint64_t supported_color_spaces;

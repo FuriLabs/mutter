@@ -48,6 +48,7 @@
 #include "backends/x11/meta-clutter-backend-x11.h"
 #include "backends/x11/meta-color-manager-x11.h"
 #include "backends/x11/meta-event-x11.h"
+#include "backends/x11/meta-input-device-x11.h"
 #include "backends/x11/meta-seat-x11.h"
 #include "backends/x11/meta-stage-x11.h"
 #include "backends/x11/meta-renderer-x11.h"
@@ -1189,4 +1190,181 @@ meta_backend_x11_get_barriers (MetaBackendX11 *backend_x11)
     meta_backend_x11_get_instance_private (backend_x11);
 
   return priv->barriers;
+}
+
+void
+meta_backend_x11_passive_button_grab (MetaBackendX11      *backend_x11,
+                                      Window               xwindow,
+                                      int                  button,
+                                      MetaPassiveGrabMode  grab_mode,
+                                      ClutterModifierType  modmask)
+{
+  MetaBackendX11Private *priv =
+    meta_backend_x11_get_instance_private (backend_x11);
+  unsigned char mask_bits[XIMaskLen (XI_LASTEVENT)] = { 0 };
+  XIEventMask mask = { XIAllMasterDevices, sizeof (mask_bits), mask_bits };
+  XIGrabModifiers mods = { 0, };
+
+  mtk_x11_error_trap_push (priv->xdisplay);
+
+  XISetMask (mask.mask, XI_ButtonPress);
+  XISetMask (mask.mask, XI_ButtonRelease);
+  XISetMask (mask.mask, XI_Motion);
+
+  if (modmask == 0)
+    mods.modifiers = XIAnyModifier;
+  else
+    mods.modifiers = modmask;
+
+  XIGrabButton (priv->xdisplay,
+                META_VIRTUAL_CORE_POINTER_ID,
+                button, xwindow, None,
+                (grab_mode == META_GRAB_MODE_SYNC ?
+                 XIGrabModeSync :
+                 XIGrabModeAsync),
+                XIGrabModeAsync, False,
+                &mask, 1, &mods);
+
+  XSync (priv->xdisplay, False);
+
+  mtk_x11_error_trap_pop (priv->xdisplay);
+}
+
+void
+meta_backend_x11_passive_button_ungrab (MetaBackendX11      *backend_x11,
+                                        Window               xwindow,
+                                        int                  button,
+                                        ClutterModifierType  modmask)
+{
+  MetaBackendX11Private *priv =
+    meta_backend_x11_get_instance_private (backend_x11);
+  XIGrabModifiers mods = { 0, };
+
+  mtk_x11_error_trap_push (priv->xdisplay);
+
+  if (modmask == 0)
+    mods.modifiers = XIAnyModifier;
+  else
+    mods.modifiers = modmask;
+
+  XIUngrabButton (priv->xdisplay,
+                  META_VIRTUAL_CORE_POINTER_ID,
+                  button, xwindow,
+                  1, &mods);
+
+  XSync (priv->xdisplay, False);
+
+  mtk_x11_error_trap_pop (priv->xdisplay);
+}
+
+void
+meta_backend_x11_passive_key_grab (MetaBackendX11      *backend_x11,
+                                   Window               xwindow,
+                                   int                  keycode,
+                                   MetaPassiveGrabMode  grab_mode,
+                                   ClutterModifierType  modmask)
+{
+  MetaBackendX11Private *priv =
+    meta_backend_x11_get_instance_private (backend_x11);
+  unsigned char mask_bits[XIMaskLen (XI_LASTEVENT)] = { 0 };
+  XIEventMask mask = { XIAllMasterDevices, sizeof (mask_bits), mask_bits };
+  XIGrabModifiers mods = { 0, };
+
+  mtk_x11_error_trap_push (priv->xdisplay);
+
+  XISetMask (mask.mask, XI_KeyPress);
+  XISetMask (mask.mask, XI_KeyRelease);
+
+  if (modmask == 0)
+    mods.modifiers = XIAnyModifier;
+  else
+    mods.modifiers = modmask;
+
+  XIGrabKeycode (priv->xdisplay,
+                 META_VIRTUAL_CORE_KEYBOARD_ID,
+                 keycode, xwindow,
+                 (grab_mode == META_GRAB_MODE_SYNC ?
+                  XIGrabModeSync :
+                  XIGrabModeAsync),
+                 XIGrabModeAsync, False,
+                 &mask, 1, &mods);
+
+  XSync (priv->xdisplay, False);
+
+  mtk_x11_error_trap_pop (priv->xdisplay);
+}
+
+void
+meta_backend_x11_passive_key_ungrab (MetaBackendX11      *backend_x11,
+                                     Window               xwindow,
+                                     int                  keycode,
+                                     ClutterModifierType  modmask)
+{
+  MetaBackendX11Private *priv =
+    meta_backend_x11_get_instance_private (backend_x11);
+  unsigned char mask_bits[XIMaskLen (XI_LASTEVENT)] = { 0 };
+  XIEventMask mask = { XIAllMasterDevices, sizeof (mask_bits), mask_bits };
+  XIGrabModifiers mods = { 0, };
+
+  mtk_x11_error_trap_push (priv->xdisplay);
+
+  XISetMask (mask.mask, XI_KeyPress);
+  XISetMask (mask.mask, XI_KeyRelease);
+
+  if (modmask == 0)
+    mods.modifiers = XIAnyModifier;
+  else
+    mods.modifiers = modmask;
+
+  XIUngrabKeycode (priv->xdisplay,
+                   META_VIRTUAL_CORE_KEYBOARD_ID,
+                   keycode, xwindow,
+                   1, &mods);
+
+  XSync (priv->xdisplay, False);
+
+  mtk_x11_error_trap_pop (priv->xdisplay);
+}
+
+void
+meta_backend_x11_allow_events (MetaBackendX11     *backend_x11,
+                               const ClutterEvent *event,
+                               MetaEventMode       event_mode)
+{
+  MetaBackendX11Private *priv =
+    meta_backend_x11_get_instance_private (backend_x11);
+  ClutterInputDevice *device;
+  int xi_event_mode, device_id;
+  uint32_t time_ms;
+
+  device = clutter_event_get_device (event);
+  device_id = meta_input_device_x11_get_device_id (device);
+  time_ms = clutter_event_get_time (event);
+
+  switch (event_mode)
+    {
+    case META_EVENT_MODE_KEEP_FROZEN:
+      xi_event_mode = XISyncDevice;
+      meta_topic (META_DEBUG_X11,
+                  "Events kept frozen, time %u device %i",
+                  (unsigned int) time_ms, device_id);
+      break;
+    case META_EVENT_MODE_REPLAY:
+      xi_event_mode = XIReplayDevice;
+      meta_topic (META_DEBUG_X11,
+                  "Replaying events time %u device %i",
+                  (unsigned int) time_ms, device_id);
+      break;
+    case META_EVENT_MODE_THAW:
+      xi_event_mode = XIAsyncDevice;
+      meta_topic (META_DEBUG_X11,
+                  "Keeping events grabbed, time %u device %i",
+                  (unsigned int) time_ms, device_id);
+      break;
+    default:
+      g_assert_not_reached ();
+      return;
+    }
+
+  XIAllowEvents (priv->xdisplay, device_id, xi_event_mode, time_ms);
 }

@@ -36,8 +36,7 @@ typedef gboolean (* ClutterEventHandler) (const ClutterEvent *event,
 typedef enum
 {
   CLUTTER_DEVICE_UPDATE_NONE = 0,
-  CLUTTER_DEVICE_UPDATE_EMIT_CROSSING = 1 << 0,
-  CLUTTER_DEVICE_UPDATE_IGNORE_CACHE = 1 << 1,
+  CLUTTER_DEVICE_UPDATE_IGNORE_CACHE = 1 << 0,
 } ClutterDeviceUpdateFlags;
 
 /* stage */
@@ -110,10 +109,6 @@ GList * clutter_stage_get_views_for_rect (ClutterStage          *stage,
 
 void clutter_stage_set_actor_needs_immediate_relayout (ClutterStage *stage);
 
-void clutter_stage_remove_device_entry (ClutterStage         *self,
-                                        ClutterInputDevice   *device,
-                                        ClutterEventSequence *sequence);
-
 void clutter_stage_unlink_grab (ClutterStage *self,
                                 ClutterGrab  *grab);
 
@@ -151,8 +146,8 @@ void clutter_stage_invalidate_devices (ClutterStage *stage);
 
 GPtrArray * clutter_stage_get_active_gestures_array (ClutterStage *self);
 
-ClutterActor * clutter_stage_update_device_for_event (ClutterStage *stage,
-                                                      ClutterEvent *event);
+void clutter_stage_update_device_for_event (ClutterStage *stage,
+                                            ClutterEvent *event);
 
 void clutter_stage_update_devices_in_view (ClutterStage     *stage,
                                            ClutterStageView *view);

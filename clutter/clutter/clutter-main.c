@@ -53,6 +53,8 @@ guint clutter_debug_flags       = 0;
 guint clutter_paint_debug_flags = 0;
 guint clutter_pick_debug_flags  = 0;
 
+static GLogLevelFlags clutter_log_level = G_LOG_LEVEL_MESSAGE;
+
 /* A constant added to heuristic max render time to account for variations
  * in the estimates.
  */
@@ -84,6 +86,10 @@ clutter_create_context (ClutterBackendConstructor   backend_constructor,
     return NULL;
 
   g_object_add_weak_pointer (G_OBJECT (ClutterCntx), (gpointer *) &ClutterCntx);
+
+  if (g_test_initialized ())
+    clutter_log_level = G_LOG_LEVEL_DEBUG;
+
   return ClutterCntx;
 }
 
@@ -135,44 +141,6 @@ emit_event (ClutterStage *stage,
     clutter_accessibility_snoop_key_event (stage, (ClutterKeyEvent *) event);
 
   clutter_stage_emit_event (stage, event);
-}
-
-static void
-maybe_remove_device_for_event (ClutterStage *stage,
-                               ClutterEvent *event,
-                               gboolean      emit_crossing)
-{
-  ClutterInputDevice *device = clutter_event_get_device (event);
-  ClutterEventSequence *sequence = clutter_event_get_event_sequence (event);
-  graphene_point_t point;
-  uint32_t time;
-
-  if (clutter_event_type (event) == CLUTTER_DEVICE_REMOVED)
-    {
-      ClutterInputDeviceType device_type =
-        clutter_input_device_get_device_type (device);
-
-      if (device_type != CLUTTER_POINTER_DEVICE &&
-          device_type != CLUTTER_TABLET_DEVICE &&
-          device_type != CLUTTER_PEN_DEVICE &&
-          device_type != CLUTTER_ERASER_DEVICE &&
-          device_type != CLUTTER_CURSOR_DEVICE)
-        return;
-    }
-
-  clutter_event_get_coords (event, &point.x, &point.y);
-  time = clutter_event_get_time (event);
-
-  clutter_stage_update_device (stage,
-                               device, sequence,
-                               NULL,
-                               point,
-                               time,
-                               NULL,
-                               NULL,
-                               TRUE);
-
-  clutter_stage_remove_device_entry (stage, device, sequence);
 }
 
 /**
@@ -264,7 +232,7 @@ clutter_stage_handle_event (ClutterStage *stage,
       event_type == CLUTTER_DEVICE_REMOVED)
     {
       _clutter_stage_process_queued_events (stage);
-      maybe_remove_device_for_event (stage, event, TRUE);
+      clutter_stage_update_device_for_event (stage, event);
     }
 }
 
@@ -284,6 +252,7 @@ _clutter_process_event_details (ClutterActor    *stage,
       case CLUTTER_PAD_BUTTON_RELEASE:
       case CLUTTER_PAD_STRIP:
       case CLUTTER_PAD_RING:
+      case CLUTTER_PAD_DIAL:
       case CLUTTER_IM_COMMIT:
       case CLUTTER_IM_DELETE:
       case CLUTTER_IM_PREEDIT:
@@ -648,7 +617,7 @@ _clutter_debug_messagev (const char *format,
   fmt = g_strconcat (stamp, ":", format, NULL);
   g_free (stamp);
 
-  g_logv (G_LOG_DOMAIN, G_LOG_LEVEL_MESSAGE, fmt, var_args);
+  g_logv (G_LOG_DOMAIN, clutter_log_level, fmt, var_args);
 
   g_free (fmt);
 }
