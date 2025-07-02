@@ -1,3 +1,9 @@
+mutter (49~alpha.1-0ubuntu2) questing; urgency=medium
+
+  * debian/control: Add umockdev build dep in addition to libumockdev-dev.
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Wed, 02 Jul 2025 18:09:06 +0800
+
 mutter (49~alpha.1-0ubuntu1) questing; urgency=medium
 
   * New upstream release 49.alpha.1 (LP: #1968901, LP: #2100243, LP: #2102063)
