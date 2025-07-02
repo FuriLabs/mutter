@@ -4,6 +4,12 @@ mutter (49~alpha.1-0ubuntu1) UNRELEASED; urgency=medium
   * Drop patch: clutter-Repick-actors-when-touches-emulate-button-clicks.patch
     because it is Xorg-specific and 48-specific. But Xorg sessions are
     being retired so updating it to 49 is not required.
+  * Drop upstreamed patches:
+    - wayland-xdg-shell-Check-popup-resource-for-parent-unmappe.patch
+    - wayland-xdg-shell-Check-for-NULL-xdg_popup-resource.patch
+    - cursor-drag-and-drop.patch
+    - cursor-sprite-xcursor-Reset-current_frame-only-if-xcursor.patch
+    - Use-access-instead-of-checking-permission-modes-for-tmp-..patch
   * Refresh patches:
     - tests-Do-not-run-screencast-tests.patch
     - Mark-several-additional-tests-as-flaky.patch
