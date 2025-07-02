@@ -47,3 +47,4 @@ clutter-Repick-actors-when-touches-emulate-button-clicks.patch
 onscreen-native-Return-the-correct-number-of-EGL-modifier.patch
 wayland-Pass-latest-cogl-sync_fd-on-kms-update.patch
 prefer-GPUs-with-built-in-panels-connected-when-sele.patch
+window-drag-Dismiss-grab-before-destroying-actor.patch

@@ -1,0 +1,30 @@
+From: Alessandro Astone <alessandro.astone@canonical.com>
+Date: Wed, 2 Jul 2025 12:00:33 +0200
+Subject: window-drag: Dismiss grab before destroying actor
+
+clutter_actor_finalize asserts that no grabs are active.
+MetaWindowDrag might be destroyed with a grab still active, such as when
+early-returning for an error in meta_window_drag_begin, so dismiss its grab
+before destroying its actor.
+
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/3753
+Bug-Ubuntu: https://launchpad.net/bugs/2107454
+Forwarded: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4520
+---
+ src/compositor/meta-window-drag.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/compositor/meta-window-drag.c b/src/compositor/meta-window-drag.c
+index 70f5da2..09dd491 100644
+--- a/src/compositor/meta-window-drag.c
++++ b/src/compositor/meta-window-drag.c
+@@ -180,8 +180,8 @@ meta_window_drag_finalize (GObject *object)
+   MetaWindowDrag *window_drag = META_WINDOW_DRAG (object);
+ 
+   hide_tile_preview (window_drag);
+-  g_clear_pointer (&window_drag->handler, clutter_actor_destroy);
+   g_clear_object (&window_drag->grab);
++  g_clear_pointer (&window_drag->handler, clutter_actor_destroy);
+   g_clear_object (&window_drag->effective_grab_window);
+ 
+   G_OBJECT_CLASS (meta_window_drag_parent_class)->finalize (object);
