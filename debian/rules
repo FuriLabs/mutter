@@ -10,11 +10,7 @@ export DPKG_GENSYMBOLS_CHECK_LEVEL = 4
 
 # Following upstream method to compute the API version
 MUTTER_MAJOR_VERSION = $(shell echo $(DEB_VERSION_UPSTREAM) | sed 's/[~.].*//')
-
-# As of 49.alpha.1, the API version is still 16. That's probably a mistake(?)
-# MUTTER_API_VERSION = $(shell echo $$(( $(MUTTER_MAJOR_VERSION) - 32 )) )
-MUTTER_API_VERSION = 16
-
+MUTTER_API_VERSION = $(shell echo $$(( $(MUTTER_MAJOR_VERSION) - 32 )) )
 MUTTER_SONAME = 0
 
 export MUTTER_API_VERSION

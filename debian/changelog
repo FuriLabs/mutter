@@ -10,6 +10,7 @@ mutter (49~alpha.1-1) UNRELEASED; urgency=medium
     - tests-Install-stacking-tests-into-a-subdirectory.patch
   * Added new binary package 'mutter-dev-bin' for the missing 'mutter-devkit'
     binary. Four years late.
+  * Bump the Mutter API/ABI to 17.
 
  -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Mon, 30 Jun 2025 17:28:48 +0800
 
