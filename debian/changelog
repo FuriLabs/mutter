@@ -1,6 +1,6 @@
 mutter (49~alpha.1-0ubuntu1) UNRELEASED; urgency=medium
 
-  * New upstream release 49.alpha.1
+  * New upstream release 49.alpha.1 (LP: #1968901, LP: #2100243, LP: #2102063)
   * Drop Xorg-specific patches:
     - clutter-Repick-actors-when-touches-emulate-button-clicks.patch
     - x11-Add-support-for-fractional-scaling-using-Randr.patch
