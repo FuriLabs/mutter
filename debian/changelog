@@ -1,9 +1,9 @@
 mutter (49~alpha.1-0ubuntu1) UNRELEASED; urgency=medium
 
   * New upstream release 49.alpha.1
-  * Drop patch: clutter-Repick-actors-when-touches-emulate-button-clicks.patch
-    because it is Xorg-specific and 48-specific. But Xorg sessions are
-    being retired so updating it to 49 is not required.
+  * Drop Xorg-specific patches:
+    - clutter-Repick-actors-when-touches-emulate-button-clicks.patch
+    - x11-Add-support-for-fractional-scaling-using-Randr.patch
   * Drop upstreamed patches:
     - wayland-xdg-shell-Check-popup-resource-for-parent-unmappe.patch
     - wayland-xdg-shell-Check-for-NULL-xdg_popup-resource.patch
