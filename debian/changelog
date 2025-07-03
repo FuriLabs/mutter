@@ -1,9 +1,19 @@
-mutter (48.3.1-3) UNRELEASED; urgency=medium
+mutter (48.4-1) UNRELEASED; urgency=medium
 
+  [ Jeremy Bícha ]
+  * New upstream bugfix release
+    - Unlink outputs from unused connectors in update_outputs
+    - Add speed limit to Visual alerts
+    - Fix behavior of windows that get activated before mapped
+    - Fix incorrect cursor over Xwayland clients (LP: #2111502)
+    - Fix hi-res scroll events getting converted to flip-flopping discrete events
+    - Fixed crash
+
+  [ Simon McVittie ]
   * d/gbp.conf: Use upstream/48.x branch for trixie
   * Revert "debian/watch: watch for development releases"
 
- -- Simon McVittie <smcv@debian.org>  Thu, 19 Jun 2025 10:57:53 +0100
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Thu, 03 Jul 2025 08:34:31 -0400
 
 mutter (48.3.1-2) unstable; urgency=medium
 
