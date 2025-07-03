@@ -17,8 +17,10 @@ Forwarded: no
  src/tests/clutter/conform/grab.c      |  6 ++++++
  src/tests/clutter/conform/meson.build |  8 +++++++-
  src/tests/meson.build                 | 16 ++++++++++++++--
+ src/tests/monitor-tests-common.c      |  6 +++++-
  src/tests/mtk/meson.build             |  1 +
- 5 files changed, 52 insertions(+), 3 deletions(-)
+ src/tests/mtk/time-utils-tests.c      |  6 ++++++
+ 7 files changed, 63 insertions(+), 4 deletions(-)
 
 diff --git a/src/tests/clutter/conform/gesture.c b/src/tests/clutter/conform/gesture.c
 index f3901a2..c0affef 100644
@@ -162,6 +164,23 @@ index 6364fd5..2291302 100644
      env: test_env,
      args: [
        files('stacking' / stacking_test + '.metatest'),
+diff --git a/src/tests/monitor-tests-common.c b/src/tests/monitor-tests-common.c
+index d03fecf..46f04b9 100644
+--- a/src/tests/monitor-tests-common.c
++++ b/src/tests/monitor-tests-common.c
+@@ -226,7 +226,11 @@ meta_check_monitor_test_clients_state (void)
+ {
+   meta_check_test_client_state (wayland_monitor_test_client);
+   meta_check_test_client_state (x11_monitor_test_client);
+-  check_test_client_x11_state (x11_monitor_test_client);
++
++  if (g_getenv ("DEB_ALLOW_FLAKY_TESTS") == NULL)
++    g_test_skip ("https://gitlab.gnome.org/GNOME/mutter/-/issues/4200");
++  else
++    check_test_client_x11_state (x11_monitor_test_client);
+ }
+ 
+ static MetaMonitorTestSetup *
 diff --git a/src/tests/mtk/meson.build b/src/tests/mtk/meson.build
 index e5400a4..df8f6d6 100644
 --- a/src/tests/mtk/meson.build
@@ -174,3 +193,20 @@ index e5400a4..df8f6d6 100644
      'sources': [
        'mtk/time-utils-tests.c',
      ]
+diff --git a/src/tests/mtk/time-utils-tests.c b/src/tests/mtk/time-utils-tests.c
+index 792f82d..704dcb3 100644
+--- a/src/tests/mtk/time-utils-tests.c
++++ b/src/tests/mtk/time-utils-tests.c
+@@ -28,6 +28,12 @@ test_extrapolate_interval_boundary (void)
+   int64_t now_us;
+   int64_t next_interval_boundary_us;
+ 
++  if (g_getenv ("DEB_ALLOW_FLAKY_TESTS") == NULL)
++    {
++      g_test_skip ("https://gitlab.gnome.org/GNOME/mutter/-/issues/4199");
++      return;
++    }
++
+   now_us = g_get_monotonic_time ();
+ 
+   next_interval_boundary_us =
