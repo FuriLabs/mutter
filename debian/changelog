@@ -1,3 +1,10 @@
+mutter (49~alpha.1-0ubuntu3) questing; urgency=medium
+
+  * debian/patches: Mark more tests as flaky for 49.alpha. These issues
+    have been reported upstream.
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 03 Jul 2025 18:10:10 +0800
+
 mutter (49~alpha.1-0ubuntu2) questing; urgency=medium
 
   * debian/control: Add umockdev build dep in addition to libumockdev-dev.
