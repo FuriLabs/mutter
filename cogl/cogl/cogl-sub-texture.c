@@ -381,6 +381,7 @@ cogl_sub_texture_new (CoglContext *ctx,
                       int sub_x, int sub_y,
                       int sub_width, int sub_height)
 {
+  CoglDriver *driver = cogl_context_get_driver (ctx);
   CoglTexture    *full_texture;
   CoglSubTexture *sub_tex;
   unsigned int    next_width, next_height;
@@ -396,6 +397,7 @@ cogl_sub_texture_new (CoglContext *ctx,
 
   sub_tex = g_object_new (COGL_TYPE_SUB_TEXTURE,
                           "context", ctx,
+                          "texture-driver", cogl_driver_create_texture_driver (driver),
                           "width", sub_width,
                           "height", sub_height,
                           "format", cogl_texture_get_format (next_texture),
@@ -421,10 +423,4 @@ cogl_sub_texture_new (CoglContext *ctx,
   sub_tex->sub_y = sub_y;
 
   return COGL_TEXTURE (sub_tex);
-}
-
-CoglTexture *
-cogl_sub_texture_get_parent (CoglSubTexture *sub_texture)
-{
-  return sub_texture->next_texture;
 }

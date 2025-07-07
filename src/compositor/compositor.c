@@ -333,9 +333,9 @@ meta_compositor_unmanage (MetaCompositor *compositor)
   META_COMPOSITOR_GET_CLASS (compositor)->unmanage (compositor);
 }
 
-void
-meta_compositor_add_window (MetaCompositor    *compositor,
-                            MetaWindow        *window)
+static void
+meta_compositor_real_add_window (MetaCompositor    *compositor,
+                                 MetaWindow        *window)
 {
   MetaCompositorPrivate *priv =
     meta_compositor_get_instance_private (compositor);
@@ -391,6 +391,13 @@ meta_compositor_real_remove_window (MetaCompositor *compositor,
   MetaWindowActor *window_actor = meta_window_actor_from_window (window);
 
   meta_window_actor_queue_destroy (window_actor);
+}
+
+void
+meta_compositor_add_window (MetaCompositor *compositor,
+                            MetaWindow     *window)
+{
+  META_COMPOSITOR_GET_CLASS (compositor)->add_window (compositor, window);
 }
 
 void
@@ -906,7 +913,8 @@ on_presented (ClutterStage     *stage,
 
 static void
 meta_compositor_real_before_paint (MetaCompositor     *compositor,
-                                   MetaCompositorView *compositor_view)
+                                   MetaCompositorView *compositor_view,
+                                   ClutterFrame       *frame)
 {
   MetaCompositorPrivate *priv =
     meta_compositor_get_instance_private (compositor);
@@ -937,12 +945,13 @@ meta_compositor_real_before_paint (MetaCompositor     *compositor,
   stage_view = meta_compositor_view_get_stage_view (compositor_view);
 
   for (l = priv->windows; l; l = l->next)
-    meta_window_actor_before_paint (l->data, stage_view);
+    meta_window_actor_before_paint (l->data, stage_view, frame);
 }
 
 static void
 meta_compositor_before_paint (MetaCompositor     *compositor,
-                              MetaCompositorView *compositor_view)
+                              MetaCompositorView *compositor_view,
+                              ClutterFrame       *frame)
 {
   MetaCompositorPrivate *priv =
     meta_compositor_get_instance_private (compositor);
@@ -954,12 +963,15 @@ meta_compositor_before_paint (MetaCompositor     *compositor,
 
   priv->frame_in_progress = TRUE;
 
-  META_COMPOSITOR_GET_CLASS (compositor)->before_paint (compositor, compositor_view);
+  META_COMPOSITOR_GET_CLASS (compositor)->before_paint (compositor,
+                                                        compositor_view,
+                                                        frame);
 }
 
 static void
 meta_compositor_real_after_paint (MetaCompositor     *compositor,
-                                  MetaCompositorView *compositor_view)
+                                  MetaCompositorView *compositor_view,
+                                  ClutterFrame       *frame)
 {
   MetaCompositorPrivate *priv =
     meta_compositor_get_instance_private (compositor);
@@ -1001,20 +1013,27 @@ meta_compositor_real_after_paint (MetaCompositor     *compositor,
 
       actor_stage_views = clutter_actor_peek_stage_views (actor);
       if (g_list_find (actor_stage_views, stage_view))
-        meta_window_actor_after_paint (META_WINDOW_ACTOR (actor), stage_view);
+        {
+          meta_window_actor_after_paint (META_WINDOW_ACTOR (actor),
+                                         stage_view,
+                                         frame);
+        }
     }
 }
 
 static void
 meta_compositor_after_paint (MetaCompositor     *compositor,
-                             MetaCompositorView *compositor_view)
+                             MetaCompositorView *compositor_view,
+                             ClutterFrame       *frame)
 {
   MetaCompositorPrivate *priv =
     meta_compositor_get_instance_private (compositor);
 
   COGL_TRACE_BEGIN_SCOPED (MetaCompositorPostPaint,
                            "Meta::Compositor::after_paint()");
-  META_COMPOSITOR_GET_CLASS (compositor)->after_paint (compositor, compositor_view);
+  META_COMPOSITOR_GET_CLASS (compositor)->after_paint (compositor,
+                                                       compositor_view,
+                                                       frame);
 
   priv->frame_in_progress = FALSE;
 }
@@ -1032,7 +1051,7 @@ on_before_paint (ClutterStage     *stage,
 
   g_assert (compositor_view != NULL);
 
-  meta_compositor_before_paint (compositor, compositor_view);
+  meta_compositor_before_paint (compositor, compositor_view, frame);
 }
 
 static void
@@ -1048,7 +1067,7 @@ on_after_paint (ClutterStage     *stage,
 
   g_assert (compositor_view != NULL);
 
-  meta_compositor_after_paint (compositor, compositor_view);
+  meta_compositor_after_paint (compositor, compositor_view, frame);
 }
 
 static void
@@ -1196,6 +1215,7 @@ meta_compositor_class_init (MetaCompositorClass *klass)
   object_class->dispose = meta_compositor_dispose;
 
   klass->unmanage = meta_compositor_real_unmanage;
+  klass->add_window = meta_compositor_real_add_window;
   klass->remove_window = meta_compositor_real_remove_window;
   klass->before_paint = meta_compositor_real_before_paint;
   klass->after_paint = meta_compositor_real_after_paint;
@@ -1595,4 +1615,31 @@ meta_compositor_get_current_window_drag (MetaCompositor *compositor)
     meta_compositor_get_instance_private (compositor);
 
   return priv->current_drag;
+}
+
+gboolean
+meta_compositor_handle_event (MetaCompositor     *compositor,
+                              const ClutterEvent *event,
+                              MetaWindow         *event_window,
+                              MetaEventMode       mode_hint)
+{
+  MetaCompositorClass *klass = META_COMPOSITOR_GET_CLASS (compositor);
+
+  if (!klass->handle_event)
+    return CLUTTER_EVENT_PROPAGATE;
+
+  return klass->handle_event (compositor, event, event_window, mode_hint);
+}
+
+void
+meta_compositor_notify_mapping_change (MetaCompositor   *compositor,
+                                       MetaMappingType   type,
+                                       MetaMappingState  state)
+{
+  MetaCompositorClass *klass = META_COMPOSITOR_GET_CLASS (compositor);
+
+  if (!klass->notify_mapping_change)
+    return;
+
+  return klass->notify_mapping_change (compositor, type, state);
 }

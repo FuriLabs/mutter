@@ -29,8 +29,8 @@
 
 #include "core/meta-tablet-action-mapper.h"
 #include "backends/meta-input-device-private.h"
-#include "backends/meta-logical-monitor.h"
-#include "backends/meta-monitor.h"
+#include "backends/meta-logical-monitor-private.h"
+#include "backends/meta-monitor-private.h"
 #include "core/display-private.h"
 
 typedef struct _TabletMappingInfo TabletMappingInfo;
@@ -207,13 +207,13 @@ meta_tablet_action_mapper_class_init (MetaTabletActionMapperClass *klass)
 static GSettings *
 lookup_device_settings (ClutterInputDevice *device)
 {
-  const char *vendor, *product;
+  guint vendor, product;
   GSettings *settings;
   char *path;
 
   vendor = clutter_input_device_get_vendor_id (device);
   product = clutter_input_device_get_product_id (device);
-  path = g_strdup_printf ("/org/gnome/desktop/peripherals/tablets/%s:%s/",
+  path = g_strdup_printf ("/org/gnome/desktop/peripherals/tablets/%.4x:%.4x/",
                           vendor, product);
 
   settings = g_settings_new_with_path ("org.gnome.desktop.peripherals.tablet",

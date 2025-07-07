@@ -100,16 +100,31 @@ void  meta_seat_native_set_device_callbacks (MetaOpenDeviceCallback  open_callba
 void  meta_seat_native_release_devices (MetaSeatNative *seat);
 void  meta_seat_native_reclaim_devices (MetaSeatNative *seat);
 
-void meta_seat_native_set_keyboard_map (MetaSeatNative *seat,
-                                        const char     *layouts,
-                                        const char     *variants,
-                                        const char     *options,
-                                        const char     *model);
+void meta_seat_native_set_keyboard_map_async (MetaSeatNative      *seat,
+                                              const char          *layouts,
+                                              const char          *variants,
+                                              const char          *options,
+                                              const char          *model,
+                                              GCancellable        *cancellable,
+                                              GAsyncReadyCallback  callback,
+                                              gpointer             user_data);
 
+gboolean meta_seat_native_set_keyboard_map_finish (MetaSeatNative  *seat_native,
+                                                   GAsyncResult    *result,
+                                                   GError         **error);
+
+META_EXPORT_TEST
 struct xkb_keymap * meta_seat_native_get_keyboard_map (MetaSeatNative *seat);
 
-void meta_seat_native_set_keyboard_layout_index (MetaSeatNative     *seat,
-                                                 xkb_layout_index_t  idx);
+gboolean meta_seat_native_set_keyboard_layout_index_finish (MetaSeatNative  *seat_native,
+                                                            GAsyncResult    *result,
+                                                            GError         **error);
+
+void meta_seat_native_set_keyboard_layout_index_async (MetaSeatNative      *seat,
+                                                       xkb_layout_index_t   idx,
+                                                       GCancellable        *cancellable,
+                                                       GAsyncReadyCallback  callback,
+                                                       gpointer             user_data);
 
 xkb_layout_index_t meta_seat_native_get_keyboard_layout_index (MetaSeatNative *seat);
 

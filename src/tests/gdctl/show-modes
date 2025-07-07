@@ -2,27 +2,25 @@ Monitors:
 ├──Monitor DP-1 (MetaProduct's Inc. 14")
 │  ├──Vendor: MetaProduct's Inc.
 │  ├──Product: MetaMonitor
-│  ├──Serial: 0x1234560
+│  ├──Serial: 0x1012000
 │  └──Modes (4)
 │      ├──3840x2160@60.000
 │      ├──3840x2160@30.000
 │      ├──2560x1440@60.000
 │      └──1440x900@60.000
-│  └──Preferences:
-│      └──Luminances:
-│          └──default ⇒  100.0 (default) (current)
+│  └──Preferences
+│      └──Backlight: None
 └──Monitor DP-2 (MetaProduct's Inc. 13")
    ├──Vendor: MetaProduct's Inc.
    ├──Product: MetaMonitor
-   ├──Serial: 0x1234561
+   ├──Serial: 0x1012001
    └──Modes (4)
        ├──2560x1440@60.000
        ├──1440x900@60.000
        ├──1366x768@60.000
        └──800x600@60.000
-   └──Preferences:
-       └──Luminances:
-           └──default ⇒  100.0 (default) (current)
+   └──Preferences
+       └──Backlight: None
 
 Logical monitors:
 ├──Logical monitor #1
@@ -34,7 +32,7 @@ Logical monitors:
 │      └──DP-1 (MetaProduct's Inc. 14")
 └──Logical monitor #2
    ├──Position: (1744, 0)
-   ├──Scale: 1.7582417726516724
+   ├──Scale: 1.495327115058899
    ├──Transform: normal
    ├──Primary: no
    └──Monitors: (1)

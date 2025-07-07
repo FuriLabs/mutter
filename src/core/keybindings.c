@@ -31,22 +31,16 @@
 
 #include "backends/meta-backend-private.h"
 #include "backends/meta-keymap-utils.h"
-#include "backends/meta-logical-monitor.h"
+#include "backends/meta-logical-monitor-private.h"
 #include "backends/meta-monitor-manager-private.h"
 #include "compositor/compositor-private.h"
 #include "core/keybindings-private.h"
 #include "core/meta-accel-parse.h"
+#include "core/meta-window-config-private.h"
 #include "core/meta-workspace-manager-private.h"
 #include "core/workspace-private.h"
 #include "meta/compositor.h"
 #include "meta/prefs.h"
-
-#ifdef HAVE_X11
-#include "backends/x11/meta-backend-x11.h"
-#include "backends/x11/meta-input-device-x11.h"
-#include "x11/meta-x11-display-private.h"
-#include "x11/meta-x11-keybindings-private.h"
-#endif
 
 #ifdef HAVE_NATIVE_BACKEND
 #include "backends/native/meta-backend-native.h"
@@ -1150,9 +1144,9 @@ reload_keybindings (MetaDisplay *display)
 {
   MetaKeyBindingManager *keys = &display->key_binding_manager;
 
-#ifdef HAVE_X11
-  meta_x11_keybindings_ungrab_key_bindings (display);
-#endif
+  meta_compositor_notify_mapping_change (display->compositor,
+                                         META_MAPPING_TYPE_KEY,
+                                         META_MAPPING_STATE_PRE_CHANGE);
 
   /* Deciphering the modmap depends on the loaded keysyms to find out
    * what modifiers is Super and so forth, so we need to reload it
@@ -1161,9 +1155,9 @@ reload_keybindings (MetaDisplay *display)
 
   reload_combos (keys);
 
-#ifdef HAVE_X11
-  meta_x11_keybindings_grab_key_bindings (display);
-#endif
+  meta_compositor_notify_mapping_change (display->compositor,
+                                         META_MAPPING_TYPE_KEY,
+                                         META_MAPPING_STATE_POST_CHANGE);
 }
 
 ClutterModifierType
@@ -1191,59 +1185,51 @@ update_window_grab_modifiers (MetaDisplay *display)
 }
 
 static void
+notify_preference_change (MetaDisplay      *display,
+                          MetaPreference    pref,
+                          MetaMappingState  state)
+{
+  switch (pref)
+    {
+    case META_PREF_LOCATE_POINTER:
+    case META_PREF_KEYBINDINGS:
+      meta_compositor_notify_mapping_change (display->compositor,
+                                             META_MAPPING_TYPE_KEY,
+                                             state);
+      break;
+    case META_PREF_MOUSE_BUTTON_MODS:
+      meta_compositor_notify_mapping_change (display->compositor,
+                                             META_MAPPING_TYPE_BUTTON,
+                                             state);
+      break;
+    default:
+      break;
+    }
+}
+
+static void
 prefs_changed_callback (MetaPreference pref,
                         void          *data)
 {
   MetaDisplay *display = data;
   MetaKeyBindingManager *keys = &display->key_binding_manager;
 
+  notify_preference_change (display, pref, META_MAPPING_STATE_PRE_CHANGE);
+
   switch (pref)
     {
-    case META_PREF_LOCATE_POINTER:
-#ifdef HAVE_X11
-      meta_x11_keybindings_maybe_update_locate_pointer_keygrab (display,
-                                                                meta_prefs_is_locate_pointer_enabled ());
-#endif
-      break;
     case META_PREF_KEYBINDINGS:
-#ifdef HAVE_X11
-      meta_x11_keybindings_ungrab_key_bindings (display);
-#endif
       rebuild_key_binding_table (keys);
       reload_combos (keys);
-#ifdef HAVE_X11
-      meta_x11_keybindings_grab_key_bindings (display);
-#endif
       break;
     case META_PREF_MOUSE_BUTTON_MODS:
-      {
-#ifdef HAVE_X11
-        GSList *windows, *l;
-        windows = meta_display_list_windows (display, META_LIST_DEFAULT);
-
-        for (l = windows; l; l = l->next)
-          {
-            MetaWindow *w = l->data;
-            meta_x11_keybindings_ungrab_window_buttons (&display->key_binding_manager, w);
-          }
-#endif
-
-        update_window_grab_modifiers (display);
-
-#ifdef HAVE_X11
-        for (l = windows; l; l = l->next)
-          {
-            MetaWindow *w = l->data;
-            if (w->type != META_WINDOW_DOCK)
-              meta_x11_keybindings_grab_window_buttons (&display->key_binding_manager, w);
-          }
-
-        g_slist_free (windows);
-#endif
-      }
+      update_window_grab_modifiers (display);
+      break;
     default:
       break;
     }
+
+  notify_preference_change (display, pref, META_MAPPING_STATE_POST_CHANGE);
 }
 
 void
@@ -1306,13 +1292,9 @@ meta_display_grab_accelerator (MetaDisplay         *display,
       return META_KEYBINDING_ACTION_NONE;
     }
 
-#ifdef HAVE_X11
-  if (!meta_is_wayland_compositor ())
-    {
-      meta_x11_keybindings_change_keygrab (keys, display->x11_display->xroot,
-                                           TRUE, &resolved_combo);
-    }
-#endif
+  meta_compositor_notify_mapping_change (display->compositor,
+                                         META_MAPPING_TYPE_KEY,
+                                         META_MAPPING_STATE_PRE_CHANGE);
 
   grab = g_new0 (MetaKeyGrab, 1);
   grab->action = next_dynamic_keybinding_action ();
@@ -1331,6 +1313,10 @@ meta_display_grab_accelerator (MetaDisplay         *display,
 
   g_hash_table_add (keys->key_bindings, binding);
   index_binding (keys, binding);
+
+  meta_compositor_notify_mapping_change (display->compositor,
+                                         META_MAPPING_TYPE_KEY,
+                                         META_MAPPING_STATE_POST_CHANGE);
 
   return grab->action;
 }
@@ -1358,13 +1344,9 @@ meta_display_ungrab_accelerator (MetaDisplay *display,
     {
       int i;
 
-#ifdef HAVE_X11
-      if (!meta_is_wayland_compositor ())
-        {
-          meta_x11_keybindings_change_keygrab (keys, display->x11_display->xroot,
-                                               FALSE, &binding->resolved_combo);
-        }
-#endif
+      meta_compositor_notify_mapping_change (display->compositor,
+                                             META_MAPPING_TYPE_KEY,
+                                             META_MAPPING_STATE_PRE_CHANGE);
 
       for (i = 0; i < binding->resolved_combo.len; i++)
         {
@@ -1373,6 +1355,10 @@ meta_display_ungrab_accelerator (MetaDisplay *display,
         }
 
       g_hash_table_remove (keys->key_bindings, binding);
+
+      meta_compositor_notify_mapping_change (display->compositor,
+                                             META_MAPPING_TYPE_KEY,
+                                             META_MAPPING_STATE_POST_CHANGE);
     }
 
   g_hash_table_remove (external_grabs, key);
@@ -1531,20 +1517,9 @@ process_special_modifier_key (MetaDisplay          *display,
                               GFunc                 trigger_callback)
 {
   MetaKeyBindingManager *keys = &display->key_binding_manager;
+  MetaCompositor *compositor = display->compositor;
   ClutterModifierType modifiers;
   uint32_t hardware_keycode;
-#ifdef HAVE_X11
-  ClutterInputDevice *device;
-  uint32_t time_ms;
-  Display *xdisplay;
-
-  time_ms = clutter_event_get_time (event);
-  device = clutter_event_get_device (event);
-  if (META_IS_BACKEND_X11 (keys->backend))
-    xdisplay = meta_backend_x11_get_xdisplay (META_BACKEND_X11 (keys->backend));
-  else
-    xdisplay = NULL;
-#endif
 
   hardware_keycode = clutter_event_get_key_code (event);
   modifiers = get_modifiers (event);
@@ -1555,16 +1530,6 @@ process_special_modifier_key (MetaDisplay          *display,
         {
           *modifier_press_only = FALSE;
 
-          /* If this is a wayland session, we can avoid the shenanigans
-           * about passive grabs below, and let the event continue to
-           * be processed through the regular paths.
-           */
-#ifdef HAVE_X11
-          if (!xdisplay)
-            return FALSE;
-#else
-          return FALSE;
-#endif
           /* OK, the user hit modifier+key rather than pressing and
            * releasing the modifier key alone. We want to handle the key
            * sequence "normally". Unfortunately, using
@@ -1577,33 +1542,12 @@ process_special_modifier_key (MetaDisplay          *display,
            * the event. Other clients with global grabs will be out of
            * luck.
            */
-          if (process_event (display, window, event))
-            {
-              /* As normally, after we've handled a global key
-               * binding, we unfreeze the keyboard but keep the grab
-               * (this is important for something like cycling
-               * windows */
-#ifdef HAVE_X11
-              if (xdisplay)
-                {
-                  XIAllowEvents (xdisplay,
-                                 meta_input_device_x11_get_device_id (device),
-                                 XIAsyncDevice, time_ms);
-                }
-#endif
-            }
-          else
+          if (!process_event (display, window, event))
             {
               /* Replay the event so it gets delivered to our
                * per-window key bindings or to the application */
-#ifdef HAVE_X11
-              if (xdisplay)
-                {
-                  XIAllowEvents (xdisplay,
-                                 meta_input_device_x11_get_device_id (device),
-                                 XIReplayDevice, time_ms);
-                }
-#endif
+              meta_compositor_handle_event (compositor, event, window,
+                                            META_EVENT_MODE_REPLAY);
             }
         }
       else if (clutter_event_type (event) == CLUTTER_KEY_RELEASE)
@@ -1612,47 +1556,14 @@ process_special_modifier_key (MetaDisplay          *display,
 
           *modifier_press_only = FALSE;
 
-          /* We want to unfreeze events, but keep the grab so that if the user
-           * starts typing into the overlay we get all the keys */
-#ifdef HAVE_X11
-          if (xdisplay)
-            {
-              XIAllowEvents (xdisplay,
-                             meta_input_device_x11_get_device_id (device),
-                             XIAsyncDevice, time_ms);
-            }
-#endif
-
           binding = get_keybinding (keys, resolved_key_combo);
-          if (binding &&
-              meta_compositor_filter_keybinding (display->compositor, binding))
-            return TRUE;
-          trigger_callback (display, NULL);
-        }
-      else
-        {
-          /* In some rare race condition, mutter might not receive the Super_L
-           * KeyRelease event because:
-           * - the compositor might end the modal mode and call XIUngrabDevice
-           *   while the key is still down
-           * - passive grabs are only activated on KeyPress and not KeyRelease.
-           *
-           * In this case, modifier_press_only might be wrong.
-           * Mutter still ought to acknowledge events, otherwise the X server
-           * will not send the next events.
-           *
-           * https://bugzilla.gnome.org/show_bug.cgi?id=666101
-           */
-#ifdef HAVE_X11
-          if (xdisplay)
-            {
-              XIAllowEvents (xdisplay,
-                             meta_input_device_x11_get_device_id (device),
-                             XIAsyncDevice, time_ms);
-            }
-#endif
+          if (!binding ||
+              !meta_compositor_filter_keybinding (display->compositor, binding))
+            trigger_callback (display, NULL);
         }
 
+      meta_compositor_handle_event (compositor, event, window,
+                                    META_EVENT_MODE_THAW);
       return TRUE;
     }
   else if (clutter_event_type (event) == CLUTTER_KEY_PRESS &&
@@ -1662,14 +1573,8 @@ process_special_modifier_key (MetaDisplay          *display,
       *modifier_press_only = TRUE;
       /* We keep the keyboard frozen - this allows us to use ReplayKeyboard
        * on the next event if it's not the release of the modifier key */
-#ifdef HAVE_X11
-      if (xdisplay)
-        {
-          XIAllowEvents (xdisplay,
-                         meta_input_device_x11_get_device_id (device),
-                         XISyncDevice, time_ms);
-        }
-#endif
+      meta_compositor_handle_event (compositor, event, window,
+                                    META_EVENT_MODE_KEEP_FROZEN);
 
       return TRUE;
     }
@@ -1679,9 +1584,9 @@ process_special_modifier_key (MetaDisplay          *display,
 
 
 static gboolean
-process_overlay_key (MetaDisplay     *display,
-                     ClutterEvent    *event,
-                     MetaWindow      *window)
+process_overlay_key (MetaDisplay  *display,
+                     ClutterEvent *event,
+                     MetaWindow   *window)
 {
   MetaKeyBindingManager *keys = &display->key_binding_manager;
 
@@ -1709,9 +1614,9 @@ handle_locate_pointer (MetaDisplay *display)
 }
 
 static gboolean
-process_locate_pointer_key (MetaDisplay     *display,
-                            ClutterEvent    *event,
-                            MetaWindow      *window)
+process_locate_pointer_key (MetaDisplay  *display,
+                            ClutterEvent *event,
+                            MetaWindow   *window)
 {
   MetaKeyBindingManager *keys = &display->key_binding_manager;
 
@@ -1766,6 +1671,8 @@ process_key_event (MetaDisplay     *display,
                    MetaWindow      *window,
                    ClutterEvent    *event)
 {
+  MetaCompositor *compositor = display->compositor;
+
   if (process_overlay_key (display, event, window))
     return TRUE;
 
@@ -1775,23 +1682,8 @@ process_key_event (MetaDisplay     *display,
   if (process_iso_next_group (display, event))
     return TRUE;
 
-#ifdef HAVE_X11
-  {
-    MetaContext *context = meta_display_get_context (display);
-    MetaBackend *backend = meta_context_get_backend (context);
-    ClutterInputDevice *device;
-
-    if (META_IS_BACKEND_X11 (backend))
-      {
-        Display *xdisplay = meta_backend_x11_get_xdisplay (META_BACKEND_X11 (backend));
-        device = clutter_event_get_device (event);
-        XIAllowEvents (xdisplay,
-                       meta_input_device_x11_get_device_id (device),
-                       XIAsyncDevice,
-                       clutter_event_get_time (event));
-      }
-  }
-#endif
+  meta_compositor_handle_event (compositor, event, window,
+                                META_EVENT_MODE_THAW);
 
   /* Do the normal keybindings */
   return process_event (display, window, event);
@@ -1899,10 +1791,10 @@ handle_maximize_vertically (MetaDisplay           *display,
 {
   if (window->has_resize_func)
     {
-      if (window->maximized_vertically)
-        meta_window_unmaximize (window, META_MAXIMIZE_VERTICAL);
+      if (meta_window_config_is_maximized_vertically (window->config))
+        meta_window_set_unmaximize_flags (window, META_MAXIMIZE_VERTICAL);
       else
-        meta_window_maximize (window, META_MAXIMIZE_VERTICAL);
+        meta_window_set_maximize_flags (window, META_MAXIMIZE_VERTICAL);
     }
 }
 
@@ -1915,10 +1807,10 @@ handle_maximize_horizontally (MetaDisplay           *display,
 {
   if (window->has_resize_func)
     {
-      if (window->maximized_horizontally)
-        meta_window_unmaximize (window, META_MAXIMIZE_HORIZONTAL);
+      if (meta_window_config_is_maximized_horizontally (window->config))
+        meta_window_set_unmaximize_flags (window, META_MAXIMIZE_HORIZONTAL);
       else
-        meta_window_maximize (window, META_MAXIMIZE_HORIZONTAL);
+        meta_window_set_maximize_flags (window, META_MAXIMIZE_HORIZONTAL);
     }
 }
 
@@ -2234,14 +2126,21 @@ handle_toggle_tiled (MetaDisplay           *display,
     }
   else if (meta_window_can_tile_side_by_side (window, window->monitor->number))
     {
-      window->tile_monitor_number = window->monitor->number;
+      gboolean is_maximized_vertically;
+
+      meta_window_config_set_tile_monitor_number (window->config,
+                                                  window->monitor->number);
       /* Maximization constraints beat tiling constraints, so if the window
        * is maximized, tiling won't have any effect unless we unmaximize it
        * horizontally first; rather than calling meta_window_unmaximize(),
        * we just set the flag and rely on meta_window_tile() syncing it to
        * save an additional roundtrip.
        */
-      window->maximized_horizontally = FALSE;
+      is_maximized_vertically =
+        meta_window_config_is_maximized_vertically (window->config);
+      meta_window_config_set_maximized_directions (window->config,
+                                                   FALSE,
+                                                   is_maximized_vertically);
       meta_window_tile (window, mode);
     }
 }
@@ -2254,9 +2153,9 @@ handle_toggle_maximized (MetaDisplay           *display,
                          gpointer               user_data)
 {
   if (meta_window_is_maximized (window))
-    meta_window_unmaximize (window, META_MAXIMIZE_BOTH);
+    meta_window_unmaximize (window);
   else if (window->has_maximize_func)
-    meta_window_maximize (window, META_MAXIMIZE_BOTH);
+    meta_window_maximize (window);
 }
 
 static void
@@ -2267,7 +2166,7 @@ handle_maximize (MetaDisplay           *display,
                  gpointer               user_data)
 {
   if (window->has_maximize_func)
-    meta_window_maximize (window, META_MAXIMIZE_BOTH);
+    meta_window_maximize (window);
 }
 
 static void
@@ -2277,8 +2176,8 @@ handle_unmaximize (MetaDisplay           *display,
                    MetaKeyBinding        *binding,
                    gpointer               user_data)
 {
-  if (window->maximized_vertically || window->maximized_horizontally)
-    meta_window_unmaximize (window, META_MAXIMIZE_BOTH);
+  if (meta_window_config_is_any_maximized (window->config))
+    meta_window_unmaximize (window);
 }
 
 static void
@@ -2893,8 +2792,6 @@ meta_display_init_keys (MetaDisplay *display)
 
   update_window_grab_modifiers (display);
 
-  /* Keys are actually grabbed in meta_screen_grab_keys() */
-
   meta_prefs_add_listener (prefs_changed_callback, display);
 
   g_signal_connect_swapped (backend, "keymap-changed",
@@ -2954,5 +2851,47 @@ meta_display_process_keybinding_event (MetaDisplay        *display,
 
     default:
       return FALSE;
+    }
+}
+
+void
+meta_display_keybinding_foreach (MetaDisplay           *display,
+                                 MetaKeyBindingForeach  func,
+                                 gpointer               user_data)
+{
+  MetaKeyBindingManager *keys = &display->key_binding_manager;
+  MetaKeyBinding *binding;
+  GHashTableIter iter;
+  int i;
+
+  if (keys->overlay_resolved_key_combo.len != 0)
+    {
+      func (display, META_KEY_BINDING_NONE,
+            &keys->overlay_resolved_key_combo, user_data);
+    }
+
+  if (keys->locate_pointer_resolved_key_combo.len != 0)
+    {
+      func (display,
+            meta_prefs_is_locate_pointer_enabled () ?
+            META_KEY_BINDING_NONE :
+            META_KEY_BINDING_NO_AUTO_GRAB,
+            &keys->locate_pointer_resolved_key_combo, user_data);
+    }
+
+  for (i = 0; i < keys->n_iso_next_group_combos; i++)
+    {
+      func (display, META_KEY_BINDING_NONE,
+            &keys->iso_next_group_combos[i], user_data);
+    }
+
+  g_hash_table_iter_init (&iter, keys->key_bindings);
+
+  while (g_hash_table_iter_next (&iter, NULL, (gpointer *) &binding))
+    {
+      if (binding->resolved_combo.len == 0)
+        continue;
+
+      func (display, binding->flags, &binding->resolved_combo, user_data);
     }
 }

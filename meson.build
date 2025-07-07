@@ -1,6 +1,6 @@
 project('mutter', 'c',
-  version: '48.4',
-  meson_version: '>= 1.3.0',
+  version: '49.alpha.1',
+  meson_version: '>= 1.5.0',
   license: 'GPL-2.0-or-later',
 )
 
@@ -20,7 +20,7 @@ glib_req = '>= 2.81.1'
 gi_req = '>= 0.9.5'
 graphene_req = '>= 1.10.2'
 gtk3_req = '>= 3.19.8'
-gtk4_req = '>= 4.0.0'
+gtk4_req = '>= 4.14.0'
 gdk_pixbuf_req = '>= 2.0'
 pango_req = '>= 1.46.0'
 cairo_req = '>= 1.10.0'
@@ -44,10 +44,11 @@ libdisplay_info_req = '>= 0.2'
 # optional version requirements
 udev_req = '>= 228'
 gudev_req = '>= 238'
+umockdev_req = '>= 0.3.0'
 
 # wayland version requirements
 wayland_server_req = '>= 1.23'
-wayland_protocols_req = '>= 1.41'
+wayland_protocols_req = '>= 1.44'
 
 # native backend version requirements
 libinput_req = '>= 1.27.0'
@@ -55,7 +56,7 @@ gbm_req = '>= 21.3'
 libdrm_req = '>= 2.4.118'
 
 # screen cast version requirements
-libpipewire_req = '>= 1.2.0'
+libpipewire_req = '>= 1.2.7'
 
 # profiler requirements
 sysprof_req = '>= 3.37.2'
@@ -99,6 +100,11 @@ pkgincludedir = includedir / pkgname
 
 pcdir = libdir / 'pkgconfig'
 
+desktopdir = join_paths(datadir, 'applications')
+icondir = join_paths(datadir, 'icons')
+
+po_path = join_paths(meson.current_source_dir(), 'po')
+
 gettext_package = meson.project_name()
 localedir = datadir / 'locale'
 
@@ -121,6 +127,7 @@ gio_dep = dependency('gio-unix-2.0', version: glib_req)
 gio_unix_dep = dependency('gio-unix-2.0', version: glib_req)
 gobject_dep = dependency('gobject-2.0', version: glib_req)
 gthread_dep = dependency('gobject-2.0', version: glib_req)
+gtk4_dep = dependency('gtk4', version: gtk4_req, required: false)
 gmodule_no_export_dep = dependency('gmodule-no-export-2.0', version: glib_req)
 gnome_settings_daemon_dep = dependency('gnome-settings-daemon', required: false)
 xkbcommon_dep = dependency('xkbcommon', version: xkbcommon_req)
@@ -158,7 +165,9 @@ if have_fonts or have_x11
 endif
 
 if have_x11_client
-  gtk4_dep = dependency('gtk4', version: gtk4_req)
+  if not gtk4_dep.found()
+    error('X11 client support requires gtk4 @0@'.format(gtk4_req))
+  endif
 
   x11_dep = dependency('x11', version: x11_req)
   xcomposite_dep = dependency('xcomposite', version: xcomposite_req)
@@ -175,7 +184,6 @@ if have_x11_client
   xau_dep = dependency('xau')
 
   if have_x11
-    ice_dep = dependency('ice')
     xcb_randr_dep = dependency('xcb-randr')
     xkbcommon_x11_dep = dependency('xkbcommon-x11')
     xkbfile_dep = dependency('xkbfile')
@@ -228,6 +236,12 @@ if not have_gl and not have_gles2
 endif
 
 if have_wayland
+  if meson.version().version_compare('>= 1.8.0')
+    wl_mod = import('wayland')
+  else
+    wl_mod = import('unstable-wayland')
+  endif
+
   wayland_server_dep = dependency('wayland-server', version: wayland_server_req)
   wayland_client_dep = dependency('wayland-client', version: wayland_server_req)
   wayland_cursor_dep = dependency('wayland-cursor')
@@ -312,10 +326,6 @@ if have_wayland_eglstream
   endif
 endif
 
-have_sm = get_option('sm') and have_x11
-if have_sm
-  sm_dep = dependency('sm')
-endif
 
 have_libwacom = get_option('libwacom')
 if have_libwacom
@@ -337,6 +347,15 @@ if have_remote_desktop
   libpipewire_dep = dependency('libpipewire-0.3', version: libpipewire_req)
 endif
 
+have_devkit = get_option('devkit').enable_auto_if(
+  gtk4_dep.found() and
+  have_native_backend and
+  have_remote_desktop
+).enabled()
+if have_devkit and (not gtk4_dep.found() or not have_native_backend or not have_remote_desktop)
+  error('MDK requires gtk4 @0@, the native backend, and remote desktop'.format(gtk4_req))
+endif
+
 have_introspection = get_option('introspection')
 if have_introspection
   gobject_introspection_dep = dependency('gobject-introspection-1.0', version: gi_req)
@@ -345,6 +364,12 @@ if have_introspection
     '--quiet',
     '-U_GNU_SOURCE',
   ]
+
+  if gobject_introspection_dep.version().version_compare('>=1.83.2')
+    introspection_args += [
+     '--doc-format=gi-docgen',
+    ]
+  endif
 
   introspection_common = {
     'install_dir_gir': pkglibdir,
@@ -384,6 +409,7 @@ if have_tests
   gtk3_dep = dependency('gtk+-3.0', version: gtk3_req)
   dbusmock_dep = python.find_installation('python3', modules: ['dbusmock'], required: false)
   libevdev_dep = dependency('libevdev', required: false)
+  umockdev_dep = dependency('umockdev-1.0', version: umockdev_req)
 
   if not have_native_backend
     error('Tests require the native backend to be enabled')
@@ -434,9 +460,13 @@ if have_tests
     ]
   endif
 
+  test_setup_env = environment()
+  test_setup_env.set('MUTTER_TEST_LOG_DIR', mutter_builddir / 'meson-logs')
+
   add_test_setup('default',
     is_default: true,
     exe_wrapper: default_test_wrappers,
+    env: test_setup_env,
   )
 
   add_test_setup('plain')
@@ -575,6 +605,7 @@ cdata.set('HAVE_X11_CLIENT', have_x11_client)
 cdata.set('HAVE_LOGIND', have_logind)
 cdata.set('HAVE_NATIVE_BACKEND', have_native_backend)
 cdata.set('HAVE_REMOTE_DESKTOP', have_remote_desktop)
+cdata.set('HAVE_DEVKIT', have_devkit)
 cdata.set('HAVE_GNOME_DESKTOP', have_gnome_desktop)
 cdata.set('HAVE_SOUND_PLAYER', have_sound_player)
 cdata.set('HAVE_EGL_DEVICE', have_egl_device)
@@ -582,7 +613,6 @@ cdata.set('HAVE_WAYLAND_EGLSTREAM', have_wayland_eglstream)
 cdata.set('HAVE_LIBGUDEV', have_libgudev)
 cdata.set('HAVE_LIBWACOM', have_libwacom)
 cdata.set('HAVE_LIBWACOM_GET_NUM_RINGS', have_libwacom_get_num_rings)
-cdata.set('HAVE_SM', have_sm)
 cdata.set('HAVE_STARTUP_NOTIFICATION', have_startup_notification)
 cdata.set('HAVE_INTROSPECTION', have_introspection)
 cdata.set('HAVE_PROFILER', have_profiler)
@@ -663,7 +693,8 @@ if have_xwayland
 
   # For Xwayland -listenfd usage
   if xwayland_dep.found()
-    have_xwayland_terminate_delay = xwayland_dep.get_variable('have_terminate_delay') == 'true'
+    have_xwayland_terminate_delay = xwayland_dep.get_variable('have_terminate_delay',
+                                                              default_value: 'false') == 'true'
   endif
 
   if (have_xwayland_terminate_delay)
@@ -728,6 +759,9 @@ subdir('clutter')
 subdir('data')
 subdir('tools')
 subdir('src')
+if have_devkit
+  subdir('mdk')
+endif
 subdir('po')
 subdir('doc/man')
 if have_documentation
@@ -736,6 +770,7 @@ endif
 
 gnome.post_install(
   glib_compile_schemas: true,
+  gtk_update_icon_cache: have_devkit,
 )
 
 meson.add_dist_script('meson/check-version.py', meson.project_version(), 'NEWS')
@@ -762,11 +797,11 @@ summary('XWayland', have_xwayland, section: 'Options')
 summary('Native Backend', have_native_backend, section: 'Options')
 summary('EGL Device', have_egl_device, section: 'Options')
 summary('Remote desktop', have_remote_desktop, section: 'Options')
+summary('Development Kit', have_devkit, section: 'Options')
 summary('libgnome-desktop', have_gnome_desktop, section: 'Options')
 summary('Sound player', have_sound_player, section: 'Options')
 summary('gudev', have_libgudev, section: 'Options')
 summary('Wacom', have_libwacom, section: 'Options')
-summary('SM', have_sm, section: 'Options')
 summary('Fonts', have_fonts, section: 'Options')
 summary('Startup notification', have_startup_notification, section: 'Options')
 summary('Introspection', have_introspection, section: 'Options')

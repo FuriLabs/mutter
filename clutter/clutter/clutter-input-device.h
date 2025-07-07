@@ -79,14 +79,18 @@ CLUTTER_EXPORT
 gboolean                clutter_input_device_get_has_cursor     (ClutterInputDevice  *device);
 
 CLUTTER_EXPORT
-const gchar *           clutter_input_device_get_vendor_id      (ClutterInputDevice *device);
+guint                   clutter_input_device_get_vendor_id      (ClutterInputDevice *device);
 CLUTTER_EXPORT
-const gchar *           clutter_input_device_get_product_id     (ClutterInputDevice *device);
+guint                   clutter_input_device_get_product_id     (ClutterInputDevice *device);
+CLUTTER_EXPORT
+guint                   clutter_input_device_get_bus_type       (ClutterInputDevice *device);
 
 CLUTTER_EXPORT
 gint                    clutter_input_device_get_n_rings        (ClutterInputDevice *device);
 CLUTTER_EXPORT
 gint                    clutter_input_device_get_n_strips       (ClutterInputDevice *device);
+CLUTTER_EXPORT
+gint                    clutter_input_device_get_n_dials        (ClutterInputDevice *device);
 CLUTTER_EXPORT
 gint                    clutter_input_device_get_n_mode_groups  (ClutterInputDevice *device);
 CLUTTER_EXPORT

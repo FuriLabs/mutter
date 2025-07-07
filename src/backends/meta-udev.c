@@ -27,10 +27,14 @@
 
 enum
 {
+  /* drm */
   HOTPLUG,
   LEASE,
   DEVICE_ADDED,
   DEVICE_REMOVED,
+
+  /* backlight */
+  BACKLIGHT_CHANGED,
 
   N_SIGNALS
 };
@@ -220,11 +224,117 @@ meta_udev_list_drm_devices (MetaUdev            *udev,
   return devices;
 }
 
+static GUdevDevice *
+meta_udev_backlight_find_type (GList      *devices,
+                               const char *type)
+{
+  GList *l;
+
+  for (l = devices; l; l = l->next)
+    {
+      GUdevDevice *device = G_UDEV_DEVICE (l->data);
+      const char *device_type;
+
+      device_type = g_udev_device_get_sysfs_attr (device, "type");
+      if (g_strcmp0 (device_type, type) == 0)
+        return g_object_ref (device);
+    }
+
+  return NULL;
+}
+
+static GUdevDevice *
+meta_udev_backlight_find_for_connector (GList      *devices,
+                                        const char *connector_name)
+{
+  GList *l;
+  g_autofree char *connector_suffix = g_strdup_printf ("-%s", connector_name);
+
+  for (l = devices; l; l = l->next)
+    {
+      GUdevDevice *device = G_UDEV_DEVICE (l->data);
+      GUdevDevice *parent;
+      const char *prop;
+
+      /* Only look for raw backlight interfaces */
+      prop = g_udev_device_get_sysfs_attr (device, "type");
+      if (g_strcmp0 (prop, "raw") != 0)
+        continue;
+
+      parent = g_udev_device_get_parent (device);
+      if (!parent)
+        continue;
+
+      /* Raw backlight interfaces registered by the drm driver will have the
+       * drm-connector as their parent.
+       */
+      prop = g_udev_device_get_subsystem (parent);
+      if (g_strcmp0 (prop, "drm") != 0)
+        continue;
+
+      /* The drm-connector name is in the form `card[n]-[connector-name]`, so
+       * let's check that the suffix of it matches the connector name to make
+       * sure this backlight belongs to the connector.
+       */
+      prop = g_udev_device_get_name (parent);
+      if (!prop || !g_str_has_suffix (prop, connector_suffix))
+        continue;
+
+      /* Also make sure the connector is actually enabled */
+      prop = g_udev_device_get_sysfs_attr (parent, "enabled");
+      if (g_strcmp0 (prop, "enabled") != 0)
+        continue;
+
+      return g_object_ref (device);
+    }
+
+  return NULL;
+}
+
+GUdevDevice *
+meta_udev_backlight_find (MetaUdev   *udev,
+                          const char *connector_name,
+                          gboolean    is_internal)
+{
+  g_autolist (GUdevDevice) devices = NULL;
+  GUdevDevice *device;
+
+  g_warn_if_fail (udev->gudev_client != NULL);
+
+  devices = g_udev_client_query_by_subsystem (udev->gudev_client, "backlight");
+  if (!devices)
+    return NULL;
+
+  if (is_internal)
+    {
+      /* For internal monitors, prefer the types firmware -> platform -> raw */
+      device = meta_udev_backlight_find_type (devices, "firmware");
+      if (device)
+        return device;
+
+      device = meta_udev_backlight_find_type (devices, "platform");
+      if (device)
+        return device;
+    }
+
+  /* Try to find a backlight interface matching the connector */
+  device = meta_udev_backlight_find_for_connector (devices, connector_name);
+  if (device)
+    return device;
+
+  /* For internal monitors, fall back to just picking the first raw backlight
+   * interface if no other interface was found. */
+  if (is_internal)
+    return meta_udev_backlight_find_type (devices, "raw");
+
+  return NULL;
+}
+
 static void
-on_uevent (GUdevClient *client,
-           const char  *action,
-           GUdevDevice *device,
-           gpointer     user_data)
+on_drm_uevent (GUdevClient *client,
+               const char  *action,
+               GUdevDevice *device,
+               gpointer     user_data)
 {
   MetaUdev *udev = META_UDEV (user_data);
 
@@ -241,6 +351,31 @@ on_uevent (GUdevClient *client,
 
   if (g_udev_device_get_property_as_boolean (device, "LEASE"))
     g_signal_emit (udev, signals[LEASE], 0, device);
+}
+
+static void
+on_backlight_uevent (GUdevClient *client,
+                     const char  *action,
+                     GUdevDevice *device,
+                     gpointer     user_data)
+{
+  MetaUdev *udev = META_UDEV (user_data);
+
+  if (g_str_equal (action, "change"))
+    g_signal_emit (udev, signals[BACKLIGHT_CHANGED], 0, device);
+}
+
+static void
+on_uevent (GUdevClient *client,
+           const char  *action,
+           GUdevDevice *device,
+           gpointer     user_data)
+{
+  if (g_str_equal (g_udev_device_get_subsystem (device), "drm"))
+    return on_drm_uevent (client, action, device, user_data);
+
+  if (g_str_equal (g_udev_device_get_subsystem (device), "backlight"))
+    return on_backlight_uevent (client, action, device, user_data);
 }
 
 MetaUdev *
@@ -280,7 +415,7 @@ meta_udev_finalize (GObject *object)
 static void
 meta_udev_init (MetaUdev *udev)
 {
-  const char *subsystems[] = { "drm", NULL };
+  const char *subsystems[] = { "drm", "backlight", NULL };
 
   udev->gudev_client = g_udev_client_new (subsystems);
   udev->uevent_handler_id = g_signal_connect (udev->gudev_client,
@@ -318,6 +453,13 @@ meta_udev_class_init (MetaUdevClass *klass)
                   G_UDEV_TYPE_DEVICE);
   signals[DEVICE_REMOVED] =
     g_signal_new ("device-removed",
+                  G_TYPE_FROM_CLASS (object_class),
+                  G_SIGNAL_RUN_LAST,
+                  0, NULL, NULL, NULL,
+                  G_TYPE_NONE, 1,
+                  G_UDEV_TYPE_DEVICE);
+  signals[BACKLIGHT_CHANGED] =
+    g_signal_new ("backlight-changed",
                   G_TYPE_FROM_CLASS (object_class),
                   G_SIGNAL_RUN_LAST,
                   0, NULL, NULL, NULL,

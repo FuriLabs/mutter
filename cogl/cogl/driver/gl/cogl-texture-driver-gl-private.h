@@ -96,19 +96,6 @@ struct _CoglTextureDriverGLClass
                              GError             **error);
 
   /*
-   * This sets up the glPixelStore state for an download to a destination with
-   * the same size, and with no offset.
-   */
-  /* NB: GLES can't download pixel data into a sub region of a larger
-   * destination buffer, the GL driver has a more flexible version of
-   * this function that it uses internally. */
-  void (* prep_gl_for_pixels_download) (CoglTextureDriverGL *driver,
-                                        CoglContext         *ctx,
-                                        int                  image_width,
-                                        int                  pixels_rowstride,
-                                        int                  pixels_bpp);
-
-  /*
    * This driver abstraction is needed because GLES doesn't support
    * glGetTexImage (). On GLES this currently just returns FALSE which
    * will lead to a generic fallback path being used that simply
@@ -121,18 +108,6 @@ struct _CoglTextureDriverGLClass
                                  GLenum               dest_gl_format,
                                  GLenum               dest_gl_type,
                                  uint8_t             *dest);
-
-  /*
-   * It may depend on the driver as to what texture sizes are supported...
-   */
-  gboolean (* size_supported) (CoglTextureDriverGL *driver,
-                               CoglContext         *ctx,
-                               GLenum               gl_target,
-                               GLenum               gl_intformat,
-                               GLenum               gl_format,
-                               GLenum               gl_type,
-                               int                  width,
-                               int                  height);
 
   /*
    * The driver may impose constraints on what formats can be used to store
@@ -148,3 +123,12 @@ struct _CoglTextureDriverGLClass
 };
 
 #define COGL_TYPE_TEXTURE_DRIVER_GL (cogl_texture_driver_gl_get_type ())
+
+/* GL and GLES3 have this by default, but GLES2 does not except via extension.
+ * So really it's probably always available. Even if we used it and it wasn't
+ * available in some driver then there are no adverse consequences to the
+ * command simply being ignored...
+ */
+#ifndef GL_TEXTURE_MAX_LEVEL
+#define GL_TEXTURE_MAX_LEVEL 0x813D
+#endif

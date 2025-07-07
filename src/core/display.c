@@ -3101,8 +3101,7 @@ check_fullscreen_func (gpointer data)
           if (meta_window_is_monitor_sized (window))
             covers_monitors = TRUE;
         }
-      else if (window->maximized_horizontally &&
-               window->maximized_vertically)
+      else if (meta_window_is_maximized (window))
         {
           MetaLogicalMonitor *logical_monitor;
 
@@ -3549,7 +3548,7 @@ static void
 move_resize (MetaDisplay *display,
              GList       *windows)
 {
-  g_list_foreach (windows, (GFunc) meta_window_update_layout, NULL);
+  g_list_foreach (windows, (GFunc) meta_window_idle_move_resize, NULL);
   g_list_foreach (windows, (GFunc) warn_on_incorrectly_unmanaged_window, NULL);
 }
 

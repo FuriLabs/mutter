@@ -22,7 +22,7 @@
 
 #include <gio/gio.h>
 
-#include "backends/meta-monitor.h"
+#include "backends/meta-monitor-private.h"
 #include "core/meta-context-private.h"
 #include "core/window-private.h"
 #include "wayland/meta-wayland.h"
@@ -321,6 +321,7 @@ meta_wayland_xdg_session_state_save_window (MetaSessionState *state,
     META_WAYLAND_XDG_SESSION_STATE (state);
   MetaWaylandXdgToplevelState *toplevel_state;
   MtkRectangle rect;
+  MetaTileMode tile_mode;
 
   toplevel_state =
     meta_wayland_xdg_session_state_ensure_toplevel (xdg_session_state,
@@ -331,19 +332,20 @@ meta_wayland_xdg_session_state_save_window (MetaSessionState *state,
                 "minimized", &toplevel_state->is_minimized,
                 NULL);
 
-  if (meta_window_get_maximized (window) ==
-      (META_MAXIMIZE_VERTICAL | META_MAXIMIZE_HORIZONTAL))
+  tile_mode = meta_window_config_get_tile_mode (window->config);
+
+  if (meta_window_is_maximized (window))
     {
       toplevel_state->window_state = WINDOW_STATE_MAXIMIZED;
 
       toplevel_state->tiled.rect = rect;
     }
-  else if (window->tile_mode == META_TILE_LEFT ||
-           window->tile_mode == META_TILE_RIGHT)
+  else if (tile_mode == META_TILE_LEFT ||
+           tile_mode == META_TILE_RIGHT)
     {
-      if (window->tile_mode == META_TILE_LEFT)
+      if (tile_mode == META_TILE_LEFT)
         toplevel_state->window_state = WINDOW_STATE_TILED_LEFT;
-      else if (window->tile_mode == META_TILE_RIGHT)
+      else if (tile_mode == META_TILE_RIGHT)
         toplevel_state->window_state = WINDOW_STATE_TILED_RIGHT;
 
       toplevel_state->tiled.rect = rect;
@@ -413,7 +415,10 @@ meta_wayland_xdg_session_state_restore_window (MetaSessionState *state,
       rect = &toplevel_state->tiled.rect;
       target_monitor = determine_monitor_for_rect (window, rect);
       if (target_monitor)
-        window->tile_monitor_number = target_monitor->number;
+        {
+          meta_window_config_set_tile_monitor_number (window->config,
+                                                      target_monitor->number);
+        }
       break;
     }
 
@@ -439,6 +444,7 @@ meta_wayland_xdg_session_state_restore_window (MetaSessionState *state,
     {
     case WINDOW_STATE_NONE:
     case WINDOW_STATE_FLOATING:
+      window->placed = TRUE;
       break;
     case WINDOW_STATE_TILED_LEFT:
       meta_window_tile (window, META_TILE_LEFT);
@@ -447,15 +453,13 @@ meta_wayland_xdg_session_state_restore_window (MetaSessionState *state,
       meta_window_tile (window, META_TILE_RIGHT);
       break;
     case WINDOW_STATE_MAXIMIZED:
-      meta_window_maximize (window, META_MAXIMIZE_VERTICAL |
-                                    META_MAXIMIZE_HORIZONTAL);
+      meta_window_maximize (window);
       break;
     }
 
   if (toplevel_state->is_minimized)
     meta_window_minimize (window);
 
-  window->placed = TRUE;
 
   if (meta_is_topic_enabled (META_DEBUG_SESSION_MANAGEMENT))
     {

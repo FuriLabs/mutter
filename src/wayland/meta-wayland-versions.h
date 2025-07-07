@@ -34,7 +34,7 @@
 /* Global/master objects (version exported by wl_registry and negotiated through bind) */
 #define META_WL_COMPOSITOR_VERSION          6
 #define META_WL_DATA_DEVICE_MANAGER_VERSION 3
-#define META_XDG_WM_BASE_VERSION            6
+#define META_XDG_WM_BASE_VERSION            7
 #define META_WL_SEAT_VERSION                8
 #define META_WL_OUTPUT_VERSION              4
 #define META_XSERVER_VERSION                1
@@ -66,3 +66,5 @@
 #define META_WP_COMMIT_TIMING_V1_VERSION 1
 #define META_WP_FIFO_V1_VERSION 1
 #define META_WP_CURSOR_SHAPE_VERSION 2
+#define META_XDG_TOPLEVEL_TAG_V1_VERSION 1
+#define META_WP_COLOR_REPRESENTATION_VERSION 1

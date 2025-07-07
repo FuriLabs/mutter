@@ -925,6 +925,18 @@ clutter_stage_view_peek_scanout (ClutterStageView *view)
   return priv->next_scanout;
 }
 
+/**
+ * clutter_stage_view_get_priority: (skip)
+ */
+int
+clutter_stage_view_get_priority (ClutterStageView *view)
+{
+  ClutterStageViewPrivate *priv =
+    clutter_stage_view_get_instance_private (view);
+
+  return clutter_frame_clock_get_priority (priv->frame_clock);
+}
+
 void
 clutter_stage_view_schedule_update (ClutterStageView *view)
 {
@@ -1066,13 +1078,13 @@ handle_frame_clock_frame (ClutterFrameClock *frame_clock,
   ClutterContext *context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
 
   if (CLUTTER_ACTOR_IN_DESTRUCTION (stage))
-    return CLUTTER_FRAME_RESULT_IDLE;
+    return CLUTTER_FRAME_RESULT_IGNORED;
 
   if (!clutter_actor_is_realized (CLUTTER_ACTOR (stage)) ||
       !clutter_actor_is_mapped (CLUTTER_ACTOR (stage)))
     {
       clutter_stage_frame_discarded (stage, view, frame);
-      return CLUTTER_FRAME_RESULT_IDLE;
+      return CLUTTER_FRAME_RESULT_IGNORED;
     }
 
   if (clutter_context_get_show_fps (context))

@@ -25,6 +25,8 @@
 #include "backends/meta-crtc.h"
 #include "backends/meta-output.h"
 
+#include "meta/meta-monitor.h"
+
 typedef struct _MetaMonitorSpec
 {
   char *connector;
@@ -62,9 +64,15 @@ typedef enum _MetaMonitorScalesConstraint
   META_MONITOR_SCALES_CONSTRAINT_NO_FRAC = (1 << 0),
 } MetaMonitorScalesConstraint;
 
-#define META_TYPE_MONITOR (meta_monitor_get_type ())
-META_EXPORT_TEST
-G_DECLARE_DERIVABLE_TYPE (MetaMonitor, meta_monitor, META, MONITOR, GObject)
+#define META_TYPE_MONITOR_MODE (meta_monitor_mode_get_type ())
+G_DECLARE_DERIVABLE_TYPE (MetaMonitorMode, meta_monitor_mode,
+                          META, MONITOR_MODE,
+                          GObject)
+
+struct _MetaMonitorModeClass
+{
+  GObjectClass parent_class;
+};
 
 struct _MetaMonitorClass
 {
@@ -82,6 +90,7 @@ struct _MetaMonitorClass
   gboolean (* get_suggested_position) (MetaMonitor *monitor,
                                        int         *width,
                                        int         *height);
+  gboolean (* update_outputs) (MetaMonitor *monitor);
 };
 
 #define META_TYPE_MONITOR_NORMAL (meta_monitor_normal_get_type ())
@@ -105,13 +114,7 @@ MetaMonitorSpec * meta_monitor_get_spec (MetaMonitor *monitor);
 MetaBackend * meta_monitor_get_backend (MetaMonitor *monitor);
 
 META_EXPORT_TEST
-gboolean meta_monitor_is_active (MetaMonitor *monitor);
-
-META_EXPORT_TEST
 MetaOutput * meta_monitor_get_main_output (MetaMonitor *monitor);
-
-META_EXPORT_TEST
-gboolean meta_monitor_is_primary (MetaMonitor *monitor);
 
 gboolean meta_monitor_supports_underscanning (MetaMonitor *monitor);
 
@@ -123,11 +126,6 @@ gboolean meta_monitor_get_max_bpc (MetaMonitor  *monitor,
                                    unsigned int *max_bpc);
 
 MetaOutputRGBRange meta_monitor_get_rgb_range (MetaMonitor *monitor);
-
-META_EXPORT_TEST
-gboolean meta_monitor_is_laptop_panel (MetaMonitor *monitor);
-
-gboolean meta_monitor_is_virtual (MetaMonitor *monitor);
 
 gboolean meta_monitor_is_same_as (MetaMonitor *monitor,
                                   MetaMonitor *other_monitor);
@@ -148,18 +146,6 @@ void meta_monitor_get_physical_dimensions (MetaMonitor *monitor,
                                            int         *height_mm);
 
 MetaSubpixelOrder meta_monitor_get_subpixel_order (MetaMonitor *monitor);
-
-META_EXPORT_TEST
-const char * meta_monitor_get_connector (MetaMonitor *monitor);
-
-META_EXPORT_TEST
-const char * meta_monitor_get_vendor (MetaMonitor *monitor);
-
-META_EXPORT_TEST
-const char * meta_monitor_get_product (MetaMonitor *monitor);
-
-META_EXPORT_TEST
-const char * meta_monitor_get_serial (MetaMonitor *monitor);
 
 META_EXPORT_TEST
 const MetaEdidInfo * meta_monitor_get_edid_info (MetaMonitor *monitor);
@@ -212,7 +198,7 @@ META_EXPORT_TEST
 MetaMonitorMode * meta_monitor_get_current_mode (MetaMonitor *monitor);
 
 META_EXPORT_TEST
-void meta_monitor_derive_current_mode (MetaMonitor *monitor);
+void meta_monitor_update_current_mode (MetaMonitor *monitor);
 
 META_EXPORT_TEST
 void meta_monitor_set_current_mode (MetaMonitor     *monitor,
@@ -283,6 +269,9 @@ META_EXPORT_TEST
 gboolean meta_monitor_mode_should_be_advertised (MetaMonitorMode *monitor_mode);
 
 META_EXPORT_TEST
+MetaMonitor * meta_monitor_mode_get_monitor (MetaMonitorMode *monitor_mode);
+
+META_EXPORT_TEST
 MetaMonitorSpec * meta_monitor_spec_clone (const MetaMonitorSpec *monitor_id);
 
 guint meta_monitor_spec_hash (gconstpointer key);
@@ -292,13 +281,11 @@ gboolean meta_monitor_spec_equals (const MetaMonitorSpec *monitor_id,
                                    const MetaMonitorSpec *other_monitor_id);
 
 META_EXPORT_TEST
-int meta_monitor_spec_compare (MetaMonitorSpec *monitor_spec_a,
-                               MetaMonitorSpec *monitor_spec_b);
+int meta_monitor_spec_compare (const MetaMonitorSpec *monitor_spec_a,
+                               const MetaMonitorSpec *monitor_spec_b);
 
 META_EXPORT_TEST
 void meta_monitor_spec_free (MetaMonitorSpec *monitor_id);
-
-const char * meta_monitor_get_display_name (MetaMonitor *monitor);
 
 void meta_monitor_set_logical_monitor (MetaMonitor        *monitor,
                                        MetaLogicalMonitor *logical_monitor);
@@ -333,22 +320,14 @@ gboolean meta_parse_monitor_mode (const char *string,
                                   float      *out_refresh_rate,
                                   float       fallback_refresh_rate);
 
-META_EXPORT_TEST
-gboolean meta_monitor_get_backlight_info (MetaMonitor *monitor,
-                                          int         *backlight_min,
-                                          int         *backlight_max);
-
-void meta_monitor_set_backlight (MetaMonitor *monitor,
-                                 int          value);
-
-META_EXPORT_TEST
-gboolean meta_monitor_get_backlight (MetaMonitor *monitor,
-                                     int         *value);
+void meta_monitor_create_backlight (MetaMonitor *monitor);
 
 void meta_monitor_set_for_lease (MetaMonitor *monitor,
                                  gboolean     for_lease);
 
 META_EXPORT_TEST
 gboolean meta_monitor_is_for_lease (MetaMonitor *monitor);
+
+gboolean meta_monitor_update_outputs (MetaMonitor *monitor);
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (MetaMonitorSpec, meta_monitor_spec_free)

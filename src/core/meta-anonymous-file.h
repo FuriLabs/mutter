@@ -31,7 +31,8 @@ typedef enum _MetaAnonymousFileMapmode
 } MetaAnonymousFileMapmode;
 
 META_EXPORT_TEST
-MetaAnonymousFile * meta_anonymous_file_new (size_t         size,
+MetaAnonymousFile * meta_anonymous_file_new (const char    *name,
+                                             size_t         size,
                                              const uint8_t *data);
 
 META_EXPORT_TEST
@@ -46,3 +47,5 @@ int meta_anonymous_file_open_fd (MetaAnonymousFile        *file,
 
 META_EXPORT_TEST
 void meta_anonymous_file_close_fd (int fd);
+
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (MetaAnonymousFile, meta_anonymous_file_free)

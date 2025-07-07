@@ -22,7 +22,7 @@
 
 #include "compositor/meta-window-actor-x11.h"
 
-#include "backends/meta-logical-monitor.h"
+#include "backends/meta-logical-monitor-private.h"
 #include "clutter/clutter-frame-clock.h"
 #include "compositor/compositor-private.h"
 #include "compositor/meta-cullable.h"
@@ -185,12 +185,11 @@ queue_send_frame_messages_timeout (MetaWindowActorX11 *actor_x11)
 }
 
 static void
-assign_frame_counter_to_frames (MetaWindowActorX11 *actor_x11)
+assign_frame_counter_to_frames (MetaWindowActorX11 *actor_x11,
+                                ClutterFrame       *clutter_frame)
 {
   MetaWindow *window =
     meta_window_actor_get_meta_window (META_WINDOW_ACTOR (actor_x11));
-  MetaCompositor *compositor = window->display->compositor;
-  ClutterStage *stage = meta_compositor_get_stage (compositor);
   MetaFrame *frame;
   MetaSyncCounter *sync_counter;
 
@@ -202,13 +201,13 @@ assign_frame_counter_to_frames (MetaWindowActorX11 *actor_x11)
 
   sync_counter = meta_window_x11_get_sync_counter (window);
   meta_sync_counter_assign_counter_to_frames (sync_counter,
-                                              clutter_stage_get_frame_counter (stage));
+                                              clutter_frame->frame_count);
   frame = meta_window_x11_get_frame (window);
   if (frame)
     {
       sync_counter = meta_frame_get_sync_counter (frame);
       meta_sync_counter_assign_counter_to_frames (sync_counter,
-                                                  clutter_stage_get_frame_counter (stage));
+                                                  clutter_frame->frame_count);
     }
 }
 
@@ -384,7 +383,7 @@ has_shadow (MetaWindowActorX11 *actor_x11)
   /* Leaving out shadows for maximized and fullscreen windows is an efficiency
    * win and also prevents the unsightly effect of the shadow of maximized
    * window appearing on an adjacent window */
-  if ((meta_window_get_maximized (window) == META_MAXIMIZE_BOTH) ||
+  if (meta_window_is_maximized (window) ||
       meta_window_is_fullscreen (window))
     return FALSE;
 
@@ -1212,13 +1211,14 @@ handle_stage_views_changed (MetaWindowActorX11 *actor_x11)
 
 static void
 meta_window_actor_x11_before_paint (MetaWindowActor  *actor,
-                                    ClutterStageView *stage_view)
+                                    ClutterStageView *stage_view,
+                                    ClutterFrame     *frame)
 {
   MetaWindowActorX11 *actor_x11 = META_WINDOW_ACTOR_X11 (actor);
 
   handle_updates (actor_x11);
 
-  assign_frame_counter_to_frames (actor_x11);
+  assign_frame_counter_to_frames (actor_x11, frame);
 }
 
 static void
@@ -1236,8 +1236,11 @@ meta_window_actor_x11_paint (ClutterActor        *actor,
   * and send the completion events normally */
   if (actor_x11->send_frame_messages_timer != 0)
     {
+      ClutterFrame *frame;
+
       remove_frame_messages_timer (actor_x11);
-      assign_frame_counter_to_frames (actor_x11);
+      frame = clutter_paint_context_get_frame (paint_context);
+      assign_frame_counter_to_frames (actor_x11, frame);
     }
 
   window = meta_window_actor_get_meta_window (META_WINDOW_ACTOR (actor_x11));
@@ -1291,13 +1294,14 @@ meta_window_actor_x11_paint (ClutterActor        *actor,
 
 static void
 meta_window_actor_x11_after_paint (MetaWindowActor  *actor,
-                                   ClutterStageView *stage_view)
+                                   ClutterStageView *stage_view,
+                                   ClutterFrame     *frame)
 {
   MetaWindowActorX11 *actor_x11 = META_WINDOW_ACTOR_X11 (actor);
   MetaSyncCounter *sync_counter;
   MetaWindowDrag *window_drag;
   MetaWindow *window;
-  MetaFrame *frame;
+  MetaFrame *window_frame;
 
   actor_x11->repaint_scheduled = FALSE;
 
@@ -1314,10 +1318,10 @@ meta_window_actor_x11_after_paint (MetaWindowActor  *actor,
     {
       sync_counter = meta_window_x11_get_sync_counter (window);
       meta_sync_counter_send_frame_drawn (sync_counter);
-      frame = meta_window_x11_get_frame (window);
-      if (frame)
+      window_frame = meta_window_x11_get_frame (window);
+      if (window_frame)
         {
-          sync_counter = meta_frame_get_sync_counter (frame);
+          sync_counter = meta_frame_get_sync_counter (window_frame);
           meta_sync_counter_send_frame_drawn (sync_counter);
         }
     }

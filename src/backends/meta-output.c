@@ -37,15 +37,6 @@ enum
 
 static GParamSpec *obj_props[N_PROPS];
 
-enum
-{
-  BACKLIGHT_CHANGED,
-
-  N_SIGNALS
-};
-
-static guint signals[N_SIGNALS];
-
 typedef struct _MetaOutputPrivate
 {
   uint64_t id;
@@ -66,8 +57,6 @@ typedef struct _MetaOutputPrivate
 
   gboolean has_max_bpc;
   unsigned int max_bpc;
-
-  int backlight;
 
   MetaPrivacyScreenState privacy_screen_state;
   gboolean is_privacy_screen_enabled;
@@ -141,8 +130,6 @@ meta_output_get_monitor (MetaOutput *output)
 {
   MetaOutputPrivate *priv = meta_output_get_instance_private (output);
 
-  g_warn_if_fail (priv->monitor);
-
   return priv->monitor;
 }
 
@@ -152,7 +139,7 @@ meta_output_set_monitor (MetaOutput  *output,
 {
   MetaOutputPrivate *priv = meta_output_get_instance_private (output);
 
-  g_warn_if_fail (!priv->monitor);
+  g_warn_if_fail (!priv->monitor || monitor == priv->monitor);
 
   priv->monitor = monitor;
 }
@@ -161,8 +148,6 @@ void
 meta_output_unset_monitor (MetaOutput *output)
 {
   MetaOutputPrivate *priv = meta_output_get_instance_private (output);
-
-  g_warn_if_fail (priv->monitor);
 
   priv->monitor = NULL;
 }
@@ -211,26 +196,20 @@ meta_output_get_max_bpc (MetaOutput   *output,
   return priv->has_max_bpc;
 }
 
-void
-meta_output_set_backlight (MetaOutput *output,
-                           int         backlight)
+MetaBacklight *
+meta_output_create_backlight (MetaOutput  *output,
+                              GError     **error)
 {
-  MetaOutputPrivate *priv = meta_output_get_instance_private (output);
+  MetaOutputClass *output_class = META_OUTPUT_GET_CLASS (output);
 
-  g_return_if_fail (backlight >= priv->info->backlight_min);
-  g_return_if_fail (backlight <= priv->info->backlight_max);
+  if (!output_class->create_backlight)
+    {
+      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED,
+                           "Output does not support creating a backlight");
+      return NULL;
+    }
 
-  priv->backlight = backlight;
-
-  g_signal_emit (output, signals[BACKLIGHT_CHANGED], 0);
-}
-
-int
-meta_output_get_backlight (MetaOutput *output)
-{
-  MetaOutputPrivate *priv = meta_output_get_instance_private (output);
-
-  return priv->backlight;
+  return output_class->create_backlight (output, error);
 }
 
 void
@@ -448,6 +427,8 @@ meta_output_dispose (GObject *object)
   MetaOutput *output = META_OUTPUT (object);
   MetaOutputPrivate *priv = meta_output_get_instance_private (output);
 
+  meta_output_unassign_crtc (output);
+  priv->monitor = NULL;
   g_clear_object (&priv->crtc);
 
   G_OBJECT_CLASS (meta_output_parent_class)->dispose (object);
@@ -536,6 +517,21 @@ meta_output_info_get_min_refresh_rate (const MetaOutputInfo *output_info,
   return TRUE;
 }
 
+gboolean
+meta_output_info_is_builtin (const MetaOutputInfo *output_info)
+{
+  switch (output_info->connector_type)
+    {
+    case META_CONNECTOR_TYPE_eDP:
+    case META_CONNECTOR_TYPE_LVDS:
+    case META_CONNECTOR_TYPE_DSI:
+    case META_CONNECTOR_TYPE_DPI:
+      return TRUE;
+    default:
+      return FALSE;
+    }
+}
+
 void
 meta_output_get_color_metadata (MetaOutput            *output,
                                 MetaOutputHdrMetadata *hdr_metadata,
@@ -604,7 +600,6 @@ meta_output_init (MetaOutput *output)
 {
   MetaOutputPrivate *priv = meta_output_get_instance_private (output);
 
-  priv->backlight = -1;
   priv->is_primary = FALSE;
   priv->is_presentation = FALSE;
   priv->is_underscanning = FALSE;
@@ -647,14 +642,6 @@ meta_output_class_init (MetaOutputClass *klass)
                           G_PARAM_READWRITE |
                           G_PARAM_STATIC_STRINGS);
   g_object_class_install_properties (object_class, N_PROPS, obj_props);
-
-  signals[BACKLIGHT_CHANGED] =
-    g_signal_new ("backlight-changed",
-                  G_TYPE_FROM_CLASS (klass),
-                  G_SIGNAL_RUN_LAST,
-                  0,
-                  NULL, NULL, NULL,
-                  G_TYPE_NONE, 0);
 }
 
 gboolean
@@ -771,4 +758,23 @@ meta_output_update_modes (MetaOutput    *output,
   priv->info->preferred_mode = preferred_mode;
   priv->info->modes = modes;
   priv->info->n_modes = n_modes;
+}
+
+gboolean
+meta_output_matches (MetaOutput *output,
+                     MetaOutput *other_output)
+{
+  MetaOutputPrivate *priv =
+    meta_output_get_instance_private (output);
+  MetaOutputPrivate *other_priv =
+    meta_output_get_instance_private (other_output);
+
+  if (output == other_output)
+    return TRUE;
+
+  return (priv->gpu == other_priv->gpu &&
+          g_strcmp0 (priv->info->name, other_priv->info->name) == 0 &&
+          g_strcmp0 (priv->info->vendor, other_priv->info->vendor) == 0 &&
+          g_strcmp0 (priv->info->product, other_priv->info->product) == 0 &&
+          g_strcmp0 (priv->info->serial, other_priv->info->serial) == 0);
 }

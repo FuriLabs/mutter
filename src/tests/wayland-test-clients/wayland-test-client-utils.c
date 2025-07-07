@@ -48,10 +48,11 @@ enum
 {
   SURFACE_CONFIGURE,
   SURFACE_POINTER_ENTER,
+  SURFACE_KEYBOARD_ENTER,
   N_SURFACE_SIGNALS
 };
 
-static guint surface_signals[N_SIGNALS];
+static guint surface_signals[N_SURFACE_SIGNALS];
 
 static struct wl_callback *effects_complete_callback;
 static struct wl_callback *window_shown_callback;
@@ -137,6 +138,15 @@ G_DEFINE_TYPE (WaylandBufferDmabuf,
                wayland_buffer_dmabuf,
                WAYLAND_TYPE_BUFFER)
 
+typedef struct _WaylandSource
+{
+  GSource source;
+  GPollFD pfd;
+  gboolean reading;
+
+  WaylandDisplay *display;
+} WaylandSource;
+
 static int
 create_tmpfile_cloexec (char *tmpname)
 {
@@ -158,7 +168,7 @@ create_anonymous_file (off_t size)
   int fd;
   int ret;
 
-  path = getenv ("XDG_RUNTIME_DIR");
+  path = g_get_user_runtime_dir ();
   if (!path)
     {
       errno = ENOENT;
@@ -284,6 +294,74 @@ static const struct wl_pointer_listener wl_pointer_listener = {
 };
 
 static void
+wl_keyboard_keymap (void               *user_data,
+                    struct wl_keyboard *wl_keyboard,
+                    uint32_t            format,
+                    int32_t             fd,
+                    uint32_t            size)
+{
+}
+
+static void
+wl_keyboard_enter (void               *user_data,
+                   struct wl_keyboard *keyboard,
+                   uint32_t            serial,
+                   struct wl_surface  *surface_resource,
+                   struct wl_array    *keys)
+{
+  WaylandSurface *surface = wl_surface_get_user_data (surface_resource);
+
+  g_signal_emit (surface, surface_signals[SURFACE_KEYBOARD_ENTER],
+                 0, keyboard, serial);
+}
+
+static void
+wl_keyboard_leave (void               *user_data,
+                   struct wl_keyboard *wl_keyboard,
+                   uint32_t            serial,
+                   struct wl_surface  *surface)
+{
+}
+
+static void
+wl_keyboard_key (void               *user_data,
+                 struct wl_keyboard *wl_keyboard,
+                 uint32_t            serial,
+                 uint32_t            time,
+                 uint32_t            key,
+                 uint32_t            state)
+{
+}
+
+static void
+wl_keyboard_modifiers (void               *user_data,
+                       struct wl_keyboard *wl_keyboard,
+                       uint32_t            serial,
+                       uint32_t            mods_depressed,
+                       uint32_t            mods_latched,
+                       uint32_t            mods_locked,
+                       uint32_t            group)
+{
+}
+
+static void
+wl_keyboard_repeat_info (void               *data,
+                         struct wl_keyboard *wl_keyboard,
+                         int32_t             rate,
+                         int32_t             delay)
+{
+}
+
+static const struct wl_keyboard_listener wl_keyboard_listener = {
+  wl_keyboard_keymap,
+  wl_keyboard_enter,
+  wl_keyboard_leave,
+  wl_keyboard_key,
+  wl_keyboard_modifiers,
+  wl_keyboard_repeat_info,
+};
+
+static void
 handle_wl_seat_capabilities (void           *user_data,
                              struct wl_seat *wl_seat,
                              uint32_t        capabilities)
@@ -299,6 +377,17 @@ handle_wl_seat_capabilities (void           *user_data,
   else if (!(capabilities & WL_SEAT_CAPABILITY_POINTER) && display->wl_pointer)
     {
       g_clear_pointer (&display->wl_pointer, wl_pointer_release);
+    }
+
+  if ((capabilities & WL_SEAT_CAPABILITY_KEYBOARD) && !display->wl_keyboard)
+    {
+      display->wl_keyboard = wl_seat_get_keyboard (wl_seat);
+      wl_keyboard_add_listener (display->wl_keyboard,
+                                &wl_keyboard_listener, display);
+    }
+  else if (!(capabilities & WL_SEAT_CAPABILITY_KEYBOARD) && display->wl_keyboard)
+    {
+      g_clear_pointer (&display->wl_keyboard, wl_keyboard_release);
     }
 }
 
@@ -471,6 +560,12 @@ handle_registry_global (void               *user_data,
       display->viewporter = wl_registry_bind (registry, id,
                                               &wp_viewporter_interface, 1);
     }
+  else if (strcmp (interface, wp_color_representation_manager_v1_interface.name) == 0)
+    {
+      display->color_representation =
+        wl_registry_bind (registry, id,
+                          &wp_color_representation_manager_v1_interface, 1);
+    }
   else if (strcmp (interface, xdg_wm_base_interface.name) == 0)
     {
       int xdg_wm_base_version = 1;
@@ -500,6 +595,18 @@ handle_registry_global (void               *user_data,
       wl_seat_add_listener (display->wl_seat, &wl_seat_listener, display);
       display->needs_roundtrip = TRUE;
     }
+  else if (strcmp (interface, xdg_toplevel_tag_manager_v1_interface.name) == 0)
+    {
+      display->toplevel_tag_manager =
+        wl_registry_bind (registry, id,
+                          &xdg_toplevel_tag_manager_v1_interface, 1);
+    }
+  else if (strcmp (interface, xdg_activation_v1_interface.name) == 0)
+    {
+      display->xdg_activation =
+        wl_registry_bind (registry, id,
+                          &xdg_activation_v1_interface, 1);
+    }
 
   if (display->capabilities & WAYLAND_DISPLAY_CAPABILITY_TEST_DRIVER)
     {
@@ -524,6 +631,114 @@ static const struct wl_registry_listener registry_listener = {
   handle_registry_global,
   handle_registry_global_remove
 };
+
+static gboolean
+wayland_source_prepare (GSource *base,
+                        int     *timeout)
+{
+  WaylandSource *source = (WaylandSource *) base;
+
+  *timeout = -1;
+
+  if (source->reading)
+    return FALSE;
+
+  if (wl_display_prepare_read (source->display->display) != 0)
+    return TRUE;
+  source->reading = TRUE;
+
+  if (wl_display_flush (source->display->display) < 0)
+    g_error ("Error flushing display: %s", g_strerror (errno));
+
+  return FALSE;
+}
+
+static gboolean
+wayland_source_check (GSource *base)
+{
+  WaylandSource *source = (WaylandSource *) base;
+
+  if (source->reading)
+    {
+      if (source->pfd.revents & G_IO_IN)
+        {
+          if (wl_display_read_events (source->display->display) < 0)
+            {
+              g_error ("Error reading events from display: %s",
+                       g_strerror (errno));
+            }
+        }
+      else
+        {
+          wl_display_cancel_read (source->display->display);
+        }
+      source->reading = FALSE;
+    }
+
+  return source->pfd.revents;
+}
+
+static gboolean
+wayland_source_dispatch (GSource     *base,
+                         GSourceFunc  callback,
+                         gpointer     data)
+{
+  WaylandSource *source = (WaylandSource *) base;
+
+  while (TRUE)
+    {
+      int ret;
+
+      ret = wl_display_dispatch_pending (source->display->display);
+      if (ret < 0)
+        g_error ("Failed to dispatch pending: %s", g_strerror (errno));
+      else if (ret == 0)
+        break;
+    }
+
+  return TRUE;
+}
+
+static void
+wayland_source_finalize (GSource *base)
+{
+  WaylandSource *source = (WaylandSource *) base;
+
+  if (source->reading)
+    wl_display_cancel_read (source->display->display);
+  source->reading = FALSE;
+}
+
+static GSourceFuncs wayland_source_funcs = {
+  .prepare = wayland_source_prepare,
+  .check = wayland_source_check,
+  .dispatch = wayland_source_dispatch,
+  .finalize = wayland_source_finalize,
+};
+
+static GSource *
+wayland_source_new (WaylandDisplay *display)
+{
+  GSource *source;
+  WaylandSource *wayland_source;
+  g_autofree char *name = NULL;
+
+  source = g_source_new (&wayland_source_funcs,
+			 sizeof (WaylandSource));
+  name = g_strdup_printf ("Wayland GSource");
+  g_source_set_name (source, name);
+  wayland_source = (WaylandSource *) source;
+
+  wayland_source->display = display;
+  wayland_source->pfd.fd = wl_display_get_fd (display->display);
+  wayland_source->pfd.events = G_IO_IN | G_IO_ERR | G_IO_HUP;
+  g_source_add_poll (source, &wayland_source->pfd);
+
+  g_source_set_priority (source, G_PRIORITY_DEFAULT);
+  g_source_set_can_recurse (source, TRUE);
+
+  return source;
+}
 
 WaylandDisplay *
 wayland_display_new_full (WaylandDisplayCapabilities  capabilities,
@@ -559,6 +774,8 @@ wayland_display_new_full (WaylandDisplayCapabilities  capabilities,
   g_assert_nonnull (display->single_pixel_mgr);
   g_assert_nonnull (display->viewporter);
   g_assert_nonnull (display->xdg_wm_base);
+  g_assert_nonnull (display->toplevel_tag_manager);
+  g_assert_nonnull (display->xdg_activation);
 
   if (capabilities & WAYLAND_DISPLAY_CAPABILITY_TEST_DRIVER)
     g_assert_nonnull (display->test_driver);
@@ -566,6 +783,10 @@ wayland_display_new_full (WaylandDisplayCapabilities  capabilities,
   wl_display_roundtrip (display->display);
 
   display->gbm_device = create_gbm_device (display);
+
+  display->source = wayland_source_new (display);
+  g_source_attach (display->source, g_main_context_get_thread_default ());
+  g_source_unref (display->source);
 
   return display;
 }
@@ -589,6 +810,7 @@ wayland_display_finalize (GObject *object)
 {
   WaylandDisplay *display = WAYLAND_DISPLAY (object);
 
+  g_clear_pointer (&display->source, g_source_destroy);
   g_clear_pointer (&display->test_state, display->destroy_test_state);
   wl_display_disconnect (display->display);
   g_clear_pointer (&display->properties, g_hash_table_unref);
@@ -673,7 +895,7 @@ handle_xdg_toplevel_configure (void                *data,
   else
     surface->height = height;
 
-  g_assert_null (surface->pending_state);
+  g_clear_pointer (&surface->pending_state, g_hash_table_unref);
   surface->pending_state = g_hash_table_new (NULL, NULL);
 
   wl_array_for_each (p, states)
@@ -713,32 +935,50 @@ static const struct xdg_toplevel_listener xdg_toplevel_listener = {
   handle_xdg_toplevel_wm_capabilities,
 };
 
-static void
-handle_xdg_surface_configure (void               *data,
-                              struct xdg_surface *xdg_surface,
-                              uint32_t            serial)
+void
+wayland_surface_commit (WaylandSurface *surface)
 {
-  WaylandSurface *surface = data;
-  struct wl_region *opaque_region;
+  if (!surface->has_alpha)
+    {
+      struct wl_region *opaque_region;
 
-  g_signal_emit (surface, surface_signals[SURFACE_CONFIGURE], 0);
+      opaque_region = wl_compositor_create_region (surface->display->compositor);
+      wl_region_add (opaque_region, 0, 0, surface->width, surface->height);
+      wl_surface_set_opaque_region (surface->wl_surface, opaque_region);
+      wl_region_destroy (opaque_region);
+    }
 
-  draw_surface (surface->display,
-                surface->wl_surface,
-                surface->width, surface->height,
-                surface->color);
-  opaque_region = wl_compositor_create_region (surface->display->compositor);
-  wl_region_add (opaque_region, 0, 0, surface->width, surface->height);
-  wl_surface_set_opaque_region (surface->wl_surface, opaque_region);
-  wl_region_destroy (opaque_region);
+  wl_surface_damage_buffer (surface->wl_surface,
+                            0, 0, surface->width, surface->height);
 
-  xdg_surface_ack_configure (xdg_surface, serial);
+  xdg_surface_ack_configure (surface->xdg_surface, surface->last_serial);
   wl_surface_commit (surface->wl_surface);
 
   g_clear_pointer (&surface->current_state, g_hash_table_unref);
   surface->current_state = g_steal_pointer (&surface->pending_state);
 
   g_signal_emit (surface->display, signals[SURFACE_PAINTED], 0, surface);
+}
+
+static void
+handle_xdg_surface_configure (void               *data,
+                              struct xdg_surface *xdg_surface,
+                              uint32_t            serial)
+{
+  WaylandSurface *surface = data;
+
+  surface->last_serial = serial;
+
+  g_signal_emit (surface, surface_signals[SURFACE_CONFIGURE], 0);
+
+  if (surface->manual_paint)
+    return;
+
+  draw_surface (surface->display,
+                surface->wl_surface,
+                surface->width, surface->height,
+                surface->color);
+  wayland_surface_commit (surface);
 }
 
 static const struct xdg_surface_listener xdg_surface_listener = {
@@ -776,6 +1016,16 @@ wayland_surface_class_init (WaylandSurfaceClass *klass)
 
   surface_signals[SURFACE_POINTER_ENTER] =
     g_signal_new ("pointer-enter",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_LAST,
+                  0,
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE, 2,
+                  G_TYPE_POINTER,
+                  G_TYPE_UINT);
+
+  surface_signals[SURFACE_KEYBOARD_ENTER] =
+    g_signal_new ("keyboard-enter",
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_LAST,
                   0,
@@ -879,13 +1129,15 @@ gboolean
 wayland_surface_has_state (WaylandSurface          *surface,
                            enum xdg_toplevel_state  state)
 {
-  return g_hash_table_contains (surface->current_state, GUINT_TO_POINTER (state));
-}
+  if (surface->pending_state &&
+      g_hash_table_contains (surface->pending_state, GUINT_TO_POINTER (state)))
+    return TRUE;
 
-void
-wayland_surface_set_opaque (WaylandSurface *surface)
-{
-  surface->is_opaque = TRUE;
+  if (surface->current_state &&
+      g_hash_table_contains (surface->current_state, GUINT_TO_POINTER (state)))
+    return TRUE;
+
+  return FALSE;
 }
 
 const char *
@@ -967,6 +1219,28 @@ wait_for_window_shown (WaylandDisplay    *display,
 
   while (window_shown_callback)
     wayland_display_dispatch (display);
+}
+
+static void
+on_configure (WaylandSurface *surface,
+              gboolean       *configured)
+{
+  *configured = TRUE;
+}
+
+void
+wait_for_window_configured (WaylandDisplay *display,
+                            WaylandSurface *surface)
+{
+  gboolean configured = FALSE;
+  gulong configure_handler_id;
+
+  configure_handler_id = g_signal_connect (surface, "configure",
+                                           G_CALLBACK (on_configure),
+                                           &configured);
+  while (!configured)
+    g_main_context_iteration (NULL, TRUE);
+  g_signal_handler_disconnect (surface, configure_handler_id);
 }
 
 static void
@@ -1273,6 +1547,32 @@ wayland_buffer_shm_allocate (WaylandBuffer *buffer,
       vsub[1] = 2;
       vsub[2] = 2;
       break;
+    case DRM_FORMAT_YUV422:
+      shm->n_planes = 3;
+      shm_format = priv->format;
+      bpp[0] = 1;
+      bpp[1] = 1;
+      bpp[2] = 1;
+      hsub[0] = 1;
+      hsub[1] = 2;
+      hsub[2] = 2;
+      vsub[0] = 1;
+      vsub[1] = 1;
+      vsub[2] = 1;
+      break;
+    case DRM_FORMAT_YUV444:
+      shm->n_planes = 3;
+      shm_format = priv->format;
+      bpp[0] = 1;
+      bpp[1] = 1;
+      bpp[2] = 1;
+      hsub[0] = 1;
+      hsub[1] = 1;
+      hsub[2] = 1;
+      vsub[0] = 1;
+      vsub[1] = 1;
+      vsub[2] = 1;
+      break;
     default:
       g_assert_not_reached ();
     }
@@ -1506,6 +1806,30 @@ alloc_dmabuf_complex (WaylandBuffer *buffer,
       vsub[0] = 1;
       vsub[1] = 2;
       vsub[2] = 2;
+      break;
+    case DRM_FORMAT_YUV422:
+      dmabuf->n_planes = 3;
+      formats[0] = DRM_FORMAT_R8;
+      formats[1] = DRM_FORMAT_R8;
+      formats[2] = DRM_FORMAT_R8;
+      hsub[0] = 1;
+      hsub[1] = 2;
+      hsub[2] = 2;
+      vsub[0] = 1;
+      vsub[1] = 1;
+      vsub[2] = 1;
+      break;
+    case DRM_FORMAT_YUV444:
+      dmabuf->n_planes = 3;
+      formats[0] = DRM_FORMAT_R8;
+      formats[1] = DRM_FORMAT_R8;
+      formats[2] = DRM_FORMAT_R8;
+      hsub[0] = 1;
+      hsub[1] = 1;
+      hsub[2] = 1;
+      vsub[0] = 1;
+      vsub[1] = 1;
+      vsub[2] = 1;
       break;
     default:
       return FALSE;

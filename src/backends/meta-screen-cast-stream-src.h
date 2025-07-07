@@ -95,6 +95,8 @@ struct _MetaScreenCastStreamSrcClass
                                   struct spa_video_info_raw *video_format);
 
   CoglPixelFormat (* get_preferred_format) (MetaScreenCastStreamSrc *src);
+
+  void (* dispatch) (MetaScreenCastStreamSrc *src);
 };
 
 void meta_screen_cast_stream_src_close (MetaScreenCastStreamSrc *src);
@@ -111,6 +113,21 @@ MetaScreenCastRecordResult meta_screen_cast_stream_src_maybe_record_frame_with_t
                                                                                           MetaScreenCastPaintPhase  paint_phase,
                                                                                           const MtkRegion          *redraw_clip,
                                                                                           int64_t                   frame_timestamp_us);
+
+MetaScreenCastRecordResult meta_screen_cast_stream_src_record_frame (MetaScreenCastStreamSrc  *src,
+                                                                     MetaScreenCastRecordFlag  flags,
+                                                                     MetaScreenCastPaintPhase  paint_phase,
+                                                                     const MtkRegion          *redraw_clip);
+
+MetaScreenCastRecordResult meta_screen_cast_stream_src_record_frame_with_timestamp (MetaScreenCastStreamSrc  *src,
+                                                                                    MetaScreenCastRecordFlag  flags,
+                                                                                    MetaScreenCastPaintPhase  paint_phase,
+                                                                                    const MtkRegion          *redraw_clip,
+                                                                                    int64_t                   frame_timestamp_us);
+
+gboolean meta_screen_cast_stream_src_is_driving (MetaScreenCastStreamSrc *src);
+
+void meta_screen_cast_stream_src_request_process (MetaScreenCastStreamSrc *src);
 
 gboolean meta_screen_cast_stream_src_pending_follow_up_frame (MetaScreenCastStreamSrc *src);
 
@@ -148,3 +165,5 @@ gboolean meta_screen_cast_stream_src_uses_dma_bufs (MetaScreenCastStreamSrc *src
 
 CoglPixelFormat
 meta_screen_cast_stream_src_get_preferred_format (MetaScreenCastStreamSrc *src);
+
+void meta_screen_cast_stream_src_queue_empty_buffer (MetaScreenCastStreamSrc *src);

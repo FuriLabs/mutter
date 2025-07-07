@@ -37,6 +37,14 @@ struct _MetaWindowConfig
   MtkRectangle rect;
 
   gboolean is_fullscreen;
+
+  gboolean maximized_horizontally;
+  gboolean maximized_vertically;
+
+  MetaTileMode tile_mode;
+  int tile_monitor_number;
+  double tile_hfraction;
+  MetaWindow *tile_match;
 };
 
 G_DEFINE_FINAL_TYPE (MetaWindowConfig, meta_window_config, G_TYPE_OBJECT)
@@ -126,6 +134,8 @@ static void
 meta_window_config_init (MetaWindowConfig *window_config)
 {
   window_config->rect = MTK_RECTANGLE_INIT (0, 0, 0, 0);
+  window_config->tile_monitor_number = -1;
+  window_config->tile_hfraction = -1.0;
 }
 
 gboolean
@@ -198,6 +208,98 @@ gboolean
 meta_window_config_get_is_fullscreen (MetaWindowConfig *window_config)
 {
   return window_config->is_fullscreen;
+}
+
+gboolean
+meta_window_config_is_maximized (MetaWindowConfig *config)
+{
+  return config->maximized_horizontally && config->maximized_vertically;
+}
+
+gboolean
+meta_window_config_is_any_maximized (MetaWindowConfig *config)
+{
+  return config->maximized_horizontally || config->maximized_vertically;
+}
+
+gboolean
+meta_window_config_is_maximized_horizontally (MetaWindowConfig *config)
+{
+  return config->maximized_horizontally;
+}
+
+gboolean
+meta_window_config_is_maximized_vertically (MetaWindowConfig *config)
+{
+  return config->maximized_vertically;
+}
+
+void
+meta_window_config_set_maximized_directions (MetaWindowConfig *config,
+                                             gboolean          horizontally,
+                                             gboolean          vertically)
+{
+  config->maximized_horizontally = horizontally;
+  config->maximized_vertically = vertically;
+}
+
+MetaTileMode
+meta_window_config_get_tile_mode (MetaWindowConfig *config)
+{
+  return config->tile_mode;
+}
+
+int
+meta_window_config_get_tile_monitor_number (MetaWindowConfig *config)
+{
+  return config->tile_monitor_number;
+}
+
+double
+meta_window_config_get_tile_hfraction (MetaWindowConfig *config)
+{
+  return config->tile_hfraction;
+}
+
+MetaWindow *
+meta_window_config_get_tile_match (MetaWindowConfig *config)
+{
+  return config->tile_match;
+}
+
+void
+meta_window_config_set_tile_mode (MetaWindowConfig *config,
+                                  MetaTileMode      tile_mode)
+{
+  config->tile_mode = tile_mode;
+}
+
+void
+meta_window_config_set_tile_monitor_number (MetaWindowConfig *config,
+                                            int               tile_monitor_number)
+{
+  config->tile_monitor_number = tile_monitor_number;
+}
+
+void
+meta_window_config_set_tile_hfraction (MetaWindowConfig *config,
+                                       double            hfraction)
+{
+  config->tile_hfraction = hfraction;
+}
+
+void
+meta_window_config_set_tile_match (MetaWindowConfig *config,
+                                   MetaWindow       *tile_match)
+{
+  config->tile_match = tile_match;
+}
+
+gboolean
+meta_window_config_is_floating (MetaWindowConfig *config)
+{
+  return (!config->is_fullscreen &&
+          !meta_window_config_is_any_maximized (config));
 }
 
 MetaWindowConfig *
