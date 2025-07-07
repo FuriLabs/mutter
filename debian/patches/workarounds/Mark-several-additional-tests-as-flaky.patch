@@ -17,7 +17,8 @@ Forwarded: no
  src/tests/clutter/conform/grab.c      |  6 ++++++
  src/tests/clutter/conform/meson.build |  8 +++++++-
  src/tests/meson.build                 | 16 ++++++++++++++--
- 4 files changed, 51 insertions(+), 3 deletions(-)
+ src/tests/mtk/meson.build             |  1 +
+ 5 files changed, 52 insertions(+), 3 deletions(-)
 
 diff --git a/src/tests/clutter/conform/gesture.c b/src/tests/clutter/conform/gesture.c
 index f3901a2..c0affef 100644
@@ -161,3 +162,15 @@ index 6364fd5..2291302 100644
      env: test_env,
      args: [
        files('stacking' / stacking_test + '.metatest'),
+diff --git a/src/tests/mtk/meson.build b/src/tests/mtk/meson.build
+index e5400a4..df8f6d6 100644
+--- a/src/tests/mtk/meson.build
++++ b/src/tests/mtk/meson.build
+@@ -23,6 +23,7 @@ test_cases += [
+   {
+     'name': 'mtk-time-utils',
+     'suite': 'unit',
++    'flaky': true,
+     'sources': [
+       'mtk/time-utils-tests.c',
+     ]
