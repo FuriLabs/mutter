@@ -1,0 +1,22 @@
+From: Carlos Garnacho <carlosg@gnome.org>
+Date: Fri, 23 May 2025 12:03:41 +0200
+Subject: build: Bump mutter API version
+
+We have branched, so bump the API version for GNOME 49.
+---
+ meson.build | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/meson.build b/meson.build
+index eb4db7b..755b419 100644
+--- a/meson.build
++++ b/meson.build
+@@ -7,7 +7,7 @@ project('mutter', 'c',
+ split_version = meson.project_version().split('.')
+ 
+ # API version, bump each development cycle
+-libmutter_api_version = '16'
++libmutter_api_version = '17'
+ 
+ mutter_srcdir = meson.current_source_dir()
+ mutter_builddir = meson.current_build_dir()
