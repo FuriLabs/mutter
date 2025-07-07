@@ -93,7 +93,7 @@ Build-Depends: debhelper-compat (= 13),
                python3-docutils,
                sysprof [amd64 arm64 armel armhf mips64el ppc64el riscv64 s390x],
                systemd-dev,
-               umockdev,
+               umockdev <!nocheck>,
                wayland-protocols (>= 1.44),
                wireplumber <!nocheck>,
                xauth <!nocheck>,
@@ -346,7 +346,8 @@ Package: mutter-dev-bin
 Section: devel
 Architecture: linux-any
 Multi-Arch: foreign
-Depends: ${shlibs:Depends},
+Depends: ${misc:Depends},
+         ${shlibs:Depends},
 Description: Development programs for the Mutter window manager
  Mutter is a Wayland display server and X11 window manager and
  compositor library. It contains functionality related to, among other

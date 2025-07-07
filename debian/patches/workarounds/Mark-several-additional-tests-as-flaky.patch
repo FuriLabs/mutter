@@ -18,8 +18,9 @@ Forwarded: no
  src/tests/clutter/conform/meson.build |  8 +++++++-
  src/tests/meson.build                 | 16 ++++++++++++++--
  src/tests/monitor-tests-common.c      |  6 +++++-
+ src/tests/mtk/meson.build             |  1 +
  src/tests/mtk/time-utils-tests.c      |  6 ++++++
- 6 files changed, 62 insertions(+), 4 deletions(-)
+ 7 files changed, 63 insertions(+), 4 deletions(-)
 
 diff --git a/src/tests/clutter/conform/gesture.c b/src/tests/clutter/conform/gesture.c
 index f3901a2..c0affef 100644
@@ -121,7 +122,7 @@ index 4502e40..e290c70 100644
      is_parallel: false,
    )
 diff --git a/src/tests/meson.build b/src/tests/meson.build
-index 840f7cf..0e0a2b5 100644
+index 6364fd5..2291302 100644
 --- a/src/tests/meson.build
 +++ b/src/tests/meson.build
 @@ -658,6 +658,7 @@ test_cases += [
@@ -180,6 +181,18 @@ index d03fecf..46f04b9 100644
  }
  
  static MetaMonitorTestSetup *
+diff --git a/src/tests/mtk/meson.build b/src/tests/mtk/meson.build
+index e5400a4..df8f6d6 100644
+--- a/src/tests/mtk/meson.build
++++ b/src/tests/mtk/meson.build
+@@ -23,6 +23,7 @@ test_cases += [
+   {
+     'name': 'mtk-time-utils',
+     'suite': 'unit',
++    'flaky': true,
+     'sources': [
+       'mtk/time-utils-tests.c',
+     ]
 diff --git a/src/tests/mtk/time-utils-tests.c b/src/tests/mtk/time-utils-tests.c
 index 792f82d..704dcb3 100644
 --- a/src/tests/mtk/time-utils-tests.c

@@ -1,8 +1,8 @@
+build-Bump-mutter-API-version.patch
+data-Remember-to-give-org.gnome.Mutter.Mdk.desktop-a-main.patch
 workarounds/tests-Mark-view-verification-tests-as-incomplete-in-big-e.patch
-debian/tests-Do-not-run-screencast-tests.patch
 workarounds/tests-skip-monitor-width-size-check-as-it-may-lead-to-une.patch
 workarounds/tests-Skip-thread-priority-test.patch
 workarounds/Mark-several-additional-tests-as-flaky.patch
 workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
 #ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
-build-Bump-mutter-API-version.patch

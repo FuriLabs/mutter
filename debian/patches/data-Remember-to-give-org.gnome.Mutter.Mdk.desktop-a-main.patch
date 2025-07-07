@@ -1,0 +1,25 @@
+From: Daniel van Vugt <daniel.van.vugt@canonical.com>
+Date: Tue, 1 Jul 2025 16:17:00 +0800
+Subject: data: Remember to give org.gnome.Mutter.Mdk.desktop a main category
+
+This was a warning while packaging for Debian.
+
+https://specifications.freedesktop.org/menu-spec/latest/category-registry.html
+
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4518>
+---
+ data/org.gnome.Mutter.Mdk.desktop.in.in | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/data/org.gnome.Mutter.Mdk.desktop.in.in b/data/org.gnome.Mutter.Mdk.desktop.in.in
+index be1d0d5..f6c2dfe 100644
+--- a/data/org.gnome.Mutter.Mdk.desktop.in.in
++++ b/data/org.gnome.Mutter.Mdk.desktop.in.in
+@@ -4,6 +4,6 @@ Comment=Mutter Development Kit
+ Exec=@libexecdir@/mutter-devkit
+ Icon=org.gnome.Mutter.Mdk
+ Type=Application
+-Categories=GNOME;
++Categories=GNOME;Development
+ Keywords=mutter;emulator;debug
+ NoDisplay=true

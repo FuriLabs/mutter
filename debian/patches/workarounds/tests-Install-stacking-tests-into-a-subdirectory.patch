@@ -13,7 +13,7 @@ Forwarded: not-needed, workaround
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/src/tests/meson.build b/src/tests/meson.build
-index 0e0a2b5..c23d066 100644
+index 2291302..5238288 100644
 --- a/src/tests/meson.build
 +++ b/src/tests/meson.build
 @@ -1311,7 +1311,7 @@ if have_installed_tests
