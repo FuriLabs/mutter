@@ -2,8 +2,18 @@ From: =?utf-8?b?Ik1hcmNvIFRyZXZpc2FuIChUcmV2acOxbyki?= <mail@3v1n0.net>
 Date: Tue, 14 Mar 2023 18:22:14 +0100
 Subject: window: Add ability to override the edge constraints
 
+In order to be able to draw tiled windows as such mutter needs to provide an
+API to change the windows edge constraints.
+
+There's no yet such publica API, so the look of the shell tiling exetension
+that we are shipping is sub-optimal.
+
+As per this define a simple API to allow this, that we consider for now
+ubuntu only, since there's no upstream interest on it.
+
 This is allows extensions (such as Tiling Assistant) to override behavior
-of windows borders when a window is tiled.
+of windows borders when a window is tiled, but they need to ensure that the
+API is available and not just rely on it.
 
 Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/gnome-shell-extension-tiling-assistant/+bug/2011611
 Forwarded: not-needed
@@ -49,13 +59,13 @@ index 0000000..ee5b2f4
 +                                  MetaWindowConstraint  right,
 +                                  MetaWindowConstraint  bottom);
 diff --git a/src/core/window-private.h b/src/core/window-private.h
-index 6f07ad1..8bd7a03 100644
+index 43da677..8e9a620 100644
 --- a/src/core/window-private.h
 +++ b/src/core/window-private.h
-@@ -269,6 +269,13 @@ struct _MetaWindow
+@@ -277,6 +277,13 @@ struct _MetaWindow
      MetaEdgeConstraint left;
    } edge_constraints;
- 
+
 +  struct {
 +    MetaEdgeConstraint top;
 +    MetaEdgeConstraint right;
@@ -63,11 +73,11 @@ index 6f07ad1..8bd7a03 100644
 +    MetaEdgeConstraint left;
 +  } overridden_constraints;
 +
-   double tile_hfraction;
- 
    MetaLogicalMonitorId *preferred_logical_monitor;
+
+   /* Area to cover when in fullscreen mode.  If _NET_WM_FULLSCREEN_MONITORS has
 diff --git a/src/core/window.c b/src/core/window.c
-index 03bbb87..bae5ebe 100644
+index 3cc0d37..4066d41 100644
 --- a/src/core/window.c
 +++ b/src/core/window.c
 @@ -72,6 +72,7 @@
@@ -78,10 +88,10 @@ index 03bbb87..bae5ebe 100644
  #include "core/meta-window-config-private.h"
  #include "core/meta-workspace-manager-private.h"
  #include "core/place.h"
-@@ -3090,6 +3091,38 @@ meta_window_update_tile_fraction (MetaWindow *window,
-     meta_window_tile (tile_match, tile_match->tile_mode);
+@@ -3180,6 +3181,38 @@ meta_window_update_tile_fraction (MetaWindow *window,
+     }
  }
- 
+
 +G_ALWAYS_INLINE static inline MetaEdgeConstraint
 +get_edge_constraint (MetaWindowConstraint constraint)
 +{
@@ -117,7 +127,7 @@ index 03bbb87..bae5ebe 100644
  static void
  update_edge_constraints (MetaWindow *window)
  {
-@@ -3145,6 +3178,18 @@ update_edge_constraints (MetaWindow *window)
+@@ -3235,6 +3268,18 @@ update_edge_constraints (MetaWindow *window)
        window->edge_constraints.right = META_EDGE_CONSTRAINT_MONITOR;
        window->edge_constraints.left = META_EDGE_CONSTRAINT_MONITOR;
      }
@@ -134,13 +144,13 @@ index 03bbb87..bae5ebe 100644
 +  if (window->overridden_constraints.right != META_EDGE_CONSTRAINT_NONE)
 +      window->edge_constraints.right = window->overridden_constraints.right;
  }
- 
+
  gboolean
 diff --git a/src/meson.build b/src/meson.build
-index b0c103b..890f6a7 100644
+index 9dc1883..02a745a 100644
 --- a/src/meson.build
 +++ b/src/meson.build
-@@ -1347,7 +1347,8 @@ if have_introspection
+@@ -1316,7 +1316,8 @@ if have_introspection
      sources: [
        mutter_enum_types[1],
        mutter_introspected_sources,
