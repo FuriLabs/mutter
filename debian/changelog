@@ -1,3 +1,15 @@
+mutter (49~alpha.1-0ubuntu4) UNRELEASED; urgency=medium
+
+  [ Marco Trevisan (Treviño) ]
+  * Merge with debian
+  * d/control: Add misisng ${misc:Depends} to mutter-dev-bin
+  * d/source/lintian-overrides: Drop unhandled and outdated line
+  * d/p/ubuntu: Enable window edge constraint override support again
+  * d/control: Add missing mutter-17-tests gio runtime dependencies
+  * d/control: Add new mutter-17-tests umockdev runtime dependency
+
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Tue, 08 Jul 2025 05:25:43 +0200
+
 mutter (49~alpha.1-0ubuntu3) questing; urgency=medium
 
   * debian/patches: Mark more tests as flaky for 49.alpha. These issues
