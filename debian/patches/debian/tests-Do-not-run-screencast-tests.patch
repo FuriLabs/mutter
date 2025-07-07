@@ -7,14 +7,14 @@ dbus daemon) so, we can't easily get one up and running while building.
 
 So let's disable this for now
 ---
- src/tests/meson.build | 20 ++++++++++----------
- 1 file changed, 10 insertions(+), 10 deletions(-)
+ src/tests/meson.build | 22 +++++++++++-----------
+ 1 file changed, 11 insertions(+), 11 deletions(-)
 
 diff --git a/src/tests/meson.build b/src/tests/meson.build
-index 433f47f..c58f70b 100644
+index 6364fd5..840f7cf 100644
 --- a/src/tests/meson.build
 +++ b/src/tests/meson.build
-@@ -477,16 +477,16 @@ test_cases += [
+@@ -620,17 +620,17 @@ test_cases += [
        'native-virtual-monitor.c',
      ],
    },
@@ -26,6 +26,7 @@ index 433f47f..c58f70b 100644
 -    ],
 -    'depends': [
 -      screen_cast_client,
+-      screen_cast_client_driver,
 -    ],
 -  },
 +#  {
@@ -36,6 +37,7 @@ index 433f47f..c58f70b 100644
 +#    ],
 +#    'depends': [
 +#      screen_cast_client,
++#      screen_cast_client_driver,
 +#    ],
 +#  },
    {
