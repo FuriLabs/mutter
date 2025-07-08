@@ -1,4 +1,4 @@
-mutter (49~alpha.1-0ubuntu4) UNRELEASED; urgency=medium
+mutter (49~alpha.1-0ubuntu4) questing; urgency=medium
 
   [ Marco Trevisan (Treviño) ]
   * Merge with debian
@@ -8,7 +8,7 @@ mutter (49~alpha.1-0ubuntu4) UNRELEASED; urgency=medium
   * d/control: Add missing mutter-17-tests gio runtime dependencies
   * d/control: Add new mutter-17-tests umockdev runtime dependency
 
- -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Tue, 08 Jul 2025 05:25:43 +0200
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Tue, 08 Jul 2025 05:29:42 +0200
 
 mutter (49~alpha.1-0ubuntu3) questing; urgency=medium
 
