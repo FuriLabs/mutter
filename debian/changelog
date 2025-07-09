@@ -1,3 +1,9 @@
+mutter (46.2-1ubuntu0.24.04.10) noble; urgency=medium
+
+  * Add proposed patch fixing crash on window drag (LP: #2107454)
+
+ -- Alessandro Astone <alessandro.astone@canonical.com>  Wed, 09 Jul 2025 09:10:43 +0200
+
 mutter (46.2-1ubuntu0.24.04.9) noble; urgency=medium
 
   [ Chun-Yi Wu ]
