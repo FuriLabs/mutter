@@ -1,6 +1,7 @@
 mutter (48.4-2) UNRELEASED; urgency=medium
 
   * d/gbp.conf, d/control: Switch packaging branch for trixie
+  * Expand previous changelog entry to document all upstream changes
 
  -- Simon McVittie <smcv@debian.org>  Sun, 13 Jul 2025 11:43:09 +0100
 
@@ -8,12 +9,48 @@ mutter (48.4-1) experimental; urgency=medium
 
   [ Jeremy Bícha ]
   * New upstream bugfix release
-    - Unlink outputs from unused connectors in update_outputs
-    - Add speed limit to Visual alerts
-    - Fix behavior of windows that get activated before mapped
-    - Fix incorrect cursor over Xwayland clients (LP: #2111502)
-    - Fix hi-res scroll events getting converted to flip-flopping discrete events
-    - Fixed crash
+    - Unlink outputs from unused connectors in update_outputs, avoiding a
+      use-after-free when a monitor is disconnected
+      (mutter!4474 upstream)
+    - Fix a crash caused by a use-after-free when clearing many
+      accumulated notifications
+      (mutter#3970 upstream, LP: #2102063)
+    - Fix a non-reproducible crash caused by a use-after-free when dragging
+      an epiphany-browser tab to create a new window
+      (mutter#4157 upstream)
+    - Fix the logic for when to disable the --no-x11 option
+      (mutter!4485 upstream, not relevant to how we configure it in Debian)
+    - Rate-limit visual alerts to 2 per second, to comply with the European
+      Accessibility Act and avoid potentially triggering photosensitive
+      seizures
+      (mutter!4487 upstream)
+    - Fix a rare crash with a NULL pointer dereference
+      (mutter#4147 upstream, LP: #2100243)
+    - Avoid reopening an inactive Nvidia GPU when not needed
+      (mutter#3550 upstream)
+    - Fix a NULL dereference in the tests
+      (mutter!4495 upstream)
+    - Fix stacking order for windows that get activated before mapped
+      (mutter!4462 upstream)
+    - Fix incorrect cursor over Xwayland clients
+      (mutter#4033 upstream, LP: #2111502)
+    - Improve Wayland spec compliance by sending Wayland seat name before
+      its capabilities
+      (mutter#4119 upstream)
+    - Improve X11 compatibility (especially in Wine) by moving the X11 focus
+      to a shared dummy window when the Wayland focus is really on any
+      non-X11 window
+      (mutter!4447 upstream)
+    - Wait longer for hotplugged monitors to detect their input sources,
+      improving compatibility with e.g. MSI PRO MP275Q
+      (mutter!4442 upstream)
+    - Make sure the cursor is updated after modesetting, even if there is no
+      application window to redraw
+      (mutter!4452 upstream)
+    - Fix high resolution scroll events getting converted to discrete events
+      that intermittently switch direction
+      (mutter#4128 upstream)
+    - Documentation updates
 
   [ Simon McVittie ]
   * d/gbp.conf: Use upstream/48.x branch for trixie
