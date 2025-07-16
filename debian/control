@@ -361,5 +361,4 @@ Description: Development programs for the Mutter window manager
  library used to simplify usage of OpenGL pipelines, as well as a fork
  of Clutter, a scene graph and user interface toolkit.
  .
- This package contains the program files which are used for the libraries
- and others.
+ This package contains the Mutter Development Kit.
