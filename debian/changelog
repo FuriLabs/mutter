@@ -3,8 +3,10 @@ mutter (49~alpha.1-0ubuntu5) questing; urgency=medium
   [ Daniel van Vugt ]
   * debian/control: Drop new binary dependency on umockdev. It's very
     weak (043efbb1831) and an unnecessary blocker being in universe.
+  * debian/libmutter-17-0.lintian-overrides: Fix outdated reference to
+    libmutter-16.
 
- -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 17 Jul 2025 14:27:03 +0800
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 17 Jul 2025 14:46:34 +0800
 
 mutter (49~alpha.1-0ubuntu4) questing; urgency=medium
 
