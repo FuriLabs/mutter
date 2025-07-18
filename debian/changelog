@@ -1,3 +1,10 @@
+mutter (49~alpha.1-0ubuntu6) questing; urgency=medium
+
+  [ Daniel van Vugt ]
+  * debian/control: Restore mutter-17-tests Depends: umockdev
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Fri, 18 Jul 2025 12:41:33 +0800
+
 mutter (49~alpha.1-0ubuntu5) questing; urgency=medium
 
   [ Daniel van Vugt ]
