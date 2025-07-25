@@ -1,3 +1,10 @@
+mutter (49~alpha.1-0ubuntu7) questing; urgency=medium
+
+  * debian/control: mutter-common breaks older versions of libmutter so don't
+    allow it to install prematurely (LP: #2118736)
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Fri, 25 Jul 2025 11:03:00 +0800
+
 mutter (49~alpha.1-0ubuntu6) questing; urgency=medium
 
   [ Daniel van Vugt ]

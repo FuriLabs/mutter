@@ -306,7 +306,14 @@ Section: misc
 Architecture: all
 Multi-Arch: foreign
 Depends: ${misc:Depends}
-Breaks: magpie-common (<< 0.9.3-0ubuntu8~)
+Breaks: magpie-common (<< 0.9.3-0ubuntu8~),
+        libmutter-16-0 (<< 49~),
+        libmutter-15-0 (<< 49~),
+        libmutter-14-0 (<< 49~),
+        libmutter-13-0 (<< 49~),
+        libmutter-12-0 (<< 49~),
+        libmutter-11-0 (<< 49~),
+        libmutter-10-0 (<< 49~),
 Replaces: magpie-common (<< 0.9.3-0ubuntu8~)
 Description: shared files for the Mutter window manager
  Mutter is a Wayland display server and X11 window manager and
