@@ -1,4 +1,4 @@
-mutter (49~beta-0ubuntu1) UNRELEASED; urgency=medium
+mutter (49~beta-0ubuntu1) questing; urgency=medium
 
   [ Daniel van Vugt ]
   * New upstream release 49.beta
@@ -18,7 +18,7 @@ mutter (49~beta-0ubuntu1) UNRELEASED; urgency=medium
       (LP: #2117277)
     - monitor-Calculate-fractional-scaling-factors-using-exact-.patch
 
- -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Tue, 05 Aug 2025 15:22:56 +0800
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Tue, 05 Aug 2025 17:28:41 +0800
 
 mutter (49~alpha.1-0ubuntu7) questing; urgency=medium
 
