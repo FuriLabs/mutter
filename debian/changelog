@@ -10,6 +10,7 @@ mutter (49~beta-0ubuntu1) UNRELEASED; urgency=medium
   * Refresh debian/patches:
     - workarounds/Mark-several-additional-tests-as-flaky.patch
     - workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
+    - ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
 
  -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Tue, 05 Aug 2025 15:22:56 +0800
 

@@ -59,13 +59,13 @@ index 0000000..ee5b2f4
 +                                  MetaWindowConstraint  right,
 +                                  MetaWindowConstraint  bottom);
 diff --git a/src/core/window-private.h b/src/core/window-private.h
-index 43da677..8e9a620 100644
+index 59f4771..fc1d4bf 100644
 --- a/src/core/window-private.h
 +++ b/src/core/window-private.h
 @@ -277,6 +277,13 @@ struct _MetaWindow
      MetaEdgeConstraint left;
    } edge_constraints;
-
+ 
 +  struct {
 +    MetaEdgeConstraint top;
 +    MetaEdgeConstraint right;
@@ -74,10 +74,10 @@ index 43da677..8e9a620 100644
 +  } overridden_constraints;
 +
    MetaLogicalMonitorId *preferred_logical_monitor;
-
+ 
    /* Area to cover when in fullscreen mode.  If _NET_WM_FULLSCREEN_MONITORS has
 diff --git a/src/core/window.c b/src/core/window.c
-index 3cc0d37..4066d41 100644
+index a39ef0d..5e3369a 100644
 --- a/src/core/window.c
 +++ b/src/core/window.c
 @@ -72,6 +72,7 @@
@@ -91,7 +91,7 @@ index 3cc0d37..4066d41 100644
 @@ -3180,6 +3181,38 @@ meta_window_update_tile_fraction (MetaWindow *window,
      }
  }
-
+ 
 +G_ALWAYS_INLINE static inline MetaEdgeConstraint
 +get_edge_constraint (MetaWindowConstraint constraint)
 +{
@@ -144,13 +144,13 @@ index 3cc0d37..4066d41 100644
 +  if (window->overridden_constraints.right != META_EDGE_CONSTRAINT_NONE)
 +      window->edge_constraints.right = window->overridden_constraints.right;
  }
-
+ 
  gboolean
 diff --git a/src/meson.build b/src/meson.build
-index 9dc1883..02a745a 100644
+index 2f697fc..1a65c57 100644
 --- a/src/meson.build
 +++ b/src/meson.build
-@@ -1316,7 +1316,8 @@ if have_introspection
+@@ -1321,7 +1321,8 @@ if have_introspection
      sources: [
        mutter_enum_types[1],
        mutter_introspected_sources,
