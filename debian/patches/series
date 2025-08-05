@@ -1,4 +1,3 @@
-data-Remember-to-give-org.gnome.Mutter.Mdk.desktop-a-main.patch
 workarounds/tests-Mark-view-verification-tests-as-incomplete-in-big-e.patch
 workarounds/tests-skip-monitor-width-size-check-as-it-may-lead-to-une.patch
 workarounds/tests-Skip-thread-priority-test.patch
