@@ -199,10 +199,22 @@ default_get_focus_surface (MetaWaylandEventHandler *handler,
                            gpointer                 user_data)
 {
   MetaWaylandSeat *seat = user_data;
+  MetaWaylandSurface *surface = NULL;
+  ClutterInputCapabilities caps;
 
-  return meta_wayland_seat_get_current_surface (seat,
-                                                device,
-                                                sequence);
+  caps = clutter_input_device_get_capabilities (device);
+
+  if (caps &
+      (CLUTTER_INPUT_CAPABILITY_POINTER |
+       CLUTTER_INPUT_CAPABILITY_TOUCHPAD |
+       CLUTTER_INPUT_CAPABILITY_TRACKBALL |
+       CLUTTER_INPUT_CAPABILITY_TRACKPOINT))
+    surface = meta_wayland_pointer_get_implicit_grab_surface (seat->pointer);
+
+  if (!surface)
+    surface = meta_wayland_seat_get_current_surface (seat, device, sequence);
+
+  return surface;
 }
 
 static void
@@ -301,6 +313,7 @@ meta_wayland_seat_new (MetaWaylandCompositor *compositor,
                               NULL);
 
   seat->text_input = meta_wayland_text_input_new (seat);
+  seat->pointer_warp = meta_wayland_pointer_warp_new (seat);
 
   meta_wayland_data_device_init (&seat->data_device, seat);
   meta_wayland_data_device_primary_init (&seat->primary_data_device, seat);
@@ -346,6 +359,7 @@ meta_wayland_seat_free (MetaWaylandSeat *seat)
   g_object_unref (seat->touch);
 
   meta_wayland_text_input_destroy (seat->text_input);
+  meta_wayland_pointer_warp_destroy (seat->pointer_warp);
 
   g_free (seat);
 }
@@ -719,17 +733,7 @@ meta_wayland_seat_get_current_surface (MetaWaylandSeat      *seat,
            CLUTTER_INPUT_CAPABILITY_TRACKBALL |
            CLUTTER_INPUT_CAPABILITY_TRACKPOINT))
         {
-          MetaWaylandSurface *implicit_grab_surface;
-
-          implicit_grab_surface =
-            meta_wayland_pointer_get_implicit_grab_surface (seat->pointer);
-
-          if (implicit_grab_surface &&
-              meta_wayland_input_is_current_handler (seat->input_handler,
-                                                     seat->default_handler))
-            return implicit_grab_surface;
-          else
-            return meta_wayland_pointer_get_current_surface (seat->pointer);
+          return meta_wayland_pointer_get_current_surface (seat->pointer);
         }
     }
 
