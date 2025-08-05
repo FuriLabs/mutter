@@ -162,9 +162,7 @@ popup_grab_release (MetaWaylandEventHandler *handler,
     {
       MetaWaylandSurface *surface;
 
-      surface = meta_wayland_event_handler_chain_up_get_focus_surface (popup_grab->handler,
-                                                                       device,
-                                                                       sequence);
+      surface = meta_wayland_seat_get_current_surface (popup_grab->seat, device, sequence);
       if (!surface ||
           wl_resource_get_client (surface->resource) != popup_grab->grab_client)
         {
@@ -319,6 +317,10 @@ meta_wayland_popup_create (MetaWaylandPopupSurface *popup_surface,
   popup->popup_surface = popup_surface;
 
   wl_list_insert (&grab->all_popups, &popup->link);
+
+  /* Transfer implicit grab to the popup surface */
+  if (meta_wayland_pointer_get_implicit_grab_surface (grab->seat->pointer) != NULL)
+    meta_wayland_pointer_focus_surface (grab->seat->pointer, surface);
 
   meta_wayland_popup_grab_repick_keyboard_focus (grab);
 

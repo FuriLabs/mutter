@@ -284,6 +284,7 @@ libmutter-17.so.0 libmutter-17-0 #MINVER#
  meta_gamma_lut_new@Base 44~rc
  meta_gamma_lut_new_sized@Base 46~rc
  meta_get_debug_paint_flags@Base 43.0
+ meta_get_wayland_client@Base 49~beta
  meta_get_window_suspend_timeout_s@Base 45~rc
  meta_gpu_get_backend@Base 43.0
  meta_gpu_get_crtcs@Base 43.0
@@ -754,18 +755,21 @@ libmutter-17.so.0 libmutter-17-0 #MINVER#
  meta_virtual_monitor_info_new@Base 43.0
  meta_virtual_monitor_set_mode@Base 43.0
  meta_wayland_actor_surface_get_actor@Base 43.0
+ meta_wayland_client_destroy@Base 49~beta
+ meta_wayland_client_get_caps@Base 49~beta
+ meta_wayland_client_get_context@Base 49~beta
+ meta_wayland_client_get_kind@Base 49~beta
+ meta_wayland_client_get_subprocess@Base 49~beta
  meta_wayland_client_get_type@Base 43.0
- meta_wayland_client_hide_from_window_list@Base 43.0
- meta_wayland_client_make_desktop@Base 45.3
- meta_wayland_client_make_dock@Base 46~rc
+ meta_wayland_client_get_wl_client@Base 49~beta
+ meta_wayland_client_has_caps@Base 49~beta
  meta_wayland_client_matches@Base 44~beta
- meta_wayland_client_new@Base 43.0
- meta_wayland_client_new_indirect@Base 44~beta
+ meta_wayland_client_new_create@Base 49~beta
+ meta_wayland_client_new_from_wl@Base 49~beta
+ meta_wayland_client_new_subprocess@Base 49~beta
  meta_wayland_client_owns_window@Base 43.0
- meta_wayland_client_setup_fd@Base 44~beta
- meta_wayland_client_show_in_window_list@Base 43.0
- meta_wayland_client_spawn@Base 43.0
- meta_wayland_client_spawnv@Base 43.0
+ meta_wayland_client_set_caps@Base 49~beta
+ meta_wayland_client_take_client_fd@Base 49~beta
  meta_wayland_compositor_get_context@Base 44~beta
  meta_wayland_compositor_get_filter_manager@Base 44~beta
  meta_wayland_compositor_get_type@Base 45~beta.1
@@ -878,6 +882,7 @@ libmutter-17.so.0 libmutter-17-0 #MINVER#
  meta_window_has_attached_dialogs@Base 43.0
  meta_window_has_focus@Base 43.0
  meta_window_has_pointer@Base 44.1
+ meta_window_hide_from_window_list@Base 49~beta
  meta_window_is_above@Base 43.0
  meta_window_is_always_on_all_workspaces@Base 43.0
  meta_window_is_ancestor_of_transient@Base 43.0
@@ -913,8 +918,10 @@ libmutter-17.so.0 libmutter-17-0 #MINVER#
  meta_window_set_demands_attention@Base 43.0
  meta_window_set_icon_geometry@Base 43.0
  meta_window_set_title@Base 49~alpha.1
+ meta_window_set_type@Base 49~beta
  meta_window_should_be_showing@Base 46.1
  meta_window_should_show@Base 46.1
+ meta_window_show_in_window_list@Base 49~beta
  meta_window_showing_on_its_workspace@Base 43.0
  meta_window_stage_to_protocol_rect@Base 47~rc
  meta_window_stick@Base 43.0
