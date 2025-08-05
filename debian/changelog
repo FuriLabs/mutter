@@ -1,3 +1,18 @@
+mutter (49~beta-0ubuntu1) UNRELEASED; urgency=medium
+
+  [ Daniel van Vugt ]
+  * New upstream release 49.beta
+  * debian/control: Bump dependencies: wayland 1.24, wayland-protocols 1.45
+  * debian/libmutter-17-0.symbols: Update symbols for 49.beta
+  * Drop upstreamed debian/patches:
+    - build-Bump-mutter-API-version.patch
+    - data-Remember-to-give-org.gnome.Mutter.Mdk.desktop-a-main.patch
+  * Refresh debian/patches:
+    - workarounds/Mark-several-additional-tests-as-flaky.patch
+    - workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Tue, 05 Aug 2025 15:22:56 +0800
+
 mutter (49~alpha.1-0ubuntu7) questing; urgency=medium
 
   * debian/control: mutter-common breaks older versions of libmutter so don't
