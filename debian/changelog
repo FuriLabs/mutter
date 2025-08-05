@@ -11,6 +11,12 @@ mutter (49~beta-0ubuntu1) UNRELEASED; urgency=medium
     - workarounds/Mark-several-additional-tests-as-flaky.patch
     - workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
     - ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
+  * Add debian/patches:
+    - clutter-stage-Allow-for-there-being-no-sprite-when-a-devi.patch
+      (LP: #2119273)
+    - core-place-Guarantee-we-never-get-work-area-for-a-NULL-lo.patch
+      (LP: #2117277)
+    - monitor-Calculate-fractional-scaling-factors-using-exact-.patch
 
  -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Tue, 05 Aug 2025 15:22:56 +0800
 

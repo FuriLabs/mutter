@@ -1,0 +1,45 @@
+From: Daniel van Vugt <daniel.van.vugt@canonical.com>
+Date: Tue, 29 Jul 2025 16:31:26 +0800
+Subject: core/place: Guarantee we never get work area for a NULL logical
+ monitor
+
+Currently the two functions we get `logical_monitor` from can return
+NULL in theory. And although I personally can't reproduce the user
+issue that motivated this, it's easy enough to just guarantee we never
+pass a NULL into `meta_window_get_work_area_for_logical_monitor`, so
+that crash can't happen anymore from `meta_window_place`.
+
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/2117277
+Origin: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4549
+---
+ src/core/place.c | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/src/core/place.c b/src/core/place.c
+index 2898854..d3f0b1c 100644
+--- a/src/core/place.c
++++ b/src/core/place.c
+@@ -953,6 +953,23 @@ meta_window_place (MetaWindow        *window,
+   else
+     logical_monitor = meta_backend_get_current_logical_monitor (backend);
+ 
++  g_warn_if_fail (logical_monitor);
++
++  /* Avoid crashing on the above warning, but we would like to fix the root
++   * causes too some day.
++   */
++  if (!logical_monitor)
++    {
++      MetaMonitorManager *monitor_manager =
++        meta_backend_get_monitor_manager (backend);
++
++      logical_monitor =
++        meta_monitor_manager_get_primary_logical_monitor (monitor_manager);
++
++      if (!logical_monitor)
++        goto done;
++    }
++
+   meta_window_get_work_area_for_logical_monitor (window,
+                                                  logical_monitor,
+                                                  &work_area);

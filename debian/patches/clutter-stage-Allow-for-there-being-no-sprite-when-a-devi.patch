@@ -1,0 +1,29 @@
+From: Daniel van Vugt <daniel.van.vugt@canonical.com>
+Date: Fri, 25 Jul 2025 13:03:09 +0800
+Subject: clutter/stage: Allow for there being no sprite when a device is
+ removed
+
+In simple tablet hotplugging scenarios, the device may be absent from
+the pointer_devices hash and so there is no sprite to remove.
+
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/4222
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/2119273
+Origin: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4541
+---
+ clutter/clutter/clutter-stage.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/clutter/clutter/clutter-stage.c b/clutter/clutter/clutter-stage.c
+index 7c20b61..2365113 100644
+--- a/clutter/clutter/clutter-stage.c
++++ b/clutter/clutter/clutter-stage.c
+@@ -3643,6 +3643,9 @@ clutter_stage_update_device_for_event (ClutterStage *stage,
+       else
+         sprite = g_hash_table_lookup (priv->pointer_devices, device);
+ 
++      if (!sprite)
++        return;
++
+       clutter_focus_set_current_actor (CLUTTER_FOCUS (sprite), NULL,
+                                        source_device, time_ms);
+       clutter_sprite_update (sprite, point, NULL);

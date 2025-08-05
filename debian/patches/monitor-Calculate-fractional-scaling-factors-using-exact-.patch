@@ -1,0 +1,982 @@
+From: Daniel van Vugt <daniel.van.vugt@canonical.com>
+Date: Sun, 22 Jun 2025 16:22:04 +0800
+Subject: monitor: Calculate fractional scaling factors using exact quotients
+
+Here we generalise scaling factor detection to include all reasonable
+quotients within the range 1.0-4.0 (which is unchanged).
+
+In theory we are only adding some one third increments and deleting
+some one quarter increments, keeping only scaling factors that divide
+perfectly into the screen resolution.
+
+In practice this also seems to yield more precise scaling factors which
+you can see in the test case expectations. The old ones were often a
+hundredth or a thousandth off, which may be too high a rounding error
+across the size of window. And that probably explains most of the blur
+that people had complained about until now.
+
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/3339
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/1135
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/4093
+Origin: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4503
+---
+ src/backends/meta-monitor-config-store.c          |   4 +-
+ src/backends/meta-monitor-private.h               |   7 +-
+ src/backends/meta-monitor.c                       | 191 ++++++++++++----------
+ src/tests/gdctl/show                              |   6 +-
+ src/tests/gdctl/show-modes                        |   6 +-
+ src/tests/gdctl/show-properties                   |  14 +-
+ src/tests/gdctl/show-verbose                      |  26 +--
+ src/tests/migration/horizontal-strip-finished.xml |   8 +-
+ src/tests/migration/horizontal-strip.xml          |   2 +-
+ src/tests/monitor-config-migration-tests.c        |  12 +-
+ src/tests/monitor-gdctl-tests.c                   |  66 ++++----
+ src/tests/monitor-scale-tests.c                   | 126 ++++++--------
+ 12 files changed, 237 insertions(+), 231 deletions(-)
+
+diff --git a/src/backends/meta-monitor-config-store.c b/src/backends/meta-monitor-config-store.c
+index 5ce3cab..41884bb 100644
+--- a/src/backends/meta-monitor-config-store.c
++++ b/src/backends/meta-monitor-config-store.c
+@@ -865,8 +865,8 @@ maybe_convert_scales (GList *logical_monitor_configs)
+       new_scale =
+         meta_get_closest_monitor_scale_factor_for_resolution (width,
+                                                               height,
+-                                                              existing_scale,
+-                                                              0.1f);
++                                                              existing_scale);
++
+       if (new_scale == 0.0f)
+         new_scale = 1.0f;
+ 
+diff --git a/src/backends/meta-monitor-private.h b/src/backends/meta-monitor-private.h
+index 898ab20..ec127bc 100644
+--- a/src/backends/meta-monitor-private.h
++++ b/src/backends/meta-monitor-private.h
+@@ -220,10 +220,9 @@ float meta_monitor_calculate_mode_scale (MetaMonitor                 *monitor,
+                                          MetaMonitorMode             *monitor_mode,
+                                          MetaMonitorScalesConstraint  constraints);
+ 
+-float meta_get_closest_monitor_scale_factor_for_resolution (float width,
+-                                                            float height,
+-                                                            float scale,
+-                                                            float threshold);
++float meta_get_closest_monitor_scale_factor_for_resolution (unsigned int width,
++                                                            unsigned int height,
++                                                            float        scale);
+ 
+ META_EXPORT_TEST
+ float * meta_monitor_calculate_supported_scales (MetaMonitor                 *monitor,
+diff --git a/src/backends/meta-monitor.c b/src/backends/meta-monitor.c
+index 0e92281..adda5a6 100644
+--- a/src/backends/meta-monitor.c
++++ b/src/backends/meta-monitor.c
+@@ -30,10 +30,9 @@
+ #include "backends/meta-backlight-private.h"
+ #include "core/boxes-private.h"
+ 
+-#define SCALE_FACTORS_PER_INTEGER 4
+-#define SCALE_FACTORS_STEPS (1.0f / (float) SCALE_FACTORS_PER_INTEGER)
+-#define MINIMUM_SCALE_FACTOR 1.0f
+-#define MAXIMUM_SCALE_FACTOR 4.0f
++#define MAX_DENOMINATOR 4
++#define MIN_INTEGER_SCALE 1
++#define MAX_INTEGER_SCALE 4
+ #define MINIMUM_LOGICAL_AREA (800 * 480)
+ #define MAXIMUM_REFRESH_RATE_DIFF 0.001f
+ 
+@@ -2316,7 +2315,7 @@ is_scale_valid_for_size (float width,
+                          float height,
+                          float scale)
+ {
+-  if (scale < MINIMUM_SCALE_FACTOR || scale > MAXIMUM_SCALE_FACTOR)
++  if (scale < MIN_INTEGER_SCALE || scale > MAX_INTEGER_SCALE)
+     return FALSE;
+ 
+   return is_logical_size_large_enough ((int) floorf (width / scale),
+@@ -2352,70 +2351,124 @@ meta_monitor_mode_get_monitor (MetaMonitorMode *monitor_mode)
+   return priv->monitor;
+ }
+ 
+-float
+-meta_get_closest_monitor_scale_factor_for_resolution (float width,
+-                                                      float height,
+-                                                      float scale,
+-                                                      float threshold)
++static unsigned int
++highest_common_factor (unsigned int x,
++                       unsigned int y)
+ {
+-  unsigned int i, j;
+-  float scaled_h;
+-  float scaled_w;
+-  float best_scale;
+-  int base_scaled_w;
+-  gboolean found_one;
++  unsigned int a = x;
++  unsigned int b = y;
+ 
+-  best_scale = 0;
++  while (a > 0 && b > 0)
++    {
++      if (b > a)
++        b %= a;
++      else
++        a %= b;
++    }
+ 
+-  if (fmodf (width, scale) == 0.0 && fmodf (height, scale) == 0.0)
+-    return scale;
++  return MAX (a, b);
++}
+ 
+-  i = 0;
+-  found_one = FALSE;
+-  base_scaled_w = (int) floorf (width / scale);
++typedef void (* ForEachScaleFunc) (float  scale,
++                                   void  *arg1,
++                                   void  *arg2);
+ 
+-  do
++static void
++for_each_scale (unsigned int      width,
++                unsigned int      height,
++                unsigned int      max_denominator,
++                ForEachScaleFunc  func,
++                void             *arg1,
++                void             *arg2)
++{
++  unsigned int denominator;
++
++  for (denominator = 1; denominator <= max_denominator; denominator++)
+     {
+-      for (j = 0; j < 2; j++)
++      unsigned int numerator;
++
++      for (numerator = MIN_INTEGER_SCALE * denominator;
++           numerator <= MAX_INTEGER_SCALE * denominator;
++           numerator++)
+         {
+-          float current_scale;
+-          int offset = i * (j ? 1 : -1);
++          float scale;
+ 
+-          scaled_w = base_scaled_w + offset;
+-          current_scale = width / scaled_w;
+-          scaled_h = height / current_scale;
++          /* Accept only scales that divide perfectly into the screen */
++          if (((width * denominator) % numerator) != 0 ||
++              ((height * denominator) % numerator) != 0)
++            continue;
+ 
+-          if (current_scale >= scale + threshold ||
+-              current_scale <= scale - threshold ||
+-              current_scale < MINIMUM_SCALE_FACTOR ||
+-              current_scale > MAXIMUM_SCALE_FACTOR)
+-            {
+-              return best_scale;
+-            }
++          /* Eliminate equivalent fractions (duplicate scales) */
++          if (highest_common_factor (numerator, denominator) > 1)
++            continue;
+ 
+-          if (floorf (scaled_h) == scaled_h)
+-            {
+-              found_one = TRUE;
++          scale = (float) numerator / denominator;
+ 
+-              if (fabsf (current_scale - scale) < fabsf (best_scale - scale))
+-                best_scale = current_scale;
+-            }
+-        }
++          if (!is_scale_valid_for_size (width, height, scale))
++            continue;
+ 
+-      i++;
++          func (scale, arg1, arg2);
++        }
+     }
+-  while (!found_one);
++}
++
++static void
++replace_best_scale (float  scale,
++                    void  *arg1,
++                    void  *arg2)
++{
++  float *old_scale = arg1;
++  float *best_scale = arg2;
++
++  if (fabs (scale - *old_scale) < fabs (*best_scale - *old_scale))
++    *best_scale = scale;
++}
++
++float
++meta_get_closest_monitor_scale_factor_for_resolution (unsigned int width,
++                                                      unsigned int height,
++                                                      float        scale)
++{
++  float best_scale = 0.0;
++
++  if (fmodf (width, scale) == 0.0 && fmodf (height, scale) == 0.0)
++    return scale;
++
++  for_each_scale (width, height, MAX_DENOMINATOR,
++                  replace_best_scale, &scale, &best_scale);
+ 
+   return best_scale;
+ }
+ 
++static void
++append_scale (float  scale,
++              void  *arg1,
++              void  *arg2)
++{
++  GArray *array = arg1;
++
++  g_array_append_val (array, scale);
++}
++
++static gint
++compare_floats (gconstpointer a,
++                gconstpointer b)
++{
++  float x = *(float *) a;
++  float y = *(float *) b;
++
++  return (x > y) ? 1 :
++         (x < y) ? -1 :
++         0;
++}
++
+ float *
+ meta_monitor_calculate_supported_scales (MetaMonitor                 *monitor,
+                                          MetaMonitorMode             *monitor_mode,
+                                          MetaMonitorScalesConstraint  constraints,
+                                          int                         *n_supported_scales)
+ {
+-  unsigned int i, j;
++  int max_denominator;
+   int width, height;
+   GArray *supported_scales;
+ 
+@@ -2423,45 +2476,17 @@ meta_monitor_calculate_supported_scales (MetaMonitor                 *monitor,
+ 
+   meta_monitor_mode_get_resolution (monitor_mode, &width, &height);
+ 
+-  for (i = floorf (MINIMUM_SCALE_FACTOR);
+-       i <= ceilf (MAXIMUM_SCALE_FACTOR);
+-       i++)
+-    {
+-      if (constraints & META_MONITOR_SCALES_CONSTRAINT_NO_FRAC)
+-        {
+-          if (is_scale_valid_for_size (width, height, i))
+-            {
+-              float scale = i;
+-              g_array_append_val (supported_scales, scale);
+-            }
+-        }
+-      else
+-        {
+-          float max_bound;
++  max_denominator =
++    (constraints & META_MONITOR_SCALES_CONSTRAINT_NO_FRAC) ? 1 :
++    MAX_DENOMINATOR;
+ 
+-          if (i == floorf (MINIMUM_SCALE_FACTOR) ||
+-              i == ceilf (MAXIMUM_SCALE_FACTOR))
+-            max_bound = SCALE_FACTORS_STEPS;
+-          else
+-            max_bound = SCALE_FACTORS_STEPS / 2.0;
++  for_each_scale (width, height,
++                  max_denominator,
++                  append_scale,
++                  supported_scales,
++                  NULL);
+ 
+-          for (j = 0; j < SCALE_FACTORS_PER_INTEGER; j++)
+-            {
+-              float scale;
+-              float scale_value = i + j * SCALE_FACTORS_STEPS;
+-
+-              if (!is_scale_valid_for_size (width, height, scale_value))
+-                continue;
+-
+-              scale = meta_get_closest_monitor_scale_factor_for_resolution (width,
+-                                                                            height,
+-                                                                            scale_value,
+-                                                                            max_bound);
+-              if (scale > 0.0)
+-                g_array_append_val (supported_scales, scale);
+-            }
+-        }
+-    }
++  g_array_sort (supported_scales, compare_floats);
+ 
+   if (supported_scales->len == 0)
+     {
+diff --git a/src/tests/gdctl/show b/src/tests/gdctl/show
+index 5cb6f80..d7c4a55 100644
+--- a/src/tests/gdctl/show
++++ b/src/tests/gdctl/show
+@@ -19,14 +19,14 @@ Monitors:
+ Logical monitors:
+ ├──Logical monitor #1
+ │  ├──Position: (0, 0)
+-│  ├──Scale: 2.2018349170684814
++│  ├──Scale: 2.5
+ │  ├──Transform: normal
+ │  ├──Primary: yes
+ │  └──Monitors: (1)
+ │      └──DP-1 (MetaProduct's Inc. 14")
+ └──Logical monitor #2
+-   ├──Position: (1744, 0)
+-   ├──Scale: 1.495327115058899
++   ├──Position: (1536, 0)
++   ├──Scale: 1.6666666269302368
+    ├──Transform: normal
+    ├──Primary: no
+    └──Monitors: (1)
+diff --git a/src/tests/gdctl/show-modes b/src/tests/gdctl/show-modes
+index 2520d06..1a7663a 100644
+--- a/src/tests/gdctl/show-modes
++++ b/src/tests/gdctl/show-modes
+@@ -25,14 +25,14 @@ Monitors:
+ Logical monitors:
+ ├──Logical monitor #1
+ │  ├──Position: (0, 0)
+-│  ├──Scale: 2.2018349170684814
++│  ├──Scale: 2.5
+ │  ├──Transform: normal
+ │  ├──Primary: yes
+ │  └──Monitors: (1)
+ │      └──DP-1 (MetaProduct's Inc. 14")
+ └──Logical monitor #2
+-   ├──Position: (1744, 0)
+-   ├──Scale: 1.495327115058899
++   ├──Position: (1536, 0)
++   ├──Scale: 1.6666666269302368
+    ├──Transform: normal
+    ├──Primary: no
+    └──Monitors: (1)
+diff --git a/src/tests/gdctl/show-properties b/src/tests/gdctl/show-properties
+index 8e82986..df3cea6 100644
+--- a/src/tests/gdctl/show-properties
++++ b/src/tests/gdctl/show-properties
+@@ -7,8 +7,8 @@ Monitors:
+ │  │   └──3840x2160@60.000
+ │  │       ├──Dimension: 3840x2160
+ │  │       ├──Refresh rate: 60.000
+-│  │       ├──Preferred scale: 2.2018349170684814
+-│  │       ├──Supported scales: [1.0, 1.25, 1.5, 1.7518248558044434, 2.0, 2.2018349170684814, 2.5, 2.7586207389831543, 3.0, 3.2432432174682617, 3.4782607555389404, 3.75, 4.0]
++│  │       ├──Preferred scale: 2.5
++│  │       ├──Supported scales: [1.0, 1.25, 1.3333333730697632, 1.5, 1.6666666269302368, 2.0, 2.5, 2.6666667461395264, 3.0, 3.3333332538604736, 3.75, 4.0]
+ │  │       └──Properties: (2)
+ │  │           ├──is-current ⇒  yes
+ │  │           └──is-preferred ⇒  yes
+@@ -28,8 +28,8 @@ Monitors:
+    │   └──2560x1440@60.000
+    │       ├──Dimension: 2560x1440
+    │       ├──Refresh rate: 60.000
+-   │       ├──Preferred scale: 1.495327115058899
+-   │       ├──Supported scales: [1.0, 1.25, 1.495327115058899, 1.7582417726516724, 2.0, 2.253521203994751, 2.5, 2.7586207389831543, 3.0188679695129395]
++   │       ├──Preferred scale: 1.6666666269302368
++   │       ├──Supported scales: [1.0, 1.25, 1.3333333730697632, 1.6666666269302368, 2.0, 2.5, 2.6666667461395264]
+    │       └──Properties: (2)
+    │           ├──is-current ⇒  yes
+    │           └──is-preferred ⇒  yes
+@@ -45,15 +45,15 @@ Monitors:
+ Logical monitors:
+ ├──Logical monitor #1
+ │  ├──Position: (0, 0)
+-│  ├──Scale: 2.2018349170684814
++│  ├──Scale: 2.5
+ │  ├──Transform: normal
+ │  ├──Primary: yes
+ │  ├──Monitors: (1)
+ │  │   └──DP-1 (MetaProduct's Inc. 14")
+ │  └──Properties: (0)
+ └──Logical monitor #2
+-   ├──Position: (1744, 0)
+-   ├──Scale: 1.495327115058899
++   ├──Position: (1536, 0)
++   ├──Scale: 1.6666666269302368
+    ├──Transform: normal
+    ├──Primary: no
+    ├──Monitors: (1)
+diff --git a/src/tests/gdctl/show-verbose b/src/tests/gdctl/show-verbose
+index 53baf3f..53de92b 100644
+--- a/src/tests/gdctl/show-verbose
++++ b/src/tests/gdctl/show-verbose
+@@ -7,28 +7,28 @@ Monitors:
+ │  │   ├──3840x2160@60.000
+ │  │   │   ├──Dimension: 3840x2160
+ │  │   │   ├──Refresh rate: 60.000
+-│  │   │   ├──Preferred scale: 2.2018349170684814
+-│  │   │   ├──Supported scales: [1.0, 1.25, 1.5, 1.7518248558044434, 2.0, 2.2018349170684814, 2.5, 2.7586207389831543, 3.0, 3.2432432174682617, 3.4782607555389404, 3.75, 4.0]
++│  │   │   ├──Preferred scale: 2.5
++│  │   │   ├──Supported scales: [1.0, 1.25, 1.3333333730697632, 1.5, 1.6666666269302368, 2.0, 2.5, 2.6666667461395264, 3.0, 3.3333332538604736, 3.75, 4.0]
+ │  │   │   └──Properties: (2)
+ │  │   │       ├──is-current ⇒  yes
+ │  │   │       └──is-preferred ⇒  yes
+ │  │   ├──3840x2160@30.000
+ │  │   │   ├──Dimension: 3840x2160
+ │  │   │   ├──Refresh rate: 30.000
+-│  │   │   ├──Preferred scale: 2.2018349170684814
+-│  │   │   ├──Supported scales: [1.0, 1.25, 1.5, 1.7518248558044434, 2.0, 2.2018349170684814, 2.5, 2.7586207389831543, 3.0, 3.2432432174682617, 3.4782607555389404, 3.75, 4.0]
++│  │   │   ├──Preferred scale: 2.5
++│  │   │   ├──Supported scales: [1.0, 1.25, 1.3333333730697632, 1.5, 1.6666666269302368, 2.0, 2.5, 2.6666667461395264, 3.0, 3.3333332538604736, 3.75, 4.0]
+ │  │   │   └──Properties: (0)
+ │  │   ├──2560x1440@60.000
+ │  │   │   ├──Dimension: 2560x1440
+ │  │   │   ├──Refresh rate: 60.000
+-│  │   │   ├──Preferred scale: 1.495327115058899
+-│  │   │   ├──Supported scales: [1.0, 1.25, 1.495327115058899, 1.7582417726516724, 2.0, 2.253521203994751, 2.5, 2.7586207389831543, 3.0188679695129395]
++│  │   │   ├──Preferred scale: 1.6666666269302368
++│  │   │   ├──Supported scales: [1.0, 1.25, 1.3333333730697632, 1.6666666269302368, 2.0, 2.5, 2.6666667461395264]
+ │  │   │   └──Properties: (0)
+ │  │   └──1440x900@60.000
+ │  │       ├──Dimension: 1440x900
+ │  │       ├──Refresh rate: 60.000
+ │  │       ├──Preferred scale: 1.0
+-│  │       ├──Supported scales: [1.0, 1.25, 1.5, 1.7475727796554565]
++│  │       ├──Supported scales: [1.0, 1.25, 1.3333333730697632, 1.5, 1.6666666269302368]
+ │  │       └──Properties: (0)
+ │  ├──Preferences
+ │  │   └──Backlight: None
+@@ -46,8 +46,8 @@ Monitors:
+    │   ├──2560x1440@60.000
+    │   │   ├──Dimension: 2560x1440
+    │   │   ├──Refresh rate: 60.000
+-   │   │   ├──Preferred scale: 1.495327115058899
+-   │   │   ├──Supported scales: [1.0, 1.25, 1.495327115058899, 1.7582417726516724, 2.0, 2.253521203994751, 2.5, 2.7586207389831543, 3.0188679695129395]
++   │   │   ├──Preferred scale: 1.6666666269302368
++   │   │   ├──Supported scales: [1.0, 1.25, 1.3333333730697632, 1.6666666269302368, 2.0, 2.5, 2.6666667461395264]
+    │   │   └──Properties: (2)
+    │   │       ├──is-current ⇒  yes
+    │   │       └──is-preferred ⇒  yes
+@@ -55,7 +55,7 @@ Monitors:
+    │   │   ├──Dimension: 1440x900
+    │   │   ├──Refresh rate: 60.000
+    │   │   ├──Preferred scale: 1.0
+-   │   │   ├──Supported scales: [1.0, 1.25, 1.5, 1.7475727796554565]
++   │   │   ├──Supported scales: [1.0, 1.25, 1.3333333730697632, 1.5, 1.6666666269302368]
+    │   │   └──Properties: (0)
+    │   ├──1366x768@60.000
+    │   │   ├──Dimension: 1366x768
+@@ -81,15 +81,15 @@ Monitors:
+ Logical monitors:
+ ├──Logical monitor #1
+ │  ├──Position: (0, 0)
+-│  ├──Scale: 2.2018349170684814
++│  ├──Scale: 2.5
+ │  ├──Transform: normal
+ │  ├──Primary: yes
+ │  ├──Monitors: (1)
+ │  │   └──DP-1 (MetaProduct's Inc. 14")
+ │  └──Properties: (0)
+ └──Logical monitor #2
+-   ├──Position: (1744, 0)
+-   ├──Scale: 1.495327115058899
++   ├──Position: (1536, 0)
++   ├──Scale: 1.6666666269302368
+    ├──Transform: normal
+    ├──Primary: no
+    ├──Monitors: (1)
+diff --git a/src/tests/migration/horizontal-strip-finished.xml b/src/tests/migration/horizontal-strip-finished.xml
+index eff4a07..a09c709 100644
+--- a/src/tests/migration/horizontal-strip-finished.xml
++++ b/src/tests/migration/horizontal-strip-finished.xml
+@@ -39,8 +39,8 @@
+     </logicalmonitor>
+     <logicalmonitor>
+       <x>1200</x>
+-      <y>199</y>
+-      <scale>2.985074520111084</scale>
++      <y>150</y>
++      <scale>2</scale>
+       <primary>yes</primary>
+       <monitor>
+         <monitorspec>
+@@ -57,7 +57,7 @@
+       </monitor>
+     </logicalmonitor>
+     <logicalmonitor>
+-      <x>1468</x>
++      <x>1600</x>
+       <y>0</y>
+       <scale>1</scale>
+       <monitor>
+@@ -116,7 +116,7 @@
+     <logicalmonitor>
+       <x>1600</x>
+       <y>550</y>
+-      <scale>3</scale>
++      <scale>2</scale>
+       <primary>yes</primary>
+       <monitor>
+         <monitorspec>
+diff --git a/src/tests/migration/horizontal-strip.xml b/src/tests/migration/horizontal-strip.xml
+index 3149014..a406440 100644
+--- a/src/tests/migration/horizontal-strip.xml
++++ b/src/tests/migration/horizontal-strip.xml
+@@ -39,7 +39,7 @@
+     <logicalmonitor>
+       <x>1600</x>
+       <y>550</y>
+-      <scale>3</scale>
++      <scale>2</scale>
+       <primary>yes</primary>
+       <monitor>
+         <monitorspec>
+diff --git a/src/tests/monitor-config-migration-tests.c b/src/tests/monitor-config-migration-tests.c
+index 463bd0b..1eae4f8 100644
+--- a/src/tests/monitor-config-migration-tests.c
++++ b/src/tests/monitor-config-migration-tests.c
+@@ -435,13 +435,13 @@ meta_test_monitor_migrated_horizontal_strip (void)
+         {
+           .monitors = { 2 },
+           .n_monitors = 1,
+-          .layout = { .x = 1200, .y = 199, .width = 268, .height = 201 },
+-          .scale = 2.985074520111084
++          .layout = { .x = 1200, .y = 150, .width = 400, .height = 300 },
++          .scale = 2
+         },
+         {
+           .monitors = { 3 },
+           .n_monitors = 1,
+-          .layout = { .x = 1468, .y = 0, .width = 800, .height = 600 },
++          .layout = { .x = 1600, .y = 0, .width = 800, .height = 600 },
+           .scale = 1
+         }
+       },
+@@ -460,15 +460,15 @@ meta_test_monitor_migrated_horizontal_strip (void)
+         {
+           .current_mode = 0,
+           .x = 1200,
+-          .y = 199
++          .y = 150
+         },
+         {
+           .current_mode = 0,
+-          .x = 1468
++          .x = 1600
+         }
+       },
+       .n_crtcs = 4,
+-      .screen_width = 2268,
++      .screen_width = 2400,
+       .screen_height = 600,
+     }
+   };
+diff --git a/src/tests/monitor-gdctl-tests.c b/src/tests/monitor-gdctl-tests.c
+index 8af4681..2b9b568 100644
+--- a/src/tests/monitor-gdctl-tests.c
++++ b/src/tests/monitor-gdctl-tests.c
+@@ -205,14 +205,14 @@ static MonitorTestCaseExpect test_case_expect = {
+     {
+       .monitors = { 0 },
+       .n_monitors = 1,
+-      .layout = { .x = 0, .y = 0, .width = 1744, .height = 981 },
+-      .scale = 2.2018349170684814,
++      .layout = { .x = 0, .y = 0, .width = 1536, .height = 864 },
++      .scale = 2.5,
+     },
+     {
+       .monitors = { 1 },
+       .n_monitors = 1,
+-      .layout = { .x = 1744, .y = 0, .width = 1712, .height = 963 },
+-      .scale = 1.495327115058899,
++      .layout = { .x = 1536, .y = 0, .width = 1536, .height = 864},
++      .scale = 1.6666666269302368,
+     },
+   },
+   .n_logical_monitors = 2,
+@@ -224,12 +224,12 @@ static MonitorTestCaseExpect test_case_expect = {
+     },
+     {
+       .current_mode = 2,
+-      .x = 1744,
++      .x = 1536,
+     }
+   },
+   .n_crtcs = 2,
+-  .screen_width = 3456,
+-  .screen_height = 981,
++  .screen_width = 3072,
++  .screen_height = 864,
+ };
+ 
+ static void
+@@ -524,9 +524,9 @@ meta_test_monitor_dbus_apply_left_of (void)
+                       NULL);
+ 
+   expect = test_case_expect;
+-  expect.logical_monitors[0].layout.x = 1712;
++  expect.logical_monitors[0].layout.x = 1536;
+   expect.logical_monitors[1].layout.x = 0;
+-  expect.crtcs[0].x = 1712;
++  expect.crtcs[0].x = 1536;
+   expect.crtcs[1].x = 0;
+   META_TEST_LOG_CALL ("Checking monitor configuration",
+                       meta_check_monitor_configuration (test_context,
+@@ -556,26 +556,26 @@ meta_test_monitor_dbus_apply_right_of_transform (void)
+   expect = test_case_expect;
+   expect.logical_monitors[0].layout.x = 0;
+   expect.logical_monitors[0].layout.y = 0;
+-  expect.logical_monitors[0].layout.width = 963;
+-  expect.logical_monitors[0].layout.height = 1712;
+-  expect.logical_monitors[0].scale = 1.495327115058899;
++  expect.logical_monitors[0].layout.width = 864;
++  expect.logical_monitors[0].layout.height = 1536;
++  expect.logical_monitors[0].scale = 1.6666666269302368;
+   expect.logical_monitors[0].transform = MTK_MONITOR_TRANSFORM_270;
+   expect.logical_monitors[0].monitors[0] = 1;
+ 
+-  expect.logical_monitors[1].layout.x = 963;
++  expect.logical_monitors[1].layout.x = 864;
+   expect.logical_monitors[1].layout.y = 400;
+-  expect.logical_monitors[1].layout.width = 1744;
+-  expect.logical_monitors[1].layout.height = 981;
+-  expect.logical_monitors[1].scale = 2.2018349170684814;
++  expect.logical_monitors[1].layout.width = 1536;
++  expect.logical_monitors[1].layout.height = 864;
++  expect.logical_monitors[1].scale = 2.5;
+   expect.logical_monitors[1].monitors[0] = 0;
+ 
+   expect.crtcs[1].x = 0;
+   expect.crtcs[1].y = 0;
+   expect.crtcs[1].transform = MTK_MONITOR_TRANSFORM_270;
+-  expect.crtcs[0].x = 963;
++  expect.crtcs[0].x = 864;
+   expect.crtcs[0].y = 400;
+-  expect.screen_width = 2707;
+-  expect.screen_height = 1712;
++  expect.screen_width = 2400;
++  expect.screen_height = 1536;
+   META_TEST_LOG_CALL ("Checking monitor configuration",
+                       meta_check_monitor_configuration (test_context,
+                                                         &expect));
+@@ -608,27 +608,27 @@ meta_test_monitor_dbus_apply_mode_scale_below_transform (void)
+   expect.monitors[0].current_mode = 3;
+   expect.logical_monitors[0].layout.x = 0;
+   expect.logical_monitors[0].layout.y = 0;
+-  expect.logical_monitors[0].layout.width = 963;
+-  expect.logical_monitors[0].layout.height = 1712;
+-  expect.logical_monitors[0].scale = 1.495327115058899;
++  expect.logical_monitors[0].layout.width = 864;
++  expect.logical_monitors[0].layout.height = 1536;
++  expect.logical_monitors[0].scale = 1.6666666269302368;
+   expect.logical_monitors[0].transform = MTK_MONITOR_TRANSFORM_270;
+   expect.logical_monitors[0].monitors[0] = 1;
+   expect.logical_monitors[1].layout.x = 100;
+-  expect.logical_monitors[1].layout.y = 1712;
++  expect.logical_monitors[1].layout.y = 1536;
+   expect.logical_monitors[1].layout.width = 600;
+   expect.logical_monitors[1].layout.height = 960;
+   expect.logical_monitors[1].scale = 1.5;
+   expect.logical_monitors[1].transform = MTK_MONITOR_TRANSFORM_90;
+   expect.logical_monitors[1].monitors[0] = 0;
+   expect.crtcs[0].x = 100;
+-  expect.crtcs[0].y = 1712;
++  expect.crtcs[0].y = 1536;
+   expect.crtcs[0].current_mode = 3;
+   expect.crtcs[0].transform = MTK_MONITOR_TRANSFORM_90;
+   expect.crtcs[1].x = 0;
+   expect.crtcs[1].y = 0;
+   expect.crtcs[1].transform = MTK_MONITOR_TRANSFORM_270;
+-  expect.screen_width = 963;
+-  expect.screen_height = 2672;
++  expect.screen_width = 864;
++  expect.screen_height = 2496;
+ 
+   META_TEST_LOG_CALL ("Checking monitor configuration",
+                       meta_check_monitor_configuration (test_context,
+@@ -650,20 +650,20 @@ meta_test_monitor_dbus_apply_mirror (void)
+                       "--monitor", "DP-1",
+                       "--mode", "2560x1440@60.000",
+                       "--monitor", "DP-2",
+-                      "--scale", "1.495327115058899",
++                      "--scale", "1.6666666269302368",
+                       NULL);
+ 
+   expect = test_case_expect;
+   expect.monitors[0].current_mode = 2;
+-  expect.logical_monitors[0].layout.width = 1712;
+-  expect.logical_monitors[0].layout.height = 963;
+-  expect.logical_monitors[0].scale = 1.495327115058899;
++  expect.logical_monitors[0].layout.width = 1536;
++  expect.logical_monitors[0].layout.height = 864;
++  expect.logical_monitors[0].scale = 1.6666666269302368;
+   expect.logical_monitors[0].monitors[0] = 0;
+   expect.logical_monitors[0].monitors[1] = 1;
+   expect.logical_monitors[0].n_monitors = 2;
+   expect.n_logical_monitors = 1;
+-  expect.screen_width = 1712;
+-  expect.screen_height = 963;
++  expect.screen_width = 1536;
++  expect.screen_height = 864;
+   expect.crtcs[0].x = 0;
+   expect.crtcs[0].y = 0;
+   expect.crtcs[0].current_mode = 2;
+@@ -693,7 +693,7 @@ meta_test_monitor_dbus_apply_for_lease (void)
+ 
+   expect = test_case_expect;
+   expect.n_logical_monitors = 1;
+-  expect.screen_width = 1744;
++  expect.screen_width = 1536;
+   expect.monitors[1].current_mode = -1;
+   expect.crtcs[1].current_mode = -1;
+   META_TEST_LOG_CALL ("Checking monitor configuration",
+diff --git a/src/tests/monitor-scale-tests.c b/src/tests/monitor-scale-tests.c
+index a9c76f0..51d5fa2 100644
+--- a/src/tests/monitor-scale-tests.c
++++ b/src/tests/monitor-scale-tests.c
+@@ -230,8 +230,8 @@ meta_test_monitor_supported_integer_scales (void)
+             {
+               .width = 2650,
+               .height = 1440,
+-              .n_scales = 3,
+-              .scales = { 1.0, 2.0, 3.0 },
++              .n_scales = 2,
++              .scales = { 1.0, 2.0 },
+             },
+             {
+               .width = 2880,
+@@ -242,14 +242,14 @@ meta_test_monitor_supported_integer_scales (void)
+             {
+               .width = 3200,
+               .height = 1800,
+-              .n_scales = 3,
+-              .scales = { 1.0, 2.0, 3.0 },
++              .n_scales = 2,
++              .scales = { 1.0, 2.0 },
+             },
+             {
+               .width = 3200,
+               .height = 2048,
+-              .n_scales = 4,
+-              .scales = { 1.0, 2.0, 3.0, 4.0 },
++              .n_scales = 3,
++              .scales = { 1.0, 2.0, 4.0 },
+             },
+             {
+               .width = 3840,
+@@ -266,20 +266,20 @@ meta_test_monitor_supported_integer_scales (void)
+             {
+               .width = 4096,
+               .height = 2160,
+-              .n_scales = 4,
+-              .scales = { 1.0, 2.0, 3.0, 4.0 },
++              .n_scales = 3,
++              .scales = { 1.0, 2.0, 4.0 },
+             },
+             {
+               .width = 4096,
+               .height = 3072,
+-              .n_scales = 4,
+-              .scales = { 1.0, 2.0, 3.0, 4.0 },
++              .n_scales = 3,
++              .scales = { 1.0, 2.0, 4.0 },
+             },
+             {
+               .width = 5120,
+               .height = 2880,
+-              .n_scales = 4,
+-              .scales = { 1.0, 2.0, 3.0, 4.0 },
++              .n_scales = 3,
++              .scales = { 1.0, 2.0, 4.0 },
+             },
+             {
+               .width = 7680,
+@@ -456,25 +456,25 @@ meta_test_monitor_supported_fractional_scales (void)
+               .width = 1024,
+               .height = 768,
+               .n_scales = 2,
+-              .scales = { 1.000000f, 1.24878049f },
++              .scales = { 1.000000f, 1.333333f },
+             },
+             {
+               .width = 1280,
+               .height = 720,
+               .n_scales = 3,
+-              .scales = { 1.000000f, 1.250000f, 1.509434f },
++              .scales = { 1.000000f, 1.250000f, 1.333333f },
+             },
+             {
+               .width = 1280,
+               .height = 800,
+               .n_scales = 3,
+-              .scales = { 1.000000f, 1.250000f, 1.495327f },
++              .scales = { 1.000000f, 1.250000f, 1.333333f },
+             },
+             {
+               .width = 1280,
+               .height = 1024,
+-              .n_scales = 4,
+-              .scales = { 1.000000f, 1.248780f, 1.497076f, 1.753425f },
++              .n_scales = 2,
++              .scales = { 1.000000f, 1.333333f },
+             },
+             {
+               .width = 1366,
+@@ -485,122 +485,104 @@ meta_test_monitor_supported_fractional_scales (void)
+             {
+               .width = 1440,
+               .height = 900,
+-              .n_scales = 4,
+-              .scales = { 1.000000f, 1.250000f, 1.500000f, 1.747573f },
++              .n_scales = 5,
++              .scales = { 1.000000f, 1.250000f, 1.333333f, 1.500000f, 1.666666f },
+             },
+             {
+               .width = 1400,
+               .height = 1050,
+               .n_scales = 4,
+-              .scales = { 1.000000f, 1.250000f, 1.502146f, 1.750000f },
++              .scales = { 1.000000f, 1.250000f, 1.666666f, 1.750000f },
+             },
+             {
+               .width = 1600,
+               .height = 900,
+               .n_scales = 4,
+-              .scales = { 1.000000f, 1.250000f, 1.492537f, 1.754386f },
++              .scales = { 1.000000f, 1.250000f, 1.333333f, 1.666666f },
+             },
+             {
+               .width = 1920,
+               .height = 1080,
+               .n_scales = 6,
+-              .scales = { 1.000000f, 1.250000f, 1.500000f, 1.739130f, 2.000000f,
+-                          2.307692f },
++              .scales = { 1.000000f, 1.250000f, 1.333333f, 1.500000f, 1.666666f,
++                          2.000000f },
+             },
+             {
+               .width = 1920,
+               .height = 1200,
+               .n_scales = 6,
+-              .scales = { 1.000000f, 1.250000f, 1.500000f, 1.751825f, 2.000000f,
+-                          2.242991f },
++              .scales = { 1.000000f, 1.250000f, 1.333333f, 1.500000f, 1.666666f,
++                          2.000000f },
+             },
+             {
+               .width = 2650,
+               .height = 1440,
+-              .n_scales = 6,
+-              .scales = { 1.000000f, 1.250000f, 1.428571f, 1.666667f, 2.000000f,
+-                          2.500000f
+-              },
++              .n_scales = 5,
++              .scales = { 1.000000f, 1.250000f, 1.666667f, 2.000000f, 2.500000f },
+             },
+             {
+               .width = 2880,
+               .height = 1800,
+               .n_scales = 11,
+-              .scales = { 1.000000f, 1.250000f, 1.500000f, 1.747573f, 2.000000f,
+-                          2.250000f, 2.500000f, 2.748092f, 3.000000f, 3.243243f,
+-                          3.495146f
+-              },
++              .scales = { 1.000000f, 1.250000f, 1.333333f, 1.500000f, 1.666666f,
++                          2.000000f, 2.250000f, 2.500000f, 2.666666f, 3.000000f,
++                          3.333333f },
+             },
+             {
+               .width = 3200,
+               .height = 1800,
+-              .n_scales = 12,
+-              .scales = { 1.000000f, 1.250000f, 1.503759f, 1.754386f, 2.000000f,
+-                          2.247191f, 2.500000f, 2.739726f, 2.985075f, 3.225806f,
+-                          3.508772f, 3.773585f
+-              },
++              .n_scales = 8,
++              .scales = { 1.000000f, 1.250000f, 1.333333f, 1.666666f, 2.000000f,
++                          2.500000f, 2.666666f, 3.333333f },
+             },
+             {
+               .width = 3200,
+               .height = 2048,
+-              .n_scales = 13,
+-              .scales = { 1.000000f, 1.254902f, 1.505882f, 1.753425f, 2.000000f,
+-                          2.245614f, 2.509804f, 2.723404f, 2.976744f, 3.282051f,
+-                          3.459460f, 3.764706f, 4.000000f,
+-              },
++              .n_scales = 5,
++              .scales = { 1.000000f, 1.333333f, 2.000000f, 2.666666f, 4.000000f },
+             },
+             {
+               .width = 3840,
+               .height = 2160,
+-              .n_scales = 13,
+-              .scales = { 1.000000f, 1.250000f, 1.500000f, 1.751825f, 2.000000f,
+-                          2.201835f, 2.500000f, 2.758621f, 3.000000f, 3.243243f,
+-                          3.478261f, 3.750000f, 4.000000f
+-              },
++              .n_scales = 12,
++              .scales = { 1.000000f, 1.250000f, 1.333333f, 1.500000f, 1.666666f,
++                          2.000000f, 2.500000f, 2.666666f, 3.000000f, 3.333333f,
++                          3.750000f, 4.000000f },
+             },
+             {
+               .width = 3840,
+               .height = 2400,
+-              .n_scales = 13,
+-              .scales = { 1.000000f, 1.250000f, 1.500000f, 1.751825f, 2.000000f,
+-                          2.253521f, 2.500000f, 2.742857f, 3.000000f, 3.243243f,
+-                          3.503650f, 3.750000f, 4.000000f
+-              },
++              .n_scales = 12,
++              .scales = { 1.000000f, 1.250000f, 1.333333f, 1.500000f, 1.666666f,
++                          2.000000f, 2.500000f, 2.666666f, 3.000000f, 3.333333f,
++                          3.750000f, 4.000000f },
+             },
+             {
+               .width = 4096,
+               .height = 2160,
+-              .n_scales = 8,
+-              .scales = { 1.000000f, 1.333333f, 1.454545f, 1.777778f, 2.000000f,
+-                          2.666667f, 3.200000f, 4.000000f
+-              }
++              .n_scales = 5,
++              .scales = { 1.000000f, 1.333333f, 2.000000f, 2.666666f, 4.000000f }
+             },
+             {
+               .width = 4096,
+               .height = 3072,
+-              .n_scales = 13,
+-              .scales = { 1.000000f, 1.250305f, 1.499268f, 1.750427f, 2.000000f,
+-                          2.245614f, 2.497561f, 2.752688f, 3.002933f, 3.250794f,
+-                          3.494880f, 3.750916f, 4.000000f
+-              },
++              .n_scales = 5,
++              .scales = { 1.000000f, 1.333333f, 2.000000f, 2.666666f, 4.000000f },
+             },
+             {
+               .width = 5120,
+               .height = 2880,
+-              .n_scales = 13,
+-              .scales = { 1.000000f, 1.250000f, 1.495327f, 1.748634f, 2.000000f,
+-                          2.253521f, 2.500000f, 2.758621f, 2.990654f, 3.265306f,
+-                          3.516484f, 3.764706f, 4.000000f
+-              },
++              .n_scales = 9,
++              .scales = { 1.000000f, 1.250000f, 1.333333f, 1.666666f, 2.000000f,
++                          2.500000f, 2.666666f, 3.333333f, 4.000000f },
+             },
+             {
+               .width = 7680,
+               .height = 4320,
+-              .n_scales = 13,
+-              .scales = { 1.000000f, 1.250000f, 1.500000f, 1.751825f, 2.000000f,
+-                          2.211982f, 2.500000f, 2.742857f, 3.000000f, 3.243243f,
+-                          3.503650f, 3.750000f, 4.000000f
+-              },
++              .n_scales = 12,
++              .scales = { 1.000000f, 1.250000f, 1.333333f, 1.500000f, 1.666666f,
++                          2.000000f, 2.500000f, 2.666666f, 3.000000f, 3.333333f,
++                          3.750000f, 4.000000f },
+             },
+           },
+         },
