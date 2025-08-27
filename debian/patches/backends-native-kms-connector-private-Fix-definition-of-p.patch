@@ -1,0 +1,35 @@
+From: =?utf-8?b?Ik1hcmNvIFRyZXZpc2FuIChUcmV2acOxbyki?= <mail@3v1n0.net>
+Date: Wed, 27 Aug 2025 06:13:44 +0200
+Subject: backends/native/kms-connector-private: Fix definition of privacy
+ screen values
+
+These are defined as:
+
+    103 privacy-screen hw-state:
+    flags: immutable enum
+    enums: Disabled=0 Enabled=1 Disabled-locked=2 Enabled-locked=3
+    value: 0
+
+Fixes 1e06b346cb4
+---
+ src/backends/native/meta-kms-connector-private.h | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/backends/native/meta-kms-connector-private.h b/src/backends/native/meta-kms-connector-private.h
+index fcabc19..02dde04 100644
+--- a/src/backends/native/meta-kms-connector-private.h
++++ b/src/backends/native/meta-kms-connector-private.h
+@@ -65,10 +65,10 @@ typedef enum _MetaKmsConnectorUnderscan
+ 
+ typedef enum _MetaKmsConnectorPrivacyScreen
+ {
+-  META_KMS_CONNECTOR_PRIVACY_SCREEN_ENABLED = 0,
+-  META_KMS_CONNECTOR_PRIVACY_SCREEN_DISABLED,
+-  META_KMS_CONNECTOR_PRIVACY_SCREEN_ENABLED_LOCKED,
++  META_KMS_CONNECTOR_PRIVACY_SCREEN_DISABLED = 0,
++  META_KMS_CONNECTOR_PRIVACY_SCREEN_ENABLED,
+   META_KMS_CONNECTOR_PRIVACY_SCREEN_DISABLED_LOCKED,
++  META_KMS_CONNECTOR_PRIVACY_SCREEN_ENABLED_LOCKED,
+   META_KMS_CONNECTOR_PRIVACY_SCREEN_N_PROPS,
+   META_KMS_CONNECTOR_PRIVACY_SCREEN_UNKNOWN,
+ } MetaKmsConnectorPrivacyScreen;
