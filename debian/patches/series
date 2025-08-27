@@ -49,3 +49,6 @@ wayland-Pass-latest-cogl-sync_fd-on-kms-update.patch
 prefer-GPUs-with-built-in-panels-connected-when-sele.patch
 window-drag-Dismiss-grab-before-destroying-actor.patch
 backends-native-kms-connector-private-Fix-definition-of-p.patch
+backends-output-Fix-privacy-screen-enabled-getter.patch
+backends-output-Use-the-current-state-to-check-if-privacy.patch
+backends-monitor-manager-Only-return-true-if-a-privacy-sc.patch

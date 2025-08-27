@@ -1,0 +1,22 @@
+From: =?utf-8?b?Ik1hcmNvIFRyZXZpc2FuIChUcmV2acOxbyki?= <mail@3v1n0.net>
+Date: Wed, 27 Aug 2025 07:22:27 +0200
+Subject: backends/output: Fix privacy screen enabled getter
+
+We were returning its state, not whether it was requested to be enabled
+---
+ src/backends/meta-output.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/backends/meta-output.c b/src/backends/meta-output.c
+index b29e6c4..e8a9fbd 100644
+--- a/src/backends/meta-output.c
++++ b/src/backends/meta-output.c
+@@ -472,7 +472,7 @@ meta_output_is_privacy_screen_enabled (MetaOutput *output)
+ {
+   MetaOutputPrivate *priv = meta_output_get_instance_private (output);
+ 
+-  return priv->privacy_screen_state;
++  return priv->is_privacy_screen_enabled;
+ }
+ 
+ gboolean

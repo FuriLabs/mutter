@@ -1,0 +1,41 @@
+From: =?utf-8?b?Ik1hcmNvIFRyZXZpc2FuIChUcmV2acOxbyki?= <mail@3v1n0.net>
+Date: Wed, 27 Aug 2025 07:27:44 +0200
+Subject: backends/monitor-manager: Only return true if a privacy screen state
+ changed
+
+We might end up setting privacy_screen_change_state even when nothing
+was changed.
+---
+ src/backends/meta-monitor-manager.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/src/backends/meta-monitor-manager.c b/src/backends/meta-monitor-manager.c
+index fd6e3a3..0f0c535 100644
+--- a/src/backends/meta-monitor-manager.c
++++ b/src/backends/meta-monitor-manager.c
+@@ -1316,9 +1316,12 @@ ensure_privacy_screen_settings (MetaMonitorManager *manager)
+ {
+   MetaSettings *settings = meta_backend_get_settings (manager->backend);
+   gboolean privacy_screen_enabled;
++  gboolean any_changed;
+   GList *l;
+ 
+   privacy_screen_enabled = meta_settings_is_privacy_screen_enabled (settings);
++  any_changed = FALSE;
++
+   for (l = manager->monitors; l; l = l->next)
+     {
+       MetaMonitor *monitor = l->data;
+@@ -1335,9 +1338,11 @@ ensure_privacy_screen_settings (MetaMonitorManager *manager)
+                      meta_monitor_get_display_name (monitor), error->message);
+           return FALSE;
+         }
++
++      any_changed = TRUE;
+     }
+ 
+-  return TRUE;
++  return any_changed;
+ }
+ 
+ static MetaPrivacyScreenState

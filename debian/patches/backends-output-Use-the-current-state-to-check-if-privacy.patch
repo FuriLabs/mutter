@@ -1,0 +1,47 @@
+From: =?utf-8?b?Ik1hcmNvIFRyZXZpc2FuIChUcmV2acOxbyki?= <mail@3v1n0.net>
+Date: Wed, 27 Aug 2025 07:24:03 +0200
+Subject: backends/output: Use the current state to check if privacy screen is
+ enabled
+
+To check if the privacy screen was enabled we used a cached value but
+this was never set and thus the privacy screen was always marked as
+unavailable.
+
+Instead get the actual state from the output implementation and use this
+value to check the current state of the privacy screen.
+
+Closes: https://gitlab.gnome.org/GNOME/mutter/-/issues/4259
+---
+ src/backends/meta-output.c | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/src/backends/meta-output.c b/src/backends/meta-output.c
+index e8a9fbd..6674b7e 100644
+--- a/src/backends/meta-output.c
++++ b/src/backends/meta-output.c
+@@ -69,7 +69,6 @@ typedef struct _MetaOutputPrivate
+ 
+   int backlight;
+ 
+-  MetaPrivacyScreenState privacy_screen_state;
+   gboolean is_privacy_screen_enabled;
+ 
+   MetaOutputHdrMetadata hdr_metadata;
+@@ -483,7 +482,7 @@ meta_output_set_privacy_screen_enabled (MetaOutput  *output,
+   MetaOutputPrivate *priv = meta_output_get_instance_private (output);
+   MetaPrivacyScreenState state;
+ 
+-  state = priv->privacy_screen_state;
++  state = meta_output_get_privacy_screen_state (output);
+ 
+   if (state == META_PRIVACY_SCREEN_UNAVAILABLE)
+     {
+@@ -500,7 +499,7 @@ meta_output_set_privacy_screen_enabled (MetaOutput  *output,
+       return FALSE;
+     }
+ 
+-  if (priv->is_privacy_screen_enabled == enabled)
++  if ((state == META_PRIVACY_SCREEN_ENABLED) == enabled)
+     return TRUE;
+ 
+   priv->is_privacy_screen_enabled = enabled;
