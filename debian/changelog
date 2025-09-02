@@ -15,6 +15,8 @@ mutter (49~rc-1) UNRELEASED; urgency=medium
   * Added new script 'gnome-service-client' to 'mutter-common'.
   * debian/control: mutter-common breaks older versions of libmutter
   * debian/control: Bump dependencies on wayland 1.24, wayland-protocols 1.45
+  * debian/control: libmutter-17-0 now breaks gnome-shell<<49~rc due to
+    some clutter symbols being removed.
 
   [ Marco Trevisan (Treviño) ]
   * debian/control: Bump dependencies
