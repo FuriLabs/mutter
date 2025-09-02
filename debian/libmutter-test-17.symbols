@@ -43,6 +43,7 @@ libmutter-test-17.so libmutter-test-17 #MINVER#
  meta_sensors_proxy_mock_get@Base 41.0
  meta_sensors_proxy_mock_set_orientation@Base 41.0
  meta_sensors_proxy_mock_set_property@Base 41.0
+ meta_sensors_proxy_mock_wait_accelerometer_claimed@Base 49~rc
  meta_set_custom_monitor_config@Base 42~beta
  meta_set_custom_monitor_config_full@Base 42~beta
  meta_set_custom_monitor_system_config@Base 42~beta
@@ -65,8 +66,8 @@ libmutter-test-17.so libmutter-test-17 #MINVER#
  meta_test_shell_disable_animations@Base 47.4
  meta_test_shell_get_type@Base 44.3-4~
  meta_test_shell_set_background_color@Base 47.4
+ meta_wait_for_effects@Base 49~rc
  meta_wait_for_monitors_changed@Base 46~beta
- meta_wait_for_orientation@Base 42~beta
  meta_wait_for_paint@Base 42~beta
  meta_wait_for_possible_orientation_change@Base 42~beta
  meta_wait_for_uinput_device@Base 48.1
@@ -74,3 +75,4 @@ libmutter-test-17.so libmutter-test-17 #MINVER#
  meta_wait_for_window_cursor@Base 47.4
  meta_wait_for_window_shown@Base 47.4
  meta_wait_test_process@Base 47.4
+ meta_wait_wayland_window_reconfigure@Base 49~rc
