@@ -6,9 +6,10 @@ mutter (49~rc-1) UNRELEASED; urgency=medium
     because it is Xorg-specific and 48-specific. But Xorg sessions are
     being retired so updating it to 49 is not required.
   * Refresh patches:
-    - tests-Do-not-run-screencast-tests.patch
     - Mark-several-additional-tests-as-flaky.patch
+    - tests-Do-not-run-screencast-tests.patch
     - tests-Install-stacking-tests-into-a-subdirectory.patch
+    - tests-Mark-view-verification-tests-as-incomplete-in-big-e.patch
   * Added new binary package 'mutter-dev-bin' for the missing 'mutter-devkit'
     binary. Four years late.
   * debian/control: mutter-common breaks older versions of libmutter
