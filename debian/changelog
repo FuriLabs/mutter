@@ -1,7 +1,7 @@
 mutter (49~rc-0ubuntu1) UNRELEASED; urgency=medium
 
   [ Daniel van Vugt ]
-  * New upstream release 49.rc
+  * New upstream release 49.rc (LP: #2079823, LP: #2120628, LP: #2121517)
   * Added new script 'gnome-service-client' to 'mutter-common'.
   * Replaced 'libgdk-pixbuf-2.0-dev' dependency with 'libglycin-2-dev'.
   * Added 'libadwaita-1-dev' dependency for the devkit.
