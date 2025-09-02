@@ -116,12 +116,13 @@ OPTIONS+=( "${DESTDIRS[@]/#/--destdir=}" )
 
 SCRIPTS_DIR="$(dirname $0)"
 
-if ! pkgconf --atleast-version 1.83.4 gjs-1.0
+if ! pkgconf --atleast-version 1.85.1 gjs-1.0
 then
     ./$SCRIPTS_DIR/install-meson-project.sh \
       "${OPTIONS[@]}" \
       https://gitlab.gnome.org/GNOME/gjs.git \
-      1.85.1
+      --commit b46026efc15d5348a47bf1aa47f1ea9bf3821ee0 \
+      master
 fi
 
 if ! pkgconf --atleast-version 1.24 wayland-server
@@ -145,7 +146,15 @@ then
     ./$SCRIPTS_DIR/install-meson-project.sh \
       "${OPTIONS[@]}" \
       https://gitlab.gnome.org/GNOME/glib.git \
-      main
+      2.85.2
+fi
+
+if ! pkgconf --atleast-version 2.0.beta.2 glycin-2
+then
+    ./$SCRIPTS_DIR/install-meson-project.sh \
+      "${OPTIONS[@]}" \
+      https://gitlab.gnome.org/GNOME/glycin.git \
+      2.0.beta.2
 fi
 
 if ! check_gsettings_key org.gnome.desktop.screensaver restart-enabled
@@ -153,5 +162,13 @@ then
     ./$SCRIPTS_DIR/install-meson-project.sh \
       "${OPTIONS[@]}" \
       https://gitlab.gnome.org/GNOME/gsettings-desktop-schemas.git \
-      main
+      49.beta
+fi
+
+if ! pkgconf --atleast-version 1.5.0 libei-1.0
+then
+    ./$SCRIPTS_DIR/install-meson-project.sh \
+      "${OPTIONS[@]}" \
+      https://gitlab.freedesktop.org/libinput/libei.git \
+      1.5.0
 fi

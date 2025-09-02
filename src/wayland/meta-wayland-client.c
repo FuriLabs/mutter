@@ -71,6 +71,10 @@ struct _MetaWaylandClient
   struct {
     GSubprocess *subprocess;
   } subprocess;
+
+  char *window_tag;
+
+  pid_t pid;
 };
 
 G_DEFINE_TYPE (MetaWaylandClient, meta_wayland_client, G_TYPE_OBJECT)
@@ -82,6 +86,7 @@ meta_wayland_client_finalize (GObject *object)
 
   g_clear_fd (&client->created.client_fd, NULL);
   g_clear_object (&client->subprocess.subprocess);
+  g_clear_pointer (&client->window_tag, g_free);
 
   G_OBJECT_CLASS (meta_wayland_client_parent_class)->finalize (object);
 }
@@ -144,6 +149,7 @@ meta_wayland_client_new_from_wl (MetaContext      *context,
   client = g_object_new (META_TYPE_WAYLAND_CLIENT, NULL);
   client->context = context;
   client->kind = META_WAYLAND_CLIENT_KIND_PUBLIC;
+  wl_client_get_credentials (wayland_client, &client->pid, NULL, NULL);
 
   set_wayland_client (client, wayland_client);
 
@@ -152,6 +158,7 @@ meta_wayland_client_new_from_wl (MetaContext      *context,
 
 MetaWaylandClient *
 meta_wayland_client_new_create (MetaContext  *context,
+                                pid_t         pid,
                                 GError      **error)
 {
   MetaWaylandCompositor *compositor =
@@ -173,6 +180,7 @@ meta_wayland_client_new_create (MetaContext  *context,
   client->context = context;
   client->kind = META_WAYLAND_CLIENT_KIND_CREATED;
   client->created.client_fd = client_fd[1];
+  client->pid = pid;
 
   wayland_client = wl_client_create (compositor->wayland_display, client_fd[0]);
   set_wayland_client (client, wayland_client);
@@ -244,6 +252,8 @@ meta_wayland_client_new_subprocess (MetaContext          *context,
   client = g_object_new (META_TYPE_WAYLAND_CLIENT, NULL);
   client->context = context;
   client->kind = META_WAYLAND_CLIENT_KIND_SUBPROCESS;
+  client->pid =
+    g_ascii_strtoll (g_subprocess_get_identifier (subprocess), NULL, 0);
   client->subprocess.subprocess = g_steal_pointer (&subprocess);
 
   wayland_client = wl_client_create (compositor->wayland_display, client_fd[0]);
@@ -331,7 +341,7 @@ meta_wayland_client_get_subprocess (MetaWaylandClient *client)
 }
 
 /**
- * meta_wayland_client_owns_wayland_window
+ * meta_wayland_client_owns_window
  * @client: a #MetaWaylandClient
  * @window: (not nullable): a MetaWindow
  *
@@ -345,19 +355,41 @@ gboolean
 meta_wayland_client_owns_window (MetaWaylandClient *client,
                                  MetaWindow        *window)
 {
-  MetaWaylandSurface *surface;
+  MetaWindowWayland *wl_window;
+  MetaWaylandClient *window_client;
 
   g_return_val_if_fail (meta_is_wayland_compositor (), FALSE);
 
-  surface = meta_window_get_wayland_surface (window);
-  if (surface == NULL || surface->resource == NULL)
+  if (!META_IS_WINDOW_WAYLAND (window))
     return FALSE;
 
-  return wl_resource_get_client (surface->resource) == client->wayland_client;
+  wl_window = META_WINDOW_WAYLAND (window);
+  window_client = meta_window_wayland_get_client (wl_window);
+
+  return client == window_client;
 }
 
 MetaWaylandClient *
 meta_get_wayland_client (const struct wl_client *wl_client)
 {
   return wl_client_get_user_data ((struct wl_client *) wl_client);
+}
+
+void
+meta_wayland_client_set_window_tag (MetaWaylandClient *client,
+                                    const char *window_tag)
+{
+  g_set_str (&client->window_tag, window_tag);
+}
+
+const char *
+meta_wayland_client_get_window_tag (MetaWaylandClient *client)
+{
+  return client->window_tag;
+}
+
+pid_t
+meta_wayland_client_get_pid (MetaWaylandClient *client)
+{
+  return client->pid;
 }

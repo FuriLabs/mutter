@@ -35,6 +35,7 @@
 #include "backends/meta-backend-private.h"
 #include "cogl/cogl.h"
 #include "core/display-private.h"
+#include "clutter/clutter-mutter.h"
 #include "clutter/clutter.h"
 #include "meta/main.h"
 #include "meta/util.h"
@@ -525,9 +526,8 @@ meta_cursor_tracker_get_pointer (MetaCursorTracker   *tracker,
   ClutterBackend *clutter_backend =
     meta_backend_get_clutter_backend (backend);
   ClutterSeat *seat = clutter_backend_get_default_seat (clutter_backend);
-  ClutterInputDevice *cdevice = clutter_seat_get_pointer (seat);
 
-  clutter_seat_query_state (seat, cdevice, NULL, coords, mods);
+  clutter_seat_query_state (seat, NULL, coords, mods);
 }
 
 void

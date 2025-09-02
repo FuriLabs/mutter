@@ -25,7 +25,7 @@ mutter_pkg_private_deps = [
   gmodule_no_export_dep,
   gnome_settings_daemon_dep,
   xkbcommon_dep,
-  gdk_pixbuf_dep,
+  glycin_dep,
   libeis_dep,
   libdisplay_info_dep,
 ]
@@ -189,6 +189,8 @@ mutter_sources = [
   'backends/meta-backlight-ref-white-private.h',
   'backends/meta-barrier.c',
   'backends/meta-barrier-private.h',
+  'backends/meta-color-calibration-session.c',
+  'backends/meta-color-calibration-session.h',
   'backends/meta-color-device.c',
   'backends/meta-color-device.h',
   'backends/meta-color-manager.c',
@@ -347,8 +349,6 @@ mutter_sources = [
   'core/keybindings-private.h',
   'core/meta-accel-parse.c',
   'core/meta-accel-parse.h',
-  'core/meta-anonymous-file.c',
-  'core/meta-anonymous-file.h',
   'core/meta-border.c',
   'core/meta-border.h',
   'core/meta-clipboard-manager.c',
@@ -1032,6 +1032,11 @@ dbus_interfaces = [
     'prefix': 'org.gnome.Mutter',
   },
   {
+    'name': 'meta-dbus-color-manager',
+    'interface': 'org.gnome.Mutter.ColorManager.xml',
+    'prefix': 'org.gnome.Mutter',
+  },
+  {
     'name': 'meta-dbus-login1',
     'interface': 'org.freedesktop.login1.xml',
     'prefix': 'org.freedesktop.',
@@ -1075,6 +1080,16 @@ if have_remote_desktop
     {
       'name': 'meta-dbus-screen-cast',
       'interface': 'org.gnome.Mutter.ScreenCast.xml',
+      'prefix': 'org.gnome.Mutter.',
+    },
+  ]
+endif
+
+if have_devkit
+  dbus_interfaces += [
+    {
+      'name': 'meta-dbus-devkit',
+      'interface': 'org.gnome.Mutter.Devkit.xml',
       'prefix': 'org.gnome.Mutter.',
     },
   ]
@@ -1146,7 +1161,7 @@ if have_wayland
     ['color-management', 'staging', 1, ],
     ['color-representation', 'staging', 1, ],
     ['commit-timing', 'staging', 1, ],
-    ['cursor-shape-v1', 'private', ],
+    ['cursor-shape', 'staging', 1, ],
     ['drm-lease', 'staging', 1, ],
     ['fractional-scale', 'staging', 1, ],
     ['fifo', 'staging', 1, ],
@@ -1154,7 +1169,7 @@ if have_wayland
     ['idle-inhibit', 'unstable', 1, ],
     ['keyboard-shortcuts-inhibit', 'unstable', 1, ],
     ['linux-dmabuf', 'stable', 1, ],
-    ['linux-drm-syncobj-v1', 'private', ],
+    ['linux-drm-syncobj', 'staging', 1, ],
     ['pointer-constraints', 'unstable', 1, ],
     ['pointer-gestures', 'unstable', 1, ],
     ['pointer-warp', 'staging', 1, ],

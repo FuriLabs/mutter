@@ -31,6 +31,9 @@ typedef enum
 
 MetaWindowConfig * meta_window_config_initial_new (void);
 
+MetaWindowConfig * meta_window_config_new_from (MetaWindow       *window,
+                                                MetaWindowConfig *other_config);
+
 gboolean meta_window_config_is_maximized (MetaWindowConfig *config);
 
 gboolean meta_window_config_is_any_maximized (MetaWindowConfig *config);
@@ -64,3 +67,5 @@ void meta_window_config_set_tile_match (MetaWindowConfig *config,
                                         MetaWindow       *tile_match);
 
 gboolean meta_window_config_is_floating (MetaWindowConfig *config);
+
+gboolean meta_window_config_has_position (MetaWindowConfig *config);

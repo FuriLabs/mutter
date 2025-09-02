@@ -27,22 +27,7 @@
 #error "Only <clutter/clutter.h> can be included directly."
 #endif
 
-#include "clutter/clutter-grab.h"
-#include "clutter/clutter-focus-private.h"
-#include "clutter/clutter-types.h"
-
-#define CLUTTER_TYPE_SPRITE (clutter_sprite_get_type ())
-
-CLUTTER_EXPORT
-G_DECLARE_DERIVABLE_TYPE (ClutterSprite,
-                          clutter_sprite,
-                          CLUTTER, SPRITE,
-                          ClutterFocus)
-
-struct _ClutterSpriteClass
-{
-  ClutterFocusClass parent_class;
-};
+#include "clutter/clutter-sprite.h"
 
 CLUTTER_EXPORT
 ClutterInputDevice * clutter_sprite_get_device (ClutterSprite *sprite);
@@ -57,6 +42,7 @@ void clutter_sprite_update (ClutterSprite    *sprite,
 void clutter_sprite_update_coords (ClutterSprite    *sprite,
                                    graphene_point_t  coords);
 
+CLUTTER_EXPORT
 graphene_point_t clutter_sprite_get_coords (ClutterSprite *sprite);
 
 gboolean clutter_sprite_point_in_clear_area (ClutterSprite    *sprite,
@@ -65,8 +51,6 @@ gboolean clutter_sprite_point_in_clear_area (ClutterSprite    *sprite,
 void clutter_sprite_maybe_break_implicit_grab (ClutterSprite *sprite,
                                                ClutterActor  *actor);
 
-void clutter_sprite_maybe_lost_implicit_grab (ClutterSprite        *sprite,
-                                              ClutterInputDevice   *device,
-                                              ClutterEventSequence *sequence);
+void clutter_sprite_maybe_lost_implicit_grab (ClutterSprite *sprite);
 
 void clutter_sprite_remove_all_actors_from_chain (ClutterSprite *sprite);

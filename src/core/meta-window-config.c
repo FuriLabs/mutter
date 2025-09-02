@@ -20,6 +20,8 @@
 
 #include "core/meta-window-config-private.h"
 
+#include "core/window-private.h"
+
 /**
  * MetaWindowConfig:
  *
@@ -35,6 +37,7 @@ struct _MetaWindowConfig
 
   /* The window geometry */
   MtkRectangle rect;
+  gboolean has_position;
 
   gboolean is_fullscreen;
 
@@ -149,6 +152,7 @@ meta_window_config_set_rect (MetaWindowConfig *window_config,
                              MtkRectangle      rect)
 {
   window_config->rect = rect;
+  window_config->has_position = TRUE;
 }
 
 MtkRectangle
@@ -182,6 +186,7 @@ meta_window_config_set_position (MetaWindowConfig *window_config,
 {
   window_config->rect.x = x;
   window_config->rect.y = y;
+  window_config->has_position = TRUE;
 }
 
 void
@@ -302,6 +307,12 @@ meta_window_config_is_floating (MetaWindowConfig *config)
           !meta_window_config_is_any_maximized (config));
 }
 
+gboolean
+meta_window_config_has_position (MetaWindowConfig *config)
+{
+  return config->has_position;
+}
+
 MetaWindowConfig *
 meta_window_config_new (void)
 {
@@ -318,4 +329,27 @@ meta_window_config_initial_new (void)
   window_config->is_initial = TRUE;
 
   return window_config;
+}
+
+MetaWindowConfig *
+meta_window_config_new_from (MetaWindow       *window,
+                             MetaWindowConfig *other_config)
+{
+  MetaWindowConfig *config;
+
+  if (window->showing_for_first_time)
+    config = meta_window_config_initial_new ();
+  else
+    config = meta_window_config_new ();
+
+  config->rect = meta_window_config_get_rect (other_config);
+  config->is_fullscreen = other_config->is_fullscreen;
+  config->maximized_horizontally = other_config->maximized_horizontally;
+  config->maximized_vertically = other_config->maximized_vertically;
+  config->tile_mode = other_config->tile_mode;
+  config->tile_monitor_number = other_config->tile_monitor_number;
+  config->tile_hfraction = other_config->tile_hfraction;
+  config->tile_match = other_config->tile_match;
+
+  return config;
 }

@@ -107,7 +107,7 @@ struct _ClutterFrameClock
 
   float refresh_rate;
   int64_t refresh_interval_us;
-  int64_t minimum_refresh_interval_us;
+  int64_t maximum_refresh_interval_us;
 
   ClutterFrameListener listener;
 
@@ -159,6 +159,7 @@ struct _ClutterFrameClock
   int64_t missed_frame_report_time_us;
 
   int64_t deadline_evasion_us;
+  int64_t frame_sync_update_time_us;
 
   char *output_name;
 
@@ -1007,7 +1008,11 @@ calculate_next_variable_update_timeout_us (ClutterFrameClock *frame_clock,
 
   now_us = g_get_monotonic_time ();
 
-  timeout_interval_us = frame_clock->minimum_refresh_interval_us;
+  if (now_us - frame_clock->frame_sync_update_time_us >=
+      frame_clock->maximum_refresh_interval_us)
+    timeout_interval_us = frame_clock->refresh_interval_us;
+  else
+    timeout_interval_us = frame_clock->maximum_refresh_interval_us;
 
   if (!last_presentation || last_presentation->presentation_time_us == 0)
     {
@@ -1383,6 +1388,13 @@ clutter_frame_clock_schedule_update_later (ClutterFrameClock *frame_clock,
   g_source_set_ready_time (frame_clock->source, ready_time_us);
   frame_clock->pending_reschedule = TRUE;
   clutter_frame_clock_set_state (frame_clock, next_state);
+}
+
+void
+clutter_frame_clock_set_frame_sync_update_time (ClutterFrameClock *frame_clock,
+                                                int64_t            update_time_us)
+{
+  frame_clock->frame_sync_update_time_us = update_time_us;
 }
 
 static int
@@ -1806,7 +1818,7 @@ clutter_frame_clock_new (float                            refresh_rate,
 {
   ClutterFrameClock *frame_clock;
 
-  g_assert_cmpfloat (refresh_rate, >, 0.0);
+  g_assert (refresh_rate >= 0.0f);
 
   frame_clock = g_object_new (CLUTTER_TYPE_FRAME_CLOCK, NULL);
 
@@ -1817,7 +1829,7 @@ clutter_frame_clock_new (float                            refresh_rate,
 
   clutter_frame_clock_set_refresh_rate (frame_clock, refresh_rate);
 
-  frame_clock->minimum_refresh_interval_us =
+  frame_clock->maximum_refresh_interval_us =
     (int64_t) (0.5 + G_USEC_PER_SEC / MINIMUM_REFRESH_RATE);
 
   frame_clock->vblank_duration_us = vblank_duration_us;

@@ -1090,14 +1090,11 @@ emulate_motion (MetaSeatX11 *seat_x11,
                 double       x,
                 double       y)
 {
-  ClutterInputDevice *pointer;
   ClutterEvent *event;
-
-  pointer = clutter_seat_get_pointer (CLUTTER_SEAT (seat_x11));
 
   event = clutter_event_motion_new (CLUTTER_EVENT_FLAG_SYNTHETIC,
                                     CLUTTER_CURRENT_TIME,
-                                    pointer,
+                                    seat_x11->core_pointer,
                                     NULL, 0,
                                     GRAPHENE_POINT_INIT ((float) x, (float) y),
                                     GRAPHENE_POINT_INIT (0, 0),
@@ -1113,6 +1110,7 @@ static void
 translate_raw_event (MetaSeatX11 *seat_x11,
                      XEvent      *xevent)
 {
+  ClutterSeat *seat = CLUTTER_SEAT (seat_x11);
   ClutterInputDevice *device;
   XGenericEventCookie *cookie;
   XIEvent *xi_event;
@@ -1142,8 +1140,8 @@ translate_raw_event (MetaSeatX11 *seat_x11,
        */
       if (meta_input_device_x11_get_pointer_location (device, &x, &y))
         {
-          if (_clutter_is_input_pointer_a11y_enabled (device))
-            _clutter_input_pointer_a11y_on_motion_event (device, x, y);
+          if (_clutter_seat_is_pointer_a11y_enabled (seat))
+            _clutter_seat_a11y_on_motion_event (seat, x, y);
           if (!seat_x11->has_pointer_focus)
             emulate_motion (seat_x11, x, y);
         }
@@ -1157,11 +1155,11 @@ translate_raw_event (MetaSeatX11 *seat_x11,
                meta_input_device_x11_get_device_id (device),
                clutter_input_device_get_device_name (device),
                xev->detail);
-      if (_clutter_is_input_pointer_a11y_enabled (device))
+      if (_clutter_seat_is_pointer_a11y_enabled (seat))
         {
-          _clutter_input_pointer_a11y_on_button_event (device,
-                                                       xev->detail,
-                                                       (cookie->evtype == XI_RawButtonPress));
+          _clutter_seat_a11y_on_button_event (seat,
+                                              xev->detail,
+                                              (cookie->evtype == XI_RawButtonPress));
         }
       break;
     }
@@ -1816,15 +1814,15 @@ translate_state (XIButtonState   *button_state,
 }
 
 static gboolean
-meta_seat_x11_query_state (ClutterSeat          *seat,
-                           ClutterInputDevice   *device,
-                           ClutterEventSequence *sequence,
-                           graphene_point_t     *coords,
-                           ClutterModifierType  *modifiers)
+meta_seat_x11_query_state (ClutterSeat         *seat,
+                           ClutterSprite       *sprite,
+                           graphene_point_t    *coords,
+                           ClutterModifierType *modifiers)
 {
   MetaSeatX11 *seat_x11 = META_SEAT_X11 (seat);
   MetaBackendX11 *backend_x11 = META_BACKEND_X11 (seat_x11->backend);
   Display *xdisplay = xdisplay_from_seat (seat_x11);
+  ClutterEventSequence *sequence = NULL;
   Window root_ret, child_ret;
   double root_x, root_y, win_x, win_y;
   XIButtonState button_state = { 0 };
@@ -1843,6 +1841,9 @@ meta_seat_x11_query_state (ClutterSeat          *seat,
       g_free (button_state.mask);
       return FALSE;
     }
+
+  if (sprite)
+    sequence = clutter_sprite_get_sequence (sprite);
 
   if (sequence)
     {
@@ -2380,6 +2381,7 @@ meta_seat_x11_translate_event (MetaSeatX11  *seat,
                                                        tool,
                                                        state,
                                                        GRAPHENE_POINT_INIT (x, y),
+                                                       CLUTTER_SCROLL_NONE,
                                                        CLUTTER_SCROLL_SOURCE_UNKNOWN,
                                                        scroll_direction);
 
@@ -2502,6 +2504,7 @@ meta_seat_x11_translate_event (MetaSeatX11  *seat,
                                                      GRAPHENE_POINT_INIT (x, y),
                                                      GRAPHENE_POINT_INIT ((float) delta_x,
                                                                           (float) delta_y),
+                                                     CLUTTER_SCROLL_NONE,
                                                      CLUTTER_SCROLL_SOURCE_UNKNOWN,
                                                      CLUTTER_SCROLL_FINISHED_NONE);
 
@@ -2713,4 +2716,10 @@ meta_seat_x11_select_stage_events (MetaSeatX11  *seat,
   XISelectEvents (xdisplay, stage_x11->xwin, &xi_event_mask, 1);
 
   g_free (mask);
+}
+
+ClutterInputDevice *
+meta_seat_x11_get_core_pointer (MetaSeatX11 *seat_x11)
+{
+  return seat_x11->core_pointer;
 }

@@ -7,6 +7,16 @@ mdk_sources = [
   'mdk-ei.h',
   'mdk-keyboard.c',
   'mdk-keyboard.h',
+  'mdk-launcher-action-item.c',
+  'mdk-launcher-action-item.h',
+  'mdk-launcher-adder.c',
+  'mdk-launcher-adder.h',
+  'mdk-launcher-entry.c',
+  'mdk-launcher-entry.h',
+  'mdk-launcher.c',
+  'mdk-launcher.h',
+  'mdk-launchers-editor.c',
+  'mdk-launchers-editor.h',
   'mdk-main-window.c',
   'mdk-main-window.h',
   'mdk-main.c',
@@ -56,6 +66,13 @@ dbus_screen_cast_built_sources = gnome.gdbus_codegen('mdk-dbus-screen-cast',
   )
 mdk_built_sources += dbus_screen_cast_built_sources
 
+dbus_devkit_built_sources = gnome.gdbus_codegen('mdk-dbus-devkit',
+    join_paths(dbus_interfaces_dir, 'org.gnome.Mutter.Devkit.xml'),
+    interface_prefix: 'org.gnome.Mutter.',
+    namespace: 'MdkDBus',
+  )
+mdk_built_sources += dbus_devkit_built_sources
+
 executable('mutter-devkit',
   sources: [
     'mdk-main.c',
@@ -67,8 +84,10 @@ executable('mutter-devkit',
   ],
   c_args: mdk_c_args,
   dependencies: [
+    gio_unix_dep,
     gmodule_no_export_dep,
     gtk4_dep,
+    libadwaita_dep,
     libpipewire_dep,
     libdrm_dep,
     libei_dep,
@@ -76,3 +95,5 @@ executable('mutter-devkit',
   install_dir: libexecdir,
   install: true,
 )
+
+subdir('data')

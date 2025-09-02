@@ -140,23 +140,19 @@ surface_from_xdg_toplevel_resource (struct wl_resource *resource)
 
 static MetaWaylandSurface *
 toplevel_drag_get_focus_surface (MetaWaylandEventHandler *handler,
-                                 ClutterInputDevice      *device,
-                                 ClutterEventSequence    *sequence,
+                                 ClutterFocus            *focus,
                                  gpointer                 user_data)
 {
-  return meta_wayland_event_handler_chain_up_get_focus_surface (handler,
-                                                                device,
-                                                                sequence);
+  return meta_wayland_event_handler_chain_up_get_focus_surface (handler, focus);
 }
 
 static void
 toplevel_drag_focus (MetaWaylandEventHandler *handler,
-                     ClutterInputDevice      *device,
-                     ClutterEventSequence    *sequence,
+                     ClutterFocus            *focus,
                      MetaWaylandSurface      *surface,
                      gpointer                 user_data)
 {
-  meta_wayland_event_handler_chain_up_focus (handler, device, sequence, surface);
+  meta_wayland_event_handler_chain_up_focus (handler, focus, surface);
 }
 
 static gboolean
@@ -188,8 +184,7 @@ start_window_drag (MetaWindow              *dragged_window,
   MetaWaylandDragGrab *drag_grab;
   MetaSurfaceActor *surface_actor;
   MetaWaylandInput *input;
-  ClutterInputDevice *device;
-  ClutterEventSequence *sequence;
+  ClutterSprite *sprite;
   MetaCompositor *compositor;
   uint32_t timestamp;
   gboolean started;
@@ -220,14 +215,14 @@ start_window_drag (MetaWindow              *dragged_window,
               (offset_hint ? offset_hint->x : -1),
               (offset_hint ? offset_hint->y : -1));
 
-  device = meta_wayland_drag_grab_get_device (drag_grab, &sequence);
+  sprite = meta_wayland_drag_grab_get_sprite (drag_grab);
   timestamp = meta_display_get_current_time_roundtrip (dragged_window->display);
 
   compositor = dragged_window->display->compositor;
   started = meta_compositor_drag_window (compositor, dragged_window,
                                          META_GRAB_OP_MOVING_UNCONSTRAINED,
                                          META_DRAG_WINDOW_FLAG_FOREIGN_GRAB,
-                                         device, sequence,
+                                         sprite,
                                          timestamp, offset_hint);
   if (!started)
     return;
@@ -417,9 +412,8 @@ meta_wayland_toplevel_drag_calc_origin_for_dragged_window (MetaWaylandToplevelDr
 {
   MetaWaylandSeat *seat;
   MetaWaylandDragGrab *drag_grab;
-  ClutterInputDevice *device;
-  ClutterEventSequence *sequence;
   graphene_point_t coords;
+  ClutterSprite *sprite;
 
   g_assert (toplevel_drag);
   g_assert (bounds_out);
@@ -432,9 +426,8 @@ meta_wayland_toplevel_drag_calc_origin_for_dragged_window (MetaWaylandToplevelDr
   if (!drag_grab)
     return FALSE;
 
-  device = meta_wayland_drag_grab_get_device (drag_grab, &sequence);
-  clutter_seat_query_state (clutter_input_device_get_seat (device),
-                            device, sequence, &coords, NULL);
+  sprite = meta_wayland_drag_grab_get_sprite (drag_grab);
+  clutter_seat_query_state (seat->clutter_seat, sprite, &coords, NULL);
 
   meta_topic (META_DEBUG_WAYLAND,
               "Calculated position for the dragged window. "

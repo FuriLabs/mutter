@@ -472,23 +472,6 @@ typedef enum /*< prefix=CLUTTER_EFFECT_PAINT >*/
   CLUTTER_EFFECT_PAINT_BYPASS_EFFECT = (1 << 1)
 } ClutterEffectPaintFlags;
 
-
-/**
- * ClutterLongPressState:
- * @CLUTTER_LONG_PRESS_QUERY: Queries the action whether it supports
- *   long presses
- * @CLUTTER_LONG_PRESS_ACTIVATE: Activates the action on a long press
- * @CLUTTER_LONG_PRESS_CANCEL: The long press was cancelled
- *
- * The states for the #ClutterClickAction::long-press signal.
- */
-typedef enum /*< prefix=CLUTTER_LONG_PRESS >*/
-{
-  CLUTTER_LONG_PRESS_QUERY,
-  CLUTTER_LONG_PRESS_ACTIVATE,
-  CLUTTER_LONG_PRESS_CANCEL
-} ClutterLongPressState;
-
 /**
  * ClutterEventFlags:
  * @CLUTTER_EVENT_NONE: No flag set
@@ -754,41 +737,19 @@ typedef enum
 } ClutterPickMode;
 
 /**
- * ClutterSwipeDirection:
- * @CLUTTER_SWIPE_DIRECTION_UP: Upwards swipe gesture
- * @CLUTTER_SWIPE_DIRECTION_DOWN: Downwards swipe gesture
- * @CLUTTER_SWIPE_DIRECTION_LEFT: Leftwards swipe gesture
- * @CLUTTER_SWIPE_DIRECTION_RIGHT: Rightwards swipe gesture
- *
- * The main direction of the swipe gesture
- */
-typedef enum /*< prefix=CLUTTER_SWIPE_DIRECTION >*/
-{
-  CLUTTER_SWIPE_DIRECTION_UP    = 1 << 0,
-  CLUTTER_SWIPE_DIRECTION_DOWN  = 1 << 1,
-  CLUTTER_SWIPE_DIRECTION_LEFT  = 1 << 2,
-  CLUTTER_SWIPE_DIRECTION_RIGHT = 1 << 3
-} ClutterSwipeDirection;
-
-/**
  * ClutterPanAxis:
- * @CLUTTER_PAN_AXIS_NONE: No constraint
- * @CLUTTER_PAN_X_AXIS: Set a constraint on the X axis
- * @CLUTTER_PAN_Y_AXIS: Set a constraint on the Y axis
- * @CLUTTER_PAN_AXIS_AUTO: Constrain panning automatically based on initial
- *   movement (available since 1.24)
+ * @CLUTTER_PAN_AXIS_BOTH: No constraint
+ * @CLUTTER_PAN_AXIS_X: Set a constraint on the X axis
+ * @CLUTTER_PAN_AXIS_Y: Set a constraint on the Y axis
  *
  * The axis of the constraint that should be applied on the
  * panning action
  */
-typedef enum /*< prefix=CLUTTER_PAN >*/
+typedef enum /*< prefix=CLUTTER_PAN_AXIS >*/
 {
-  CLUTTER_PAN_AXIS_NONE = 0,
-
-  CLUTTER_PAN_X_AXIS,
-  CLUTTER_PAN_Y_AXIS,
-
-  CLUTTER_PAN_AXIS_AUTO
+  CLUTTER_PAN_AXIS_BOTH,
+  CLUTTER_PAN_AXIS_X,
+  CLUTTER_PAN_AXIS_Y,
 } ClutterPanAxis;
 
 /**
@@ -981,28 +942,6 @@ typedef enum
 } ClutterStepMode;
 
 /**
- * ClutterGestureTriggerEdge:
- * @CLUTTER_GESTURE_TRIGGER_EDGE_NONE: Tell #ClutterGestureAction that
- * the gesture must begin immediately and there's no drag limit that
- * will cause its cancellation;
- * @CLUTTER_GESTURE_TRIGGER_EDGE_AFTER: Tell #ClutterGestureAction that
- * it needs to wait until the drag threshold has been exceeded before
- * considering that the gesture has begun;
- * @CLUTTER_GESTURE_TRIGGER_EDGE_BEFORE: Tell #ClutterGestureAction that
- * the gesture must begin immediately and that it must be cancelled
- * once the drag exceed the configured threshold.
- *
- * Enum passed to the [method@GestureAction.set_threshold_trigger_edge]
- * function.
- */
-typedef enum
-{
-  CLUTTER_GESTURE_TRIGGER_EDGE_NONE  = 0,
-  CLUTTER_GESTURE_TRIGGER_EDGE_AFTER,
-  CLUTTER_GESTURE_TRIGGER_EDGE_BEFORE
-} ClutterGestureTriggerEdge;
-
-/**
  * ClutterTouchpadGesturePhase:
  * @CLUTTER_TOUCHPAD_GESTURE_PHASE_BEGIN: The gesture has begun.
  * @CLUTTER_TOUCHPAD_GESTURE_PHASE_UPDATE: The gesture has been updated.
@@ -1052,7 +991,7 @@ typedef enum
  * The scroll source determines the source of the scroll event.
  *
  * Keep in mind that the source device #ClutterInputDeviceType is not enough
- * to infer the scroll source.6
+ * to infer the scroll source.
  */
 typedef enum
 {
@@ -1063,6 +1002,20 @@ typedef enum
 } ClutterScrollSource;
 
 /**
+ * ClutterScrollFlags:
+ * @CLUTTER_SCROLL_NONE: No additional information.
+ * @CLUTTER_SCROLL_INVERTED: Scroll direction is inverted, relative to the
+ *   physical motion on the device.
+ *
+ * Flags used to notify modification on scrolling behavior.
+ */
+typedef enum
+{
+  CLUTTER_SCROLL_NONE = 0,
+  CLUTTER_SCROLL_INVERTED = 1 << 0,
+} ClutterScrollFlags;
+
+/**
  * ClutterScrollFinishFlags:
  * @CLUTTER_SCROLL_FINISHED_NONE: no axis was stopped.
  * @CLUTTER_SCROLL_FINISHED_HORIZONTAL: The horizontal axis stopped.
@@ -1070,7 +1023,7 @@ typedef enum
  *
  * Flags used to notify the axes that were stopped in a #ClutterScrollEvent.
  *
- * These can be used to trigger post-scroll effects like kinetic scrolling.6
+ * These can be used to trigger post-scroll effects like kinetic scrolling.
  */
 typedef enum
 {

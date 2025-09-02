@@ -125,6 +125,8 @@ typedef struct _MetaMonitorManagerPrivate
   guint switch_config_handle_id;
 
   uint32_t backlight_serial;
+
+  gboolean power_save_inhibit_orientation_tracking;
 } MetaMonitorManagerPrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (MetaMonitorManager, meta_monitor_manager,
@@ -158,6 +160,11 @@ meta_monitor_manager_get_backend (MetaMonitorManager *manager)
 static void
 meta_monitor_manager_init (MetaMonitorManager *manager)
 {
+  MetaMonitorManagerPrivate *priv =
+    meta_monitor_manager_get_instance_private (manager);
+
+  priv->power_save_mode = META_POWER_SAVE_ON;
+  priv->power_save_inhibit_orientation_tracking = FALSE;
 }
 
 static void
@@ -479,12 +486,27 @@ meta_monitor_manager_power_save_mode_changed (MetaMonitorManager        *manager
 {
   MetaMonitorManagerPrivate *priv =
     meta_monitor_manager_get_instance_private (manager);
+  gboolean inhibit_orientation_tracking;
+  MetaOrientationManager *orientation_manager =
+    meta_backend_get_orientation_manager (manager->backend);
 
   if (priv->power_save_mode == mode)
     return;
 
   priv->power_save_mode = mode;
   g_signal_emit (manager, signals[POWER_SAVE_MODE_CHANGED], 0, reason);
+
+  inhibit_orientation_tracking = priv->power_save_mode != META_POWER_SAVE_ON;
+
+  if (priv->power_save_inhibit_orientation_tracking == inhibit_orientation_tracking)
+    return;
+
+  priv->power_save_inhibit_orientation_tracking = inhibit_orientation_tracking;
+
+  if (inhibit_orientation_tracking)
+    meta_orientation_manager_inhibit_tracking (orientation_manager);
+  else
+    meta_orientation_manager_uninhibit_tracking (orientation_manager);
 }
 
 static void
@@ -1130,17 +1152,23 @@ handle_initial_orientation_change (MetaOrientationManager *orientation_manager,
 }
 
 static void
-orientation_changed (MetaOrientationManager *orientation_manager,
-                     MetaMonitorManager     *manager)
+orientation_changed (MetaMonitorManager *manager)
 {
   MetaMonitorManagerPrivate *priv =
     meta_monitor_manager_get_instance_private (manager);
+  MetaOrientationManager *orientation_manager =
+    meta_backend_get_orientation_manager (manager->backend);
 
   if (!priv->initial_orient_change_done)
     {
       priv->initial_orient_change_done = TRUE;
       if (handle_initial_orientation_change (orientation_manager, manager))
-        return;
+        {
+          meta_orientation_manager_inhibit_tracking (orientation_manager);
+          return;
+        }
+
+      meta_orientation_manager_inhibit_tracking (orientation_manager);
     }
 
   if (!manager->panel_orientation_managed)
@@ -1180,9 +1208,12 @@ ensure_privacy_screen_settings (MetaMonitorManager *manager)
 {
   MetaSettings *settings = meta_backend_get_settings (manager->backend);
   gboolean privacy_screen_enabled;
+  gboolean any_changed;
   GList *l;
 
   privacy_screen_enabled = meta_settings_is_privacy_screen_enabled (settings);
+  any_changed = FALSE;
+
   for (l = manager->monitors; l; l = l->next)
     {
       MetaMonitor *monitor = l->data;
@@ -1197,11 +1228,13 @@ ensure_privacy_screen_settings (MetaMonitorManager *manager)
 
           g_warning ("Failed to set privacy screen setting on monitor %s: %s",
                      meta_monitor_get_display_name (monitor), error->message);
-          return FALSE;
+          continue;
         }
+
+      any_changed = TRUE;
     }
 
-  return TRUE;
+  return any_changed;
 }
 
 static MetaPrivacyScreenState
@@ -1285,9 +1318,46 @@ update_panel_orientation_managed (MetaMonitorManager *manager)
   meta_dbus_display_config_set_panel_orientation_managed (manager->display_config,
                                                           manager->panel_orientation_managed);
 
-  /* The orientation may have changed while it was unmanaged */
   if (panel_orientation_managed)
-    handle_orientation_change (orientation_manager, manager);
+    {
+      meta_orientation_manager_uninhibit_tracking (orientation_manager);
+
+      /* Claiming the sensor is asynchronous. We listen to
+       * MetaOrientationManager::sensor-active to rotate to the current orientation
+       * once the sensor is claimed.
+       */
+    }
+  else
+    {
+      MetaMonitorsConfig *current_config =
+        meta_monitor_config_manager_get_current (manager->config_manager);
+
+      meta_orientation_manager_inhibit_tracking (orientation_manager);
+
+      /* Rotate back to normal transform when orientation goes unmanaged */
+      if (current_config)
+        {
+          g_autoptr (MetaMonitorsConfig) config = NULL;
+          g_autoptr (GError) error = NULL;
+
+          config =
+            meta_monitor_config_manager_create_for_orientation (manager->config_manager,
+                                                                current_config,
+                                                                MTK_MONITOR_TRANSFORM_NORMAL);
+
+          if (config)
+            {
+              if (!meta_monitor_manager_apply_monitors_config (manager,
+                                                               config,
+                                                               META_MONITORS_CONFIG_METHOD_TEMPORARY,
+                                                               &error))
+                {
+                  g_warning ("Failed to rotate monitor back to normal transform: %s",
+                             error->message);
+                }
+            }
+        }
+    }
 }
 
 static void
@@ -1499,12 +1569,21 @@ meta_monitor_manager_constructed (GObject *object)
   g_signal_connect_object (meta_backend_get_orientation_manager (backend),
                            "orientation-changed",
                            G_CALLBACK (orientation_changed),
-                           manager, G_CONNECT_DEFAULT);
+                           manager,
+                           G_CONNECT_SWAPPED);
+
+  g_signal_connect_object (meta_backend_get_orientation_manager (backend),
+                           "sensor-active",
+                           G_CALLBACK (orientation_changed),
+                           manager,
+                           G_CONNECT_SWAPPED);
 
   g_signal_connect_object (meta_backend_get_orientation_manager (backend),
                            "notify::has-accelerometer",
                            G_CALLBACK (update_panel_orientation_managed), manager,
                            G_CONNECT_SWAPPED);
+
+  manager->panel_orientation_managed = FALSE;
 
   g_signal_connect_object (backend,
                            "lid-is-closed-changed",
@@ -2240,6 +2319,7 @@ meta_monitor_manager_handle_get_current_state (MetaDBusDisplayConfig *skeleton,
       gboolean is_builtin;
       gboolean is_for_lease;
       MetaColorMode color_mode;
+      MetaOutputRGBRange rgb_range;
       const char *display_name;
 
       current_mode = meta_monitor_get_current_mode (monitor);
@@ -2374,6 +2454,11 @@ meta_monitor_manager_handle_get_current_state (MetaDBusDisplayConfig *skeleton,
       g_variant_builder_add (&monitor_properties_builder, "{sv}",
                              "supported-color-modes",
                              generate_color_modes_variant (monitor));
+
+      rgb_range = meta_monitor_get_rgb_range (monitor);
+      g_variant_builder_add (&monitor_properties_builder, "{sv}",
+                             "rgb-range",
+                             g_variant_new_uint32 (rgb_range));
 
       g_variant_builder_add (&monitors_builder, MONITOR_FORMAT,
                              monitor_spec->connector,
@@ -2671,6 +2756,8 @@ create_monitor_config_from_variant (MetaMonitorManager *manager,
   gboolean set_underscanning = FALSE;
   MetaColorMode color_mode = META_COLOR_MODE_DEFAULT;
   uint32_t color_mode_value;
+  MetaOutputRGBRange rgb_range = META_OUTPUT_RGB_RANGE_UNKNOWN;
+  uint32_t rgb_range_value;
 
   g_variant_get (monitor_config_variant, "(ss@a{sv})",
                  &connector,
@@ -2710,6 +2797,10 @@ create_monitor_config_from_variant (MetaMonitorManager *manager,
                         &color_mode_value))
     color_mode = color_mode_value;
 
+  if (g_variant_lookup (properties_variant, "rgb-range", "u",
+                        &rgb_range_value))
+    rgb_range = rgb_range_value;
+
   monitor_spec = meta_monitor_spec_clone (meta_monitor_get_spec (monitor));
 
   monitor_mode_spec = g_new0 (MetaMonitorModeSpec, 1);
@@ -2721,6 +2812,7 @@ create_monitor_config_from_variant (MetaMonitorManager *manager,
     .mode_spec = monitor_mode_spec,
     .enable_underscanning = enable_underscanning,
     .color_mode = color_mode,
+    .rgb_range = rgb_range,
   };
 
   return monitor_config;

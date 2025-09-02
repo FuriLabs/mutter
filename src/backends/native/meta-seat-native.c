@@ -366,15 +366,23 @@ meta_seat_native_init_pointer_position (ClutterSeat *seat,
 }
 
 static gboolean
-meta_seat_native_query_state (ClutterSeat          *seat,
-                              ClutterInputDevice   *device,
-                              ClutterEventSequence *sequence,
-                              graphene_point_t     *coords,
-                              ClutterModifierType  *modifiers)
+meta_seat_native_query_state (ClutterSeat         *seat,
+                              ClutterSprite       *sprite,
+                              graphene_point_t    *coords,
+                              ClutterModifierType *modifiers)
 {
   MetaSeatNative *seat_native = META_SEAT_NATIVE (seat);
+  ClutterStage *stage =
+    CLUTTER_STAGE (meta_backend_get_stage (seat_native->backend));
+  ClutterBackend *clutter_backend =
+    meta_backend_get_clutter_backend (seat_native->backend);
 
-  return meta_seat_impl_query_state (seat_native->impl, device, sequence,
+  if (sprite == clutter_backend_get_pointer_sprite (clutter_backend, stage))
+    sprite = NULL;
+
+  return meta_seat_impl_query_state (seat_native->impl,
+                                     sprite ? clutter_sprite_get_device (sprite) : NULL,
+                                     sprite ? clutter_sprite_get_sequence (sprite) : NULL,
                                      coords, modifiers);
 }
 
@@ -765,9 +773,13 @@ meta_seat_native_set_pointer_constraint (MetaSeatNative            *seat,
 }
 
 MetaCursorRenderer *
-meta_seat_native_maybe_ensure_cursor_renderer (MetaSeatNative     *seat_native,
-                                               ClutterInputDevice *device)
+meta_seat_native_maybe_ensure_cursor_renderer (MetaSeatNative *seat_native,
+                                               ClutterSprite  *sprite)
 {
+  ClutterInputDevice *device;
+
+  device = clutter_sprite_get_device (sprite);
+
   if (device == seat_native->core_pointer)
     {
       if (!seat_native->cursor_renderer)
@@ -776,7 +788,7 @@ meta_seat_native_maybe_ensure_cursor_renderer (MetaSeatNative     *seat_native,
 
           cursor_renderer_native =
             meta_cursor_renderer_native_new (seat_native->backend,
-                                             seat_native->core_pointer);
+                                             sprite);
           seat_native->cursor_renderer =
             META_CURSOR_RENDERER (cursor_renderer_native);
         }
@@ -803,7 +815,7 @@ meta_seat_native_maybe_ensure_cursor_renderer (MetaSeatNative     *seat_native,
       if (!cursor_renderer)
         {
           cursor_renderer = meta_cursor_renderer_new (seat_native->backend,
-                                                      device);
+                                                      sprite);
           g_hash_table_insert (seat_native->tablet_cursors,
                                device, cursor_renderer);
         }

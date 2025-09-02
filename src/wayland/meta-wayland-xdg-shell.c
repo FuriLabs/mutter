@@ -26,6 +26,7 @@
 #include "backends/meta-logical-monitor-private.h"
 #include "compositor/compositor-private.h"
 #include "core/boxes-private.h"
+#include "core/meta-window-config-private.h"
 #include "core/window-private.h"
 #include "meta/meta-window-config.h"
 #include "wayland/meta-wayland-outputs.h"
@@ -305,7 +306,7 @@ xdg_toplevel_show_window_menu (struct wl_client   *client,
     return;
 
   if (!meta_wayland_seat_get_grab_info (seat, surface, serial, FALSE,
-                                        NULL, NULL, NULL, NULL))
+                                        NULL, NULL, NULL))
     return;
 
   monitor_scale = meta_window_wayland_get_geometry_scale (window);
@@ -323,8 +324,7 @@ xdg_toplevel_move (struct wl_client   *client,
   MetaWaylandSeat *seat = wl_resource_get_user_data (seat_resource);
   MetaWaylandSurface *surface = surface_from_xdg_toplevel_resource (resource);
   MetaWindow *window;
-  ClutterInputDevice *device;
-  ClutterEventSequence *sequence;
+  ClutterSprite *sprite;
   float x, y;
 
   window = meta_wayland_surface_get_window (surface);
@@ -332,11 +332,11 @@ xdg_toplevel_move (struct wl_client   *client,
     return;
 
   if (!meta_wayland_seat_get_grab_info (seat, surface, serial, TRUE,
-                                        &device, &sequence, &x, &y))
+                                        &sprite, &x, &y))
     return;
 
   meta_wayland_surface_begin_grab_op (surface, seat, META_GRAB_OP_MOVING,
-                                      device, sequence, x, y);
+                                      sprite, x, y);
 }
 
 static MetaGrabOp
@@ -374,8 +374,7 @@ xdg_toplevel_resize (struct wl_client   *client,
   MetaWindow *window;
   gfloat x, y;
   MetaGrabOp grab_op;
-  ClutterInputDevice *device;
-  ClutterEventSequence *sequence;
+  ClutterSprite *sprite;
 
   window = meta_wayland_surface_get_window (surface);
   if (!window)
@@ -385,12 +384,11 @@ xdg_toplevel_resize (struct wl_client   *client,
     return;
 
   if (!meta_wayland_seat_get_grab_info (seat, surface, serial, TRUE,
-                                        &device, &sequence, &x, &y))
+                                        &sprite, &x, &y))
     return;
 
   grab_op = grab_op_for_xdg_toplevel_resize_edge (edges);
-  meta_wayland_surface_begin_grab_op (surface, seat, grab_op,
-                                      device, sequence, x, y);
+  meta_wayland_surface_begin_grab_op (surface, seat, grab_op, sprite, x, y);
 }
 
 static void
@@ -768,6 +766,75 @@ add_wm_capability_value (struct wl_array                   *states,
 }
 
 static void
+append_state_string (struct wl_array *states,
+                     GString         *string)
+{
+  uint32_t *p;
+  gboolean first = TRUE;
+
+  g_string_append (string, "state=");
+
+  if (states->size == 0)
+    {
+      g_string_append (string, "none");
+      return;
+    }
+
+  wl_array_for_each (p, states)
+    {
+      uint32_t state = *p;
+
+      if (!first)
+        g_string_append_c (string, '|');
+
+      switch (state)
+        {
+        case XDG_TOPLEVEL_STATE_MAXIMIZED:
+          g_string_append (string, "maximized");
+          break;
+        case XDG_TOPLEVEL_STATE_FULLSCREEN:
+          g_string_append (string, "fullscreen");
+          break;
+        case XDG_TOPLEVEL_STATE_RESIZING:
+          g_string_append (string, "resizing");
+          break;
+        case XDG_TOPLEVEL_STATE_ACTIVATED:
+          g_string_append (string, "activated");
+          break;
+        case XDG_TOPLEVEL_STATE_SUSPENDED:
+          g_string_append (string, "suspended");
+          break;
+        case XDG_TOPLEVEL_STATE_TILED_TOP:
+          g_string_append (string, "tiled-top");
+          break;
+        case XDG_TOPLEVEL_STATE_TILED_RIGHT:
+          g_string_append (string, "tiled-right");
+          break;
+        case XDG_TOPLEVEL_STATE_TILED_BOTTOM:
+          g_string_append (string, "tiled-bottom");
+          break;
+        case XDG_TOPLEVEL_STATE_TILED_LEFT:
+          g_string_append (string, "tiled-left");
+          break;
+        case XDG_TOPLEVEL_STATE_CONSTRAINED_TOP:
+          g_string_append (string, "constrained-top");
+          break;
+        case XDG_TOPLEVEL_STATE_CONSTRAINED_RIGHT:
+          g_string_append (string, "constrained-right");
+          break;
+        case XDG_TOPLEVEL_STATE_CONSTRAINED_BOTTOM:
+          g_string_append (string, "constrained-bottom");
+          break;
+        case XDG_TOPLEVEL_STATE_CONSTRAINED_LEFT:
+          g_string_append (string, "constrained-left");
+          break;
+        }
+
+      first = FALSE;
+    }
+}
+
+static void
 meta_wayland_xdg_toplevel_send_configure (MetaWaylandXdgToplevel         *xdg_toplevel,
                                           MetaWaylandWindowConfiguration *configuration)
 {
@@ -778,6 +845,35 @@ meta_wayland_xdg_toplevel_send_configure (MetaWaylandXdgToplevel         *xdg_to
 
   wl_array_init (&states);
   fill_states (xdg_toplevel, configuration, &states);
+
+  if (meta_is_topic_enabled (META_DEBUG_WAYLAND))
+    {
+      MetaWaylandSurfaceRole *surface_role =
+        META_WAYLAND_SURFACE_ROLE (xdg_toplevel);
+      MetaWaylandSurface *surface =
+        meta_wayland_surface_role_get_surface (surface_role);
+      g_autoptr (GString) string = NULL;
+
+      string = g_string_new ("");
+
+      g_string_append_printf (string,
+                              "Configuring xdg_toplevel#%u (wl_surface#%u): "
+                              "serial=%u ",
+                              wl_resource_get_id (xdg_toplevel->resource),
+                              wl_resource_get_id (surface->resource),
+                              configuration->serial);
+
+      append_state_string (&states, string);
+      g_string_append_printf (string, ", size=%dx%d",
+                              configuration->width, configuration->height);
+      if (configuration->has_position)
+        {
+          g_string_append_printf (string, ", position=%d,%d",
+                                  configuration->x, configuration->y);
+        }
+
+      meta_topic (META_DEBUG_WAYLAND, "%s", string->str);
+    }
 
   if (wl_resource_get_version (xdg_toplevel->resource) >=
       XDG_TOPLEVEL_CONFIGURE_BOUNDS_SINCE_VERSION &&
@@ -886,49 +982,14 @@ meta_wayland_xdg_toplevel_apply_state (MetaWaylandSurfaceRole  *surface_role,
 
   if (!xdg_surface_priv->configure_sent)
     {
-      MetaWindowWayland *wl_window = META_WINDOW_WAYLAND (window);
-      g_autoptr (MetaWaylandWindowConfiguration) configuration = NULL;
       g_autoptr (MetaWindowConfig) window_config = NULL;
-      int bounds_width, bounds_height, geometry_scale;
-      MtkRectangle rect;
 
-      geometry_scale = meta_window_wayland_get_geometry_scale (window);
-      rect = meta_window_config_get_rect (window->config);
-
-      if (!meta_window_calculate_bounds (window, &bounds_width, &bounds_height))
-        {
-          bounds_width = 0;
-          bounds_height = 0;
-        }
-
-      if (xdg_toplevel->restored_from_session)
-        {
-          configuration =
-            meta_wayland_window_configuration_new (window,
-                                                   rect,
-                                                   bounds_width,
-                                                   bounds_height,
-                                                   geometry_scale,
-                                                   META_MOVE_RESIZE_STATE_CHANGED,
-                                                   META_GRAVITY_NONE);
-        }
-      else
-        {
-          configuration =
-            meta_wayland_window_configuration_new_empty (bounds_width,
-                                                         bounds_height,
-                                                         geometry_scale);
-        }
-
-      window_config =
-        meta_window_config_new_from_wayland_window_configuration (window,
-                                                                  configuration);
+      window_config = meta_window_config_initial_new ();
       meta_window_emit_configure (window, window_config);
-      meta_wayland_window_configuration_apply_window_config (window,
-                                                             configuration,
-                                                             window_config);
 
-      meta_window_wayland_configure (wl_window, configuration);
+      meta_window_apply_config (window, window_config,
+                                META_WINDOW_APPLY_FLAG_ALWAYS_MOVE_RESIZE);
+      g_warn_if_fail (xdg_surface_priv->configure_sent);
     }
 }
 
