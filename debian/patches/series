@@ -4,6 +4,3 @@ workarounds/tests-Skip-thread-priority-test.patch
 workarounds/Mark-several-additional-tests-as-flaky.patch
 workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
 ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
-ubuntu/core-place-Guarantee-we-never-get-work-area-for-a-NULL-lo.patch
-ubuntu/clutter-stage-Allow-for-there-being-no-sprite-when-a-devi.patch
-ubuntu/monitor-Calculate-fractional-scaling-factors-using-exact-.patch
