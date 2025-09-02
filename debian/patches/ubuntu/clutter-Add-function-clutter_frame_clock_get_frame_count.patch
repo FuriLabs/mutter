@@ -1,0 +1,37 @@
+From: Daniel van Vugt <daniel.van.vugt@canonical.com>
+Date: Fri, 29 Aug 2025 16:01:10 +0800
+Subject: clutter: Add function clutter_frame_clock_get_frame_count
+
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/4254
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/2121195
+Origin: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4612
+---
+ clutter/clutter/clutter-frame-clock.c | 6 ++++++
+ clutter/clutter/clutter-frame-clock.h | 3 +++
+ 2 files changed, 9 insertions(+)
+
+diff --git a/clutter/clutter/clutter-frame-clock.c b/clutter/clutter/clutter-frame-clock.c
+index 6207f9a..01129c3 100644
+--- a/clutter/clutter/clutter-frame-clock.c
++++ b/clutter/clutter/clutter-frame-clock.c
+@@ -1935,3 +1935,9 @@ clutter_frame_clock_set_passive (ClutterFrameClock       *frame_clock,
+ 
+   clear_source (frame_clock);
+ }
++
++int64_t
++clutter_frame_clock_get_frame_count (ClutterFrameClock *frame_clock)
++{
++  return frame_clock->frame_count;
++}
+diff --git a/clutter/clutter/clutter-frame-clock.h b/clutter/clutter/clutter-frame-clock.h
+index 4868136..df6762a 100644
+--- a/clutter/clutter/clutter-frame-clock.h
++++ b/clutter/clutter/clutter-frame-clock.h
+@@ -144,3 +144,6 @@ void clutter_frame_clock_set_passive (ClutterFrameClock       *frame_clock,
+ CLUTTER_EXPORT
+ ClutterFrameResult clutter_frame_clock_dispatch (ClutterFrameClock *frame_clock,
+                                                  int64_t            time_us);
++
++CLUTTER_EXPORT
++int64_t clutter_frame_clock_get_frame_count (ClutterFrameClock *frame_clock);

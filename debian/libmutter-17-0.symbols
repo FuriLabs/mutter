@@ -1545,6 +1545,7 @@ libmutter-clutter-17.so.0 libmutter-17-0 #MINVER#
  clutter_frame_clock_destroy@Base 43.0
  clutter_frame_clock_dispatch@Base 49~alpha.1
  clutter_frame_clock_driver_get_type@Base 49~alpha.1
+ clutter_frame_clock_get_frame_count@Base 49~rc-0ubuntu1
  clutter_frame_clock_get_priority@Base 49~alpha.1
  clutter_frame_clock_get_refresh_rate@Base 43.0
  clutter_frame_clock_get_type@Base 43.0
