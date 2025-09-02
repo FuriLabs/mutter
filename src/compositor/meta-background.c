@@ -24,9 +24,11 @@
 #include <string.h>
 
 #include "backends/meta-backend-private.h"
+#include "clutter/clutter-color-state.h"
 #include "compositor/cogl-utils.h"
+#include "compositor/meta-background-image-private.h"
+#include "meta/compositor.h"
 #include "meta/display.h"
-#include "meta/meta-background-image.h"
 #include "meta/meta-background.h"
 #include "meta/meta-monitor-manager.h"
 #include "meta/util.h"
@@ -77,8 +79,10 @@ struct _MetaBackground
 enum
 {
   PROP_META_DISPLAY = 1,
-  PROP_MONITOR,
+  N_PROPS,
 };
+
+static GParamSpec *props[N_PROPS] = { 0, };
 
 G_DEFINE_TYPE (MetaBackground, meta_background, G_TYPE_OBJECT)
 
@@ -336,7 +340,6 @@ static void
 meta_background_class_init (MetaBackgroundClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
-  GParamSpec *param_spec;
 
   object_class->dispose = meta_background_dispose;
   object_class->finalize = meta_background_finalize;
@@ -352,14 +355,12 @@ meta_background_class_init (MetaBackgroundClass *klass)
                   NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
-  param_spec = g_param_spec_object ("meta-display", NULL, NULL,
-                                    META_TYPE_DISPLAY,
-                                    G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY);
+  props[PROP_META_DISPLAY] =
+    g_param_spec_object ("meta-display", NULL, NULL,
+                         META_TYPE_DISPLAY,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY);
 
-  g_object_class_install_property (object_class,
-                                   PROP_META_DISPLAY,
-                                   param_spec);
-
+  g_object_class_install_properties (object_class, N_PROPS, props);
 }
 
 static void
@@ -1032,4 +1033,17 @@ meta_background_refresh_all (void)
 
   for (l = all_backgrounds; l; l = l->next)
     mark_changed (l->data);
+}
+
+ClutterColorState *
+meta_background_get_color_state (MetaBackground *self)
+{
+  g_return_val_if_fail (META_IS_BACKGROUND (self), NULL);
+
+  if (self->background_image1)
+    return meta_background_image_get_color_state (self->background_image1);
+  else if (self->background_image2)
+    return meta_background_image_get_color_state (self->background_image2);
+  else
+    return NULL;
 }

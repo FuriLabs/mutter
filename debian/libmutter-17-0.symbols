@@ -3,11 +3,6 @@ libmutter-17.so.0 libmutter-17-0 #MINVER#
  meta_accelerator_name@Base 44~beta
  meta_add_debug_paint_flag@Base 43.0
  meta_add_verbose_topic@Base 43.0
- meta_anonymous_file_close_fd@Base 43.0
- meta_anonymous_file_free@Base 43.0
- meta_anonymous_file_new@Base 43.0
- meta_anonymous_file_open_fd@Base 43.0
- meta_anonymous_file_size@Base 43.0
  meta_backend_add_gpu@Base 43.0
  meta_backend_capabilities_get_type@Base 43.0
  meta_backend_freeze_keyboard@Base 46~rc
@@ -519,6 +514,7 @@ libmutter-17.so.0 libmutter-17-0 #MINVER#
  meta_monitor_switch_config_type_get_type@Base 43.0
  meta_monitor_tiled_get_tile_group_id@Base 43.0
  meta_monitor_update_current_mode@Base 49~alpha.1
+ meta_monitors_config_copy@Base 49~rc
  meta_monitors_config_get_switch_config@Base 43.0
  meta_monitors_config_key_equal@Base 43.0
  meta_monitors_config_key_free@Base 43.0
@@ -558,6 +554,7 @@ libmutter-17.so.0 libmutter-17-0 #MINVER#
  meta_output_get_info@Base 43.0
  meta_output_get_max_bpc@Base 43.0
  meta_output_get_monitor@Base 43.0
+ meta_output_get_name@Base 49~rc
  meta_output_get_type@Base 43.0
  meta_output_hdr_metadata_equal@Base 47~rc
  meta_output_info_get_type@Base 43.0
@@ -631,6 +628,8 @@ libmutter-17.so.0 libmutter-17-0 #MINVER#
  meta_prefs_set_force_fullscreen@Base 43.0
  meta_prefs_set_num_workspaces@Base 43.0
  meta_prefs_set_show_fallback_app_menu@Base 43.0
+ meta_read_bytes@Base 49~rc
+ meta_read_bytes_finish@Base 49~rc
  meta_rectangle_clamp_to_fit_into_region@Base 43.0
  meta_rectangle_clip_to_region@Base 43.0
  meta_rectangle_contained_in_region@Base 43.0
@@ -759,6 +758,7 @@ libmutter-17.so.0 libmutter-17-0 #MINVER#
  meta_wayland_client_get_caps@Base 49~beta
  meta_wayland_client_get_context@Base 49~beta
  meta_wayland_client_get_kind@Base 49~beta
+ meta_wayland_client_get_pid@Base 49~rc
  meta_wayland_client_get_subprocess@Base 49~beta
  meta_wayland_client_get_type@Base 43.0
  meta_wayland_client_get_wl_client@Base 49~beta
@@ -856,6 +856,7 @@ libmutter-17.so.0 libmutter-17-0 #MINVER#
  meta_window_get_id@Base 43.0
  meta_window_get_layer@Base 43.0
  meta_window_get_main_logical_monitor@Base 47~beta
+ meta_window_get_maximize_flags@Base 49~rc
  meta_window_get_monitor@Base 43.0
  meta_window_get_mutter_hints@Base 43.0
  meta_window_get_pid@Base 43.0
@@ -917,8 +918,10 @@ libmutter-17.so.0 libmutter-17-0 #MINVER#
  meta_window_set_compositor_private@Base 43.0
  meta_window_set_demands_attention@Base 43.0
  meta_window_set_icon_geometry@Base 43.0
+ meta_window_set_maximize_flags@Base 49~rc
  meta_window_set_title@Base 49~alpha.1
  meta_window_set_type@Base 49~beta
+ meta_window_set_unmaximize_flags@Base 49~rc
  meta_window_should_be_showing@Base 46.1
  meta_window_should_show@Base 46.1
  meta_window_show_in_window_list@Base 49~beta
@@ -987,11 +990,11 @@ libmutter-clutter-17.so.0 libmutter-17-0 #MINVER#
  _clutter_event_process_filters@Base 43.0
  _clutter_event_push@Base 43.0
  _clutter_flatten_effect_get_type@Base 46~beta
- _clutter_input_pointer_a11y_add_device@Base 43.0
- _clutter_input_pointer_a11y_on_button_event@Base 43.0
- _clutter_input_pointer_a11y_on_motion_event@Base 43.0
- _clutter_input_pointer_a11y_remove_device@Base 43.0
- _clutter_is_input_pointer_a11y_enabled@Base 43.0
+ _clutter_seat_a11y_on_button_event@Base 49~rc
+ _clutter_seat_a11y_on_motion_event@Base 49~rc
+ _clutter_seat_init_a11y@Base 49~rc
+ _clutter_seat_is_pointer_a11y_enabled@Base 49~rc
+ _clutter_seat_shutdown_a11y@Base 49~rc
  _clutter_stage_get_window@Base 43.0
  _clutter_stage_maybe_setup_viewport@Base 43.0
  _clutter_stage_process_queued_events@Base 45~beta.1
@@ -1294,10 +1297,13 @@ libmutter-clutter-17.so.0 libmutter-17-0 #MINVER#
  clutter_backend_get_cogl_context@Base 43.0
  clutter_backend_get_default_seat@Base 43.0
  clutter_backend_get_input_method@Base 43.0
+ clutter_backend_get_key_focus@Base 49~rc
+ clutter_backend_get_pointer_sprite@Base 49~rc
  clutter_backend_get_resolution@Base 43.0
  clutter_backend_get_sprite@Base 49~alpha.1
  clutter_backend_get_stage_window@Base 43.0
  clutter_backend_get_type@Base 43.0
+ clutter_backend_lookup_sprite@Base 49~rc
  clutter_backend_set_fallback_resource_scale@Base 43.0
  clutter_backend_set_input_method@Base 43.0
  clutter_bin_layout_get_type@Base 43.0
@@ -1348,12 +1354,14 @@ libmutter-clutter-17.so.0 libmutter-17-0 #MINVER#
  clutter_brightness_contrast_effect_set_contrast@Base 43.0
  clutter_brightness_contrast_effect_set_contrast_full@Base 43.0
  clutter_button_state_get_type@Base 43.0
- clutter_click_action_get_button@Base 43.0
- clutter_click_action_get_coords@Base 43.0
- clutter_click_action_get_state@Base 43.0
- clutter_click_action_get_type@Base 43.0
- clutter_click_action_new@Base 43.0
- clutter_click_action_release@Base 43.0
+ clutter_cicp_primaries_get_type@Base 49~rc
+ clutter_cicp_transfer_get_type@Base 49~rc
+ clutter_click_gesture_get_n_clicks_required@Base 49~rc
+ clutter_click_gesture_get_recognize_on_press@Base 49~rc
+ clutter_click_gesture_get_type@Base 49~rc
+ clutter_click_gesture_new@Base 49~rc
+ clutter_click_gesture_set_n_clicks_required@Base 49~rc
+ clutter_click_gesture_set_recognize_on_press@Base 49~rc
  clutter_clip_node_get_type@Base 43.0
  clutter_clip_node_new@Base 43.0
  clutter_clone_get_source@Base 43.0
@@ -1370,15 +1378,22 @@ libmutter-clutter-17.so.0 libmutter-17-0 #MINVER#
  clutter_color_state_get_blending@Base 47~beta
  clutter_color_state_get_id@Base 47~beta
  clutter_color_state_get_type@Base 43.0
+ clutter_color_state_icc_get_file@Base 49~rc
+ clutter_color_state_icc_get_type@Base 49~rc
+ clutter_color_state_icc_new@Base 49~rc
+ clutter_color_state_needs_mapping@Base 49~rc
+ clutter_color_state_params_do_tone_mapping@Base 49~rc
  clutter_color_state_params_get_colorimetry@Base 48~alpha
  clutter_color_state_params_get_eotf@Base 48~alpha
  clutter_color_state_params_get_luminance@Base 48~alpha
  clutter_color_state_params_get_type@Base 48~alpha
  clutter_color_state_params_new@Base 48~alpha
+ clutter_color_state_params_new_from_cicp@Base 49~rc
  clutter_color_state_params_new_from_primitives@Base 48~alpha
  clutter_color_state_params_new_full@Base 48~alpha
  clutter_color_state_required_format@Base 47~beta
  clutter_color_state_to_string@Base 47~beta
+ clutter_color_state_transform_flags_get_type@Base 49~rc
  clutter_color_state_update_uniforms@Base 47~rc
  clutter_colorimetry_type_get_type@Base 48~alpha
  clutter_colorize_effect_get_tint@Base 43.0
@@ -1471,6 +1486,7 @@ libmutter-clutter-17.so.0 libmutter-17-0 #MINVER#
  clutter_event_get_scroll_delta@Base 43.0
  clutter_event_get_scroll_direction@Base 43.0
  clutter_event_get_scroll_finish_flags@Base 43.0
+ clutter_event_get_scroll_flags@Base 49~rc
  clutter_event_get_scroll_source@Base 43.0
  clutter_event_get_source@Base 46.0
  clutter_event_get_source_device@Base 43.0
@@ -1523,6 +1539,7 @@ libmutter-clutter-17.so.0 libmutter-17-0 #MINVER#
  clutter_flow_layout_set_row_height@Base 43.0
  clutter_flow_layout_set_row_spacing@Base 43.0
  clutter_flow_layout_set_snap_to_grid@Base 43.0
+ clutter_focus_get_current_actor@Base 49~rc
  clutter_focus_get_type@Base 49~alpha.1
  clutter_frame_clock_add_future_time@Base 48~alpha
  clutter_frame_clock_destroy@Base 43.0
@@ -1539,6 +1556,7 @@ libmutter-clutter-17.so.0 libmutter-17-0 #MINVER#
  clutter_frame_clock_schedule_update@Base 43.0
  clutter_frame_clock_schedule_update_now@Base 43.0
  clutter_frame_clock_set_deadline_evasion@Base 47~rc
+ clutter_frame_clock_set_frame_sync_update_time@Base 49~rc
  clutter_frame_clock_set_mode@Base 46~rc
  clutter_frame_clock_set_passive@Base 49~alpha.1
  clutter_frame_clock_uninhibit@Base 43.0
@@ -1554,24 +1572,6 @@ libmutter-clutter-17.so.0 libmutter-17-0 #MINVER#
  clutter_frame_result_get_type@Base 43.0
  clutter_frame_set_result@Base 43.0
  clutter_frame_unref@Base 44~beta
- clutter_gesture_action_cancel@Base 43.0
- clutter_gesture_action_get_device@Base 43.0
- clutter_gesture_action_get_last_event@Base 43.0
- clutter_gesture_action_get_motion_coords@Base 43.0
- clutter_gesture_action_get_motion_delta@Base 43.0
- clutter_gesture_action_get_n_current_points@Base 43.0
- clutter_gesture_action_get_n_touch_points@Base 43.0
- clutter_gesture_action_get_press_coords@Base 43.0
- clutter_gesture_action_get_release_coords@Base 43.0
- clutter_gesture_action_get_sequence@Base 43.0
- clutter_gesture_action_get_threshold_trigger_distance@Base 43.0
- clutter_gesture_action_get_threshold_trigger_edge@Base 43.0
- clutter_gesture_action_get_type@Base 43.0
- clutter_gesture_action_get_velocity@Base 43.0
- clutter_gesture_action_new@Base 43.0
- clutter_gesture_action_set_n_touch_points@Base 43.0
- clutter_gesture_action_set_threshold_trigger_distance@Base 43.0
- clutter_gesture_action_set_threshold_trigger_edge@Base 43.0
  clutter_gesture_can_not_cancel@Base 46.0
  clutter_gesture_cancel@Base 46.0
  clutter_gesture_get_n_points@Base 46.0
@@ -1588,7 +1588,6 @@ libmutter-clutter-17.so.0 libmutter-17-0 #MINVER#
  clutter_gesture_reset_state_machine@Base 46.0
  clutter_gesture_set_state@Base 46.0
  clutter_gesture_state_get_type@Base 46.0
- clutter_gesture_trigger_edge_get_type@Base 43.0
  clutter_get_accessibility_enabled@Base 43.0
  clutter_get_current_event@Base 43.0
  clutter_get_current_event_time@Base 43.0
@@ -1680,7 +1679,6 @@ libmutter-clutter-17.so.0 libmutter-17-0 #MINVER#
  clutter_input_method_set_preedit_text@Base 43.0
  clutter_input_mode_get_type@Base 43.0
  clutter_input_panel_state_get_type@Base 43.0
- clutter_input_pointer_a11y_update@Base 43.0
  clutter_interval_clone@Base 43.0
  clutter_interval_compute@Base 43.0
  clutter_interval_compute_value@Base 43.0
@@ -1701,6 +1699,7 @@ libmutter-clutter-17.so.0 libmutter-17-0 #MINVER#
  clutter_interval_set_initial_value@Base 43.0
  clutter_interval_set_interval@Base 43.0
  clutter_interval_validate@Base 43.0
+ clutter_key_focus_get_type@Base 49~rc
  clutter_key_state_get_type@Base 43.0
  clutter_keyframe_transition_clear@Base 43.0
  clutter_keyframe_transition_get_key_frame@Base 43.0
@@ -1741,7 +1740,8 @@ libmutter-clutter-17.so.0 libmutter-17-0 #MINVER#
  clutter_layout_meta_get_manager@Base 43.0
  clutter_layout_meta_get_type@Base 43.0
  clutter_layout_meta_is_for@Base 46~beta
- clutter_long_press_state_get_type@Base 43.0
+ clutter_long_press_gesture_get_type@Base 49~rc
+ clutter_long_press_gesture_new@Base 49~rc
  clutter_luminance_type_get_type@Base 48~alpha
  clutter_margin_copy@Base 43.0
  clutter_margin_free@Base 43.0
@@ -1809,22 +1809,27 @@ libmutter-clutter-17.so.0 libmutter-17-0 #MINVER#
  clutter_paint_volume_set_width@Base 43.0
  clutter_paint_volume_union@Base 43.0
  clutter_paint_volume_union_box@Base 43.0
- clutter_pan_action_get_acceleration_factor@Base 43.0
- clutter_pan_action_get_constrained_motion_delta@Base 43.0
- clutter_pan_action_get_deceleration@Base 43.0
- clutter_pan_action_get_interpolate@Base 43.0
- clutter_pan_action_get_interpolated_coords@Base 43.0
- clutter_pan_action_get_interpolated_delta@Base 43.0
- clutter_pan_action_get_motion_coords@Base 43.0
- clutter_pan_action_get_motion_delta@Base 43.0
- clutter_pan_action_get_pan_axis@Base 43.0
- clutter_pan_action_get_type@Base 43.0
- clutter_pan_action_new@Base 43.0
- clutter_pan_action_set_acceleration_factor@Base 43.0
- clutter_pan_action_set_deceleration@Base 43.0
- clutter_pan_action_set_interpolate@Base 43.0
- clutter_pan_action_set_pan_axis@Base 43.0
  clutter_pan_axis_get_type@Base 43.0
+ clutter_pan_gesture_get_accumulated_delta@Base 49~rc
+ clutter_pan_gesture_get_accumulated_delta_abs@Base 49~rc
+ clutter_pan_gesture_get_begin_centroid@Base 49~rc
+ clutter_pan_gesture_get_begin_centroid_abs@Base 49~rc
+ clutter_pan_gesture_get_begin_threshold@Base 49~rc
+ clutter_pan_gesture_get_centroid@Base 49~rc
+ clutter_pan_gesture_get_centroid_abs@Base 49~rc
+ clutter_pan_gesture_get_delta@Base 49~rc
+ clutter_pan_gesture_get_delta_abs@Base 49~rc
+ clutter_pan_gesture_get_max_n_points@Base 49~rc
+ clutter_pan_gesture_get_min_n_points@Base 49~rc
+ clutter_pan_gesture_get_pan_axis@Base 49~rc
+ clutter_pan_gesture_get_type@Base 49~rc
+ clutter_pan_gesture_get_velocity@Base 49~rc
+ clutter_pan_gesture_get_velocity_abs@Base 49~rc
+ clutter_pan_gesture_new@Base 49~rc
+ clutter_pan_gesture_set_begin_threshold@Base 49~rc
+ clutter_pan_gesture_set_max_n_points@Base 49~rc
+ clutter_pan_gesture_set_min_n_points@Base 49~rc
+ clutter_pan_gesture_set_pan_axis@Base 49~rc
  clutter_perspective_get_type@Base 43.0
  clutter_pick_context_destroy@Base 43.0
  clutter_pick_context_get_mode@Base 43.0
@@ -1855,6 +1860,19 @@ libmutter-clutter-17.so.0 libmutter-17-0 #MINVER#
  clutter_pointer_a11y_flags_get_type@Base 43.0
  clutter_pointer_a11y_timeout_type_get_type@Base 43.0
  clutter_preedit_reset_mode_get_type@Base 43.0
+ clutter_press_gesture_get_button@Base 49~rc
+ clutter_press_gesture_get_cancel_threshold@Base 49~rc
+ clutter_press_gesture_get_coords@Base 49~rc
+ clutter_press_gesture_get_coords_abs@Base 49~rc
+ clutter_press_gesture_get_long_press_duration_ms@Base 49~rc
+ clutter_press_gesture_get_n_presses@Base 49~rc
+ clutter_press_gesture_get_pressed@Base 49~rc
+ clutter_press_gesture_get_required_button@Base 49~rc
+ clutter_press_gesture_get_state@Base 49~rc
+ clutter_press_gesture_get_type@Base 49~rc
+ clutter_press_gesture_set_cancel_threshold@Base 49~rc
+ clutter_press_gesture_set_long_press_duration_ms@Base 49~rc
+ clutter_press_gesture_set_required_button@Base 49~rc
  clutter_primaries_ensure_normalized_range@Base 48~alpha
  clutter_property_transition_get_property_name@Base 43.0
  clutter_property_transition_get_type@Base 43.0
@@ -1866,13 +1884,13 @@ libmutter-clutter-17.so.0 libmutter-17-0 #MINVER#
  clutter_request_mode_get_type@Base 43.0
  clutter_root_node_get_type@Base 43.0
  clutter_root_node_new@Base 43.0
- clutter_rotate_action_get_type@Base 43.0
- clutter_rotate_action_new@Base 43.0
  clutter_rotate_axis_get_type@Base 43.0
  clutter_scaling_filter_get_type@Base 43.0
  clutter_scroll_direction_get_type@Base 43.0
  clutter_scroll_finish_flags_get_type@Base 43.0
+ clutter_scroll_flags_get_type@Base 49~rc
  clutter_scroll_source_get_type@Base 43.0
+ clutter_seat_a11y_update@Base 49~rc
  clutter_seat_bell_notify@Base 43.0
  clutter_seat_create_virtual_device@Base 43.0
  clutter_seat_destroy@Base 43.0
@@ -1918,16 +1936,16 @@ libmutter-clutter-17.so.0 libmutter-17-0 #MINVER#
  clutter_snap_constraint_set_offset@Base 43.0
  clutter_snap_constraint_set_source@Base 43.0
  clutter_snap_edge_get_type@Base 43.0
+ clutter_sprite_get_coords@Base 49~rc
  clutter_sprite_get_device@Base 49~alpha.1
  clutter_sprite_get_sequence@Base 49~alpha.1
  clutter_sprite_get_type@Base 49~alpha.1
  clutter_stage_capture_view_into@Base 43.0
  clutter_stage_clear_stage_views@Base 43.0
  clutter_stage_ensure_viewport@Base 43.0
+ clutter_stage_foreach_sprite@Base 49~rc
  clutter_stage_get_actor_at_pos@Base 43.0
  clutter_stage_get_capture_final_size@Base 43.0
- clutter_stage_get_device_actor@Base 43.0
- clutter_stage_get_device_coords@Base 43.0
  clutter_stage_get_event_actor@Base 43.0
  clutter_stage_get_grab_actor@Base 43.0
  clutter_stage_get_key_focus@Base 43.0
@@ -1946,7 +1964,6 @@ libmutter-clutter-17.so.0 libmutter-17-0 #MINVER#
  clutter_stage_paint_to_framebuffer@Base 43.0
  clutter_stage_paint_view@Base 43.0
  clutter_stage_peek_stage_views@Base 43.0
- clutter_stage_pointing_input_foreach@Base 45~rc
  clutter_stage_process_event@Base 45~beta.1
  clutter_stage_read_pixels@Base 43.0
  clutter_stage_schedule_update@Base 43.0
@@ -1984,11 +2001,6 @@ libmutter-clutter-17.so.0 libmutter-17-0 #MINVER#
  clutter_stage_view_take_scanout@Base 43.0
  clutter_stage_window_get_type@Base 43.0
  clutter_step_mode_get_type@Base 43.0
- clutter_swipe_action_get_type@Base 43.0
- clutter_swipe_action_new@Base 43.0
- clutter_swipe_direction_get_type@Base 43.0
- clutter_tap_action_get_type@Base 43.0
- clutter_tap_action_new@Base 43.0
  clutter_text_activate@Base 43.0
  clutter_text_buffer_delete_text@Base 43.0
  clutter_text_buffer_emit_deleted_text@Base 43.0
@@ -2176,10 +2188,6 @@ libmutter-clutter-17.so.0 libmutter-17-0 #MINVER#
  clutter_virtual_input_device_notify_touch_down@Base 43.0
  clutter_virtual_input_device_notify_touch_motion@Base 43.0
  clutter_virtual_input_device_notify_touch_up@Base 43.0
- clutter_zoom_action_get_focal_point@Base 43.0
- clutter_zoom_action_get_transformed_focal_point@Base 43.0
- clutter_zoom_action_get_type@Base 43.0
- clutter_zoom_action_new@Base 43.0
 libmutter-cogl-17.so.0 libmutter-17-0 #MINVER#
 * Build-Depends-Package: libmutter-17-dev
  _cogl_bitmask_clear_all_in_array@Base 43.0
@@ -2621,7 +2629,17 @@ libmutter-cogl-17.so.0 libmutter-17-0 #MINVER#
  cogl_winsys_feature_get_type@Base 48~alpha
 libmutter-mtk-17.so.0 libmutter-17-0 #MINVER#
 * Build-Depends-Package: libmutter-17-dev
+ mtk_anonymous_file_close_fd@Base 49~rc
+ mtk_anonymous_file_free@Base 49~rc
+ mtk_anonymous_file_new@Base 49~rc
+ mtk_anonymous_file_open_fd@Base 49~rc
+ mtk_anonymous_file_size@Base 49~rc
  mtk_compute_viewport_matrix@Base 47.4
+ mtk_dbus_pidfd_free@Base 49~rc
+ mtk_dbus_pidfd_get_pid@Base 49~rc
+ mtk_dbus_pidfd_get_pidfd@Base 49~rc
+ mtk_dbus_pidfd_new_for_connection_async@Base 49~rc
+ mtk_dbus_pidfd_new_for_connection_finish@Base 49~rc
  mtk_dispose_bin_add@Base 49~alpha.1
  mtk_dispose_bin_dispose@Base 49~alpha.1
  mtk_dispose_bin_new@Base 49~alpha.1

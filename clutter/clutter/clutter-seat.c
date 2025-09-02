@@ -251,8 +251,7 @@ clutter_seat_class_init (ClutterSeatClass *klass)
                   G_SIGNAL_RUN_LAST,
                   0, NULL, NULL,
                   _clutter_marshal_VOID__OBJECT_FLAGS_UINT,
-                  G_TYPE_NONE, 3,
-                  CLUTTER_TYPE_INPUT_DEVICE,
+                  G_TYPE_NONE, 2,
                   CLUTTER_TYPE_POINTER_A11Y_TIMEOUT_TYPE,
                   G_TYPE_UINT);
   g_signal_set_va_marshaller (signals[PTR_A11Y_TIMEOUT_STARTED],
@@ -277,8 +276,7 @@ clutter_seat_class_init (ClutterSeatClass *klass)
                   G_SIGNAL_RUN_LAST,
                   0, NULL, NULL,
                   _clutter_marshal_VOID__OBJECT_FLAGS_BOOLEAN,
-                  G_TYPE_NONE, 3,
-                  CLUTTER_TYPE_INPUT_DEVICE,
+                  G_TYPE_NONE, 2,
                   CLUTTER_TYPE_POINTER_A11Y_TIMEOUT_TYPE,
                   G_TYPE_BOOLEAN);
   g_signal_set_va_marshaller (signals[PTR_A11Y_TIMEOUT_STOPPED],
@@ -341,12 +339,7 @@ clutter_seat_init (ClutterSeat *seat)
 }
 
 /**
- * clutter_seat_get_pointer:
- * @seat: a #ClutterSeat
- *
- * Returns the logical pointer
- *
- * Returns: (transfer none): the logical pointer
+ * clutter_seat_get_pointer: (skip)
  **/
 ClutterInputDevice *
 clutter_seat_get_pointer (ClutterSeat *seat)
@@ -357,12 +350,7 @@ clutter_seat_get_pointer (ClutterSeat *seat)
 }
 
 /**
- * clutter_seat_get_keyboard:
- * @seat: a #ClutterSeat
- *
- * Returns the logical keyboard
- *
- * Returns: (transfer none): the logical keyboard
+ * clutter_seat_get_keyboard: (skip)
  **/
 ClutterInputDevice *
 clutter_seat_get_keyboard (ClutterSeat *seat)
@@ -425,15 +413,8 @@ clutter_seat_get_keymap (ClutterSeat *seat)
 void
 clutter_seat_ensure_a11y_state (ClutterSeat *seat)
 {
-  ClutterInputDevice *core_pointer;
-
-  core_pointer = clutter_seat_get_pointer (seat);
-
-  if (core_pointer)
-    {
-      if (_clutter_is_input_pointer_a11y_enabled (core_pointer))
-        _clutter_input_pointer_a11y_add_device (core_pointer);
-    }
+  if (_clutter_seat_is_pointer_a11y_enabled (seat))
+    _clutter_seat_init_a11y (seat);
 }
 
 static gboolean
@@ -446,21 +427,13 @@ are_pointer_a11y_settings_equal (ClutterPointerA11ySettings *a,
 static void
 clutter_seat_enable_pointer_a11y (ClutterSeat *seat)
 {
-  ClutterInputDevice *core_pointer;
-
-  core_pointer = clutter_seat_get_pointer (seat);
-
-  _clutter_input_pointer_a11y_add_device (core_pointer);
+  _clutter_seat_init_a11y (seat);
 }
 
 static void
 clutter_seat_disable_pointer_a11y (ClutterSeat *seat)
 {
-  ClutterInputDevice *core_pointer;
-
-  core_pointer = clutter_seat_get_pointer (seat);
-
-  _clutter_input_pointer_a11y_remove_device (core_pointer);
+  _clutter_seat_shutdown_a11y (seat);
 }
 
 /**
@@ -747,29 +720,19 @@ clutter_seat_has_touchscreen (ClutterSeat *seat)
 }
 
 /**
- * clutter_seat_query_state:
- * @seat: a #ClutterSeat
- * @device: a #ClutterInputDevice
- * @sequence: (nullable): a #ClutterEventSequence
- * @coords: (out caller-allocates) (optional): the coordinates of the pointer
- * @modifiers: (out) (optional): the current #ClutterModifierType of the pointer
- *
- * Returns: %TRUE if @device (or the specific @sequence) is on the stage, %FALSE
- *   otherwise.
+ * clutter_seat_query_state: (skip)
  **/
 gboolean
-clutter_seat_query_state (ClutterSeat          *seat,
-                          ClutterInputDevice   *device,
-                          ClutterEventSequence *sequence,
-                          graphene_point_t     *coords,
-                          ClutterModifierType  *modifiers)
+clutter_seat_query_state (ClutterSeat         *seat,
+                          ClutterSprite       *sprite,
+                          graphene_point_t    *coords,
+                          ClutterModifierType *modifiers)
 {
   g_return_val_if_fail (CLUTTER_IS_SEAT (seat), FALSE);
-  g_return_val_if_fail (CLUTTER_IS_INPUT_DEVICE (device), FALSE);
+  g_return_val_if_fail (!sprite || CLUTTER_IS_SPRITE (sprite), FALSE);
 
   return CLUTTER_SEAT_GET_CLASS (seat)->query_state (seat,
-                                                     device,
-                                                     sequence,
+                                                     sprite,
                                                      coords,
                                                      modifiers);
 }

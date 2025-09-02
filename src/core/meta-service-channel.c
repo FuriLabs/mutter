@@ -18,23 +18,24 @@
 
 #include "config.h"
 
+#include <glib.h>
+#include <glib/gstdio.h>
+
 #include "core/meta-service-channel.h"
 
+#include "mtk/mtk.h"
 #include "wayland/meta-wayland-client-private.h"
 
 #define META_SERVICE_CHANNEL_DBUS_SERVICE "org.gnome.Mutter.ServiceChannel"
 #define META_SERVICE_CHANNEL_DBUS_PATH "/org/gnome/Mutter/ServiceChannel"
 
-struct _MetaServiceChannel
+typedef struct _MetaServiceChannelData
 {
-  MetaDBusServiceChannelSkeleton parent;
-
-  guint dbus_name_id;
-
-  MetaContext *context;
-
-  GHashTable *service_clients;
-};
+  MetaServiceChannel *service_channel;
+  GDBusMethodInvocation *invocation;
+  MetaServiceClientType service_client_type;
+  GVariant *options;
+} MetaServiceChannelData;
 
 typedef struct _MetaServiceClient
 {
@@ -44,12 +45,35 @@ typedef struct _MetaServiceClient
   MetaServiceClientType service_client_type;
 } MetaServiceClient;
 
+struct _MetaServiceChannel
+{
+  MetaDBusServiceChannelSkeleton parent;
+
+  guint dbus_name_id;
+  GCancellable *cancellable;
+
+  MetaContext *context;
+
+  GHashTable *service_clients;
+};
+
 static void meta_service_channel_init_iface (MetaDBusServiceChannelIface *iface);
 
 G_DEFINE_TYPE_WITH_CODE (MetaServiceChannel, meta_service_channel,
                          META_DBUS_TYPE_SERVICE_CHANNEL_SKELETON,
                          G_IMPLEMENT_INTERFACE (META_DBUS_TYPE_SERVICE_CHANNEL,
                                                 meta_service_channel_init_iface))
+
+static void
+meta_service_channel_data_free (MetaServiceChannelData *data)
+{
+  g_clear_object (&data->service_channel);
+  g_clear_pointer (&data->options, g_variant_unref);
+  g_free (data);
+}
+
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (MetaServiceChannelData,
+                               meta_service_channel_data_free);
 
 static void
 meta_service_client_free (MetaServiceClient *service_client)
@@ -103,6 +127,86 @@ verify_service_client_type (uint32_t service_client_type)
   return FALSE;
 }
 
+static MetaWaylandClient *
+setup_wayland_client_with_fd (MetaContext  *context,
+                              pid_t         pid,
+                              GUnixFDList  *fd_list,
+                              int          *fd_id,
+                              GError      **error)
+{
+  g_autoptr (MetaWaylandClient) wayland_client = NULL;
+  g_autofd int fd = -1;
+
+  wayland_client = meta_wayland_client_new_create (context, pid, error);
+  if (!wayland_client)
+      return NULL;
+
+  fd = meta_wayland_client_take_client_fd (wayland_client);
+  *fd_id = g_unix_fd_list_append (fd_list, fd, error);
+  if (*fd_id == -1)
+    return NULL;
+
+  return g_steal_pointer (&wayland_client);
+}
+
+static void
+on_dbus_pidfd_new_with_type (GObject      *source_object,
+                             GAsyncResult *res,
+                             gpointer      user_data)
+{
+  GDBusConnection *connection = G_DBUS_CONNECTION (source_object);
+  g_autoptr (MetaServiceChannelData) data = user_data;
+  MetaServiceChannel *service_channel = data->service_channel;
+  GDBusMethodInvocation *invocation = data->invocation;
+  MetaServiceClientType service_client_type = data->service_client_type;
+  g_autoptr (MtkDbusPidfd) pidfd = NULL;
+  g_autoptr (MetaWaylandClient) wayland_client = NULL;
+  g_autoptr (GUnixFDList) out_fd_list = NULL;
+  g_autoptr (GError) error = NULL;
+  int fd_id;
+
+  pidfd = mtk_dbus_pidfd_new_for_connection_finish (connection, res, &error);
+  if (!pidfd)
+    {
+      g_dbus_method_invocation_return_error (invocation,
+                                             G_DBUS_ERROR,
+                                             G_DBUS_ERROR_FAILED,
+                                             "Could not determine identity");
+      return;
+    }
+
+  out_fd_list = g_unix_fd_list_new ();
+  wayland_client = setup_wayland_client_with_fd (service_channel->context,
+                                                 mtk_dbus_pidfd_get_pid (pidfd),
+                                                 out_fd_list,
+                                                 &fd_id,
+                                                 &error);
+  if (!wayland_client)
+    {
+      g_dbus_method_invocation_return_error (invocation,
+                                             G_DBUS_ERROR,
+                                             G_DBUS_ERROR_FAILED,
+                                             "Failed to create Wayland client: %s",
+                                             error->message);
+      return;
+    }
+
+  meta_wayland_client_set_caps (wayland_client,
+                                META_WAYLAND_CLIENT_CAPS_X11_INTEROP);
+
+  g_hash_table_replace (service_channel->service_clients,
+                        GUINT_TO_POINTER (service_client_type),
+                        meta_service_client_new (service_channel,
+                                                 wayland_client,
+                                                 service_client_type));
+
+  meta_dbus_service_channel_complete_open_wayland_service_connection (
+    META_DBUS_SERVICE_CHANNEL (service_channel),
+    invocation,
+    out_fd_list,
+    g_variant_new_handle (fd_id));
+}
+
 static gboolean
 handle_open_wayland_service_connection (MetaDBusServiceChannel *object,
                                         GDBusMethodInvocation  *invocation,
@@ -111,11 +215,9 @@ handle_open_wayland_service_connection (MetaDBusServiceChannel *object,
 {
 #ifdef HAVE_WAYLAND
   MetaServiceChannel *service_channel = META_SERVICE_CHANNEL (object);
-  g_autoptr (GError) error = NULL;
-  g_autoptr (MetaWaylandClient) wayland_client = NULL;
-  g_autoptr (GUnixFDList) out_fd_list = NULL;
-  int fd;
-  int fd_id;
+  GDBusConnection *connection;
+  const char *sender;
+  g_autoptr (MetaServiceChannelData) data = NULL;
 
   if (meta_context_get_compositor_type (service_channel->context) !=
       META_COMPOSITOR_TYPE_WAYLAND)
@@ -136,51 +238,131 @@ handle_open_wayland_service_connection (MetaDBusServiceChannel *object,
       return G_DBUS_METHOD_INVOCATION_HANDLED;
     }
 
-  wayland_client = meta_wayland_client_new_create (service_channel->context,
-                                                   &error);
-  if (!wayland_client)
-    {
-      g_dbus_method_invocation_return_error (invocation,
-                                             G_DBUS_ERROR,
-                                             G_DBUS_ERROR_NOT_SUPPORTED,
-                                             "Failed to create Wayland client: %s",
-                                             error->message);
-      return G_DBUS_METHOD_INVOCATION_HANDLED;
-    }
+  connection = g_dbus_method_invocation_get_connection (invocation);
+  sender = g_dbus_method_invocation_get_sender (invocation);
 
-  meta_wayland_client_set_caps (wayland_client,
-                                META_WAYLAND_CLIENT_CAPS_X11_INTEROP);
+  data = g_new0 (MetaServiceChannelData, 1);
+  data->service_channel = g_object_ref (service_channel);
+  data->invocation = g_object_ref (invocation);
+  data->service_client_type = service_client_type;
 
-  fd = meta_wayland_client_take_client_fd (wayland_client);
-  out_fd_list = g_unix_fd_list_new ();
-  fd_id = g_unix_fd_list_append (out_fd_list, fd, &error);
-  close (fd);
+  mtk_dbus_pidfd_new_for_connection_async (connection,
+                                           sender,
+                                           service_channel->cancellable,
+                                           on_dbus_pidfd_new_with_type,
+                                           g_steal_pointer (&data));
 
-  if (fd_id == -1)
-    {
-      g_dbus_method_invocation_return_error (invocation,
-                                             G_DBUS_ERROR,
-                                             G_DBUS_ERROR_ACCESS_DENIED,
-                                             "Failed to append fd: %s",
-                                             error->message);
-      return G_DBUS_METHOD_INVOCATION_HANDLED;
-    }
-
-  g_hash_table_replace (service_channel->service_clients,
-                        GUINT_TO_POINTER (service_client_type),
-                        meta_service_client_new (service_channel,
-                                                 wayland_client,
-                                                 service_client_type));
-
-  meta_dbus_service_channel_complete_open_wayland_service_connection (
-    object, invocation, out_fd_list, g_variant_new_handle (fd_id));
   return G_DBUS_METHOD_INVOCATION_HANDLED;
 #else /* HAVE_WAYLAND */
   g_dbus_method_invocation_return_error (invocation,
                                          G_DBUS_ERROR,
                                          G_DBUS_ERROR_NOT_SUPPORTED,
-                                         "Wayland not supported",
-                                         error->message);
+                                         "Wayland not supported");
+  return G_DBUS_METHOD_INVOCATION_HANDLED;
+#endif /* HAVE_WAYLAND */
+}
+
+static void
+on_dbus_pidfd_new_with_options (GObject      *source_object,
+                                GAsyncResult *res,
+                                gpointer      user_data)
+{
+  GDBusConnection *connection = G_DBUS_CONNECTION (source_object);
+  g_autoptr (MetaServiceChannelData) data = user_data;
+  MetaServiceChannel *service_channel = data->service_channel;
+  GDBusMethodInvocation *invocation = data->invocation;
+  GVariant *options = data->options;
+  g_autoptr (MtkDbusPidfd) pidfd = NULL;
+  g_autoptr (MetaWaylandClient) wayland_client = NULL;
+  g_autoptr (GVariant) window_tag_variant = NULL;
+  g_autoptr (GUnixFDList) out_fd_list = NULL;
+  g_autoptr (GError) error = NULL;
+  int fd_id;
+
+  pidfd = mtk_dbus_pidfd_new_for_connection_finish (connection, res, &error);
+  if (!pidfd)
+    {
+      g_dbus_method_invocation_return_error (invocation,
+                                             G_DBUS_ERROR,
+                                             G_DBUS_ERROR_FAILED,
+                                             "Could not determine identity");
+      return;
+    }
+
+  out_fd_list = g_unix_fd_list_new ();
+  wayland_client = setup_wayland_client_with_fd (service_channel->context,
+                                                 mtk_dbus_pidfd_get_pid (pidfd),
+                                                 out_fd_list,
+                                                 &fd_id,
+                                                 &error);
+  if (!wayland_client)
+    {
+      g_dbus_method_invocation_return_error (invocation,
+                                             G_DBUS_ERROR,
+                                             G_DBUS_ERROR_FAILED,
+                                             "Failed to create Wayland client: %s",
+                                             error->message);
+      return;
+    }
+
+  window_tag_variant = g_variant_lookup_value (options,
+                                               "window-tag",
+                                               G_VARIANT_TYPE_STRING);
+  if (window_tag_variant)
+    {
+      const char *window_tag = g_variant_get_string (window_tag_variant, NULL);
+      meta_wayland_client_set_window_tag (wayland_client, window_tag);
+    }
+
+  meta_dbus_service_channel_complete_open_wayland_connection (
+    META_DBUS_SERVICE_CHANNEL (service_channel),
+    invocation,
+    out_fd_list,
+    g_variant_new_handle (fd_id));
+}
+
+static gboolean
+handle_open_wayland_connection (MetaDBusServiceChannel *object,
+                                GDBusMethodInvocation  *invocation,
+                                GUnixFDList            *in_fd_list,
+                                GVariant               *arg_options)
+{
+#ifdef HAVE_WAYLAND
+  MetaServiceChannel *service_channel = META_SERVICE_CHANNEL (object);
+  GDBusConnection *connection;
+  const char *sender;
+  g_autoptr (MetaServiceChannelData) data = NULL;
+
+  if (meta_context_get_compositor_type (service_channel->context) !=
+      META_COMPOSITOR_TYPE_WAYLAND)
+    {
+      g_dbus_method_invocation_return_error (invocation,
+                                             G_DBUS_ERROR,
+                                             G_DBUS_ERROR_NOT_SUPPORTED,
+                                             "Not a Wayland compositor");
+      return G_DBUS_METHOD_INVOCATION_HANDLED;
+    }
+
+  connection = g_dbus_method_invocation_get_connection (invocation);
+  sender = g_dbus_method_invocation_get_sender (invocation);
+
+  data = g_new0 (MetaServiceChannelData, 1);
+  data->service_channel = g_object_ref (service_channel);
+  data->invocation = g_object_ref (invocation);
+  data->options = g_variant_ref (arg_options);
+
+  mtk_dbus_pidfd_new_for_connection_async (connection,
+                                           sender,
+                                           service_channel->cancellable,
+                                           on_dbus_pidfd_new_with_options,
+                                           g_steal_pointer (&data));
+
+  return G_DBUS_METHOD_INVOCATION_HANDLED;
+#else /* HAVE_WAYLAND */
+  g_dbus_method_invocation_return_error (invocation,
+                                         G_DBUS_ERROR,
+                                         G_DBUS_ERROR_NOT_SUPPORTED,
+                                         "Wayland not supported");
   return G_DBUS_METHOD_INVOCATION_HANDLED;
 #endif /* HAVE_WAYLAND */
 }
@@ -190,6 +372,8 @@ meta_service_channel_init_iface (MetaDBusServiceChannelIface *iface)
 {
   iface->handle_open_wayland_service_connection =
     handle_open_wayland_service_connection;
+  iface->handle_open_wayland_connection =
+    handle_open_wayland_connection;
 }
 
 static void
@@ -230,6 +414,8 @@ meta_service_channel_constructed (GObject *object)
 {
   MetaServiceChannel *service_channel = META_SERVICE_CHANNEL (object);
 
+  service_channel->cancellable = g_cancellable_new ();
+
   service_channel->service_clients =
     g_hash_table_new_full (NULL, NULL,
                            NULL, (GDestroyNotify) meta_service_client_free);
@@ -249,6 +435,9 @@ static void
 meta_service_channel_finalize (GObject *object)
 {
   MetaServiceChannel *service_channel = META_SERVICE_CHANNEL (object);
+
+  g_cancellable_cancel (service_channel->cancellable);
+  g_clear_object (&service_channel->cancellable);
 
   g_clear_pointer (&service_channel->service_clients, g_hash_table_unref);
   g_clear_handle_id (&service_channel->dbus_name_id, g_bus_unown_name);

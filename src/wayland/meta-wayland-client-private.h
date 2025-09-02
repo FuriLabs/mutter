@@ -42,6 +42,7 @@ MetaWaylandClient * meta_wayland_client_new_from_wl (MetaContext      *context,
 
 META_EXPORT_TEST
 MetaWaylandClient * meta_wayland_client_new_create (MetaContext  *context,
+                                                    pid_t         pid,
                                                     GError      **error);
 
 META_EXPORT_TEST
@@ -76,3 +77,8 @@ int meta_wayland_client_take_client_fd (MetaWaylandClient *client);
 
 META_EXPORT_TEST
 MetaWaylandClient * meta_get_wayland_client (const struct wl_client *wl_client);
+
+void meta_wayland_client_set_window_tag (MetaWaylandClient *client,
+                                         const char *window_tag);
+
+const char * meta_wayland_client_get_window_tag (MetaWaylandClient *client);

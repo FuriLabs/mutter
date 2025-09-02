@@ -52,8 +52,6 @@ static GParamSpec *obj_props[N_PROPS];
 
 typedef struct _MetaDbusSessionManagerPrivate
 {
-  GObject parent;
-
   MetaBackend *backend;
   char *service_name;
   char *service_path;
@@ -566,4 +564,20 @@ meta_dbus_session_manager_is_enabled (MetaDbusSessionManager *session_manager)
     meta_dbus_session_manager_get_instance_private (session_manager);
 
   return priv->is_enabled;
+}
+
+MetaDbusSessionManager *
+meta_dbus_session_manager_new (MetaBackend            *backend,
+                               const char             *service_name,
+                               const char             *service_path,
+                               GType                   session_gtype,
+                               GDBusInterfaceSkeleton *skeleton)
+{
+  return g_object_new (META_TYPE_DBUS_SESSION_MANAGER,
+                       "backend", backend,
+                       "service-name", service_name,
+                       "service-path", service_path,
+                       "session-gtype", session_gtype,
+                       "interface-skeleton", skeleton,
+                       NULL);
 }

@@ -790,6 +790,16 @@ meta_wayland_surface_apply_state (MetaWaylandSurface      *surface,
   gboolean had_damage = FALSE;
   int old_width, old_height;
 
+  if (surface->resource)
+    {
+      meta_topic (META_DEBUG_WAYLAND, "Applying wl_surface#%u state",
+                  wl_resource_get_id (surface->resource));
+    }
+  else
+    {
+      meta_topic (META_DEBUG_WAYLAND, "Applying state of orphaned surface");
+    }
+
   old_width = meta_wayland_surface_get_width (surface);
   old_height = meta_wayland_surface_get_height (surface);
 
@@ -1756,12 +1766,12 @@ gboolean
 meta_wayland_surface_begin_grab_op (MetaWaylandSurface   *surface,
                                     MetaWaylandSeat      *seat,
                                     MetaGrabOp            grab_op,
-                                    ClutterInputDevice   *device,
-                                    ClutterEventSequence *sequence,
+                                    ClutterSprite        *sprite,
                                     gfloat                x,
                                     gfloat                y)
 {
   MetaWindow *window = meta_wayland_surface_get_window (surface);
+  MetaDisplay *display = meta_window_get_display (window);
 
   if (grab_op == META_GRAB_OP_NONE)
     return FALSE;
@@ -1771,8 +1781,8 @@ meta_wayland_surface_begin_grab_op (MetaWaylandSurface   *surface,
      being moved/resized via a SSD event. */
   return meta_window_begin_grab_op (window,
                                     grab_op,
-                                    device, sequence,
-                                    meta_display_get_current_time_roundtrip (window->display),
+                                    sprite,
+                                    meta_display_get_current_time_roundtrip (display),
                                     &GRAPHENE_POINT_INIT (x, y));
 }
 
@@ -2379,6 +2389,9 @@ meta_wayland_surface_notify_geometry_changed (MetaWaylandSurface *surface)
 int
 meta_wayland_surface_get_width (MetaWaylandSurface *surface)
 {
+  if (!surface->buffer)
+    return 0;
+
   if (surface->viewport.has_dst_size)
     {
       return surface->viewport.dst_width;
@@ -2403,6 +2416,9 @@ meta_wayland_surface_get_width (MetaWaylandSurface *surface)
 int
 meta_wayland_surface_get_height (MetaWaylandSurface *surface)
 {
+  if (!surface->buffer)
+    return 0;
+
   if (surface->viewport.has_dst_size)
     {
       return surface->viewport.dst_height;

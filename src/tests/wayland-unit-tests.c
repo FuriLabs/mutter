@@ -34,6 +34,7 @@
 #include "meta/meta-workspace-manager.h"
 #include "tests/meta-test-utils.h"
 #include "tests/meta-monitor-test-utils.h"
+#include "tests/meta-ref-test.h"
 #include "tests/meta-wayland-test-driver.h"
 #include "tests/meta-wayland-test-utils.h"
 #include "wayland/meta-wayland-client-private.h"
@@ -308,12 +309,12 @@ registry_filter (void)
   gboolean client2_saw_global;
   gboolean client3_saw_global;
 
-  client1 = meta_wayland_client_new_create (test_context, &error);
+  client1 = meta_wayland_client_new_create (test_context, getpid (), &error);
   g_assert_nonnull (client1);
   g_assert_null (error);
   fd1 = meta_wayland_client_take_client_fd (client1);
   g_assert_cmpint (fd1, >=, 0);
-  client2 = meta_wayland_client_new_create (test_context, &error);
+  client2 = meta_wayland_client_new_create (test_context, getpid (), &error);
   g_assert_nonnull (client2);
   g_assert_null (error);
   fd2 = meta_wayland_client_take_client_fd (client2);
@@ -352,7 +353,7 @@ registry_filter (void)
   meta_wayland_filter_manager_remove_global (filter_manager, dummy_global);
   wl_global_destroy (dummy_global);
 
-  client3 = meta_wayland_client_new_create (test_context, &error);
+  client3 = meta_wayland_client_new_create (test_context, getpid (), &error);
   g_assert_nonnull (client3);
   g_assert_null (error);
   fd3 = meta_wayland_client_take_client_fd (client3);
@@ -733,6 +734,39 @@ toplevel_apply_limits (void)
   window = find_client_window ("toplevel-limits-test");
   g_assert_null (window);
 
+  meta_wayland_test_client_finish (wayland_test_client);
+  g_test_assert_expected_messages ();
+}
+
+static void
+toplevel_invalid_limits (void)
+{
+  GSettings *settings = g_settings_new ("org.gnome.mutter");
+  MetaWaylandTestClient *wayland_test_client;
+  MetaWindow *window;
+  MtkRectangle rect;
+
+  g_assert_true (g_settings_set_boolean (settings, "center-new-windows", TRUE));
+
+  wayland_test_client =
+    meta_wayland_test_client_new (test_context, "invalid-size-limits-on-map-client");
+
+  while (!(window = find_client_window ("invalid-size-limits-client")))
+    g_main_context_iteration (NULL, TRUE);
+  while (meta_window_is_hidden (window))
+    g_main_context_iteration (NULL, TRUE);
+
+  rect = meta_window_config_get_rect (window->config);
+  g_assert_cmpint (window->size_hints.max_width, ==, 200);
+  g_assert_cmpint (window->size_hints.max_height, ==, 200);
+  g_assert_cmpint (window->size_hints.max_width, ==, 200);
+  g_assert_cmpint (window->size_hints.max_height, ==, 200);
+  g_assert_cmpint (rect.width, ==, 250);
+  g_assert_cmpint (rect.height, ==, 250);
+  g_assert_cmpint (rect.x, ==, 195);
+  g_assert_cmpint (rect.y, ==, 115);
+
+  meta_wayland_test_driver_terminate (test_driver);
   meta_wayland_test_client_finish (wayland_test_client);
   g_test_assert_expected_messages ();
 }
@@ -1512,6 +1546,8 @@ enum
   XDG_TOPLEVEL_SUSPENDED_COMMAND_PREV_WORKSPACE = 1,
   XDG_TOPLEVEL_SUSPENDED_COMMAND_ACTIVATE_WINDOW = 2,
   XDG_TOPLEVEL_SUSPENDED_COMMAND_CLONE = 3,
+  XDG_TOPLEVEL_SUSPENDED_COMMAND_SHOW_SCREEN_SHIELD = 4,
+  XDG_TOPLEVEL_SUSPENDED_COMMAND_HIDE_SCREEN_SHIELD = 5,
 };
 
 static void
@@ -1572,6 +1608,34 @@ on_toplevel_suspended_sync_point (MetaWaylandTestDriver *driver,
         g_object_set_data_full (G_OBJECT (window), "suspend-test-clone",
                                 clone, (GDestroyNotify) clutter_actor_destroy);
 
+        break;
+      }
+    case XDG_TOPLEVEL_SUSPENDED_COMMAND_SHOW_SCREEN_SHIELD:
+      {
+        MetaCompositor *compositor = meta_display_get_compositor (display);
+        ClutterActor *window_group;
+        ClutterActor *top_window_group;
+
+        /* Imitate what the screen shield does to the window groups. */
+        window_group = meta_compositor_get_window_group (compositor);
+        top_window_group = meta_compositor_get_top_window_group (compositor);
+
+        clutter_actor_hide (window_group);
+        clutter_actor_hide (top_window_group);
+        break;
+      }
+    case XDG_TOPLEVEL_SUSPENDED_COMMAND_HIDE_SCREEN_SHIELD:
+      {
+        MetaCompositor *compositor = meta_display_get_compositor (display);
+        ClutterActor *window_group;
+        ClutterActor *top_window_group;
+
+        /* Imitate what the screen shield does to the window groups. */
+        window_group = meta_compositor_get_window_group (compositor);
+        top_window_group = meta_compositor_get_top_window_group (compositor);
+
+        clutter_actor_show (window_group);
+        clutter_actor_show (top_window_group);
         break;
       }
     }
@@ -1651,6 +1715,88 @@ toplevel_activation_before_mapped (void)
 }
 
 static void
+toplevel_fixed_size_fullscreen (void)
+{
+  MetaBackend *backend = meta_context_get_backend (test_context);
+  MetaCursorTracker *cursor_tracker = meta_backend_get_cursor_tracker (backend);
+  MetaRenderer *renderer = meta_backend_get_renderer (backend);
+  MetaWaylandTestClient *wayland_test_client;
+  GSettings *settings;
+  GList *views;
+  ClutterStageView *view;
+  MetaWindow *window;
+
+  meta_cursor_tracker_inhibit_cursor_visibility (cursor_tracker);
+
+  settings = g_settings_new ("org.gnome.mutter");
+  g_assert_true (g_settings_set_boolean (settings, "center-new-windows", FALSE));
+
+  views = meta_renderer_get_views (renderer);
+  g_assert_cmpint (g_list_length (views), ==, 1);
+  view = CLUTTER_STAGE_VIEW (views->data);
+
+  wayland_test_client =
+    meta_wayland_test_client_new_with_args (test_context,
+                                            "fixed-size-client",
+                                            "100", "100",
+                                            NULL);
+
+  while (!(window = find_client_window ("fixed-size-client")))
+    g_main_context_iteration (NULL, TRUE);
+  while (meta_window_is_hidden (window))
+    g_main_context_iteration (NULL, TRUE);
+  meta_wait_for_effects (window);
+
+  meta_ref_test_verify_view (view,
+                             g_test_get_path (), 0,
+                             meta_ref_test_determine_ref_test_flag ());
+
+  meta_window_make_fullscreen (window);
+  meta_wait_wayland_window_reconfigure (window);
+  meta_wait_for_effects (window);
+
+  meta_ref_test_verify_view (view,
+                             g_test_get_path (), 1,
+                             meta_ref_test_determine_ref_test_flag ());
+
+  meta_wayland_test_driver_terminate (test_driver);
+  meta_wayland_test_client_finish (wayland_test_client);
+
+  meta_cursor_tracker_uninhibit_cursor_visibility (cursor_tracker);
+}
+
+static void
+toplevel_fixed_size_fullscreen_exceeds (void)
+{
+  MetaWaylandTestClient *wayland_test_client;
+  MetaWindow *window;
+
+  wayland_test_client =
+    meta_wayland_test_client_new_with_args (test_context,
+                                            "fixed-size-client",
+                                            "1000", "1000",
+                                            NULL);
+
+  while (!(window = find_client_window ("fixed-size-client")))
+    g_main_context_iteration (NULL, TRUE);
+  while (meta_window_is_hidden (window))
+    g_main_context_iteration (NULL, TRUE);
+  meta_wait_for_effects (window);
+
+  g_test_expect_message ("libmutter", G_LOG_LEVEL_WARNING,
+                         "Window * (fixed-size-client) (wl_surface#*) "
+                         "size 1000x1000 exceeds allowed maximum size 640x480");
+
+  meta_window_make_fullscreen (window);
+  meta_wait_wayland_window_reconfigure (window);
+  meta_wait_for_effects (window);
+
+  meta_wayland_test_driver_terminate (test_driver);
+  meta_wayland_test_client_finish (wayland_test_client);
+  g_test_assert_expected_messages ();
+}
+
+static void
 on_before_tests (void)
 {
   MetaWaylandCompositor *compositor =
@@ -1724,6 +1870,8 @@ init_tests (void)
                    subsurface_parent_unmapped);
   g_test_add_func ("/wayland/toplevel/apply-limits",
                    toplevel_apply_limits);
+  g_test_add_func ("/wayland/toplevel/invalid-limits",
+                   toplevel_invalid_limits);
   g_test_add_func ("/wayland/toplevel/activation",
                    toplevel_activation);
   g_test_add_func ("/wayland/toplevel/sessions/basic",
@@ -1767,6 +1915,10 @@ init_tests (void)
                    toplevel_tag);
   g_test_add_func ("/wayland/toplevel/activation-before-mapped",
                    toplevel_activation_before_mapped);
+  g_test_add_func ("/wayland/toplevel/fixed-size-fullscreen",
+                   toplevel_fixed_size_fullscreen);
+  g_test_add_func ("/wayland/toplevel/fixed-size-fullscreen-exceeds",
+                   toplevel_fixed_size_fullscreen_exceeds);
 }
 
 int

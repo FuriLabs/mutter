@@ -37,3 +37,24 @@ MdkPipewire * mdk_context_get_pipewire (MdkContext *context);
 gboolean mdk_context_get_emulate_touch (MdkContext *context);
 
 gboolean mdk_context_get_inhibit_system_shortcuts (MdkContext *context);
+
+GPtrArray * mdk_context_get_launchers (MdkContext *context);
+
+void mdk_context_activate_launcher (MdkContext *context,
+                                    int         id);
+
+void mdk_context_add_launcher (MdkContext      *context,
+                               MdkLauncherType  launcher_type,
+                               const char      *value,
+                               const char      *option);
+
+void mdk_context_remove_launcher (MdkContext      *context,
+                                  MdkLauncherType  launcher_type,
+                                  const char      *value,
+                                  const char      *option);
+
+void mdk_context_set_launcher_action (MdkContext *context,
+                                      const char *app_id,
+                                      const char *action_id);
+
+GStrv mdk_context_get_launch_env (MdkContext *context);

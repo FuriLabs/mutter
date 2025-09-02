@@ -1,5 +1,7 @@
 #!/usr/bin/dh-exec
 ${env:deb_udevdir}/rules.d/*-mutter.rules
+usr/bin/gnome-service-client
+usr/share/man/man1/gnome-service-client.1
 usr/share/GConf
 usr/share/glib-2.0
 usr/share/gnome-control-center

@@ -49,9 +49,9 @@ static const char coeffs_bt709_full_shader[] =
   "  float Y = yuva.x;\n"
   "  float su = yuva.y - 128.0/255.0;\n"
   "  float sv = yuva.z - 128.0/255.0;\n"
-  "  res.r = Y                   + 1.79274107 * sv;\n"
-  "  res.g = Y - 0.21324861 * su - 0.53290933 * sv;\n"
-  "  res.b = Y + 2.11240179 * su;\n"
+  "  res.r = Y                   + 1.5748     * sv;\n"
+  "  res.g = Y - 0.18732427 * su - 0.46812427 * sv;\n"
+  "  res.b = Y + 1.8556     * su;\n"
   "  res.rgb *= yuva.w;\n"
   "  res.a = yuva.w;\n"
   "  return res;\n"
@@ -79,9 +79,9 @@ static const char coeffs_bt601_full_shader[] =
   "  float Y = yuva.x;\n"
   "  float su = yuva.y - 128.0/255.0;\n"
   "  float sv = yuva.z - 128.0/255.0;\n"
-  "  res.r = Y                   + 1.59602678 * sv;\n"
-  "  res.g = Y - 0.39176229 * su - 0.81296764 * sv;\n"
-  "  res.b = Y + 2.01723214 * su;\n"
+  "  res.r = Y                   + 1.402      * sv;\n"
+  "  res.g = Y - 0.34413629 * su - 0.71413629 * sv;\n"
+  "  res.b = Y + 1.772      * su;\n"
   "  res.rgb *= yuva.w;\n"
   "  res.a = yuva.w;\n"
   "  return res;\n"
@@ -200,13 +200,46 @@ static const char rgba_shader[] =
   "}\n";
 
 /* Shader for a single YUV plane */
-static const char y_xuxv_shader[] =
-  "vec4 sample_y_xuxv(vec4 unused)\n"
+static const char yuyv_shader[] =
+  "vec4 sample_yuyv(vec4 unused)\n"
   "{\n"
   "  vec4 yuva;\n"
   "  yuva.a = 1.0;\n"
-  "  yuva.x = texture2D(cogl_sampler0, cogl_tex_coord0_in.st).x;\n"
+  "  yuva.x = texture2D(cogl_sampler0, cogl_tex_coord0_in.st).r;\n"
   "  yuva.yz = texture2D(cogl_sampler1, cogl_tex_coord0_in.st).ga;\n"
+  "  return yuva;\n"
+  "}\n";
+
+/* Shader for a single YUV plane */
+static const char yvyu_shader[] =
+  "vec4 sample_yvyu(vec4 unused)\n"
+  "{\n"
+  "  vec4 yuva;\n"
+  "  yuva.a = 1.0;\n"
+  "  yuva.x = texture2D(cogl_sampler0, cogl_tex_coord0_in.st).r;\n"
+  "  yuva.zy = texture2D(cogl_sampler1, cogl_tex_coord0_in.st).ga;\n"
+  "  return yuva;\n"
+  "}\n";
+
+/* Shader for a single YUV plane */
+static const char uyvy_shader[] =
+  "vec4 sample_uyvy(vec4 unused)\n"
+  "{\n"
+  "  vec4 yuva;\n"
+  "  yuva.a = 1.0;\n"
+  "  yuva.yz = texture2D(cogl_sampler0, cogl_tex_coord0_in.st).br;\n"
+  "  yuva.x = texture2D(cogl_sampler1, cogl_tex_coord0_in.st).g;\n"
+  "  return yuva;\n"
+  "}\n";
+
+/* Shader for a single YUV plane */
+static const char vyuy_shader[] =
+  "vec4 sample_vyuy(vec4 unused)\n"
+  "{\n"
+  "  vec4 yuva;\n"
+  "  yuva.a = 1.0;\n"
+  "  yuva.zy = texture2D(cogl_sampler0, cogl_tex_coord0_in.st).br;\n"
+  "  yuva.x = texture2D(cogl_sampler1, cogl_tex_coord0_in.st).g;\n"
   "  return yuva;\n"
   "}\n";
 
@@ -216,8 +249,19 @@ static const char y_uv_shader[] =
   "{\n"
   "  vec4 yuva;\n"
   "  yuva.a = 1.0;\n"
-  "  yuva.x = texture2D(cogl_sampler0, cogl_tex_coord0_in.st).x;\n"
+  "  yuva.x = texture2D(cogl_sampler0, cogl_tex_coord0_in.st).r;\n"
   "  yuva.yz = texture2D(cogl_sampler1, cogl_tex_coord0_in.st).rg;\n"
+  "  return yuva;\n"
+  "}\n";
+
+/* Shader for 1 Y-plane and 1 VU-plane */
+static const char y_vu_shader[] =
+  "vec4 sample_y_vu(vec4 unused)\n"
+  "{\n"
+  "  vec4 yuva;\n"
+  "  yuva.a = 1.0;\n"
+  "  yuva.x = texture2D(cogl_sampler0, cogl_tex_coord0_in.st).r;\n"
+  "  yuva.zy = texture2D(cogl_sampler1, cogl_tex_coord0_in.st).rg;\n"
   "  return yuva;\n"
   "}\n";
 
@@ -227,33 +271,47 @@ static const char y_u_v_shader[] =
   "{\n"
   "  vec4 yuva;\n"
   "  yuva.a = 1.0;\n"
-  "  yuva.x = texture2D(cogl_sampler0, cogl_tex_coord0_in.st).x;\n"
-  "  yuva.y = texture2D(cogl_sampler1, cogl_tex_coord0_in.st).x;\n"
-  "  yuva.z = texture2D(cogl_sampler2, cogl_tex_coord0_in.st).x;\n"
+  "  yuva.x = texture2D(cogl_sampler0, cogl_tex_coord0_in.st).r;\n"
+  "  yuva.y = texture2D(cogl_sampler1, cogl_tex_coord0_in.st).r;\n"
+  "  yuva.z = texture2D(cogl_sampler2, cogl_tex_coord0_in.st).r;\n"
   "  return yuva;\n"
   "}\n";
 
-/* Shader for 1 Y-plane, 1 U-plane and 1 V-plane, shifted by 6 bits (2^6=64) */
+/* Shader for 1 Y-plane, 1 V-plane and 1 U-plane */
+static const char y_v_u_shader[] =
+  "vec4 sample_y_v_u(vec4 unused)\n"
+  "{\n"
+  "  vec4 yuva;\n"
+  "  yuva.a = 1.0;\n"
+  "  yuva.x = texture2D(cogl_sampler0, cogl_tex_coord0_in.st).r;\n"
+  "  yuva.z = texture2D(cogl_sampler1, cogl_tex_coord0_in.st).r;\n"
+  "  yuva.y = texture2D(cogl_sampler2, cogl_tex_coord0_in.st).r;\n"
+  "  return yuva;\n"
+  "}\n";
+
+/* Shader for 1 Y-plane, 1 U-plane and 1 V-plane, shifted by 6 bits */
 static const char y_u_v_shader_10bit_lsb[] =
   "vec4 sample_y_u_v_10bit_lsb(vec4 unused)\n"
   "{\n"
   "  vec4 yuva;\n"
+  "  float mult = 65535.0 / 1023.0;\n"
   "  yuva.a = 1.0;\n"
-  "  yuva.x = texture2D(cogl_sampler0, cogl_tex_coord0_in.st).x * 64.0;\n"
-  "  yuva.y = texture2D(cogl_sampler1, cogl_tex_coord0_in.st).x * 64.0;\n"
-  "  yuva.z = texture2D(cogl_sampler2, cogl_tex_coord0_in.st).x * 64.0;\n"
+  "  yuva.x = texture2D(cogl_sampler0, cogl_tex_coord0_in.st).r * mult;\n"
+  "  yuva.y = texture2D(cogl_sampler1, cogl_tex_coord0_in.st).r * mult;\n"
+  "  yuva.z = texture2D(cogl_sampler2, cogl_tex_coord0_in.st).r * mult;\n"
   "  return yuva;\n"
   "}\n";
 
-/* Shader for 1 Y-plane, 1 U-plane and 1 V-plane, shifted by 4 bits (2^4=16) */
+/* Shader for 1 Y-plane, 1 U-plane and 1 V-plane, shifted by 4 bits */
 static const char y_u_v_shader_12bit_lsb[] =
   "vec4 sample_y_u_v_12bit_lsb(vec4 unused)\n"
   "{\n"
   "  vec4 yuva;\n"
+  "  float mult = 65535.0 / 4095.0;\n"
   "  yuva.a = 1.0;\n"
-  "  yuva.x = texture2D(cogl_sampler0, cogl_tex_coord0_in.st).x * 16.0;\n"
-  "  yuva.y = texture2D(cogl_sampler1, cogl_tex_coord0_in.st).x * 16.0;\n"
-  "  yuva.z = texture2D(cogl_sampler2, cogl_tex_coord0_in.st).x * 16.0;\n"
+  "  yuva.x = texture2D(cogl_sampler0, cogl_tex_coord0_in.st).r * mult;\n"
+  "  yuva.y = texture2D(cogl_sampler1, cogl_tex_coord0_in.st).r * mult;\n"
+  "  yuva.z = texture2D(cogl_sampler2, cogl_tex_coord0_in.st).r * mult;\n"
   "  return yuva;\n"
   "}\n";
 
@@ -288,14 +346,56 @@ static MetaMultiTextureFormatFullInfo multi_format_table[] = {
   [META_MULTI_TEXTURE_FORMAT_YUYV] = {
     .name = "YUYV",
     .snippet = {
-      .source = y_xuxv_shader,
-      .name = "sample_y_xuxv",
+      .source = yuyv_shader,
+      .name = "sample_yuyv",
     },
     .info = {
       .n_planes = 2,
       .subformats = { COGL_PIXEL_FORMAT_RG_88, COGL_PIXEL_FORMAT_BGRA_8888_PRE },
       .plane_indices = { 0, 0 },
       .hsub = { 1, 2 },
+      .vsub = { 1, 1 },
+    },
+  },
+  [META_MULTI_TEXTURE_FORMAT_YVYU] = {
+    .name = "YVYU",
+    .snippet = {
+      .source = yvyu_shader,
+      .name = "sample_yvyu",
+    },
+    .info = {
+      .n_planes = 2,
+      .subformats = { COGL_PIXEL_FORMAT_RG_88, COGL_PIXEL_FORMAT_BGRA_8888_PRE },
+      .plane_indices = { 0, 0 },
+      .hsub = { 1, 2 },
+      .vsub = { 1, 1 },
+    },
+  },
+  [META_MULTI_TEXTURE_FORMAT_UYVY] = {
+    .name = "UYVY",
+    .snippet = {
+      .source = uyvy_shader,
+      .name = "sample_uyvy",
+    },
+    .info = {
+      .n_planes = 2,
+      .subformats = { COGL_PIXEL_FORMAT_BGRA_8888_PRE, COGL_PIXEL_FORMAT_RG_88 },
+      .plane_indices = { 0, 0 },
+      .hsub = { 2, 1 },
+      .vsub = { 1, 1 },
+    },
+  },
+  [META_MULTI_TEXTURE_FORMAT_VYUY] = {
+    .name = "VYUY",
+    .snippet = {
+      .source = vyuy_shader,
+      .name = "sample_vyuy",
+    },
+    .info = {
+      .n_planes = 2,
+      .subformats = { COGL_PIXEL_FORMAT_BGRA_8888_PRE, COGL_PIXEL_FORMAT_RG_88 },
+      .plane_indices = { 0, 0 },
+      .hsub = { 2, 1 },
       .vsub = { 1, 1 },
     },
   },
@@ -314,8 +414,106 @@ static MetaMultiTextureFormatFullInfo multi_format_table[] = {
       .vsub = { 1, 2 },
     },
   },
+  [META_MULTI_TEXTURE_FORMAT_NV21] = {
+    .name = "NV21",
+    .snippet = {
+      .source = y_vu_shader,
+      .name = "sample_y_vu",
+    },
+    .info = {
+      .n_planes = 2,
+      .subformats = { COGL_PIXEL_FORMAT_R_8, COGL_PIXEL_FORMAT_RG_88 },
+      .plane_indices = { 0, 1 },
+      .hsub = { 1, 2 },
+      .vsub = { 1, 2 },
+    },
+  },
+  [META_MULTI_TEXTURE_FORMAT_NV16] = {
+    .name = "NV16",
+    .snippet = {
+      .source = y_uv_shader,
+      .name = "sample_y_uv",
+    },
+    .info = {
+      .n_planes = 2,
+      .subformats = { COGL_PIXEL_FORMAT_R_8, COGL_PIXEL_FORMAT_RG_88 },
+      .plane_indices = { 0, 1 },
+      .hsub = { 1, 2 },
+      .vsub = { 1, 1 },
+    },
+  },
+  [META_MULTI_TEXTURE_FORMAT_NV61] = {
+    .name = "NV61",
+    .snippet = {
+      .source = y_vu_shader,
+      .name = "sample_y_vu",
+    },
+    .info = {
+      .n_planes = 2,
+      .subformats = { COGL_PIXEL_FORMAT_R_8, COGL_PIXEL_FORMAT_RG_88 },
+      .plane_indices = { 0, 1 },
+      .hsub = { 1, 2 },
+      .vsub = { 1, 1 },
+    },
+  },
+  [META_MULTI_TEXTURE_FORMAT_NV24] = {
+    .name = "NV24",
+    .snippet = {
+      .source = y_uv_shader,
+      .name = "sample_y_uv",
+    },
+    .info = {
+      .n_planes = 2,
+      .subformats = { COGL_PIXEL_FORMAT_R_8, COGL_PIXEL_FORMAT_RG_88 },
+      .plane_indices = { 0, 1 },
+      .hsub = { 1, 1 },
+      .vsub = { 1, 1 },
+    },
+  },
+  [META_MULTI_TEXTURE_FORMAT_NV42] = {
+    .name = "NV42",
+    .snippet = {
+      .source = y_vu_shader,
+      .name = "sample_y_vu",
+    },
+    .info = {
+      .n_planes = 2,
+      .subformats = { COGL_PIXEL_FORMAT_R_8, COGL_PIXEL_FORMAT_RG_88 },
+      .plane_indices = { 0, 1 },
+      .hsub = { 1, 1 },
+      .vsub = { 1, 1 },
+    },
+  },
   [META_MULTI_TEXTURE_FORMAT_P010] = {
     .name = "P010",
+    .snippet = {
+      .source = y_uv_shader,
+      .name = "sample_y_uv",
+    },
+    .info = {
+      .n_planes = 2,
+      .subformats = { COGL_PIXEL_FORMAT_R_16, COGL_PIXEL_FORMAT_RG_1616 },
+      .plane_indices = { 0, 1 },
+      .hsub = { 1, 2 },
+      .vsub = { 1, 2 },
+    },
+  },
+  [META_MULTI_TEXTURE_FORMAT_P012] = {
+    .name = "P012",
+    .snippet = {
+      .source = y_uv_shader,
+      .name = "sample_y_uv",
+    },
+    .info = {
+      .n_planes = 2,
+      .subformats = { COGL_PIXEL_FORMAT_R_16, COGL_PIXEL_FORMAT_RG_1616 },
+      .plane_indices = { 0, 1 },
+      .hsub = { 1, 2 },
+      .vsub = { 1, 2 },
+    },
+  },
+  [META_MULTI_TEXTURE_FORMAT_P016] = {
+    .name = "P016",
     .snippet = {
       .source = y_uv_shader,
       .name = "sample_y_uv",
@@ -343,6 +541,20 @@ static MetaMultiTextureFormatFullInfo multi_format_table[] = {
       .vsub = { 1, 2, 2 },
     },
   },
+  [META_MULTI_TEXTURE_FORMAT_YVU420] = {
+    .name = "YVU420",
+    .snippet = {
+      .source = y_v_u_shader,
+      .name = "sample_y_v_u",
+    },
+    .info = {
+      .n_planes = 3,
+      .subformats = { COGL_PIXEL_FORMAT_R_8, COGL_PIXEL_FORMAT_R_8, COGL_PIXEL_FORMAT_R_8 },
+      .plane_indices = { 0, 1, 2 },
+      .hsub = { 1, 2, 2 },
+      .vsub = { 1, 2, 2 },
+    },
+  },
   [META_MULTI_TEXTURE_FORMAT_YUV422] = {
     .name = "YUV422",
     .snippet = {
@@ -357,11 +569,39 @@ static MetaMultiTextureFormatFullInfo multi_format_table[] = {
       .vsub = { 1, 1, 1 },
     },
   },
+  [META_MULTI_TEXTURE_FORMAT_YVU422] = {
+    .name = "YVU422",
+    .snippet = {
+      .source = y_v_u_shader,
+      .name = "sample_y_v_u",
+    },
+    .info = {
+      .n_planes = 3,
+      .subformats = { COGL_PIXEL_FORMAT_R_8, COGL_PIXEL_FORMAT_R_8, COGL_PIXEL_FORMAT_R_8 },
+      .plane_indices = { 0, 1, 2 },
+      .hsub = { 1, 2, 2 },
+      .vsub = { 1, 1, 1 },
+    },
+  },
   [META_MULTI_TEXTURE_FORMAT_YUV444] = {
     .name = "YUV444",
     .snippet = {
       .source = y_u_v_shader,
       .name = "sample_y_u_v",
+    },
+    .info = {
+      .n_planes = 3,
+      .subformats = { COGL_PIXEL_FORMAT_R_8, COGL_PIXEL_FORMAT_R_8, COGL_PIXEL_FORMAT_R_8 },
+      .plane_indices = { 0, 1, 2 },
+      .hsub = { 1, 1, 1 },
+      .vsub = { 1, 1, 1 },
+    },
+  },
+  [META_MULTI_TEXTURE_FORMAT_YVU444] = {
+    .name = "YVU444",
+    .snippet = {
+      .source = y_v_u_shader,
+      .name = "sample_y_v_u",
     },
     .info = {
       .n_planes = 3,

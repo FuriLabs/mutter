@@ -31,10 +31,10 @@
 #include "backends/meta-monitor-manager-private.h"
 #include "backends/meta-logical-monitor-private.h"
 #include "backends/meta-remote-access-controller-private.h"
-#include "core/meta-anonymous-file.h"
 #include "meta/barrier.h"
 #include "meta/boxes.h"
 #include "meta/meta-backend.h"
+#include "mtk/mtk.h"
 
 #include "meta-dbus-input-capture.h"
 
@@ -91,11 +91,13 @@ struct _MetaInputCaptureSession
   struct eis *eis;
   struct eis_client *eis_client;
   struct eis_seat *eis_seat;
+  gboolean want_eis_pointer;
+  gboolean want_eis_keyboard;
   struct eis_device *eis_pointer;
   struct eis_device *eis_keyboard;
   GSource *eis_source;
 
-  MetaAnonymousFile *keymap_file;
+  MtkAnonymousFile *keymap_file;
 
   MetaViewportInfo *viewports;
 
@@ -111,6 +113,7 @@ static void meta_input_capture_session_init_iface (MetaDBusInputCaptureSessionIf
 static void meta_dbus_session_init_iface (MetaDbusSessionInterface *iface);
 
 static MetaInputCaptureSessionHandle * meta_input_capture_session_handle_new (MetaInputCaptureSession *session);
+static void meta_input_capture_session_disable (MetaInputCaptureSession *session);
 
 G_DEFINE_TYPE_WITH_CODE (MetaInputCaptureSession,
                          meta_input_capture_session,
@@ -228,7 +231,7 @@ ensure_eis_pointer (MetaInputCaptureSession *session)
     eis_device_start_emulating (session->eis_pointer, session->activation_id);
 }
 
-static MetaAnonymousFile *
+static MtkAnonymousFile *
 ensure_xkb_keymap_file (MetaInputCaptureSession  *session,
                         GError                  **error)
 {
@@ -253,9 +256,9 @@ ensure_xkb_keymap_file (MetaInputCaptureSession  *session,
   keymap_size = strlen (keymap_string) + 1;
 
   session->keymap_file =
-    meta_anonymous_file_new ("input-capture-keymap",
-                             keymap_size,
-                             (const uint8_t *) keymap_string);
+    mtk_anonymous_file_new ("input-capture-keymap",
+                            keymap_size,
+                            (const uint8_t *) keymap_string);
 
   return session->keymap_file;
 }
@@ -266,7 +269,7 @@ ensure_eis_keyboard (MetaInputCaptureSession *session)
   struct eis_device *eis_keyboard;
   g_autoptr (GError) error = NULL;
   struct eis_keymap *eis_keymap;
-  MetaAnonymousFile *keymap_file;
+  MtkAnonymousFile *keymap_file;
   int keymap_fd;
   size_t keymap_size;
 
@@ -285,15 +288,15 @@ ensure_eis_keyboard (MetaInputCaptureSession *session)
   eis_device_configure_name (eis_keyboard, "captured keyboard");
   eis_device_configure_capability (eis_keyboard, EIS_DEVICE_CAP_KEYBOARD);
 
-  keymap_fd = meta_anonymous_file_open_fd (keymap_file,
-                                           META_ANONYMOUS_FILE_MAPMODE_PRIVATE);
-  keymap_size = meta_anonymous_file_size (keymap_file);
+  keymap_fd = mtk_anonymous_file_open_fd (keymap_file,
+                                          MTK_ANONYMOUS_FILE_MAPMODE_PRIVATE);
+  keymap_size = mtk_anonymous_file_size (keymap_file);
   eis_keymap = eis_device_new_keymap (eis_keyboard,
                                       EIS_KEYMAP_TYPE_XKB,
                                       keymap_fd, keymap_size);
   eis_keymap_add (eis_keymap);
   eis_keymap_unref (eis_keymap);
-  meta_anonymous_file_close_fd (keymap_fd);
+  mtk_anonymous_file_close_fd (keymap_fd);
 
   eis_device_add (eis_keyboard);
   eis_device_resume (eis_keyboard);
@@ -343,12 +346,29 @@ remove_eis_keyboard (MetaInputCaptureSession *session)
 }
 
 static void
+ensure_eis_devices (MetaInputCaptureSession *session)
+{
+  if (session->eis_seat)
+    {
+      if (session->want_eis_pointer)
+        ensure_eis_pointer (session);
+      else if (session->eis_pointer)
+        clear_eis_pointer (session);
+
+      if (session->want_eis_keyboard)
+        ensure_eis_keyboard (session);
+      else if (session->eis_keyboard)
+        clear_eis_keyboard (session);
+    }
+}
+
+static void
 on_keymap_changed (MetaBackend *backend,
                    gpointer     user_data)
 {
   MetaInputCaptureSession *session = META_INPUT_CAPTURE_SESSION (user_data);
 
-  g_clear_pointer (&session->keymap_file, meta_anonymous_file_free);
+  g_clear_pointer (&session->keymap_file, mtk_anonymous_file_free);
 
   if (session->eis_keyboard)
     {
@@ -394,17 +414,18 @@ process_eis_event (MetaInputCaptureSession *session,
       g_clear_pointer (&session->eis_client, eis_client_unref);
       break;
     case EIS_EVENT_SEAT_BIND:
-      if (eis_event_seat_has_capability (eis_event, EIS_DEVICE_CAP_POINTER) &&
-          eis_event_seat_has_capability (eis_event, EIS_DEVICE_CAP_BUTTON) &&
-          eis_event_seat_has_capability (eis_event, EIS_DEVICE_CAP_SCROLL))
-        ensure_eis_pointer (session);
-      else if (session->eis_pointer)
-        clear_eis_pointer (session);
+      session->want_eis_pointer =
+        eis_event_seat_has_capability (eis_event, EIS_DEVICE_CAP_POINTER) &&
+        eis_event_seat_has_capability (eis_event, EIS_DEVICE_CAP_BUTTON) &&
+        eis_event_seat_has_capability (eis_event, EIS_DEVICE_CAP_SCROLL);
 
-      if (eis_event_seat_has_capability (eis_event, EIS_DEVICE_CAP_KEYBOARD))
-        ensure_eis_keyboard (session);
-      else if (session->eis_keyboard)
-        clear_eis_keyboard (session);
+      session->want_eis_keyboard =
+        eis_event_seat_has_capability (eis_event, EIS_DEVICE_CAP_KEYBOARD);
+
+      if (!session->want_eis_pointer && !session->want_eis_keyboard)
+        meta_input_capture_session_disable (session);
+      else
+        ensure_eis_devices (session);
       break;
     case EIS_EVENT_DEVICE_CLOSED:
       eis_device = eis_event_get_device (eis_event);
@@ -530,6 +551,8 @@ meta_input_capture_session_enable (MetaInputCaptureSession  *session,
       input_capture_barrier->barrier = barrier;
     }
 
+  ensure_eis_devices (session);
+
   session->state = INPUT_CAPTURE_STATE_ENABLED;
   session->cancel_requested = FALSE;
 
@@ -578,10 +601,9 @@ meta_input_capture_session_disable (MetaInputCaptureSession *session)
     }
 
   clear_all_barriers (session);
+  clear_eis_pointer (session);
+  clear_eis_keyboard (session);
 
-  g_clear_pointer (&session->eis_pointer, eis_device_unref);
-  g_clear_pointer (&session->eis_keyboard, eis_device_unref);
-  g_clear_pointer (&session->eis_seat, eis_seat_unref);
 
   session->state = INPUT_CAPTURE_STATE_INIT;
 
@@ -1202,7 +1224,8 @@ meta_input_capture_session_finalize (GObject *object)
   g_free (session->session_id);
   g_free (session->object_path);
   g_clear_object (&session->viewports);
-  g_clear_pointer (&session->keymap_file, meta_anonymous_file_free);
+  g_clear_pointer (&session->keymap_file, mtk_anonymous_file_free);
+  g_clear_pointer (&session->eis_seat, eis_seat_unref);
   g_clear_pointer (&session->eis_source, g_source_destroy);
   g_clear_pointer (&session->eis, eis_unref);
 

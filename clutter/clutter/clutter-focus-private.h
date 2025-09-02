@@ -27,38 +27,7 @@
 #error "Only <clutter/clutter.h> can be included directly."
 #endif
 
-#include "clutter/clutter-grab.h"
-#include "clutter/clutter-types.h"
-
-#define CLUTTER_TYPE_FOCUS (clutter_focus_get_type ())
-
-CLUTTER_EXPORT
-G_DECLARE_DERIVABLE_TYPE (ClutterFocus,
-                          clutter_focus,
-                          CLUTTER, FOCUS,
-                          GObject)
-
-struct _ClutterFocusClass
-{
-  GObjectClass parent_class;
-
-  gboolean (* set_current_actor) (ClutterFocus       *focus,
-                                  ClutterActor       *actor,
-                                  ClutterInputDevice *source_device,
-                                  uint32_t            time_ms);
-  ClutterActor * (* get_current_actor) (ClutterFocus *focus);
-
-  void (* propagate_event) (ClutterFocus       *focus,
-                            const ClutterEvent *event);
-
-  void (* update_from_event) (ClutterFocus       *focus,
-                              const ClutterEvent *event);
-
-  void (* notify_grab) (ClutterFocus *focus,
-                        ClutterGrab  *grab,
-                        ClutterActor *grab_actor,
-                        ClutterActor *old_grab_actor);
-};
+#include "clutter/clutter-focus.h"
 
 ClutterStage * clutter_focus_get_stage (ClutterFocus *focus);
 
@@ -67,6 +36,7 @@ gboolean clutter_focus_set_current_actor (ClutterFocus       *focus,
                                           ClutterInputDevice *source_device,
                                           uint32_t            time_ms);
 
+CLUTTER_EXPORT
 ClutterActor * clutter_focus_get_current_actor (ClutterFocus *focus);
 
 void clutter_focus_propagate_event (ClutterFocus       *focus,

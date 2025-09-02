@@ -69,10 +69,6 @@ struct _CoglContext
 
   CoglDisplay *display;
 
-  int glsl_major;
-  int glsl_minor;
-  gboolean glsl_es;
-
   /* Features cache */
   unsigned long features[COGL_FLAGS_N_LONGS_FOR_SIZE (_COGL_N_FEATURE_IDS)];
   unsigned long private_features
@@ -151,9 +147,6 @@ struct _CoglContext
   gboolean have_last_offscreen_allocate_flags;
   CoglOffscreenAllocateFlags last_offscreen_allocate_flags;
 
-  GHashTable *swap_callback_closures;
-  int next_swap_callback_id;
-
   CoglList onscreen_events_queue;
   CoglList onscreen_dirty_queue;
   CoglClosure *onscreen_dispatch_idle;
@@ -183,8 +176,6 @@ struct _CoglContext
 
   /* Cached values for GL_MAX_TEXTURE_[IMAGE_]UNITS to avoid calling
      glGetInteger too often */
-  GLint             max_texture_units;
-  GLint             max_texture_image_units;
   GLint             max_activateable_texture_units;
 
   /* Fragment processing programs */

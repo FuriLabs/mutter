@@ -28,11 +28,13 @@
 #include "clutter/clutter-backend-private.h"
 #include "clutter/clutter-damage-history.h"
 #include "clutter/clutter-event-private.h"
+#include "clutter/clutter-focus-private.h"
 #include "clutter/clutter-frame-private.h"
 #include "clutter/clutter-input-device-private.h"
 #include "clutter/clutter-input-pointer-a11y-private.h"
 #include "clutter/clutter-macros.h"
 #include "clutter/clutter-private.h"
+#include "clutter/clutter-seat-private.h"
 #include "clutter/clutter-sprite-private.h"
 #include "clutter/clutter-stage-private.h"
 #include "clutter/clutter-stage-view.h"
@@ -88,12 +90,6 @@ gboolean clutter_seat_handle_event_post (ClutterSeat        *seat,
                                          const ClutterEvent *event);
 
 CLUTTER_EXPORT
-gboolean clutter_stage_get_device_coords (ClutterStage         *stage,
-                                          ClutterInputDevice   *device,
-                                          ClutterEventSequence *sequence,
-                                          graphene_point_t     *coords);
-
-CLUTTER_EXPORT
 void clutter_actor_notify_transform_invalid (ClutterActor *self);
 
 CLUTTER_EXPORT
@@ -102,12 +98,19 @@ void clutter_actor_get_relative_transformation_matrix (ClutterActor      *self,
                                                        graphene_matrix_t *matrix);
 
 CLUTTER_EXPORT
-ClutterSprite * clutter_backend_get_sprite (ClutterBackend     *backend,
-                                            ClutterStage       *stage,
-                                            const ClutterEvent *for_event);
+ClutterSprite * clutter_backend_lookup_sprite (ClutterBackend       *backend,
+                                               ClutterStage         *stage,
+                                               ClutterInputDevice   *device,
+                                               ClutterEventSequence *sequence);
 
 CLUTTER_EXPORT
 void clutter_backend_destroy_sprite (ClutterBackend *backend,
                                      ClutterSprite  *sprite);
+
+CLUTTER_EXPORT
+gboolean clutter_seat_query_state (ClutterSeat         *seat,
+                                   ClutterSprite       *sprite,
+                                   graphene_point_t    *coords,
+                                   ClutterModifierType *modifiers);
 
 #undef __CLUTTER_H_INSIDE__

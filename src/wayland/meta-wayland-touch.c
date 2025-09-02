@@ -42,6 +42,7 @@ struct _MetaWaylandTouchSurface
 struct _MetaWaylandTouchInfo
 {
   MetaWaylandTouchSurface *touch_surface;
+  ClutterSprite *sprite;
   guint32 slot_serial;
   gint32 slot;
   gfloat start_x;
@@ -234,15 +235,19 @@ meta_wayland_touch_update (MetaWaylandTouch   *touch,
     {
       MetaWaylandSurface *surface = NULL;
       MetaBackend *backend;
+      ClutterContext *context;
+      ClutterBackend *clutter_backend;
       ClutterStage *stage;
       ClutterActor *actor;
+      ClutterSprite *sprite;
 
       backend = backend_from_touch (touch);
+      context = meta_backend_get_clutter_context (backend);
+      clutter_backend = clutter_context_get_backend (context);
       stage = CLUTTER_STAGE (meta_backend_get_stage (backend));
 
-      actor = clutter_stage_get_device_actor (stage,
-                                              clutter_event_get_device (event),
-                                              clutter_event_get_event_sequence (event));
+      sprite = clutter_backend_get_sprite (clutter_backend, stage, event);
+      actor = clutter_focus_get_current_actor (CLUTTER_FOCUS (sprite));
 
       if (META_IS_SURFACE_ACTOR_WAYLAND (actor))
         surface = meta_surface_actor_wayland_get_surface (META_SURFACE_ACTOR_WAYLAND (actor));
@@ -252,6 +257,7 @@ meta_wayland_touch_update (MetaWaylandTouch   *touch,
 
       touch_info = touch_get_info (touch, sequence, TRUE);
       touch_info->touch_surface = touch_surface_get (touch, surface);
+      touch_info->sprite = sprite;
       clutter_event_get_coords (event, &touch_info->start_x, &touch_info->start_y);
     }
 
@@ -601,9 +607,10 @@ touch_can_grab_surface (MetaWaylandTouchInfo *touch_info,
 }
 
 ClutterEventSequence *
-meta_wayland_touch_find_grab_sequence (MetaWaylandTouch   *touch,
-                                       MetaWaylandSurface *surface,
-                                       uint32_t            serial)
+meta_wayland_touch_find_grab_sequence (MetaWaylandTouch    *touch,
+                                       MetaWaylandSurface  *surface,
+                                       uint32_t             serial,
+                                       ClutterSprite      **sprite_out)
 {
   MetaWaylandTouchInfo *touch_info;
   ClutterEventSequence *sequence;
@@ -619,7 +626,11 @@ meta_wayland_touch_find_grab_sequence (MetaWaylandTouch   *touch,
     {
       if (touch_info->slot_serial == serial &&
           touch_can_grab_surface (touch_info, surface))
-        return sequence;
+        {
+          if (sprite_out)
+            *sprite_out = touch_info->sprite;
+          return sequence;
+        }
     }
 
   return NULL;

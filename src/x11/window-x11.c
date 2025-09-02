@@ -541,6 +541,7 @@ meta_window_x11_initialize_state (MetaWindow *window)
     {
       MtkRectangle rect;
       MetaMoveResizeFlags flags;
+      MetaSizeHintsFlags size_hints_flags;
       MetaGravity gravity = window->size_hints.win_gravity;
       MetaPlaceFlag place_flags = META_PLACE_FLAG_NONE;
 
@@ -554,7 +555,9 @@ meta_window_x11_initialize_state (MetaWindow *window)
                META_MOVE_RESIZE_RESIZE_ACTION |
                META_MOVE_RESIZE_CONSTRAIN);
 
-      if (!(window->size_hints.flags & META_SIZE_HINTS_USER_POSITION))
+      size_hints_flags = window->size_hints.flags;
+      if (!(size_hints_flags & META_SIZE_HINTS_USER_POSITION) &&
+          !meta_window_config_get_is_fullscreen (window->config))
         flags |= META_MOVE_RESIZE_RECT_INVALID;
 
       adjust_for_gravity (window, TRUE, gravity, &rect);
@@ -3108,31 +3111,28 @@ handle_net_restack_window (MetaDisplay *display,
 
 #ifdef HAVE_XWAYLAND
 typedef struct {
-  ClutterInputDevice *device;
-  ClutterEventSequence *sequence;
+  ClutterSprite *sprite;
   graphene_point_t device_point;
   graphene_point_t coords;
   int button;
 } NearestDeviceData;
 
 static gboolean
-nearest_device_func (ClutterStage         *stage,
-                     ClutterInputDevice   *device,
-                     ClutterEventSequence *sequence,
-                     gpointer              user_data)
+nearest_device_func (ClutterStage  *stage,
+                     ClutterSprite *sprite,
+                     gpointer       user_data)
 {
+  ClutterContext *context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
+  ClutterBackend *clutter_backend = clutter_context_get_backend (context);
+  ClutterSeat *seat = clutter_backend_get_default_seat (clutter_backend);
   NearestDeviceData *data = user_data;
   graphene_point_t point;
   ClutterModifierType mods;
   const int nearest_threshold = 64;
 
-  clutter_seat_query_state (clutter_input_device_get_seat (device),
-                            device,
-                            sequence,
-                            &point,
-                            &mods);
+  clutter_seat_query_state (seat, sprite, &point, &mods);
 
-  if (!sequence)
+  if (!clutter_sprite_get_sequence (sprite))
     {
       ClutterModifierType accepted_buttons = 0;
       ClutterModifierType mask =
@@ -3152,12 +3152,10 @@ nearest_device_func (ClutterStage         *stage,
 
   if (ABS (point.x - data->coords.x) < nearest_threshold &&
       ABS (point.y - data->coords.y) < nearest_threshold &&
-      (!data->device ||
-       (ABS (point.x - data->coords.x) < ABS (data->device_point.x - data->coords.x) &&
-        ABS (point.y - data->coords.y) < ABS (data->device_point.y - data->coords.y))))
+      ABS (point.x - data->coords.x) < ABS (data->device_point.x - data->coords.x) &&
+      ABS (point.y - data->coords.y) < ABS (data->device_point.y - data->coords.y))
     {
-      data->device = device;
-      data->sequence = sequence;
+      data->sprite = sprite;
       data->device_point = point;
     }
 
@@ -3169,8 +3167,7 @@ guess_nearest_device (MetaWindow            *window,
                       int                    root_x,
                       int                    root_y,
                       int                    button,
-                      ClutterInputDevice   **device,
-                      ClutterEventSequence **sequence)
+                      ClutterSprite        **sprite)
 {
   MetaDisplay *display = meta_window_get_display (window);
   MetaContext *context = meta_display_get_context (display);
@@ -3180,19 +3177,12 @@ guess_nearest_device (MetaWindow            *window,
 
   data.button = button;
   graphene_point_init (&data.coords, root_x, root_y);
-  clutter_stage_pointing_input_foreach (stage,
-                                        nearest_device_func,
-                                        &data);
+  clutter_stage_foreach_sprite (stage, nearest_device_func, &data);
 
-  if (!data.device)
-    return FALSE;
+  if (sprite && data.sprite)
+    *sprite = data.sprite;
 
-  if (device && data.device)
-    *device = data.device;
-  if (sequence && data.sequence)
-    *sequence = data.sequence;
-
-  return TRUE;
+  return data.sprite != NULL;
 }
 #endif /* HAVE_XWAYLAND */
 
@@ -3519,11 +3509,12 @@ meta_window_x11_client_message (MetaWindow *window,
           MetaContext *context = meta_display_get_context (display);
           MetaBackend *backend = meta_context_get_backend (context);
           ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
-          ClutterSeat *seat = clutter_backend_get_default_seat (clutter_backend);
+          ClutterStage *stage = CLUTTER_STAGE (meta_backend_get_stage (backend));
+          ClutterSprite *sprite;
 
+          sprite = clutter_backend_get_pointer_sprite (clutter_backend, stage);
           meta_window_begin_grab_op (window, op,
-                                     clutter_seat_get_pointer (seat),
-                                     NULL,
+                                     sprite,
                                      timestamp,
                                      NULL);
         }
@@ -3535,31 +3526,29 @@ meta_window_x11_client_message (MetaWindow *window,
         {
           MetaContext *context = meta_display_get_context (display);
           MetaBackend *backend = meta_context_get_backend (context);
+          ClutterStage *stage = CLUTTER_STAGE (meta_backend_get_stage (backend));
           ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
-          ClutterSeat *seat = clutter_backend_get_default_seat (clutter_backend);
-          ClutterInputDevice *device = NULL;
-          ClutterEventSequence *sequence = NULL;
+          ClutterSprite *sprite = NULL;
           int button_mask;
 
 #ifdef HAVE_XWAYLAND
           if (meta_is_wayland_compositor ())
             {
-              if (!guess_nearest_device (window, x_root, y_root, button,
-                                         &device, &sequence))
+              if (!guess_nearest_device (window, x_root, y_root, button, &sprite))
                 return FALSE;
             }
           else
 #endif
             {
-              device = clutter_seat_get_pointer (seat);
-              sequence = NULL;
+              sprite = clutter_backend_get_pointer_sprite (clutter_backend,
+                                                           stage);
             }
 
+          g_assert (sprite);
           meta_topic (META_DEBUG_WINDOW_OPS,
                       "Beginning move/resize with button = %d", button);
           meta_window_begin_grab_op (window, op,
-                                     device,
-                                     sequence,
+                                     sprite,
                                      timestamp,
                                      &GRAPHENE_POINT_INIT (x_root, y_root));
 
@@ -4086,6 +4075,9 @@ meta_window_x11_new (MetaDisplay       *display,
     }
 
   mtk_x11_error_trap_pop (x11_display->xdisplay); /* pop the XSync()-reducing trap */
+
+  meta_display_notify_window_created (display, window);
+
   return window;
 
 error:
@@ -4812,44 +4804,26 @@ meta_window_x11_shutdown_group (MetaWindow *window)
 void
 meta_window_x11_configure (MetaWindow *window)
 {
-  MtkRectangle prev_rect;
-  MtkRectangle new_rect;
-  MetaMoveResizeFlags flags;
-  gboolean is_fullscreen;
   g_autoptr (MetaWindowConfig) window_config = NULL;
+  MtkRectangle new_rect;
 
-  window_config = meta_window_new_window_config (window);
-  prev_rect = meta_window_config_get_rect (window->config);
-  meta_window_config_set_rect (window_config, prev_rect);
-  is_fullscreen = meta_window_is_fullscreen (window);
-  meta_window_config_set_is_fullscreen (window_config, is_fullscreen);
-
+  window_config = meta_window_config_new_from (window, window->config);
   meta_window_emit_configure (window, window_config);
+
   new_rect = meta_window_config_get_rect (window_config);
 
   meta_topic (META_DEBUG_GEOMETRY,
               "Window %s pre-configured at (%i,%i) [%ix%i]",
               window->desc, new_rect.x, new_rect.y, new_rect.width, new_rect.height);
 
-  if (!mtk_rectangle_equal (&prev_rect, &new_rect))
+  if (meta_window_config_has_position (window_config))
     {
-      window->placed = TRUE;
-
-      /* Update the size hints to match the new pre-configuration */
       window->size_hints.x = new_rect.x;
       window->size_hints.y = new_rect.y;
       window->size_hints.width = new_rect.width;
       window->size_hints.height = new_rect.height;
-
-      flags = (META_MOVE_RESIZE_MOVE_ACTION |
-               META_MOVE_RESIZE_RESIZE_ACTION |
-               META_MOVE_RESIZE_CONSTRAIN);
-
-      meta_window_move_resize (window,
-                               flags,
-                               new_rect);
     }
 
-  if (meta_window_config_get_is_fullscreen (window_config))
-    meta_window_make_fullscreen (window);
+  meta_window_apply_config (window, window_config,
+                            META_WINDOW_APPLY_FLAG_NONE);
 }

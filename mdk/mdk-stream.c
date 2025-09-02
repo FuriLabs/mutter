@@ -237,7 +237,7 @@ build_format_param (MdkStream              *stream,
     }
 
   rect = SPA_RECTANGLE (stream->width, stream->height);
-  min_framerate = SPA_FRACTION (1, 1);
+  min_framerate = SPA_FRACTION (0, 1);
   max_framerate = SPA_FRACTION (60, 1);
   spa_pod_builder_add (
     pod_builder,
@@ -1016,7 +1016,7 @@ create_monitor_cb (GObject      *source_object,
 {
   MdkStream *stream = MDK_STREAM (user_data);
   g_autoptr (GError) error = NULL;
-  const char *stream_path;
+  g_autofree char *stream_path = NULL;
 
   stream_path = mdk_session_create_monitor_finish (stream->session,
                                                    res,
