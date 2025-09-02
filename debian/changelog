@@ -12,6 +12,7 @@ mutter (49~rc-1) UNRELEASED; urgency=medium
     - tests-Mark-view-verification-tests-as-incomplete-in-big-e.patch
   * Added new binary package 'mutter-dev-bin' for the missing 'mutter-devkit'
     binary. Four years late.
+  * Added new script 'gnome-service-client' to 'mutter-common'.
   * debian/control: mutter-common breaks older versions of libmutter
   * debian/control: Bump dependencies on wayland 1.24, wayland-protocols 1.45
 

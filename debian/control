@@ -301,7 +301,8 @@ Package: mutter-common
 Section: misc
 Architecture: all
 Multi-Arch: foreign
-Depends: ${misc:Depends}
+Depends: ${misc:Depends},
+         python3,
 Breaks: magpie-common (<< 0.9.3-0ubuntu8~),
         libmutter-16-0 (<< 49~),
         libmutter-15-0 (<< 49~),
