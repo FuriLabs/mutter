@@ -59,10 +59,10 @@ index 0000000..ee5b2f4
 +                                  MetaWindowConstraint  right,
 +                                  MetaWindowConstraint  bottom);
 diff --git a/src/core/window-private.h b/src/core/window-private.h
-index 59f4771..fc1d4bf 100644
+index b1f9086..db69a06 100644
 --- a/src/core/window-private.h
 +++ b/src/core/window-private.h
-@@ -277,6 +277,13 @@ struct _MetaWindow
+@@ -283,6 +283,13 @@ struct _MetaWindow
      MetaEdgeConstraint left;
    } edge_constraints;
  
@@ -77,7 +77,7 @@ index 59f4771..fc1d4bf 100644
  
    /* Area to cover when in fullscreen mode.  If _NET_WM_FULLSCREEN_MONITORS has
 diff --git a/src/core/window.c b/src/core/window.c
-index a39ef0d..5e3369a 100644
+index 9bee7ce..b832626 100644
 --- a/src/core/window.c
 +++ b/src/core/window.c
 @@ -72,6 +72,7 @@
@@ -88,7 +88,7 @@ index a39ef0d..5e3369a 100644
  #include "core/meta-window-config-private.h"
  #include "core/meta-workspace-manager-private.h"
  #include "core/place.h"
-@@ -3180,6 +3181,38 @@ meta_window_update_tile_fraction (MetaWindow *window,
+@@ -3171,6 +3172,38 @@ meta_window_update_tile_fraction (MetaWindow *window,
      }
  }
  
@@ -127,7 +127,7 @@ index a39ef0d..5e3369a 100644
  static void
  update_edge_constraints (MetaWindow *window)
  {
-@@ -3235,6 +3268,18 @@ update_edge_constraints (MetaWindow *window)
+@@ -3226,6 +3259,18 @@ update_edge_constraints (MetaWindow *window)
        window->edge_constraints.right = META_EDGE_CONSTRAINT_MONITOR;
        window->edge_constraints.left = META_EDGE_CONSTRAINT_MONITOR;
      }
@@ -147,10 +147,10 @@ index a39ef0d..5e3369a 100644
  
  gboolean
 diff --git a/src/meson.build b/src/meson.build
-index 2f697fc..1a65c57 100644
+index 508c341..19155b3 100644
 --- a/src/meson.build
 +++ b/src/meson.build
-@@ -1321,7 +1321,8 @@ if have_introspection
+@@ -1336,7 +1336,8 @@ if have_introspection
      sources: [
        mutter_enum_types[1],
        mutter_introspected_sources,

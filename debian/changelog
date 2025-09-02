@@ -10,6 +10,7 @@ mutter (49~rc-0ubuntu1) UNRELEASED; urgency=medium
     - workarounds/Mark-several-additional-tests-as-flaky.patch
     - workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
     - workarounds/tests-Mark-view-verification-tests-as-incomplete-in-big-e.patch
+    - ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
   * Drop upstreamed debian/patches:
     - ubuntu/clutter-stage-Allow-for-there-being-no-sprite-when-a-devi.patch
     - ubuntu/core-place-Guarantee-we-never-get-work-area-for-a-NULL-lo.patch
