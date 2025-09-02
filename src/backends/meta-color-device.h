@@ -70,3 +70,13 @@ void meta_color_device_set_reference_luminance_factor (MetaColorDevice *color_de
 
 META_EXPORT_TEST
 void meta_set_color_efivar_test_path (const char *path);
+
+gboolean meta_color_device_start_calibration (MetaColorDevice  *color_device,
+                                              GError          **error);
+
+void meta_color_device_stop_calibration (MetaColorDevice *color_device);
+
+size_t meta_color_device_get_calibration_lut_size (MetaColorDevice *color_device);
+
+void meta_color_device_set_calibration_lut (MetaColorDevice    *color_device,
+                                            const MetaGammaLut *lut);

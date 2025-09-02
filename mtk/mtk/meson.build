@@ -1,6 +1,8 @@
 mtk_mtk_includesubdir = mtk_includesubdir / 'mtk'
 
 mtk_headers = [
+  'mtk-anonymous-file.h',
+  'mtk-dbus.h',
   'mtk-dispose-bin.h',
   'mtk-macros.h',
   'mtk-monitor-transform.h',
@@ -12,6 +14,8 @@ mtk_headers = [
 ]
 
 mtk_sources = [
+  'mtk-anonymous-file.c',
+  'mtk-dbus.c',
   'mtk-dispose-bin.c',
   'mtk-monitor-transform.c',
   'mtk-rectangle.c',

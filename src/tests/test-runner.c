@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "backends/meta-monitor-config-utils.h"
 #include "backends/meta-virtual-monitor.h"
 #include "clutter/clutter.h"
 #include "compositor/compositor-private.h"
@@ -1029,6 +1030,40 @@ track_popup (TestCase        *test,
 }
 
 static gboolean
+logical_monitor_config_has_connector (MetaLogicalMonitorConfig *logical_monitor_config,
+                                      const char               *connector)
+{
+  GList *l;
+
+  for (l = logical_monitor_config->monitor_configs; l; l = l->next)
+    {
+      MetaMonitorConfig *monitor_config = l->data;
+
+      if (g_strcmp0 (monitor_config->monitor_spec->connector, connector) == 0)
+        return TRUE;
+    }
+
+  return FALSE;
+}
+
+static MetaLogicalMonitorConfig *
+find_logical_monitor_config (MetaMonitorsConfig *config,
+                             const char         *connector)
+{
+  GList *l;
+
+  for (l = config->logical_monitor_configs; l; l = l->next)
+    {
+      MetaLogicalMonitorConfig *logical_monitor_config = l->data;
+
+      if (logical_monitor_config_has_connector (logical_monitor_config,
+                                                connector))
+        return logical_monitor_config;
+    }
+  return NULL;
+}
+
+static gboolean
 test_case_do (TestCase    *test,
               const char  *filename,
               int          line_no,
@@ -1250,8 +1285,10 @@ test_case_do (TestCase    *test,
   else if (strcmp (argv[0], "begin_resize") == 0)
     {
       MetaBackend *backend = meta_context_get_backend (test->context);
-      ClutterSeat *seat = meta_backend_get_default_seat (backend);
-      ClutterInputDevice *pointer = clutter_seat_get_pointer (seat);
+      ClutterBackend *clutter_backend =
+        meta_backend_get_clutter_backend (backend);
+      ClutterStage *stage = CLUTTER_STAGE (meta_backend_get_stage (backend));
+      ClutterSprite *sprite;
       MetaTestClient *client;
       const char *window_id;
       MetaWindow *window;
@@ -1279,9 +1316,11 @@ test_case_do (TestCase    *test,
       window_drag =
         meta_compositor_get_current_window_drag (window->display->compositor);
       g_assert_null (window_drag);
+
+      sprite = clutter_backend_get_pointer_sprite (clutter_backend, stage);
       ret = meta_window_begin_grab_op (window,
                                        grab_op,
-                                       pointer, NULL,
+                                       sprite,
                                        meta_display_get_current_time_roundtrip (window->display),
                                        &grab_origin);
       g_assert_true (ret);
@@ -1413,7 +1452,6 @@ test_case_do (TestCase    *test,
            strcmp (argv[0], "unminimize") == 0 ||
            strcmp (argv[0], "maximize") == 0 ||
            strcmp (argv[0], "unmaximize") == 0 ||
-           strcmp (argv[0], "fullscreen") == 0 ||
            strcmp (argv[0], "unfullscreen") == 0 ||
            strcmp (argv[0], "set_modal") == 0 ||
            strcmp (argv[0], "unset_modal") == 0 ||
@@ -1431,6 +1469,39 @@ test_case_do (TestCase    *test,
 
       if (!meta_test_client_do (client, error, argv[0], window_id, NULL))
         return FALSE;
+    }
+  else if (strcmp (argv[0], "fullscreen") == 0)
+    {
+      MetaTestClient *client;
+      const char *window_id;
+
+      if (argc != 2 && argc != 3)
+        BAD_COMMAND("usage: %s <client-id>/<window-id> [<connector>]", argv[0]);
+
+      if (!test_case_parse_window_id (test, argv[1], &client, &window_id, error))
+        return FALSE;
+
+      if (argc == 3)
+        {
+          MetaVirtualMonitor *virtual_monitor;
+          MetaOutput *output;
+
+          virtual_monitor = g_hash_table_lookup (test->virtual_monitors,
+                                                 argv[2]);
+          if (!virtual_monitor)
+            BAD_COMMAND ("Unknown monitor %s", argv[2]);
+
+          output = meta_virtual_monitor_get_output (virtual_monitor);
+          if (!meta_test_client_do (client, error, argv[0], window_id,
+                                    meta_output_get_name (output),
+                                    NULL))
+            return FALSE;
+        }
+      else
+        {
+          if (!meta_test_client_do (client, error, argv[0], window_id, NULL))
+            return FALSE;
+        }
     }
   else if (strcmp (argv[0], "local_activate") == 0)
     {
@@ -2069,6 +2140,94 @@ test_case_do (TestCase    *test,
 
       g_hash_table_insert (test->virtual_monitors, g_strdup (argv[1]), monitor);
     }
+  else if (strcmp (argv[0], "set_monitor_order") == 0)
+    {
+      MetaBackend *backend = meta_context_get_backend (test->context);
+      MetaMonitorManager *monitor_manager =
+        meta_backend_get_monitor_manager (backend);
+      MetaMonitorsConfig *current_config;
+      g_autoptr (MetaMonitorsConfig) new_config = NULL;
+      int i;
+      int total_width = 0;
+
+      if (argc < 2)
+        BAD_COMMAND ("usage: %s [<monitor-id>, ...]", argv[0]);
+
+      current_config =
+        meta_monitor_config_manager_get_current (monitor_manager->config_manager);
+      new_config =
+        meta_monitors_config_copy (current_config);
+
+      for (i = 1; i < argc; i++)
+        {
+          MetaVirtualMonitor *virtual_monitor;
+          MetaOutput *output;
+          MetaLogicalMonitorConfig *logical_monitor_config;
+
+          virtual_monitor =
+            g_hash_table_lookup (test->virtual_monitors, argv[i]);
+          if (!virtual_monitor)
+            BAD_COMMAND ("Unknown monitor %s", argv[1]);
+
+          output = meta_virtual_monitor_get_output (virtual_monitor);
+          logical_monitor_config =
+            find_logical_monitor_config (new_config,
+                                         meta_output_get_name (output));
+          logical_monitor_config->layout.x = total_width;
+          total_width += logical_monitor_config->layout.width;
+        }
+
+      if (!meta_monitor_manager_apply_monitors_config (monitor_manager,
+                                                       new_config,
+                                                       META_MONITORS_CONFIG_METHOD_TEMPORARY,
+                                                       error))
+        return FALSE;
+    }
+  else if (strcmp (argv[0], "assert_window_main_monitor") == 0)
+    {
+      MetaTestClient *client;
+      const char *window_id;
+      MetaWindow *window;
+      MetaLogicalMonitor *logical_monitor;
+      const char *monitor_id;
+
+      if (argc != 3)
+        BAD_COMMAND ("usage: %s <window-id> <monitor-id>", argv[0]);
+
+      if (!test_case_parse_window_id (test, argv[1], &client, &window_id, error))
+        return FALSE;
+
+      window = meta_test_client_find_window (client, window_id, error);
+      if (!window)
+        return FALSE;
+
+      monitor_id = argv[2];
+      logical_monitor = get_logical_monitor (test, monitor_id, error);
+      if (!logical_monitor)
+        return FALSE;
+
+      if (window->monitor != logical_monitor)
+        {
+          g_set_error (error,
+                       META_TEST_CLIENT_ERROR,
+                       META_TEST_CLIENT_ERROR_ASSERTION_FAILED,
+                       "Monitor %s (%d, %dx%d+%d+%d) is not the primary monitor of window %s (%d, %dx%d+%d+%d)",
+                       monitor_id,
+                       logical_monitor->number,
+                       logical_monitor->rect.width,
+                       logical_monitor->rect.height,
+                       logical_monitor->rect.x,
+                       logical_monitor->rect.y,
+                       window_id,
+                       window->monitor->number,
+                       window->monitor->rect.width,
+                       window->monitor->rect.height,
+                       window->monitor->rect.x,
+                       window->monitor->rect.y
+                       );
+          return FALSE;
+        }
+    }
   else if (strcmp (argv[0], "assert_primary_monitor") == 0)
     {
       MetaVirtualMonitor *virtual_monitor;
@@ -2543,7 +2702,6 @@ test_case_do (TestCase    *test,
       MetaTestClient *client;
       const char *window_id;
       MetaWindow *window;
-      MetaWindowActor *window_actor;
 
       if (argc != 2)
         BAD_COMMAND("usage: %s <client-id>/<window-id>", argv[0]);
@@ -2555,16 +2713,7 @@ test_case_do (TestCase    *test,
       if (!window)
         return FALSE;
 
-      window_actor = meta_window_actor_from_window (window);
-      g_object_add_weak_pointer (G_OBJECT (window_actor),
-                                 (gpointer *) &window_actor);
-      while (window_actor && meta_window_actor_effect_in_progress (window_actor))
-        g_main_context_iteration (NULL, TRUE);
-      if (window_actor)
-        {
-          g_object_remove_weak_pointer (G_OBJECT (window_actor),
-                                        (gpointer *) &window_actor);
-        }
+      meta_wait_for_effects (window);
     }
   else if (argc > 2 && g_str_equal (argv[1], "=>"))
     {

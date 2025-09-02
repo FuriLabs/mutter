@@ -130,9 +130,6 @@
 /* Supports timerfd_create/timerfd_settime */
 #mesondefine HAVE_TIMERFD
 
-/* Supports malloc_trim */
-#mesondefine HAVE_MALLOC_TRIM
-
 /* Supports eventfd */
 #mesondefine HAVE_EVENTFD
 
@@ -144,3 +141,6 @@
 
 /* Building with font rendering integration support */
 #mesondefine HAVE_FONTS
+
+/* Whether libei has eis_event_ref() */
+#mesondefine HAVE_EIS_EVENT_REF

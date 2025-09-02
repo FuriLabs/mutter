@@ -30,7 +30,7 @@
 
 #define DEADLINE_EVASION_CONSTANT_US 800
 
-#define MINIMUM_REFRESH_RATE 30.f
+#define MAXIMUM_REFRESH_INTERVAL_US (G_USEC_PER_SEC / 30.f)
 
 typedef struct _MetaKmsCrtcPropTable
 {
@@ -55,6 +55,7 @@ struct _MetaKmsCrtc
   int64_t shortterm_max_dispatch_duration_us;
   int64_t deadline_evasion_us;
   int64_t deadline_evasion_update_time_us;
+  int64_t vrr_update_time_us;
 };
 
 G_DEFINE_TYPE (MetaKmsCrtc, meta_kms_crtc, G_TYPE_OBJECT)
@@ -621,6 +622,8 @@ meta_kms_crtc_determine_deadline (MetaKmsCrtc  *crtc,
   int ret;
   int64_t next_presentation_us;
   int64_t next_deadline_us;
+  gboolean vrr_enabled;
+  int64_t now_us;
 
   if (!crtc->current_state.is_drm_mode_valid)
     {
@@ -646,12 +649,16 @@ meta_kms_crtc_determine_deadline (MetaKmsCrtc  *crtc,
       return FALSE;
     }
 
-  if (crtc->current_state.vrr.enabled)
+  vrr_enabled = crtc->current_state.vrr.enabled;
+  now_us = g_get_monotonic_time ();
+
+  if (vrr_enabled &&
+      now_us - crtc->vrr_update_time_us < MAXIMUM_REFRESH_INTERVAL_US)
     {
       next_presentation_us = 0;
       next_deadline_us =
         (int64_t) (s2us (vblank.reply.tval_sec) + vblank.reply.tval_usec + 0.5 +
-                   G_USEC_PER_SEC / MINIMUM_REFRESH_RATE);
+                   MAXIMUM_REFRESH_INTERVAL_US);
     }
   else
     {
@@ -659,7 +666,6 @@ meta_kms_crtc_determine_deadline (MetaKmsCrtc  *crtc,
       int64_t refresh_interval_us;
       int64_t vblank_duration_us;
       int64_t deadline_evasion_us;
-      int64_t now_us;
 
       drm_mode = &crtc->current_state.drm_mode;
 
@@ -687,27 +693,40 @@ meta_kms_crtc_determine_deadline (MetaKmsCrtc  *crtc,
       next_deadline_us = next_presentation_us - (vblank_duration_us +
                                                  deadline_evasion_us);
 
-      now_us = g_get_monotonic_time ();
       if (now_us > next_deadline_us)
         {
-          int64_t skip_us;
-
-          skip_us =
-            mtk_extrapolate_next_interval_boundary (next_deadline_us,
-                                                    refresh_interval_us) -
-            next_deadline_us;
-
-          if (meta_is_topic_enabled (META_DEBUG_KMS_DEADLINE))
+          if (vrr_enabled)
             {
               meta_topic (META_DEBUG_KMS_DEADLINE,
                           "Missed deadline by %3"G_GINT64_FORMAT "µs, "
-                          "skipping by %"G_GINT64_FORMAT "µs",
-                          now_us - next_deadline_us,
-                          skip_us);
-            }
+                          "starting ASAP for VRR",
+                          now_us - next_deadline_us);
 
-          next_presentation_us += skip_us;
-          next_deadline_us += skip_us;
+              /* Extrapolate assuming dispatch starts now */
+              next_presentation_us += now_us - next_deadline_us;
+              next_deadline_us = now_us;
+            }
+          else
+            {
+              int64_t skip_us;
+
+              skip_us =
+                mtk_extrapolate_next_interval_boundary (next_deadline_us,
+                                                        refresh_interval_us) -
+                next_deadline_us;
+
+              if (meta_is_topic_enabled (META_DEBUG_KMS_DEADLINE))
+                {
+                  meta_topic (META_DEBUG_KMS_DEADLINE,
+                              "Missed deadline by %3"G_GINT64_FORMAT "µs, "
+                              "skipping by %"G_GINT64_FORMAT "µs",
+                              now_us - next_deadline_us,
+                              skip_us);
+                }
+
+              next_presentation_us += skip_us;
+              next_deadline_us += skip_us;
+            }
         }
     }
 
@@ -715,6 +734,13 @@ meta_kms_crtc_determine_deadline (MetaKmsCrtc  *crtc,
   *out_next_deadline_us = next_deadline_us;
 
   return TRUE;
+}
+
+void
+meta_kms_crtc_set_vrr_update_time (MetaKmsCrtc *crtc,
+                                   int64_t      vrr_update_time_us)
+{
+  crtc->vrr_update_time_us = vrr_update_time_us;
 }
 
 void

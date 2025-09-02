@@ -63,6 +63,19 @@ void                            clutter_backend_set_input_method        (Clutter
 CLUTTER_EXPORT
 ClutterSeat *                   clutter_backend_get_default_seat        (ClutterBackend             *backend);
 
+CLUTTER_EXPORT
+ClutterSprite * clutter_backend_get_sprite (ClutterBackend     *backend,
+                                            ClutterStage       *stage,
+                                            const ClutterEvent *for_event);
+
+CLUTTER_EXPORT
+ClutterSprite * clutter_backend_get_pointer_sprite (ClutterBackend *backend,
+                                                    ClutterStage   *stage);
+
+CLUTTER_EXPORT
+ClutterKeyFocus * clutter_backend_get_key_focus (ClutterBackend *backend,
+                                                 ClutterStage   *stage);
+
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (ClutterBackend, g_object_unref)
 
 G_END_DECLS

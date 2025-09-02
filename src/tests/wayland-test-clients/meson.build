@@ -136,6 +136,15 @@ wayland_test_clients = [
   {
     'name': 'xdg-activation-before-mapped',
   },
+  {
+    'name': 'fixed-size-client',
+  },
+  {
+    'name': 'buffer-less-viewport-client',
+  },
+  {
+    'name': 'invalid-size-limits-on-map-client',
+  },
 ]
 
 test_client_executables = {}

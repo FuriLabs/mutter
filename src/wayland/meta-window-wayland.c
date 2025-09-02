@@ -37,6 +37,7 @@
 #include "core/stack-tracker.h"
 #include "core/window-private.h"
 #include "wayland/meta-wayland-actor-surface.h"
+#include "wayland/meta-wayland-client-private.h"
 #include "wayland/meta-wayland-private.h"
 #include "wayland/meta-wayland-surface-private.h"
 #include "wayland/meta-wayland-toplevel-drag.h"
@@ -49,6 +50,7 @@ enum
   PROP_0,
 
   PROP_SURFACE,
+  PROP_CLIENT,
 
   PROP_LAST
 };
@@ -61,6 +63,7 @@ struct _MetaWindowWayland
 
   int geometry_scale;
 
+  MetaWaylandClient *client;
   MetaWaylandSurface *surface;
 
   GList *pending_configurations;
@@ -159,17 +162,25 @@ meta_window_wayland_delete (MetaWindow *window,
 static void
 meta_window_wayland_kill (MetaWindow *window)
 {
-  MetaWaylandSurface *surface = meta_window_get_wayland_surface (window);
-  struct wl_resource *resource;
-
-  resource = surface->resource;
-  if (!resource)
-    return;
+  MetaWindowWayland *wl_window = META_WINDOW_WAYLAND (window);
+  MetaWaylandSurface *surface;
+  struct wl_client *client;
 
   /* Send the client an unrecoverable error to kill the client. */
-  wl_resource_post_error (resource,
-                          WL_DISPLAY_ERROR_NO_MEMORY,
-                          "User requested that we kill you. Sorry. Don't take it too personally.");
+
+  surface = meta_window_get_wayland_surface (window);
+  if (surface->resource)
+    {
+      wl_resource_post_error (surface->resource,
+                              WL_DISPLAY_ERROR_NO_MEMORY,
+                              "User requested that we kill you. Sorry. "
+                              "Don't take it too personally.");
+      return;
+    }
+
+  client = meta_wayland_client_get_wl_client (wl_window->client);
+  if (client)
+    wl_client_post_no_memory (client);
 }
 
 static void
@@ -272,6 +283,7 @@ should_configure (MetaWindow          *window,
   /* The constrained size changed from last time, also explicit, thus need to
    * configure the new size. */
   if (last_sent_configuration->has_size &&
+      flags & META_MOVE_RESIZE_RESIZE_ACTION &&
       (constrained_rect.width != last_sent_configuration->width ||
        constrained_rect.height != last_sent_configuration->height))
     return TRUE;
@@ -519,7 +531,8 @@ meta_window_wayland_move_resize_internal (MetaWindow                *window,
     *result |= META_MOVE_RESIZE_RESULT_STATE_CHANGED;
 
   if (flags & META_MOVE_RESIZE_WAYLAND_CLIENT_RESIZE ||
-      !(flags & META_MOVE_RESIZE_WAYLAND_FINISH_MOVE_RESIZE))
+      (can_move_now &&
+      !(flags & META_MOVE_RESIZE_WAYLAND_FINISH_MOVE_RESIZE)))
     *result |= META_MOVE_RESIZE_RESULT_UPDATE_UNCONSTRAINED;
 }
 
@@ -589,7 +602,7 @@ meta_window_wayland_update_main_monitor (MetaWindow                   *window,
     }
 
   frame_rect = meta_window_config_get_rect (window->config);
-  if (frame_rect.width == 0 || frame_rect.height == 0 || !window->placed)
+  if (frame_rect.width == 0 || frame_rect.height == 0)
     {
       g_set_object (&window->monitor, meta_window_find_monitor_from_id (window));
       return;
@@ -723,16 +736,9 @@ meta_window_wayland_main_monitor_changed (MetaWindow               *window,
 static pid_t
 meta_window_wayland_get_client_pid (MetaWindow *window)
 {
-  MetaWaylandSurface *surface = meta_window_get_wayland_surface (window);
-  struct wl_resource *resource;
-  pid_t pid;
+  MetaWindowWayland *wl_window = META_WINDOW_WAYLAND (window);
 
-  resource = surface->resource;
-  if (!resource)
-    return 0;
-
-  wl_client_get_credentials (wl_resource_get_client (resource), &pid, NULL, NULL);
-  return pid;
+  return meta_wayland_client_get_pid (wl_window->client);
 }
 
 static void
@@ -965,6 +971,7 @@ meta_window_wayland_finalize (GObject *object)
 {
   MetaWindowWayland *wl_window = META_WINDOW_WAYLAND (object);
 
+  g_clear_object (&wl_window->client);
   g_clear_pointer (&wl_window->last_acked_configuration,
                    meta_wayland_window_configuration_unref);
   g_clear_pointer (&wl_window->last_sent_configuration,
@@ -988,6 +995,9 @@ meta_window_wayland_get_property (GObject    *object,
     case PROP_SURFACE:
       g_value_set_object (value, window->surface);
       break;
+    case PROP_CLIENT:
+      g_value_set_object (value, window->client);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -1006,6 +1016,9 @@ meta_window_wayland_set_property (GObject      *object,
     {
     case PROP_SURFACE:
       window->surface = g_value_get_object (value);
+      break;
+    case PROP_CLIENT:
+      window->client = g_value_dup_object (value);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -1055,7 +1068,23 @@ meta_window_wayland_class_init (MetaWindowWaylandClass *klass)
                          META_TYPE_WAYLAND_SURFACE,
                          G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE);
 
+  obj_props[PROP_CLIENT] =
+    g_param_spec_object ("client", NULL, NULL,
+                         META_TYPE_WAYLAND_CLIENT,
+                         G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE);
+
   g_object_class_install_properties (object_class, PROP_LAST, obj_props);
+}
+
+static void
+meta_window_wayland_maybe_apply_custom_tag (MetaWindow *window)
+{
+  MetaWindowWayland *wl_window = META_WINDOW_WAYLAND (window);
+  const char *window_tag;
+
+  window_tag = meta_wayland_client_get_window_tag (wl_window->client);
+  if (window_tag)
+    meta_window_set_tag (window, window_tag);
 }
 
 MetaWindow *
@@ -1064,15 +1093,22 @@ meta_window_wayland_new (MetaDisplay        *display,
 {
   MetaWindowWayland *wl_window;
   MetaWindow *window;
+  struct wl_client *wl_client;
+  MetaWaylandClient *client;
+
+  wl_client = wl_resource_get_client (surface->resource);
+  client = meta_get_wayland_client (wl_client);
 
   window = g_initable_new (META_TYPE_WINDOW_WAYLAND,
                            NULL, NULL,
                            "display", display,
                            "effect", META_COMP_EFFECT_CREATE,
                            "surface", surface,
+                           "client", client,
                            NULL);
   wl_window = META_WINDOW_WAYLAND (window);
   set_geometry_scale_for_window (wl_window, wl_window->geometry_scale);
+  meta_window_wayland_maybe_apply_custom_tag (window);
 
   return window;
 }
@@ -1302,6 +1338,42 @@ meta_window_wayland_finish_move_resize (MetaWindow              *window,
 
   acked_configuration = acquire_acked_configuration (wl_window, pending,
                                                      &is_client_resize);
+
+  if (meta_is_topic_enabled (META_DEBUG_WAYLAND))
+    {
+      g_autoptr (GString) string = NULL;
+
+      string = g_string_new ("");
+      g_string_append_printf (string,
+                              "Applying window state for wl_surface#%u: ",
+                              wl_resource_get_id (surface->resource));
+      g_string_append_printf (string, "size=%dx%d",
+                              new_geom.width, new_geom.height);
+      if (acked_configuration)
+        {
+          g_string_append_printf (string, ", serial=%u",
+                                  acked_configuration->serial);
+        }
+      meta_topic (META_DEBUG_WAYLAND, "%s", string->str);
+    }
+
+  if (acked_configuration &&
+      acked_configuration->has_size &&
+      acked_configuration->is_fullscreen &&
+      (new_geom.width > acked_configuration->width ||
+       new_geom.height > acked_configuration->height))
+    {
+      g_warning ("Window %s (wl_surface#%u) size %dx%d exceeds "
+                 "allowed maximum size %dx%d",
+                 window->desc,
+                 surface->resource
+                   ? wl_resource_get_id (surface->resource)
+                   : 0,
+                 new_geom.width / geometry_scale,
+                 new_geom.height / geometry_scale,
+                 acked_configuration->width / geometry_scale,
+                 acked_configuration->height / geometry_scale);
+    }
 
   window_drag = meta_compositor_get_current_window_drag (display->compositor);
 
@@ -1619,4 +1691,10 @@ meta_window_wayland_get_pending_serial (MetaWindowWayland *wl_window,
     }
 
   return FALSE;
+}
+
+MetaWaylandClient *
+meta_window_wayland_get_client (MetaWindowWayland *wl_window)
+{
+  return wl_window->client;
 }

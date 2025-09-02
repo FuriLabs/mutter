@@ -40,18 +40,8 @@
 #include "backends/native/meta-xkb-utils.h"
 #include "clutter/clutter.h"
 
-typedef struct _MetaTouchState MetaTouchState;
 typedef struct _MetaSeatImpl MetaSeatImpl;
 typedef struct _MetaEventSource  MetaEventSource;
-
-struct _MetaTouchState
-{
-  MetaSeatImpl *seat_impl;
-
-  int device_slot;
-  int seat_slot;
-  graphene_point_t coords;
-};
 
 struct _MetaSeatImpl
 {
@@ -77,7 +67,6 @@ struct _MetaSeatImpl
   ClutterInputDevice *core_pointer;
   ClutterInputDevice *core_keyboard;
 
-  GHashTable *touch_states;
   GHashTable *cursor_renderers;
 
   struct xkb_state *xkb;
@@ -108,9 +97,6 @@ struct _MetaSeatImpl
   uint32_t repeat_count;
   ClutterInputDevice *repeat_device;
   GSource *repeat_source;
-
-  float pointer_x;
-  float pointer_y;
 
   /* Emulation of discrete scroll events out of smooth ones */
   float accum_scroll_dx;
@@ -187,17 +173,10 @@ void meta_seat_impl_notify_touch_event_in_impl (MetaSeatImpl       *seat_impl,
                                                 ClutterEventType    evtype,
                                                 uint64_t            time_us,
                                                 int                 slot,
-                                                double              x,
-                                                double              y);
+                                                float               x,
+                                                float               y);
 
 void meta_seat_impl_sync_leds_in_impl (MetaSeatImpl *seat_impl);
-
-MetaTouchState * meta_seat_impl_acquire_touch_state_in_impl (MetaSeatImpl *seat_impl,
-                                                             int           seat_slot);
-MetaTouchState * meta_seat_impl_lookup_touch_state_in_impl (MetaSeatImpl *seat_impl,
-                                                            int           seat_slot);
-void meta_seat_impl_release_touch_state_in_impl (MetaSeatImpl   *seat_impl,
-                                                 int             seat_slot);
 
 void meta_seat_impl_update_xkb_state_in_impl (MetaSeatImpl *seat_impl);
 

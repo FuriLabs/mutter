@@ -1,5 +1,5 @@
 project('mutter', 'c',
-  version: '49.beta',
+  version: '49.rc',
   meson_version: '>= 1.5.0',
   license: 'GPL-2.0-or-later',
 )
@@ -21,7 +21,7 @@ gi_req = '>= 0.9.5'
 graphene_req = '>= 1.10.2'
 gtk3_req = '>= 3.19.8'
 gtk4_req = '>= 4.14.0'
-gdk_pixbuf_req = '>= 2.0'
+glycin_req = '>= 2.0.beta.2'
 pango_req = '>= 1.46.0'
 cairo_req = '>= 1.10.0'
 pangocairo_req = '>= 1.20'
@@ -117,7 +117,7 @@ subproject('gvdb')
 
 m_dep = cc.find_library('m', required: true)
 graphene_dep = dependency('graphene-gobject-1.0', version: graphene_req)
-gdk_pixbuf_dep = dependency('gdk-pixbuf-2.0', version: gdk_pixbuf_req)
+glycin_dep = dependency('glycin-2', version: glycin_req)
 cairo_dep = dependency('cairo', version: cairo_req)
 pixman_dep = dependency('pixman-1', version: pixman_req)
 gsettings_desktop_schemas_dep = dependency('gsettings-desktop-schemas',
@@ -128,6 +128,7 @@ gio_unix_dep = dependency('gio-unix-2.0', version: glib_req)
 gobject_dep = dependency('gobject-2.0', version: glib_req)
 gthread_dep = dependency('gobject-2.0', version: glib_req)
 gtk4_dep = dependency('gtk4', version: gtk4_req, required: false)
+libadwaita_dep = dependency('libadwaita-1', required: false)
 gmodule_no_export_dep = dependency('gmodule-no-export-2.0', version: glib_req)
 gnome_settings_daemon_dep = dependency('gnome-settings-daemon', required: false)
 xkbcommon_dep = dependency('xkbcommon', version: xkbcommon_req)
@@ -176,7 +177,7 @@ if have_x11_client
   xext_dep = dependency('xext')
   xfixes_dep = dependency('xfixes', version: xfixes_req)
   xi_dep = dependency('xi', version: xi_req)
-  xkeyboard_config_dep = dependency('xkeyboard-config')
+  xkeyboard_config_dep = dependency('xkeyboard-config-2', 'xkeyboard-config')
   x11_xcb_dep = dependency('x11-xcb')
   xrandr_dep = dependency('xrandr', version: xrandr_req)
   xcb_res_dep = dependency('xcb-res')
@@ -349,11 +350,12 @@ endif
 
 have_devkit = get_option('devkit').enable_auto_if(
   gtk4_dep.found() and
+  libadwaita_dep.found() and
   have_native_backend and
   have_remote_desktop
 ).enabled()
-if have_devkit and (not gtk4_dep.found() or not have_native_backend or not have_remote_desktop)
-  error('MDK requires gtk4 @0@, the native backend, and remote desktop'.format(gtk4_req))
+if have_devkit and (not gtk4_dep.found() or not libadwaita_dep.found() or not have_native_backend or not have_remote_desktop)
+  error('MDK requires gtk4 @0@, libadwaita, the native backend, and remote desktop'.format(gtk4_req))
 endif
 
 have_introspection = get_option('introspection')
@@ -391,8 +393,6 @@ int main (int argc, char ** argv) {
   return 0;
 }
 ''', name : 'timerfd_create(2) system call')
-
-have_malloc_trim = cc.has_function('malloc_trim')
 
 have_documentation = get_option('docs')
 have_tests = get_option('tests').enable_auto_if(have_native_backend).enabled()
@@ -617,12 +617,13 @@ cdata.set('HAVE_STARTUP_NOTIFICATION', have_startup_notification)
 cdata.set('HAVE_INTROSPECTION', have_introspection)
 cdata.set('HAVE_PROFILER', have_profiler)
 cdata.set('HAVE_TIMERFD', have_timerfd)
-cdata.set('HAVE_MALLOC_TRIM', have_malloc_trim)
 cdata.set('HAVE_EVENTFD', have_eventfd)
 cdata.set('HAVE_FONTS', have_fonts)
 cdata.set('HAVE_DRM_PLANE_SIZE_HINT', have_drm_plane_size_hint)
 cdata.set('HAVE_XKBCOMMON_KANA_COMPOSE_LEDS',
   xkbcommon_dep.version().version_compare('>= 1.8.0'))
+cdata.set('HAVE_EIS_EVENT_REF',
+  libeis_dep.version().version_compare('>= 1.5.0'))
 
 if have_x11_client
   xkb_base = xkeyboard_config_dep.get_variable('xkb_base')

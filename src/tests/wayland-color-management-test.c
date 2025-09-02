@@ -22,6 +22,9 @@
 
 #include "config.h"
 
+#include <glib/gstdio.h>
+#include <stdint.h>
+
 #include "backends/meta-virtual-monitor.h"
 #include "core/window-private.h"
 #include "meta-test/meta-context-test.h"
@@ -71,9 +74,11 @@ color_management (void)
   MetaWindow *test_window;
   ClutterColorState *color_state;
   ClutterColorStateParams *color_state_params;
+  ClutterColorStateIcc *color_state_icc;
   const ClutterColorimetry *colorimetry;
   const ClutterEOTF *eotf;
   const ClutterLuminance *lum;
+  const MtkAnonymousFile *file;
 
   wayland_test_client = meta_wayland_test_client_new (test_context,
                                                       "color-management");
@@ -91,6 +96,7 @@ color_management (void)
   g_assert_cmpuint (eotf->tf_name, ==, CLUTTER_TRANSFER_FUNCTION_SRGB);
   lum = clutter_color_state_params_get_luminance (color_state_params);
   g_assert_cmpuint (lum->type, ==, CLUTTER_LUMINANCE_TYPE_DERIVED);
+  g_assert_cmpuint (lum->ref_is_1_0, ==, FALSE);
   emit_sync_event (0);
 
   wait_for_sync_point (1);
@@ -104,6 +110,7 @@ color_management (void)
   g_assert_cmpuint (eotf->tf_name, ==, CLUTTER_TRANSFER_FUNCTION_PQ);
   lum = clutter_color_state_params_get_luminance (color_state_params);
   g_assert_cmpuint (lum->type, ==, CLUTTER_LUMINANCE_TYPE_EXPLICIT);
+  g_assert_cmpuint (lum->ref_is_1_0, ==, FALSE);
   g_assert_cmpfloat_with_epsilon (lum->min, 0.005f, TEST_COLOR_EPSILON);
   g_assert_cmpfloat_with_epsilon (lum->max, lum->min + 10000.0f, TEST_COLOR_EPSILON);
   g_assert_cmpfloat_with_epsilon (lum->ref, 303.0f, TEST_COLOR_EPSILON);
@@ -120,6 +127,7 @@ color_management (void)
   g_assert_cmpuint (eotf->tf_name, ==, CLUTTER_TRANSFER_FUNCTION_SRGB);
   lum = clutter_color_state_params_get_luminance (color_state_params);
   g_assert_cmpuint (lum->type, ==, CLUTTER_LUMINANCE_TYPE_EXPLICIT);
+  g_assert_cmpuint (lum->ref_is_1_0, ==, FALSE);
   g_assert_cmpfloat_with_epsilon (lum->min, 0.2f, TEST_COLOR_EPSILON);
   g_assert_cmpfloat_with_epsilon (lum->max, 80.0f, TEST_COLOR_EPSILON);
   g_assert_cmpfloat_with_epsilon (lum->ref, 70.0f, TEST_COLOR_EPSILON);
@@ -143,7 +151,17 @@ color_management (void)
   g_assert_cmpfloat_with_epsilon (eotf->gamma_exp, 2.5f, TEST_COLOR_EPSILON);
   lum = clutter_color_state_params_get_luminance (color_state_params);
   g_assert_cmpuint (lum->type, ==, CLUTTER_LUMINANCE_TYPE_DERIVED);
+  g_assert_cmpuint (lum->ref_is_1_0, ==, FALSE);
   emit_sync_event (3);
+
+  wait_for_sync_point (4);
+  color_state = get_window_color_state (test_window);
+  g_assert_true (CLUTTER_IS_COLOR_STATE_ICC (color_state));
+  color_state_icc = CLUTTER_COLOR_STATE_ICC (color_state);
+
+  file = clutter_color_state_icc_get_file (color_state_icc);
+  g_assert_nonnull (file);
+  emit_sync_event (4);
 
   meta_wayland_test_client_finish (wayland_test_client);
 }

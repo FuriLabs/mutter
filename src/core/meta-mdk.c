@@ -20,9 +20,18 @@
 
 #include "config.h"
 
+#include "core/meta-mdk.h"
+
 #include "backends/meta-remote-desktop.h"
 #include "backends/meta-screen-cast.h"
-#include "core/meta-mdk.h"
+#include "meta/meta-wayland-compositor.h"
+#include "wayland/meta-wayland.h"
+
+#ifdef HAVE_XWAYLAND
+#include "wayland/meta-xwayland.h"
+#endif
+
+#include "meta-dbus-devkit.h"
 
 static const char * const devkit_path =
   MUTTER_LIBEXECDIR "/mutter-devkit";
@@ -35,6 +44,9 @@ struct _MetaMdk
   char *external_wayland_display;
   char *external_x11_display;
 
+  MetaDBusDevkit *api;
+  guint dbus_name_id;
+
   GSubprocess *devkit_process;
   GCancellable *devkit_process_cancellable;
 };
@@ -46,6 +58,8 @@ meta_mdk_finalize (GObject *object)
 {
   MetaMdk *mdk = META_MDK (object);
 
+  g_clear_handle_id (&mdk->dbus_name_id, g_bus_unown_name);
+  g_clear_object (&mdk->api);
   g_clear_pointer (&mdk->external_wayland_display, g_free);
   g_clear_pointer (&mdk->external_x11_display, g_free);
   g_cancellable_cancel (mdk->devkit_process_cancellable);
@@ -147,8 +161,71 @@ maybe_launch_devkit (gpointer  dependency,
                            mdk);
 }
 
+static void
+on_name_acquired (GDBusConnection *connection,
+                  const char      *name,
+                  gpointer         user_data)
+{
+  MetaMdk *mdk = META_MDK (user_data);
+
+  g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (mdk->api),
+                                    connection,
+                                    "/org/gnome/Mutter/Devkit",
+                                    NULL);
+}
+
+static void
+init_api (MetaMdk *mdk)
+{
+  MetaWaylandCompositor *wayland_compositor =
+    meta_context_get_wayland_compositor (mdk->context);
+  GVariantBuilder env_builder;
+  const char *wayland_display;
+#ifdef HAVE_XWAYLAND
+  MetaX11DisplayPolicy x11_display_policy;
+#endif
+
+  mdk->api = meta_dbus_devkit_skeleton_new ();
+
+  g_variant_builder_init (&env_builder, G_VARIANT_TYPE ("a{ss}"));
+
+  wayland_display = meta_wayland_get_wayland_display_name (wayland_compositor);
+  g_variant_builder_add (&env_builder, "{ss}",
+                         "WAYLAND_DISPLAY", wayland_display);
+#ifdef HAVE_XWAYLAND
+  x11_display_policy =
+    meta_context_get_x11_display_policy (mdk->context);
+  if (x11_display_policy != META_X11_DISPLAY_POLICY_DISABLED)
+    {
+      MetaXWaylandManager *xwayland_manager =
+        meta_wayland_compositor_get_xwayland_manager (wayland_compositor);
+      const char *x11_display =
+        meta_xwayland_get_public_display_name (xwayland_manager);
+      const char *xauthority =
+        meta_xwayland_get_xauthority (xwayland_manager);
+
+      g_variant_builder_add (&env_builder, "{ss}",
+                             "DISPLAY", x11_display);
+      g_variant_builder_add (&env_builder, "{ss}",
+                             "XAUTHORITY", xauthority);
+    }
+#endif
+
+  meta_dbus_devkit_set_env (mdk->api, g_variant_builder_end (&env_builder));
+
+  mdk->dbus_name_id =
+    g_bus_own_name (G_BUS_TYPE_SESSION,
+                    "org.gnome.Mutter.Devkit",
+                    G_BUS_NAME_OWNER_FLAGS_NONE,
+                    NULL,
+                    on_name_acquired,
+                    NULL,
+                    mdk, NULL);
+}
+
 MetaMdk *
 meta_mdk_new (MetaContext  *context,
+              MetaMdkFlag   flags,
               GError      **error)
 {
   g_autoptr (MetaMdk) mdk = NULL;
@@ -161,12 +238,19 @@ meta_mdk_new (MetaContext  *context,
   mdk->external_wayland_display = g_strdup (getenv ("WAYLAND_DISPLAY"));
   mdk->external_x11_display = g_strdup (getenv ("DISPLAY"));
 
-  g_signal_connect_object (remote_desktop, "enabled",
-                           G_CALLBACK (maybe_launch_devkit),
-                           mdk, 0);
-  g_signal_connect_object (screen_cast, "enabled",
-                           G_CALLBACK (maybe_launch_devkit),
-                           mdk, 0);
+  g_signal_connect_object (context, "started",
+                           G_CALLBACK (init_api),
+                           mdk, G_CONNECT_SWAPPED);
+
+  if (flags & META_MDK_FLAG_LAUNCH_VIEWER)
+    {
+      g_signal_connect_object (remote_desktop, "enabled",
+                               G_CALLBACK (maybe_launch_devkit),
+                               mdk, G_CONNECT_DEFAULT);
+      g_signal_connect_object (screen_cast, "enabled",
+                               G_CALLBACK (maybe_launch_devkit),
+                               mdk, G_CONNECT_DEFAULT);
+    }
 
   return g_steal_pointer (&mdk);
 }

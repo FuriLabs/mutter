@@ -32,6 +32,7 @@
 #include "clutter/clutter-keysyms.h"
 #include "clutter/clutter-input-device-tool.h"
 #include "clutter/clutter-private.h"
+#include "clutter/clutter-seat-private.h"
 
 #include <math.h>
 
@@ -140,6 +141,7 @@ struct _ClutterScrollEvent
   ClutterModifierType modifier_state;
   double *axes;
   ClutterInputDeviceTool *tool;
+  ClutterScrollFlags scroll_flags;
   ClutterScrollSource scroll_source;
   ClutterScrollFinishFlags finish_flags;
 };
@@ -794,19 +796,7 @@ clutter_event_get_device_type (const ClutterEvent *event)
 }
 
 /**
- * clutter_event_get_device:
- * @event: a #ClutterEvent
- *
- * Retrieves the #ClutterInputDevice for the event.
- * If you want the physical device the event originated from, use
- * [method@Clutter.Event.get_source_device].
- *
- * The #ClutterInputDevice structure is completely opaque and should
- * be cast to the platform-specific implementation.
- *
- * Return value: (transfer none): the #ClutterInputDevice or %NULL. The
- *   returned device is owned by the #ClutterEvent and it should not
- *   be unreferenced
+ * clutter_event_get_device: (skip)
  */
 ClutterInputDevice *
 clutter_event_get_device (const ClutterEvent *event)
@@ -1103,11 +1093,6 @@ clutter_get_current_event (void)
  * @event: a #ClutterEvent
  *
  * Retrieves the hardware device that originated the event.
- *
- * If you need the virtual device, use [method@Clutter.Event.get_device].
- *
- * If no hardware device originated this event, this function will
- * return the same device as [method@Clutter.Event.get_device].
  *
  * Return value: (transfer none): a pointer to a #ClutterInputDevice
  *   or %NULL
@@ -1578,7 +1563,7 @@ clutter_event_get_gesture_motion_delta_unaccelerated (const ClutterEvent *event,
  *
  * Returns the #ClutterScrollSource that applies to an scroll event.
  *
- * Returns: The source of scroll events6
+ * Returns: The source of scroll events
  **/
 ClutterScrollSource
 clutter_event_get_scroll_source (const ClutterEvent *event)
@@ -1598,7 +1583,7 @@ clutter_event_get_scroll_source (const ClutterEvent *event)
  * can be used to determine whether post-scroll effects like kinetic
  * scrolling should be applied.
  *
- * Returns: The scroll finish flags6
+ * Returns: The scroll finish flags
  **/
 ClutterScrollFinishFlags
 clutter_event_get_scroll_finish_flags (const ClutterEvent *event)
@@ -1608,6 +1593,24 @@ clutter_event_get_scroll_finish_flags (const ClutterEvent *event)
                         CLUTTER_SCROLL_FINISHED_NONE);
 
   return event->scroll.finish_flags;
+}
+
+/**
+ * clutter_event_get_scroll_flags:
+ * @event: an scroll event
+ *
+ * Returns the #ClutterScrollFlags of an scroll event.
+ *
+ * Returns: The scroll flags
+ **/
+ClutterScrollFlags
+clutter_event_get_scroll_flags (const ClutterEvent *event)
+{
+  g_return_val_if_fail (event != NULL, CLUTTER_SCROLL_NONE);
+  g_return_val_if_fail (event->type == CLUTTER_SCROLL,
+                        CLUTTER_SCROLL_NONE);
+
+  return event->scroll.scroll_flags;
 }
 
 guint
@@ -2023,6 +2026,7 @@ clutter_event_scroll_smooth_new (ClutterEventFlags         flags,
                                  ClutterModifierType       modifiers,
                                  graphene_point_t          coords,
                                  graphene_point_t          delta,
+                                 ClutterScrollFlags        scroll_flags,
                                  ClutterScrollSource       scroll_source,
                                  ClutterScrollFinishFlags  finish_flags)
 {
@@ -2041,6 +2045,7 @@ clutter_event_scroll_smooth_new (ClutterEventFlags         flags,
   event->scroll.delta_y = delta.y;
   event->scroll.direction = CLUTTER_SCROLL_SMOOTH;
   event->scroll.modifier_state = modifiers;
+  event->scroll.scroll_flags = scroll_flags;
   event->scroll.scroll_source = scroll_source;
   event->scroll.finish_flags = finish_flags;
   event->scroll.tool = tool;
@@ -2070,6 +2075,7 @@ clutter_event_scroll_discrete_new (ClutterEventFlags       flags,
                                    ClutterInputDeviceTool *tool,
                                    ClutterModifierType     modifiers,
                                    graphene_point_t        coords,
+                                   ClutterScrollFlags      scroll_flags,
                                    ClutterScrollSource     scroll_source,
                                    ClutterScrollDirection  direction)
 {
@@ -2085,6 +2091,7 @@ clutter_event_scroll_discrete_new (ClutterEventFlags       flags,
   event->scroll.x = coords.x;
   event->scroll.y = coords.y;
   event->scroll.direction = direction;
+  event->scroll.scroll_flags = scroll_flags;
   event->scroll.scroll_source = scroll_source;
   event->scroll.modifier_state = modifiers;
   event->scroll.tool = tool;

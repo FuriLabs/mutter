@@ -29,6 +29,7 @@
 #include "clutter/clutter-actor-private.h"
 #include "clutter/clutter-debug.h"
 #include "clutter/clutter-event-private.h"
+#include "clutter/clutter-focus-private.h"
 #include "clutter/clutter-grab.h"
 #include "clutter/clutter-private.h"
 #include "clutter/clutter-stage.h"
@@ -97,7 +98,13 @@ emit_event (const ClutterEvent *event,
 
       if (receiver->actor)
         {
-          if (clutter_actor_event (receiver->actor, event, receiver->phase == CLUTTER_PHASE_CAPTURE))
+          ClutterEventType type = clutter_event_type (event);
+          gboolean may_emit = receiver->emit_to_actor ||
+                              type == CLUTTER_ENTER ||
+                              type == CLUTTER_LEAVE;
+
+          if (may_emit &&
+              clutter_actor_event (receiver->actor, event, receiver->phase == CLUTTER_PHASE_CAPTURE))
             return EVENT_HANDLED_BY_ACTOR;
         }
       else if (receiver->action)
@@ -195,9 +202,7 @@ clutter_sprite_remove_all_actions_from_chain (ClutterSprite *sprite)
 
       if (receiver->action)
         {
-          clutter_action_sequence_cancelled (receiver->action,
-                                             priv->device,
-                                             priv->sequence);
+          clutter_action_sequence_cancelled (receiver->action, sprite);
           g_clear_object (&receiver->action);
         }
     }
@@ -211,12 +216,14 @@ sync_crossings_on_implicit_grab_end (ClutterSprite *sprite)
   ClutterActor *parent;
   ClutterEvent *crossing;
 
-  deepmost = priv->current_actor;
-
+  if (!priv->current_actor)
+    return;
   if (clutter_actor_contains (priv->current_actor, priv->implicit_grab_actor))
     return;
 
+  deepmost = priv->current_actor;
   topmost = priv->current_actor;
+
   while ((parent = clutter_actor_get_parent (topmost)))
     {
       if (clutter_actor_contains (parent, priv->implicit_grab_actor))
@@ -265,11 +272,10 @@ find_common_root_actor (ClutterStage *stage,
 }
 
 static void
-setup_sequence_actions (GArray             *emission_chain,
+setup_sequence_actions (ClutterSprite      *sprite,
+                        GArray             *emission_chain,
                         const ClutterEvent *sequence_begin_event)
 {
-  ClutterInputDevice *device = clutter_event_get_device (sequence_begin_event);
-  ClutterEventSequence *sequence = clutter_event_get_event_sequence (sequence_begin_event);
   unsigned int i, j;
 
   for (i = 0; i < emission_chain->len; i++)
@@ -299,8 +305,7 @@ setup_sequence_actions (GArray             *emission_chain,
 
           clutter_action_setup_sequence_relationship (receiver_1->action,
                                                       receiver_2->action,
-                                                      device,
-                                                      sequence);
+                                                      sprite);
         }
     }
 }
@@ -317,6 +322,7 @@ add_actor_to_event_emission_chain (GArray            *chain,
 
   receiver->actor = g_object_ref (actor);
   receiver->phase = phase;
+  receiver->emit_to_actor = TRUE;
 }
 
 static inline void
@@ -607,11 +613,11 @@ clutter_sprite_notify_grab (ClutterFocus *focus,
           EventReceiver *receiver =
             &g_array_index (priv->event_emission_chain, EventReceiver, i);
 
-          if (receiver->actor)
+          if (receiver->actor && receiver->emit_to_actor)
             {
               if (!clutter_actor_contains (grab_actor, receiver->actor))
                 {
-                  g_clear_object (&receiver->actor);
+                  receiver->emit_to_actor = FALSE;
                   implicit_grab_n_removed++;
                 }
               else
@@ -626,9 +632,7 @@ clutter_sprite_notify_grab (ClutterFocus *focus,
 
               if (!action_actor || !clutter_actor_contains (grab_actor, action_actor))
                 {
-                  clutter_action_sequence_cancelled (receiver->action,
-                                                     device,
-                                                     sequence);
+                  clutter_action_sequence_cancelled (receiver->action, sprite);
                   g_clear_object (&receiver->action);
                   implicit_grab_n_removed++;
                 }
@@ -839,7 +843,7 @@ clutter_sprite_propagate_event (ClutterFocus       *focus,
       clutter_actor_set_implicitly_grabbed (priv->implicit_grab_actor, TRUE);
 
       create_event_emission_chain (sprite, priv->event_emission_chain, seat_grab_actor, target_actor);
-      setup_sequence_actions (priv->event_emission_chain, event);
+      setup_sequence_actions (sprite, priv->event_emission_chain, event);
     }
 
   if (priv->press_count)
@@ -962,15 +966,13 @@ clutter_sprite_remove_all_actors_from_chain (ClutterSprite *sprite)
         &g_array_index (priv->event_emission_chain, EventReceiver, i);
 
       if (receiver->actor)
-        g_clear_object (&receiver->actor);
+        receiver->emit_to_actor = FALSE;
     }
 }
 
 
 void
-clutter_sprite_maybe_lost_implicit_grab (ClutterSprite        *sprite,
-                                         ClutterInputDevice   *device,
-                                         ClutterEventSequence *sequence)
+clutter_sprite_maybe_lost_implicit_grab (ClutterSprite *sprite)
 {
   ClutterSpritePrivate *priv = clutter_sprite_get_instance_private (sprite);
   unsigned int i;
@@ -979,8 +981,8 @@ clutter_sprite_maybe_lost_implicit_grab (ClutterSprite        *sprite,
     return;
 
   CLUTTER_NOTE (GRABS,
-                "[device=%p sequence=%p] Lost implicit grab",
-                device, sequence);
+                "[sprite=%p] Lost implicit grab",
+                sprite);
 
   for (i = 0; i < priv->event_emission_chain->len; i++)
     {
@@ -988,7 +990,7 @@ clutter_sprite_maybe_lost_implicit_grab (ClutterSprite        *sprite,
         &g_array_index (priv->event_emission_chain, EventReceiver, i);
 
       if (receiver->action)
-        clutter_action_sequence_cancelled (receiver->action, device, sequence);
+        clutter_action_sequence_cancelled (receiver->action, sprite);
     }
 
   sync_crossings_on_implicit_grab_end (sprite);
@@ -1030,9 +1032,7 @@ clutter_sprite_maybe_break_implicit_grab (ClutterSprite *sprite,
 
           if (!action_actor || action_actor == actor)
             {
-              clutter_action_sequence_cancelled (receiver->action,
-                                                 priv->device,
-                                                 priv->sequence);
+              clutter_action_sequence_cancelled (receiver->action, sprite);
               g_clear_object (&receiver->action);
             }
         }

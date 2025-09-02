@@ -191,8 +191,12 @@ enum
   PROP_0,
 
   PROP_COMPOSITOR_MODIFIERS,
-  PROP_FOCUS_WINDOW
+  PROP_FOCUS_WINDOW,
+
+  N_PROPS
 };
+
+static GParamSpec *obj_props[N_PROPS];
 
 static guint display_signals [LAST_SIGNAL] = { 0 };
 
@@ -591,19 +595,16 @@ meta_display_class_init (MetaDisplayClass *klass)
                   G_TYPE_POINTER,
                   G_TYPE_POINTER);
 
-  g_object_class_install_property (object_class,
-                                   PROP_COMPOSITOR_MODIFIERS,
-                                   g_param_spec_flags ("compositor-modifiers", NULL, NULL,
-                                                       CLUTTER_TYPE_MODIFIER_TYPE,
-                                                       0,
-                                                       G_PARAM_READABLE));
-
-  g_object_class_install_property (object_class,
-                                   PROP_FOCUS_WINDOW,
-                                   g_param_spec_object ("focus-window", NULL, NULL,
-                                                        META_TYPE_WINDOW,
-                                                        G_PARAM_READABLE));
-
+  obj_props[PROP_COMPOSITOR_MODIFIERS] =
+    g_param_spec_flags ("compositor-modifiers", NULL, NULL,
+                        CLUTTER_TYPE_MODIFIER_TYPE,
+                        0,
+                        G_PARAM_READABLE);
+  obj_props[PROP_FOCUS_WINDOW] =
+    g_param_spec_object ("focus-window", NULL, NULL,
+                         META_TYPE_WINDOW,
+                         G_PARAM_READABLE);
+  g_object_class_install_properties (object_class, N_PROPS, obj_props);
 }
 
 
@@ -1679,6 +1680,9 @@ meta_display_notify_window_created (MetaDisplay  *display,
   COGL_TRACE_BEGIN_SCOPED (MetaDisplayNotifyWindowCreated,
                            "Meta::Display::notify_window_created()");
   g_signal_emit (display, display_signals[WINDOW_CREATED], 0, window);
+
+  if (window->wm_state_demands_attention)
+    g_signal_emit_by_name (display, "window-demands-attention", window);
 }
 
 void
@@ -1930,7 +1934,8 @@ in_tab_chain (MetaWindow  *window,
   return (type == META_TAB_LIST_NORMAL && in_normal_tab_chain)
          || (type == META_TAB_LIST_DOCKS && in_dock_tab_chain)
          || (type == META_TAB_LIST_GROUP && in_group_tab_chain)
-         || (type == META_TAB_LIST_NORMAL_ALL && in_normal_tab_chain_type);
+         || (type == META_TAB_LIST_NORMAL_ALL && in_normal_tab_chain_type)
+         || (type == META_TAB_LIST_NORMAL_ALL_MRU && in_normal_tab_chain_type);
 }
 
 static MetaWindow*
@@ -2075,7 +2080,9 @@ meta_display_get_tab_list (MetaDisplay   *display,
 {
   GList *tab_list = NULL;
   GList *global_mru_list = NULL;
-  GList *mru_list, *tmp;
+  GList *minimized_tabs = NULL;
+  GList *unminimized_tabs = NULL;
+  GList *mru_list, *l;
   GSList *windows = meta_display_list_windows (display, META_LIST_DEFAULT);
   GSList *w;
 
@@ -2089,24 +2096,27 @@ meta_display_get_tab_list (MetaDisplay   *display,
 
   mru_list = workspace ? workspace->mru_list : global_mru_list;
 
-  /* Windows sellout mode - MRU order. Collect unminimized windows
-   * then minimized so minimized windows aren't in the way so much.
+  /* Windows MRU ordering strategy:
+   * - NORMAL_ALL_MRU: Pure MRU order
+   * - Default: Unminimized windows first, minimized last (less intrusive)
    */
-  for (tmp = mru_list; tmp; tmp = tmp->next)
+  for (l = mru_list; l; l = l->next)
     {
-      MetaWindow *window = tmp->data;
+      MetaWindow *window = l->data;
 
-      if (!window->minimized && in_tab_chain (window, type))
-        tab_list = g_list_prepend (tab_list, window);
+      if (in_tab_chain (window, type))
+        {
+          if (type == META_TAB_LIST_NORMAL_ALL_MRU)
+            tab_list = g_list_prepend (tab_list, window);
+          else if (window->minimized)
+            minimized_tabs = g_list_prepend (minimized_tabs, window);
+          else
+            unminimized_tabs = g_list_prepend (unminimized_tabs, window);
+        }
     }
 
-  for (tmp = mru_list; tmp; tmp = tmp->next)
-    {
-      MetaWindow *window = tmp->data;
-
-      if (window->minimized && in_tab_chain (window, type))
-        tab_list = g_list_prepend (tab_list, window);
-    }
+  if (type != META_TAB_LIST_NORMAL_ALL_MRU)
+    tab_list = g_list_concat (minimized_tabs, unminimized_tabs);
 
   tab_list = g_list_reverse (tab_list);
 

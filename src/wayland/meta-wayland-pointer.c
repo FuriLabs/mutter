@@ -110,7 +110,7 @@ struct _MetaWaylandPointer
   float grab_x, grab_y;
   float last_rel_x, last_rel_y;
 
-  ClutterInputDevice *device;
+  ClutterSprite *sprite;
   MetaWaylandSurface *current;
   gulong current_surface_destroyed_handler_id;
 
@@ -336,7 +336,7 @@ sync_focus_surface (MetaWaylandPointer *pointer)
   MetaWaylandInput *input;
 
   input = meta_wayland_seat_get_input (seat);
-  meta_wayland_input_invalidate_focus (input, pointer->device, NULL);
+  meta_wayland_input_invalidate_focus (input, CLUTTER_FOCUS (pointer->sprite));
 }
 
 static void
@@ -490,14 +490,9 @@ meta_wayland_pointer_enable (MetaWaylandPointer *pointer)
 {
   MetaBackend *backend = backend_from_pointer (pointer);
   MetaCursorTracker *cursor_tracker = meta_backend_get_cursor_tracker (backend);
-  ClutterSeat *clutter_seat;
-  ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
 
   pointer->cursor_surface = NULL;
   pointer->cursor_shape = META_CURSOR_INVALID;
-
-  clutter_seat = clutter_backend_get_default_seat (clutter_backend);
-  pointer->device = clutter_seat_get_pointer (clutter_seat);
 
   g_signal_connect (cursor_tracker,
                     "cursor-changed",
@@ -598,10 +593,11 @@ repick_for_event (MetaWaylandPointer *pointer,
   MetaWaylandSurface *surface;
   MetaBackend *backend = backend_from_pointer (pointer);
   ClutterStage *stage = CLUTTER_STAGE (meta_backend_get_stage (backend));
+  ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
+  ClutterSprite *sprite;
 
-  actor = clutter_stage_get_device_actor (stage,
-                                          clutter_event_get_device (for_event),
-                                          clutter_event_get_event_sequence (for_event));
+  sprite = clutter_backend_get_sprite (clutter_backend, stage, for_event);
+  actor = clutter_focus_get_current_actor (CLUTTER_FOCUS (sprite));
 
   if (META_IS_SURFACE_ACTOR_WAYLAND (actor))
     {
@@ -634,12 +630,16 @@ meta_wayland_pointer_update (MetaWaylandPointer *pointer,
   MetaWaylandInputDevice *input_device = META_WAYLAND_INPUT_DEVICE (pointer);
   MetaWaylandSeat *seat = meta_wayland_input_device_get_seat (input_device);
   MetaWaylandCompositor *compositor = meta_wayland_seat_get_compositor (seat);
+  MetaBackend *backend = backend_from_pointer (pointer);
+  ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
+  ClutterStage *stage = CLUTTER_STAGE (meta_backend_get_stage (backend));
   MetaContext *context =
     meta_wayland_compositor_get_context (compositor);
   MetaDisplay *display = meta_context_get_display (context);
   ClutterEventType event_type;
 
   event_type = clutter_event_type (event);
+  pointer->sprite = clutter_backend_get_sprite (clutter_backend, stage, event);
 
   if ((event_type == CLUTTER_MOTION ||
        event_type == CLUTTER_ENTER ||
@@ -754,6 +754,7 @@ handle_scroll_event (MetaWaylandPointer *pointer,
   int x_discrete = 0, y_discrete = 0;
   int32_t x_value120 = 0, y_value120 = 0;
   enum wl_pointer_axis_source source = -1;
+  enum wl_pointer_axis_relative_direction relative_direction;
   MetaWaylandPointerClient *client;
   ClutterScrollFinishFlags finish_flags;
 
@@ -826,6 +827,11 @@ handle_scroll_event (MetaWaylandPointer *pointer,
       return;
     }
 
+  if (!(clutter_event_get_scroll_flags (event) & CLUTTER_SCROLL_INVERTED))
+    relative_direction = WL_POINTER_AXIS_RELATIVE_DIRECTION_IDENTICAL;
+  else
+    relative_direction = WL_POINTER_AXIS_RELATIVE_DIRECTION_INVERTED;
+
   finish_flags = clutter_event_get_scroll_finish_flags (event);
 
   wl_resource_for_each (resource, &client->pointer_resources)
@@ -858,6 +864,13 @@ handle_scroll_event (MetaWaylandPointer *pointer,
             }
         }
 
+      if (client_version >= WL_POINTER_AXIS_RELATIVE_DIRECTION_SINCE_VERSION)
+        {
+          wl_pointer_send_axis_relative_direction (resource,
+                                                   WL_POINTER_AXIS_HORIZONTAL_SCROLL,
+                                                   relative_direction);
+        }
+
       if (x_value)
         wl_pointer_send_axis (resource, clutter_event_get_time (event),
                               WL_POINTER_AXIS_HORIZONTAL_SCROLL, x_value);
@@ -885,6 +898,13 @@ handle_scroll_event (MetaWaylandPointer *pointer,
                                              WL_POINTER_AXIS_VERTICAL_SCROLL,
                                              y_discrete);
             }
+        }
+
+      if (client_version >= WL_POINTER_AXIS_RELATIVE_DIRECTION_SINCE_VERSION)
+        {
+          wl_pointer_send_axis_relative_direction (resource,
+                                                   WL_POINTER_AXIS_VERTICAL_SCROLL,
+                                                   relative_direction);
         }
 
       if (y_value)
@@ -1128,12 +1148,10 @@ meta_wayland_pointer_get_relative_coordinates (MetaWaylandPointer *pointer,
 					       wl_fixed_t         *sx,
 					       wl_fixed_t         *sy)
 {
-  MetaBackend *backend = backend_from_pointer (pointer);
-  ClutterStage *stage = CLUTTER_STAGE (meta_backend_get_stage (backend));
   float xf = 0.0f, yf = 0.0f;
   graphene_point_t pos;
 
-  clutter_stage_get_device_coords (stage, pointer->device, NULL, &pos);
+  pos = clutter_sprite_get_coords (pointer->sprite);
   meta_wayland_surface_get_relative_coordinates (surface, pos.x, pos.y, &xf, &yf);
 
   *sx = wl_fixed_from_double (xf);
@@ -1280,13 +1298,14 @@ pointer_set_cursor (struct wl_client *client,
   if (surface)
     {
       MetaBackend *backend = backend_from_pointer (pointer);
-      ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
-      ClutterSeat *clutter_seat =
-        clutter_backend_get_default_seat (clutter_backend);
-      ClutterInputDevice *device = clutter_seat_get_pointer (clutter_seat);
+      ClutterStage *stage = CLUTTER_STAGE (meta_backend_get_stage (backend));
+      ClutterBackend *clutter_backend =
+        meta_backend_get_clutter_backend (backend);
+      ClutterSprite *clutter_sprite =
+        clutter_backend_get_pointer_sprite (clutter_backend, stage);
       MetaCursorRenderer *cursor_renderer =
-        meta_backend_get_cursor_renderer_for_device (backend_from_pointer (pointer),
-                                                     device);
+        meta_backend_get_cursor_renderer_for_sprite (backend,
+                                                     clutter_sprite);
       MetaWaylandCursorSurface *cursor_surface;
       MetaCursorSprite *cursor_sprite;
 
@@ -1390,15 +1409,15 @@ meta_wayland_pointer_get_grab_info (MetaWaylandPointer    *pointer,
                                     MetaWaylandSurface    *surface,
                                     uint32_t               serial,
                                     gboolean               require_pressed,
-                                    ClutterInputDevice   **device_out,
+                                    ClutterSprite        **sprite_out,
                                     float                 *x,
                                     float                 *y)
 {
   if ((!require_pressed || pointer->button_count > 0) &&
       meta_wayland_pointer_can_grab_surface (pointer, surface, serial))
     {
-      if (device_out)
-        *device_out = pointer->device;
+      if (sprite_out)
+        *sprite_out = pointer->sprite;
 
       if (x)
         *x = pointer->grab_x;
