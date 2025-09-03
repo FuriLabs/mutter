@@ -1,3 +1,13 @@
+mutter (49~rc-0ubuntu2) UNRELEASED; urgency=medium
+
+  * debian/control:
+    - Break on gnome-shell versions prior to 49~rc only
+    - Set version on libglycin-2-dev dependency
+    - Add libglycin-2-dev dependency to libmutter-17-dev
+  * debian/libmutter-17-0.symbols: Drop ubuntu version from symbols file
+
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Wed, 03 Sep 2025 07:47:52 +0200
+
 mutter (49~rc-0ubuntu1) questing; urgency=medium
 
   [ Daniel van Vugt ]
