@@ -1,3 +1,31 @@
+mutter (49~rc-1) experimental; urgency=medium
+
+  [ Daniel van Vugt ]
+  * New upstream release
+  * Drop patch: clutter-Repick-actors-when-touches-emulate-button-clicks.patch
+    because it is Xorg-specific and 48-specific. But Xorg sessions are
+    being retired so updating it to 49 is not required.
+  * Refresh patches:
+    - Mark-several-additional-tests-as-flaky.patch
+    - tests-Do-not-run-screencast-tests.patch
+    - tests-Install-stacking-tests-into-a-subdirectory.patch
+    - tests-Mark-view-verification-tests-as-incomplete-in-big-e.patch
+  * Added new binary package 'mutter-dev-bin' for the missing 'mutter-devkit'
+    binary. Four years late.
+  * Added new script 'gnome-service-client' to 'mutter-common'.
+  * debian/control: mutter-common breaks older versions of libmutter
+  * debian/control: Bump dependencies on wayland 1.24, wayland-protocols 1.45
+  * debian/control: libmutter-17-0 now breaks gnome-shell<<49~rc due to
+    some clutter symbols being removed.
+
+  [ Marco Trevisan (Treviño) ]
+  * debian/control: Bump dependencies
+  * d/p: Run screen-cast test
+  * d/p/workarounds: Add mtk-time-utils to flaky tests
+  * d/source/lintian-overrides: Drop unhandled and outdated line
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 02 Sep 2025 11:17:38 -0400
+
 mutter (49~rc-0ubuntu2) questing; urgency=medium
 
   * debian/control:
