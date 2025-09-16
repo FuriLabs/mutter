@@ -1499,6 +1499,7 @@ libmutter-clutter-17.so.0 libmutter-17-0 #MINVER#
  clutter_event_im_new@Base 45~beta.1
  clutter_event_is_pointer_emulated@Base 43.0
  clutter_event_key_new@Base 45~beta.1
+ clutter_event_key_state_new@Base 49.0
  clutter_event_motion_new@Base 45~beta.1
  clutter_event_pad_button_new@Base 45~beta.1
  clutter_event_pad_dial_new@Base 49~alpha.1
