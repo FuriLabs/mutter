@@ -122,7 +122,7 @@ index 7cb80a2..8e95bc6 100644
      is_parallel: false,
    )
 diff --git a/src/tests/meson.build b/src/tests/meson.build
-index b34e0dd..8227486 100644
+index 1b88a86..8e64e02 100644
 --- a/src/tests/meson.build
 +++ b/src/tests/meson.build
 @@ -658,6 +658,7 @@ test_cases += [
@@ -133,7 +133,7 @@ index b34e0dd..8227486 100644
    },
    {
      'name': 'thread',
-@@ -1079,9 +1080,20 @@ foreach test_case: test_cases
+@@ -1080,9 +1081,20 @@ foreach test_case: test_cases
  
    args = test_case.get('args', [])
  
@@ -155,7 +155,7 @@ index b34e0dd..8227486 100644
      args: args,
      env: test_env,
      depends: test_depends,
-@@ -1159,7 +1171,7 @@ stacking_tests = [
+@@ -1162,7 +1174,7 @@ stacking_tests = [
  
  foreach stacking_test: stacking_tests
    test(stacking_test, test_runner,
