@@ -1,3 +1,10 @@
+mutter (49.0-2) experimental; urgency=medium
+
+  * debian/libmutter-17-0.symbols: Restore architecture restrictions
+    for cogl_trace*
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 16 Sep 2025 09:36:06 -0400
+
 mutter (49.0-1) experimental; urgency=medium
 
   [ Jeremy Bícha ]
