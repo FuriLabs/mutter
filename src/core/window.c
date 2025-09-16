@@ -171,6 +171,10 @@ static void update_edge_constraints (MetaWindow *window);
 
 static void set_hidden_suspended_state (MetaWindow *window);
 
+static void move_rect_between_rects (MtkRectangle       *rect,
+                                     const MtkRectangle *old_area,
+                                     const MtkRectangle *new_area);
+
 static void initable_iface_init (GInitableIface *initable_iface);
 
 typedef struct _MetaWindowPrivate
@@ -2361,7 +2365,8 @@ implement_showing (MetaWindow *window,
        * Force placing windows only when they should be already mapped,
        * see #751887
        */
-      if (!window->placed && window_has_buffer (window))
+      if (!window->placed && window_has_buffer (window) &&
+          meta_window_config_is_floating (window->config))
         meta_window_force_placement (window, META_PLACE_FLAG_NONE);
 
       meta_window_hide (window);
@@ -4291,11 +4296,38 @@ meta_window_move_resize_internal (MetaWindow          *window,
   /* If we did placement, then we need to save the position that the window
    * was placed at to make sure that meta_window_idle_move_resize() places the
    * window correctly.
+   *
+   * If we constrained an unplaced window, we also need to move any non-empty
+   * unconstrained rect, so that the eventual placement happens on the same
+   * monitor as where it was constrained.
    */
   if (did_placement)
     {
       unconstrained_rect.x = constrained_rect.x;
       unconstrained_rect.y = constrained_rect.y;
+    }
+  else if (!window->placed &&
+           !mtk_rectangle_is_empty (&unconstrained_rect) &&
+           !meta_window_config_is_floating (window->config))
+    {
+      MetaBackend *backend = backend_from_window (window);
+      MetaMonitorManager *monitor_manager =
+        meta_backend_get_monitor_manager (backend);
+      MetaLogicalMonitor *from;
+      MetaLogicalMonitor *to;
+
+      from =
+        meta_monitor_manager_get_logical_monitor_from_rect (monitor_manager,
+                                                            &unconstrained_rect);
+      to =
+        meta_monitor_manager_get_logical_monitor_from_rect (monitor_manager,
+                                                            &constrained_rect);
+      if (to && from != to)
+        {
+          move_rect_between_rects (&unconstrained_rect,
+                                   from ? &from->rect : NULL,
+                                   &to->rect);
+        }
     }
 
   /* Do the protocol-specific move/resize logic */
@@ -4413,12 +4445,11 @@ meta_window_move_frame (MetaWindow *window,
 }
 
 static void
-meta_window_move_between_rects (MetaWindow          *window,
-                                MetaMoveResizeFlags  move_resize_flags,
-                                const MtkRectangle  *old_area,
-                                const MtkRectangle  *new_area)
+move_rect_between_rects (MtkRectangle       *rect,
+                         const MtkRectangle *old_area,
+                         const MtkRectangle *new_area)
 {
-  double rel_x, rel_y;
+  float rel_x, rel_y;
   int new_x, new_y;
 
   if (!old_area)
@@ -4426,43 +4457,52 @@ meta_window_move_between_rects (MetaWindow          *window,
       new_x = new_area->x;
       new_y = new_area->y;
     }
-  else if (mtk_rectangle_contains_rect (old_area, &window->unconstrained_rect) &&
-           old_area->width > window->unconstrained_rect.width &&
-           old_area->height > window->unconstrained_rect.height &&
-           new_area->width >= window->unconstrained_rect.width &&
-           new_area->height >= window->unconstrained_rect.height)
+  else if (mtk_rectangle_contains_rect (old_area, rect) &&
+           old_area->width > rect->width &&
+           old_area->height > rect->height &&
+           new_area->width >= rect->width &&
+           new_area->height >= rect->height)
     {
-      rel_x = (double)(window->unconstrained_rect.x - old_area->x) /
-              (old_area->width - window->unconstrained_rect.width);
-      rel_y = (double)(window->unconstrained_rect.y - old_area->y) /
-              (old_area->height - window->unconstrained_rect.height);
+      rel_x = ((float) (rect->x - old_area->x) /
+               (float) (old_area->width - rect->width));
+      rel_y = ((float) (rect->y - old_area->y) /
+               (float) (old_area->height - rect->height));
 
       g_warn_if_fail (rel_x >= 0.0 && rel_x <= 1.0 &&
                       rel_y >= 0.0 && rel_y <= 1.0);
 
       new_x = (int) (new_area->x +
-                     rel_x * (new_area->width - window->unconstrained_rect.width));
+                     rel_x * (new_area->width - rect->width));
       new_y = (int) (new_area->y +
-                     rel_y * (new_area->height - window->unconstrained_rect.height));
+                     rel_y * (new_area->height - rect->height));
     }
   else
     {
-      rel_x = (float)(window->unconstrained_rect.x - old_area->x +
-                      (window->unconstrained_rect.width / 2)) / old_area->width;
-      rel_y = (float)(window->unconstrained_rect.y - old_area->y +
-                      (window->unconstrained_rect.height / 2)) / old_area->height;
+      rel_x = (float) (rect->x - old_area->x +
+                       (rect->width / 2)) / old_area->width;
+      rel_y = (float) (rect->y - old_area->y +
+                       (rect->height / 2)) / old_area->height;
 
-      rel_x = CLAMP (rel_x, FLT_EPSILON, 1.0 - FLT_EPSILON);
-      rel_y = CLAMP (rel_y, FLT_EPSILON, 1.0 - FLT_EPSILON);
+      rel_x = CLAMP (rel_x, FLT_EPSILON, 1.0f - FLT_EPSILON);
+      rel_y = CLAMP (rel_y, FLT_EPSILON, 1.0f - FLT_EPSILON);
 
-      new_x = (int) (new_area->x - (window->unconstrained_rect.width / 2) +
+      new_x = (int) (new_area->x - (rect->width / 2) +
                      (rel_x * new_area->width));
-      new_y = (int) (new_area->y - (window->unconstrained_rect.height / 2) +
+      new_y = (int) (new_area->y - (rect->height / 2) +
                      (rel_y * new_area->height));
     }
 
-  window->unconstrained_rect.x = new_x;
-  window->unconstrained_rect.y = new_y;
+  rect->x = new_x;
+  rect->y = new_y;
+}
+
+static void
+meta_window_move_between_rects (MetaWindow          *window,
+                                MetaMoveResizeFlags  move_resize_flags,
+                                const MtkRectangle  *old_area,
+                                const MtkRectangle  *new_area)
+{
+  move_rect_between_rects (&window->unconstrained_rect, old_area, new_area);
   window->unconstrained_rect_valid = TRUE;
 
   meta_window_move_resize (window,
