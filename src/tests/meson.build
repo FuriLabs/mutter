@@ -958,6 +958,7 @@ wayland_test_cases = [
   {
     'name': 'wayland-unit',
     'suite': 'wayland',
+    'timeout': 300,
     'sources': [
       'wayland-unit-tests.c',
       dummy_client_header,
@@ -1104,6 +1105,7 @@ stacking_tests = [
   'closed-transient-no-input-parents-queued-default-focus-destroyed',
   'closed-transient-only-take-focus-parents',
   'minimized',
+  'unminimize',
   'mixed-windows',
   'set-parent',
   'override-redirect',
@@ -1155,6 +1157,7 @@ stacking_tests = [
   'drag-restore-maximized',
   'monitors-changed-position',
   'multi-monitor-placement',
+  'unmaximize-placement',
 ]
 
 foreach stacking_test: stacking_tests

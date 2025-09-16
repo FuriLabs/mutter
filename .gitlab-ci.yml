@@ -110,8 +110,8 @@ variables:
   extends:
     - .skip-git-clone
   variables:
-    FDO_DISTRIBUTION_VERSION: 42
-    BASE_TAG: '2025-08-26.0'
+    FDO_DISTRIBUTION_VERSION: 43
+    BASE_TAG: '2025-09-13.0'
     MUTTER_USER: 'meta-user'
     FDO_DISTRIBUTION_PACKAGES:
       accountsservice-devel
@@ -138,6 +138,20 @@ variables:
       libjxl-devel
       lcms2-devel
       libseccomp-devel
+      'pkgconfig(x11-xcb)'
+      'pkgconfig(xcomposite)'
+      'pkgconfig(xcursor)'
+      'pkgconfig(xdamage)'
+      'pkgconfig(xext)'
+      'pkgconfig(xfixes)'
+      'pkgconfig(xi)'
+      'pkgconfig(xkbcommon-x11)'
+      'pkgconfig(xkbfile)'
+      'pkgconfig(xkeyboard-config)'
+      'pkgconfig(xrandr)'
+      'pkgconfig(xrender)'
+      'pkgconfig(xtst)'
+
 
     FDO_DISTRIBUTION_EXEC: |
       set -e
@@ -164,6 +178,11 @@ variables:
         --commit 8e69aef1e4bbb79b5806692ea9f0280aae0fda06 \
         https://gitlab.gnome.org/jadahl/catch.git \
         main
+
+      ./.gitlab-ci/install-meson-project.sh \
+        -Dglycin=disabled \
+        https://gitlab.gnome.org/GNOME/gdk-pixbuf.git \
+        2.44.0
 
       ./.gitlab-ci/install-meson-project.sh \
         https://gitlab.gnome.org/GNOME/gi-docgen.git \
@@ -694,7 +713,7 @@ can-run-gnome-shell@x86_64:
     - meson setup gnome-shell gnome-shell/build --prefix /usr -Dbuildtype=debugoptimized -Dman=false --werror --fatal-meson-warnings
     - sudo meson install -C gnome-shell/build
     - mkdir -m 1777 /tmp/.X11-unix
-    - dbus-run-session -- meson test -C gnome-shell/build --no-rebuild --timeout-multiplier 5
+    - dbus-run-session -- meson test -C gnome-shell/build --timeout-multiplier 5
   artifacts:
     expire_in: 7 day
     name: "mutter-${CI_JOB_NAME}-${CI_COMMIT_REF_NAME}"

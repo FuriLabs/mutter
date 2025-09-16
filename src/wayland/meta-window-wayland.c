@@ -211,15 +211,27 @@ meta_window_wayland_configure (MetaWindowWayland              *wl_window,
     meta_wayland_window_configuration_ref (configuration);
 }
 
+static gboolean
+is_drag_resizing_window (MetaWindowDrag *window_drag,
+                         MetaWindow     *window)
+{
+  return (window_drag &&
+          meta_grab_op_is_resizing (meta_window_drag_get_grab_op (window_drag)) &&
+          (meta_window_drag_get_window (window_drag) == window ||
+           meta_window_drag_get_window (window_drag) ==
+           meta_window_config_get_tile_match (window->config)));
+}
+
 static void
 surface_state_changed (MetaWindow *window)
 {
   MetaWindowWayland *wl_window = META_WINDOW_WAYLAND (window);
   MetaWaylandWindowConfiguration *last_sent_configuration =
     wl_window->last_sent_configuration;
-  MetaWaylandWindowConfiguration *last_acked_configuration =
-    wl_window->last_acked_configuration;
+  MetaWaylandWindowConfiguration *last_acked_configuration;
   g_autoptr (MetaWaylandWindowConfiguration) configuration = NULL;
+  gboolean is_configuration_up_to_date;
+  MetaWindowDrag *window_drag;
 
   /* don't send notify when the window is being unmanaged */
   if (window->unmanaging)
@@ -232,13 +244,35 @@ surface_state_changed (MetaWindow *window)
   configuration->flags = META_MOVE_RESIZE_STATE_CHANGED;
   configuration->is_suspended = wl_window->is_suspended;
 
-  if (last_acked_configuration &&
-      last_acked_configuration->serial == last_sent_configuration->serial &&
-      last_sent_configuration->is_floating)
+  last_acked_configuration = wl_window->last_acked_configuration;
+
+  is_configuration_up_to_date =
+    last_acked_configuration &&
+    last_acked_configuration->serial == last_sent_configuration->serial;
+
+  if (is_configuration_up_to_date && last_sent_configuration->is_floating)
     {
       configuration->has_position = FALSE;
       configuration->x = 0;
       configuration->y = 0;
+    }
+
+  window_drag =
+    meta_compositor_get_current_window_drag (window->display->compositor);
+  if (is_drag_resizing_window (window_drag, window))
+    {
+      configuration->has_size = TRUE;
+      meta_window_drag_calculate_window_size (window_drag,
+                                              &configuration->width,
+                                              &configuration->height);
+    }
+  else if (is_configuration_up_to_date && last_sent_configuration->is_floating)
+    {
+      MtkRectangle frame_rect = meta_window_config_get_rect (window->config);
+
+      configuration->has_size = TRUE;
+      configuration->width = frame_rect.width;
+      configuration->height = frame_rect.height;
     }
 
   meta_window_wayland_configure (wl_window, configuration);
@@ -475,8 +509,8 @@ meta_window_wayland_move_resize_internal (MetaWindow                *window,
                                                    flags,
                                                    gravity);
           if (!meta_wayland_window_configuration_is_equivalent (
-              configuration,
-              wl_window->last_sent_configuration))
+                configuration,
+                wl_window->last_sent_configuration))
             {
               meta_window_wayland_configure (wl_window, configuration);
               can_move_now = FALSE;
@@ -530,9 +564,10 @@ meta_window_wayland_move_resize_internal (MetaWindow                *window,
       flags & META_MOVE_RESIZE_WAYLAND_STATE_CHANGED)
     *result |= META_MOVE_RESIZE_RESULT_STATE_CHANGED;
 
-  if (flags & META_MOVE_RESIZE_WAYLAND_CLIENT_RESIZE ||
+  if ((wl_window->last_acked_configuration &&
+       wl_window->last_acked_configuration->is_floating) ||
       (can_move_now &&
-      !(flags & META_MOVE_RESIZE_WAYLAND_FINISH_MOVE_RESIZE)))
+       !(flags & META_MOVE_RESIZE_WAYLAND_FINISH_MOVE_RESIZE)))
     *result |= META_MOVE_RESIZE_RESULT_UPDATE_UNCONSTRAINED;
 }
 
@@ -1376,14 +1411,7 @@ meta_window_wayland_finish_move_resize (MetaWindow              *window,
     }
 
   window_drag = meta_compositor_get_current_window_drag (display->compositor);
-
-  /* x/y are ignored when we're doing interactive resizing */
-  is_window_being_resized =
-    (window_drag &&
-     meta_grab_op_is_resizing (meta_window_drag_get_grab_op (window_drag)) &&
-     (meta_window_drag_get_window (window_drag) == window ||
-      meta_window_drag_get_window (window_drag) ==
-      meta_window_config_get_tile_match (window->config)));
+  is_window_being_resized = is_drag_resizing_window (window_drag, window);
 
   frame_rect = meta_window_config_get_rect (window->config);
   rect = (MtkRectangle) {
@@ -1413,7 +1441,7 @@ meta_window_wayland_finish_move_resize (MetaWindow              *window,
                 {
                   flags |= META_MOVE_RESIZE_CONSTRAIN;
                 }
-              else if (!window->placed)
+              else if (!window->placed && !window->minimized)
                 {
                   place_flags |= META_PLACE_FLAG_CALCULATE;
                   flags |= META_MOVE_RESIZE_CONSTRAIN;
