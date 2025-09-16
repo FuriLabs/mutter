@@ -1,3 +1,21 @@
+mutter (49.0-1) experimental; urgency=medium
+
+  [ Jeremy Bícha ]
+  * New upstream release
+  * debian/libmutter-17-0.symbols: Add new symbol
+  * Bump Standards Version to 4.7.2
+  * Remove obsolete Rules-Requires-Root: no field
+
+  [ Marco Trevisan (Treviño) ]
+  * debian/control: Break on gnome-shell versions prior to 49~rc only
+  * debian/control: Set version on libglycin-2-dev dependency
+  * debian/control: Add libglycin-2-dev dependency to libmutter-17-dev
+
+  [ Alessandro Astone ]
+  * debian/control: Improve the description of the mutter-dev-bin package
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 16 Sep 2025 07:59:17 -0400
+
 mutter (49~rc-1) experimental; urgency=medium
 
   [ Daniel van Vugt ]

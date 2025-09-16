@@ -62,14 +62,15 @@ pointer_warp_perform (struct wl_client   *client,
                             0.0);
 
   /* Not focused and implicitly grabbed */
-  if (!meta_wayland_pointer_get_grab_info (pointer, surface, serial, TRUE,
-                                           NULL, NULL, NULL))
+  if (!meta_wayland_pointer_can_warp (pointer, surface, serial))
     return;
 
   /* Outside of actor */
   if (!surface_actor ||
-      x < 0 || x > clutter_actor_get_width (CLUTTER_ACTOR (surface_actor)) ||
-      y < 0 || y > clutter_actor_get_height (CLUTTER_ACTOR (surface_actor)))
+      coords.x < 0 ||
+      coords.x > clutter_actor_get_width (CLUTTER_ACTOR (surface_actor)) ||
+      coords.y < 0 ||
+      coords.y > clutter_actor_get_height (CLUTTER_ACTOR (surface_actor)))
     return;
 
   clutter_actor_apply_transform_to_point (CLUTTER_ACTOR (surface_actor),
