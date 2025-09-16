@@ -1,4 +1,4 @@
-mutter (49~rc-2) UNRELEASED; urgency=medium
+mutter (49.0-1) UNRELEASED; urgency=medium
 
   [ Marco Trevisan (Treviño) ]
   * debian/control: Break on gnome-shell versions prior to 49~rc only
@@ -8,7 +8,10 @@ mutter (49~rc-2) UNRELEASED; urgency=medium
   [ Alessandro Astone ]
   * debian/control: Improve the description of the mutter-dev-bin package
 
- -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 16 Sep 2025 07:11:40 -0400
+  [ Jeremy Bícha ]
+  * New upstream release
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 16 Sep 2025 07:12:58 -0400
 
 mutter (49~rc-1) experimental; urgency=medium
 
