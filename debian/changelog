@@ -1,3 +1,9 @@
+mutter (49.0-2ubuntu1) UNRELEASED; urgency=medium
+
+  * New upstream release 49.0
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Wed, 17 Sep 2025 14:54:43 +0800
+
 mutter (49.0-2) experimental; urgency=medium
 
   * debian/libmutter-17-0.symbols: Restore architecture restrictions
