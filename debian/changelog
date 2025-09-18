@@ -1,6 +1,27 @@
 mutter (48.5-1) UNRELEASED; urgency=medium
 
-  * New upstream release
+  * New upstream stable release
+    - Fix X11 drag-and-drop with a graphics tablet stylus, which would
+      previously freeze the application
+      (mutter#3914 upstream)
+    - Fix a file descriptor leak that would cause a crash after a long
+      screencast
+      (mutter#4251 upstream)
+    - Fix crash with an assertion failure when screencasting from an
+      Apple aarch64 system
+      (mutter#4224 upstream)
+    - Fix detection of the "Privacy Screen" feature on hardware that
+      supports it
+      (mutter#4259 upstream)
+    - Update the EIS viewport used for input capture when a virtual monitor
+      stream is resized
+      (mutter!4622 upstream)
+    - Fix a crash when combining the screen time limit's greyscale effect,
+      the screen magnifier and the screenshot tool
+      (mutter#8634 upstream)
+    - Fix a crash when unplugging a docking station with two monitors
+      (mutter#4262 upstream)
+    - Translation update: th
   * d/gbp/conf, d/control: Switch packaging branch for forky
 
  -- Simon McVittie <smcv@debian.org>  Thu, 18 Sep 2025 10:01:08 +0100
