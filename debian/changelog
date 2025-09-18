@@ -51,16 +51,90 @@ mutter (49~rc-1) experimental; urgency=medium
 
  -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 02 Sep 2025 11:17:38 -0400
 
+mutter (48.5-1) unstable; urgency=medium
+
+  * Team upload
+  * New upstream stable release
+    - Fix X11 drag-and-drop with a graphics tablet stylus, which would
+      previously freeze the application
+      (mutter#3914 upstream)
+    - Fix a file descriptor leak that would cause a crash after a long
+      screencast
+      (mutter#4251 upstream)
+    - Fix crash with an assertion failure when screencasting from an
+      Apple aarch64 system
+      (mutter#4224 upstream)
+    - Fix detection of the "Privacy Screen" feature on hardware that
+      supports it
+      (mutter#4259 upstream)
+    - Update the EIS viewport used for input capture when a virtual monitor
+      stream is resized
+      (mutter!4622 upstream)
+    - Fix a crash when combining the screen time limit's greyscale effect,
+      the screen magnifier and the screenshot tool
+      (mutter#8634 upstream)
+    - Fix a crash when unplugging a docking station with two monitors
+      (mutter#4262 upstream)
+    - Translation update: th
+  * d/gbp/conf, d/control: Switch packaging branch for forky
+
+ -- Simon McVittie <smcv@debian.org>  Thu, 18 Sep 2025 10:16:31 +0100
+
+mutter (48.4-2) unstable; urgency=medium
+
+  * Team upload
+  * d/gbp.conf, d/control: Switch packaging branch for trixie
+  * Expand previous changelog entry to document all upstream changes
+  * Upload to unstable
+
+ -- Simon McVittie <smcv@debian.org>  Sun, 13 Jul 2025 12:27:01 +0100
+
 mutter (48.4-1) experimental; urgency=medium
 
   [ Jeremy Bícha ]
   * New upstream bugfix release
-    - Unlink outputs from unused connectors in update_outputs
-    - Add speed limit to Visual alerts
-    - Fix behavior of windows that get activated before mapped
-    - Fix incorrect cursor over Xwayland clients (LP: #2111502)
-    - Fix hi-res scroll events getting converted to flip-flopping discrete events
-    - Fixed crash
+    - Unlink outputs from unused connectors in update_outputs, avoiding a
+      use-after-free when a monitor is disconnected
+      (mutter!4474 upstream)
+    - Fix a crash caused by a use-after-free when clearing many
+      accumulated notifications
+      (mutter#3970 upstream, LP: #2102063)
+    - Fix a non-reproducible crash caused by a use-after-free when dragging
+      an epiphany-browser tab to create a new window
+      (mutter#4157 upstream)
+    - Fix the logic for when to disable the --no-x11 option
+      (mutter!4485 upstream, not relevant to how we configure it in Debian)
+    - Rate-limit visual alerts to 2 per second, to comply with the European
+      Accessibility Act and avoid potentially triggering photosensitive
+      seizures
+      (mutter!4487 upstream)
+    - Fix a rare crash with a NULL pointer dereference
+      (mutter#4147 upstream, LP: #2100243)
+    - Avoid reopening an inactive Nvidia GPU when not needed
+      (mutter#3550 upstream)
+    - Fix a NULL dereference in the tests
+      (mutter!4495 upstream)
+    - Fix stacking order for windows that get activated before mapped
+      (mutter!4462 upstream)
+    - Fix incorrect cursor over Xwayland clients
+      (mutter#4033 upstream, LP: #2111502)
+    - Improve Wayland spec compliance by sending Wayland seat name before
+      its capabilities
+      (mutter#4119 upstream)
+    - Improve X11 compatibility (especially in Wine) by moving the X11 focus
+      to a shared dummy window when the Wayland focus is really on any
+      non-X11 window
+      (mutter!4447 upstream)
+    - Wait longer for hotplugged monitors to detect their input sources,
+      improving compatibility with e.g. MSI PRO MP275Q
+      (mutter!4442 upstream)
+    - Make sure the cursor is updated after modesetting, even if there is no
+      application window to redraw
+      (mutter!4452 upstream)
+    - Fix high resolution scroll events getting converted to discrete events
+      that intermittently switch direction
+      (mutter#4128 upstream)
+    - Documentation updates
 
   [ Simon McVittie ]
   * d/gbp.conf: Use upstream/48.x branch for trixie
