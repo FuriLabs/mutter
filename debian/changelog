@@ -1,3 +1,10 @@
+mutter (48.5-1) UNRELEASED; urgency=medium
+
+  * New upstream release
+  * d/gbp/conf, d/control: Switch packaging branch for forky
+
+ -- Simon McVittie <smcv@debian.org>  Thu, 18 Sep 2025 10:01:08 +0100
+
 mutter (48.4-2) unstable; urgency=medium
 
   * Team upload
