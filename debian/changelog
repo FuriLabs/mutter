@@ -1,3 +1,10 @@
+mutter (49.0-3) UNRELEASED; urgency=medium
+
+  * Merge packaging changes from unstable
+    - No functional changes, changelog entry only
+
+ -- Simon McVittie <smcv@debian.org>  Thu, 18 Sep 2025 17:38:44 +0100
+
 mutter (49.0-2) experimental; urgency=medium
 
   * debian/libmutter-17-0.symbols: Restore architecture restrictions
