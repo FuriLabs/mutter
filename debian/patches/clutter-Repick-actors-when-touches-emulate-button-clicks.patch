@@ -38,10 +38,10 @@ index ed54c05..7948223 100644
  
  /* stage */
 diff --git a/clutter/clutter/clutter-stage.c b/clutter/clutter/clutter-stage.c
-index 074f5fe..5623567 100644
+index 483d05b..81e2d02 100644
 --- a/clutter/clutter/clutter-stage.c
 +++ b/clutter/clutter/clutter-stage.c
-@@ -3586,10 +3586,15 @@ clutter_stage_pick_and_update_device (ClutterStage             *stage,
+@@ -3588,10 +3588,15 @@ clutter_stage_pick_and_update_device (ClutterStage             *stage,
    ClutterActor *new_actor = NULL;
    MtkRegion *clear_area = NULL;
    ClutterSeat *seat;
@@ -58,7 +58,7 @@ index 074f5fe..5623567 100644
        device != clutter_seat_get_pointer (seat) ||
        clutter_seat_is_unfocus_inhibited (seat))
      {
-@@ -4677,6 +4682,9 @@ clutter_stage_update_device_for_event (ClutterStage *stage,
+@@ -4679,6 +4684,9 @@ clutter_stage_update_device_for_event (ClutterStage *stage,
  
    flags = CLUTTER_DEVICE_UPDATE_EMIT_CROSSING;
  
