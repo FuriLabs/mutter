@@ -1,3 +1,10 @@
+mutter (49.0-2ubuntu2) questing; urgency=medium
+
+  * Add clutter-Use-event-type-to-determine-ClutterFocus-to-deliv.patch
+    to ensure the gnome-shell overview gets keyboard focus (LP: #2124255)
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Tue, 23 Sep 2025 14:46:09 +0800
+
 mutter (49.0-2ubuntu1) questing; urgency=medium
 
   * New upstream release 49.0

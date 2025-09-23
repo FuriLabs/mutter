@@ -4,3 +4,4 @@ workarounds/tests-Skip-thread-priority-test.patch
 workarounds/Mark-several-additional-tests-as-flaky.patch
 workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
 ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
+ubuntu/clutter-Use-event-type-to-determine-ClutterFocus-to-deliv.patch
