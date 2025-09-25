@@ -1,3 +1,11 @@
+mutter (49.0-2ubuntu4) questing; urgency=medium
+
+  * Add another patch related to LP: #2122579 and refresh the existing one.
+    I'm just finding out now from upstream what actually fixed it because
+    the bug was never tracked properly before the fix landed.
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 25 Sep 2025 16:52:10 +0800
+
 mutter (49.0-2ubuntu3) questing; urgency=medium
 
   * Add patches from upstream (to be released in 49.1) fixing common

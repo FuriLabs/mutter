@@ -23,6 +23,7 @@ clutter/gesture: Fix code style for new code
 
 Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4679>
 
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/4345
 Bug-Ubuntu: https://bugs.launchpad.net/bugs/2122579
 Origin: Upstream commit 85216f2db006a5f51703c0bcd519e9d630e9b7eb
 ---
@@ -30,7 +31,7 @@ Origin: Upstream commit 85216f2db006a5f51703c0bcd519e9d630e9b7eb
  1 file changed, 24 insertions(+), 22 deletions(-)
 
 diff --git a/clutter/clutter/clutter-gesture.c b/clutter/clutter/clutter-gesture.c
-index a52e7fc..22de7f2 100644
+index 8a05888..6c1c43a 100644
 --- a/clutter/clutter/clutter-gesture.c
 +++ b/clutter/clutter/clutter-gesture.c
 @@ -817,6 +817,27 @@ is_sequence_end_event (const ClutterEvent *event)
@@ -76,8 +77,8 @@ index a52e7fc..22de7f2 100644
 +  if (!supported_gesture_event (event_type))
      return CLUTTER_EVENT_PROPAGATE;
  
-   if ((seq_data = get_sequence_data (self, sprite, &seq_index)) == NULL)
-@@ -923,25 +941,9 @@ clutter_gesture_handle_event (ClutterAction      *action,
+   sprite = clutter_backend_get_sprite (backend, stage, event);
+@@ -927,25 +945,9 @@ clutter_gesture_handle_event (ClutterAction      *action,
        seq_data->latest_event = clutter_event_copy (event);
  
        priv->latest_index = seq_index;
