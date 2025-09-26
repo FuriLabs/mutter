@@ -1,5 +1,6 @@
-mutter (49.0-3) UNRELEASED; urgency=medium
+mutter (49.0-3) experimental; urgency=medium
 
+  * Team upload
   * Merge packaging changes from unstable
     - No functional changes, changelog entry only
   * d/p/Use-dbus-debug-topic-for-D-Bus-name-changes.patch,
@@ -12,7 +13,7 @@ mutter (49.0-3) UNRELEASED; urgency=medium
     Add proposed patches from upstream MR mutter!4648 to fix a crash
     with sdl2-compat and ioquake3
 
- -- Simon McVittie <smcv@debian.org>  Tue, 23 Sep 2025 14:54:51 +0100
+ -- Simon McVittie <smcv@debian.org>  Fri, 26 Sep 2025 18:35:28 +0100
 
 mutter (49.0-2) experimental; urgency=medium
 
