@@ -4,7 +4,10 @@ mutter (49.0-2ubuntu5) UNRELEASED; urgency=medium
   * Add patches to resolve handling of modifier keys in the wrong order,
     in some cases (LP: #2125866, LP: #2125240)
 
- -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Wed, 01 Oct 2025 17:37:44 +0800
+  [ Alessandro Astone ]
+  * Add patch fixing popups freezing near the screen edge (LP: #2125770)
+
+ -- Alessandro Astone <alessandro.astone@canonical.com>  Wed, 01 Oct 2025 12:42:12 +0200
 
 mutter (49.0-2ubuntu4) questing; urgency=medium
 
