@@ -1,0 +1,35 @@
+From: Alessandro Astone <alessandro.astone@canonical.com>
+Date: Wed, 1 Oct 2025 16:56:12 +0200
+Subject: window: Do not unqueue wayland window for move-resize when acking
+
+If we had queued a window for move-resize updates and some event causes us
+to process a previous configuration ack, we don't want to remove the window
+from the queue and make it lose the next configuration update.
+
+This fixes the bug where maximized windows may extend under a panel when
+locking/unlocking or changing the display scale, where we get multiple struts
+updates in quick succession.
+
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/1627
+Bug-Ubuntu: https://launchpad.net/bugs/2125581
+Forwarded: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4695
+---
+ src/core/window.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/src/core/window.c b/src/core/window.c
+index 26996eb..e215a7c 100644
+--- a/src/core/window.c
++++ b/src/core/window.c
+@@ -4273,8 +4273,9 @@ meta_window_move_resize_internal (MetaWindow          *window,
+ 
+   gravity = meta_window_get_gravity (window);
+ 
+-  /* We don't need it in the idle queue anymore. */
+-  meta_window_unqueue (window, META_QUEUE_MOVE_RESIZE);
++  if (!(flags & META_MOVE_RESIZE_WAYLAND_FINISH_MOVE_RESIZE))
++    meta_window_unqueue (window, META_QUEUE_MOVE_RESIZE);
++
+   rect = meta_window_config_get_rect (window->config);
+ 
+   if ((flags & META_MOVE_RESIZE_RESIZE_ACTION) && (flags & META_MOVE_RESIZE_MOVE_ACTION))
