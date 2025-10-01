@@ -9,3 +9,5 @@ ubuntu/clutter-Bail-out-in-gesture-event-handler-on-sprite-less-.patch
 ubuntu/clutter-gesture-Do-not-crash-on-unknown-events.patch
 ubuntu/cursor-renderer-native-Sanity-check-texture-size-before-a.patch
 ubuntu/prefs-Fallback-cursor-size-to-24-when-invalid-value-in-se.patch
+ubuntu/core-Let-key-presses-of-special-modifiers-through.patch
+ubuntu/wayland-Check-modifier-state-from-event-prior-to-event-de.patch
