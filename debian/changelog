@@ -6,8 +6,10 @@ mutter (49.0-2ubuntu5) UNRELEASED; urgency=medium
 
   [ Alessandro Astone ]
   * Add patch fixing popups freezing near the screen edge (LP: #2125770)
+  * Add patch fixing maximized windows extending under the dock on unlock
+    (LP: #2125581)
 
- -- Alessandro Astone <alessandro.astone@canonical.com>  Wed, 01 Oct 2025 12:42:12 +0200
+ -- Alessandro Astone <alessandro.astone@canonical.com>  Wed, 01 Oct 2025 22:20:03 +0200
 
 mutter (49.0-2ubuntu4) questing; urgency=medium
 
