@@ -11,3 +11,4 @@ ubuntu/cursor-renderer-native-Sanity-check-texture-size-before-a.patch
 ubuntu/prefs-Fallback-cursor-size-to-24-when-invalid-value-in-se.patch
 ubuntu/core-Let-key-presses-of-special-modifiers-through.patch
 ubuntu/wayland-Check-modifier-state-from-event-prior-to-event-de.patch
+ubuntu/wayland-Always-send-configure-event-after-xdg_popup-repos.patch
