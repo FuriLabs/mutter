@@ -1,4 +1,4 @@
-mutter (49.0-2ubuntu5) UNRELEASED; urgency=medium
+mutter (49.0-2ubuntu5) questing; urgency=medium
 
   [ Daniel van Vugt ]
   * Add patches to resolve handling of modifier keys in the wrong order,
@@ -9,7 +9,7 @@ mutter (49.0-2ubuntu5) UNRELEASED; urgency=medium
   * Add patch fixing maximized windows extending under the dock on unlock
     (LP: #2125581)
 
- -- Alessandro Astone <alessandro.astone@canonical.com>  Wed, 01 Oct 2025 22:20:03 +0200
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 02 Oct 2025 10:04:46 +0800
 
 mutter (49.0-2ubuntu4) questing; urgency=medium
 
