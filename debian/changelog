@@ -1,9 +1,14 @@
-mutter (49.1-1) UNRELEASED; urgency=medium
+mutter (49.1-1) experimental; urgency=medium
 
-  * New upstream release
+  * Team upload
+  * New upstream stable release
     - d/patches: Drop patches that were applied upstream
+    - d/libmutter-17-0.symbols: Ignore removal of meta_window_resize_frame().
+      This is technically an ABI break, but it was only declared in a
+      private header for use by automated tests.
+    - d/libmutter-test-17.symbols: Update for 49.1
 
- -- Simon McVittie <smcv@debian.org>  Wed, 15 Oct 2025 12:08:42 +0100
+ -- Simon McVittie <smcv@debian.org>  Wed, 15 Oct 2025 12:59:28 +0100
 
 mutter (49.0-3) experimental; urgency=medium
 
