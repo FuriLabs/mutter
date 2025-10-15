@@ -21,6 +21,7 @@
 #include <glib.h>
 #include <stdint.h>
 
+#include "compositor/meta-window-drag.h"
 #include "core/window-private.h"
 #include "meta/meta-window-config.h"
 #include "wayland/meta-wayland-types.h"
@@ -34,6 +35,8 @@ struct _MetaWaylandWindowConfiguration
   gboolean has_position;
   int x;
   int y;
+
+  MetaWindowDrag *window_drag;
 
   gboolean has_relative_position;
   int rel_x;
@@ -51,8 +54,7 @@ struct _MetaWaylandWindowConfiguration
   int bounds_width;
   int bounds_height;
 
-  gboolean is_fullscreen;
-  gboolean is_floating;
+  MetaWindowConfig *config;
   gboolean is_suspended;
 };
 

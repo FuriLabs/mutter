@@ -23,6 +23,7 @@
 #include "mtk/mtk-x11.h"
 #include "x11/meta-x11-display-private.h"
 #include "x11/meta-x11-frame.h"
+#include "x11/window-props.h"
 #include "x11/window-x11.h"
 #include "x11/window-x11-private.h"
 #include "x11/xprops.h"
@@ -145,8 +146,11 @@ meta_window_xwayland_adjust_fullscreen_monitor_rect (MetaWindow   *window,
     {
       if (rects[i].x == win_monitor_rect.x && rects[i].y == win_monitor_rect.y)
         {
-          fs_monitor_rect->width = rects[i].width;
-          fs_monitor_rect->height = rects[i].height;
+          meta_window_protocol_to_stage_point (window,
+                                               rects[i].width, rects[i].height,
+                                               &fs_monitor_rect->width,
+                                               &fs_monitor_rect->height,
+                                               MTK_ROUNDING_STRATEGY_GROW);
           break;
         }
     }
@@ -318,22 +322,100 @@ meta_window_xwayland_process_property_notify (MetaWindow     *window,
     meta_window_queue (window, META_QUEUE_MOVE_RESIZE);
 }
 
+static int
+scale_and_handle_overflow (int                 input,
+                           float               scale,
+                           MtkRoundingStrategy rounding_strategy)
+{
+  float value;
+
+  switch (rounding_strategy)
+    {
+    case MTK_ROUNDING_STRATEGY_SHRINK:
+      value = floorf (input * scale);
+      break;
+    case MTK_ROUNDING_STRATEGY_GROW:
+      value = ceilf (input * scale);
+      break;
+    case MTK_ROUNDING_STRATEGY_ROUND:
+      value = roundf (input * scale);
+      break;
+    default:
+      g_return_val_if_reached (NAN);
+    }
+
+  if (value >= (float) INT_MAX)
+    return INT_MAX;
+  else if (value <= (float) INT_MIN)
+    return INT_MIN;
+  else
+    return (int) value;
+}
+
+static float
+get_viewport_scale_x (MetaWaylandSurface *surface)
+{
+  int buffer_width;
+
+  if (mtk_monitor_transform_is_rotated (surface->buffer_transform))
+    buffer_width = meta_wayland_surface_get_buffer_height (surface);
+  else
+    buffer_width = meta_wayland_surface_get_buffer_width (surface);
+
+  return (float) surface->viewport.dst_width / buffer_width;
+}
+
+static float
+get_viewport_scale_y (MetaWaylandSurface *surface)
+{
+  int buffer_height;
+
+  if (mtk_monitor_transform_is_rotated (surface->buffer_transform))
+    buffer_height = meta_wayland_surface_get_buffer_width (surface);
+  else
+    buffer_height = meta_wayland_surface_get_buffer_height (surface);
+
+  return (float) surface->viewport.dst_height / buffer_height;
+}
+
 static void
-meta_window_xwayland_stage_to_protocol (MetaWindow *window,
-                                        int         stage_x,
-                                        int         stage_y,
-                                        int        *protocol_x,
-                                        int        *protocol_y)
+meta_window_xwayland_stage_to_protocol (MetaWindow          *window,
+                                        int                  stage_x,
+                                        int                  stage_y,
+                                        int                 *protocol_x,
+                                        int                 *protocol_y,
+                                        MtkRoundingStrategy  rounding_strategy)
 {
   MetaDisplay *display = meta_window_get_display (window);
   MetaContext *context = meta_display_get_context (display);
   MetaWaylandCompositor *wayland_compositor =
     meta_context_get_wayland_compositor (context);
   MetaXWaylandManager *xwayland_manager = &wayland_compositor->xwayland_manager;
+  MetaWaylandSurface *surface;
+  float scale_x, scale_y;
 
-  meta_xwayland_stage_to_protocol_point (xwayland_manager,
-                                         stage_x, stage_y,
-                                         protocol_x, protocol_y);
+  scale_x = scale_y = meta_xwayland_get_effective_scale (xwayland_manager);
+
+  surface = meta_window_get_wayland_surface (window);
+  if (surface && surface->viewport.has_dst_size)
+    {
+      if (stage_x)
+        scale_x /= get_viewport_scale_x (surface);
+
+      if (stage_y)
+        scale_y /= get_viewport_scale_y (surface);
+    }
+
+  if (protocol_x)
+    {
+      *protocol_x = scale_and_handle_overflow (stage_x, scale_x,
+                                               rounding_strategy);
+    }
+  if (protocol_y)
+    {
+      *protocol_y = scale_and_handle_overflow (stage_y, scale_y,
+                                               rounding_strategy);
+    }
 }
 
 static void
@@ -349,11 +431,43 @@ meta_window_xwayland_protocol_to_stage (MetaWindow          *window,
   MetaWaylandCompositor *wayland_compositor =
     meta_context_get_wayland_compositor (context);
   MetaXWaylandManager *xwayland_manager = &wayland_compositor->xwayland_manager;
+  MetaWaylandSurface *surface;
+  int xwayland_scale;
+  float scale_x, scale_y;
 
-  meta_xwayland_protocol_to_stage (xwayland_manager,
-                                   protocol_x, protocol_y,
-                                   stage_x, stage_y,
-                                   rounding_strategy);
+  xwayland_scale = meta_xwayland_get_effective_scale (xwayland_manager);
+  scale_x = scale_y = 1.0f / xwayland_scale;
+
+  surface = meta_window_get_wayland_surface (window);
+  if (surface && surface->viewport.has_dst_size)
+    {
+      if (stage_x)
+        scale_x *= get_viewport_scale_x (surface);
+
+      if (stage_y)
+        scale_y *= get_viewport_scale_y (surface);
+    }
+
+  if (stage_x)
+    {
+      *stage_x = scale_and_handle_overflow (protocol_x, scale_x,
+                                            rounding_strategy);
+    }
+  if (stage_y)
+    {
+      *stage_y = scale_and_handle_overflow (protocol_y, scale_y,
+                                            rounding_strategy);
+    }
+}
+
+void
+meta_window_xwayland_viewport_changed (MetaWindow *window)
+{
+  meta_window_x11_update_shape_region (window);
+  meta_window_x11_update_input_region (window);
+  meta_window_load_initial_properties (window);
+  meta_window_frame_size_changed (window);
+  meta_window_update_visibility (window);
 }
 
 static void

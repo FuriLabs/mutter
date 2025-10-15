@@ -2245,7 +2245,8 @@ meta_window_force_placement (MetaWindow    *window,
   meta_window_move_resize_internal (window,
                                     flags,
                                     place_flags | META_PLACE_FLAG_CALCULATE,
-                                    window->unconstrained_rect);
+                                    window->unconstrained_rect,
+                                    NULL);
 
   /* don't ever do the initial position constraint thing again.
    * This is toggled here so that initially-iconified windows
@@ -2802,25 +2803,7 @@ ensure_size_hints_satisfied (MtkRectangle        *rect,
 static void
 meta_window_save_rect (MetaWindow *window)
 {
-  if (!(meta_window_is_maximized (window) ||
-        meta_window_is_tiled_side_by_side (window) ||
-        meta_window_is_fullscreen (window)))
-    {
-      MtkRectangle frame_rect;
-
-      frame_rect = meta_window_config_get_rect (window->config);
-      /* save size/pos as appropriate args for move_resize */
-      if (!meta_window_config_is_maximized_horizontally (window->config))
-        {
-          window->saved_rect.x      = frame_rect.x;
-          window->saved_rect.width  = frame_rect.width;
-        }
-      if (!meta_window_config_is_maximized_vertically (window->config))
-        {
-          window->saved_rect.y      = frame_rect.y;
-          window->saved_rect.height = frame_rect.height;
-        }
-    }
+  META_WINDOW_GET_CLASS (window)->save_rect (window);
 }
 
 void
@@ -3141,7 +3124,7 @@ meta_window_get_tile_fraction (MetaWindow   *window,
     *fraction = .5;
 }
 
-static void
+void
 meta_window_update_tile_fraction (MetaWindow *window,
                                   int         new_w,
                                   int         new_h)
@@ -3236,11 +3219,7 @@ update_edge_constraints (MetaWindow *window)
 gboolean
 meta_window_is_tiled_side_by_side (MetaWindow *window)
 {
-  MetaWindowConfig *config = window->config;
-
-  return (meta_window_config_is_maximized_vertically (config) &&
-          !meta_window_config_is_maximized_horizontally (config) &&
-          meta_window_config_get_tile_mode (config) != META_TILE_NONE);
+  return meta_window_config_is_tiled_side_by_side (window->config);
 }
 
 gboolean
@@ -3282,8 +3261,9 @@ meta_window_untile (MetaWindow *window)
 }
 
 void
-meta_window_tile (MetaWindow   *window,
-                  MetaTileMode  tile_mode)
+meta_window_tile_internal (MetaWindow   *window,
+                           MetaTileMode  tile_mode,
+                           MtkRectangle *saved_rect)
 {
   MetaMaximizeFlags directions;
   MetaWindowDrag *window_drag;
@@ -3313,7 +3293,7 @@ meta_window_tile (MetaWindow   *window,
   else
     directions = META_MAXIMIZE_VERTICAL;
 
-  meta_window_maximize_internal (window, directions, NULL);
+  meta_window_maximize_internal (window, directions, saved_rect);
 
   window_drag =
     meta_compositor_get_current_window_drag (window->display->compositor);
@@ -3339,6 +3319,13 @@ meta_window_tile (MetaWindow   *window,
                             META_MOVE_RESIZE_STATE_CHANGED |
                             META_MOVE_RESIZE_CONSTRAIN),
                            window->unconstrained_rect);
+}
+
+void
+meta_window_tile (MetaWindow   *window,
+                  MetaTileMode  tile_mode)
+{
+  meta_window_tile_internal (window, tile_mode, NULL);
 }
 
 void
@@ -3580,7 +3567,8 @@ meta_window_set_unmaximize_flags (MetaWindow        *window,
                                           &old_frame_rect, &old_buffer_rect);
 
       meta_window_move_resize_internal (window, flags, place_flags,
-                                        target_rect);
+                                        target_rect,
+                                        NULL);
 
       meta_window_recalc_features (window);
       set_net_wm_state (window);
@@ -3754,7 +3742,8 @@ meta_window_unmake_fullscreen (MetaWindow  *window)
                                           &old_frame_rect, &old_buffer_rect);
 
       meta_window_move_resize_internal (window, flags, place_flags,
-                                        target_rect);
+                                        target_rect,
+                                        NULL);
 
       meta_display_queue_check_fullscreen (window->display);
 
@@ -4181,7 +4170,8 @@ void
 meta_window_move_resize_internal (MetaWindow          *window,
                                   MetaMoveResizeFlags  flags,
                                   MetaPlaceFlag        place_flags,
-                                  MtkRectangle         frame_rect)
+                                  MtkRectangle         frame_rect,
+                                  MtkRectangle        *result_rect)
 {
   /* The rectangle here that's passed in *always* in "frame rect"
    * coordinates. That means the position of the frame's visible bounds,
@@ -4228,8 +4218,9 @@ meta_window_move_resize_internal (MetaWindow          *window,
 
   gravity = meta_window_get_gravity (window);
 
-  /* We don't need it in the idle queue anymore. */
-  meta_window_unqueue (window, META_QUEUE_MOVE_RESIZE);
+  if (!(flags & META_MOVE_RESIZE_WAYLAND_FINISH_MOVE_RESIZE))
+    meta_window_unqueue (window, META_QUEUE_MOVE_RESIZE);
+
   rect = meta_window_config_get_rect (window->config);
 
   if ((flags & META_MOVE_RESIZE_RESIZE_ACTION) && (flags & META_MOVE_RESIZE_MOVE_ACTION))
@@ -4341,12 +4332,42 @@ meta_window_move_resize_internal (MetaWindow          *window,
 
   if (result & META_MOVE_RESIZE_RESULT_MOVED)
     {
+      if (meta_is_topic_enabled (META_DEBUG_WINDOW_STATE))
+        {
+          MtkRectangle new_rect;
+
+          new_rect = meta_window_config_get_rect (window->config);
+          meta_topic (META_DEBUG_WINDOW_STATE,
+                      "Moved window %s moved: "
+                      "frame position=%d, %d, "
+                      "buffer position=%d, %d",
+                      window->desc,
+                      new_rect.x, new_rect.y,
+                      window->buffer_rect.x,
+                      window->buffer_rect.y);
+        }
+
       moved_or_resized = TRUE;
       g_signal_emit (window, window_signals[POSITION_CHANGED], 0);
     }
 
   if (result & META_MOVE_RESIZE_RESULT_RESIZED)
     {
+      if (meta_is_topic_enabled (META_DEBUG_WINDOW_STATE))
+        {
+          MtkRectangle new_rect;
+
+          new_rect = meta_window_config_get_rect (window->config);
+          meta_topic (META_DEBUG_WINDOW_STATE,
+                      "Moved window %s resized: "
+                      "frame size=%dx%d, "
+                      "buffer size=%dx%d",
+                      window->desc,
+                      new_rect.width, new_rect.height,
+                      window->buffer_rect.width,
+                      window->buffer_rect.height);
+        }
+
       moved_or_resized = TRUE;
       g_signal_emit (window, window_signals[SIZE_CHANGED], 0);
     }
@@ -4401,6 +4422,9 @@ meta_window_move_resize_internal (MetaWindow          *window,
 
   meta_stack_update_window_tile_matches (window->display->stack,
                                          workspace_manager->active_workspace);
+
+  if (result_rect)
+    *result_rect = constrained_rect;
 }
 
 void
@@ -4411,7 +4435,8 @@ meta_window_move_resize (MetaWindow          *window,
   meta_window_move_resize_internal (window,
                                     flags,
                                     META_PLACE_FLAG_NONE,
-                                    rect);
+                                    rect,
+                                    NULL);
 }
 
 /**
@@ -4570,9 +4595,7 @@ meta_window_move_to_monitor (MetaWindow  *window,
                                          monitor,
                                          &new_area);
 
-  if (window->unconstrained_rect.width == 0 ||
-      window->unconstrained_rect.height == 0 ||
-      !mtk_rectangle_overlap (&window->unconstrained_rect, &old_area))
+  if (meta_window_is_hidden (window))
     {
       meta_window_move_between_rects (window, 0, NULL, &new_area);
     }
@@ -4602,75 +4625,6 @@ meta_window_move_to_monitor (MetaWindow  *window,
     meta_display_queue_check_fullscreen (window->display);
 }
 
-static void
-adjust_size_for_tile_match (MetaWindow *window,
-                            int        *new_w,
-                            int        *new_h)
-{
-  MtkRectangle work_area, rect;
-  MetaWindow *tile_match = meta_window_config_get_tile_match (window->config);
-  int tile_monitor_number;
-
-  if (!meta_window_is_tiled_side_by_side (window) || !tile_match)
-    return;
-
-  tile_monitor_number =
-    meta_window_config_get_tile_monitor_number (window->config);
-  meta_window_get_work_area_for_monitor (window, tile_monitor_number,
-                                         &work_area);
-
-  /* Make sure the resize does not break minimum sizes */
-  rect = work_area;
-  rect.width = *new_w;
-
-  meta_window_frame_rect_to_client_rect (window, &rect, &rect);
-  *new_w += MAX (0, window->size_hints.min_width - rect.width);
-
-  /* Make sure we're not resizing the tile match below its min width */
-  rect = work_area;
-  rect.width = work_area.width - *new_w;
-
-  meta_window_frame_rect_to_client_rect (tile_match, &rect, &rect);
-  *new_w -= MAX (0, tile_match->size_hints.min_width - rect.width);
-}
-
-void
-meta_window_resize_frame (MetaWindow *window,
-                          gboolean    user_op,
-                          int         w,
-                          int         h)
-{
-  MetaMoveResizeFlags flags;
-  MtkRectangle rect = { 0, };
-
-  rect.width = w;
-  rect.height = h;
-
-  if (user_op)
-    {
-      MetaWindowDrag *window_drag;
-
-      window_drag =
-        meta_compositor_get_current_window_drag (window->display->compositor);
-
-      /* When resizing in-tandem with a tile match, we need to respect
-       * its minimum width
-       */
-      if (window_drag &&
-          meta_window_drag_get_window (window_drag) == window)
-        adjust_size_for_tile_match (window, &w, &h);
-      meta_window_update_tile_fraction (window, w, h);
-    }
-
-  flags = ((user_op ? META_MOVE_RESIZE_USER_ACTION : 0) |
-           META_MOVE_RESIZE_RESIZE_ACTION |
-           META_MOVE_RESIZE_CONSTRAIN);
-  meta_window_move_resize_internal (window,
-                                    flags,
-                                    META_PLACE_FLAG_NONE,
-                                    rect);
-}
-
 void
 meta_window_idle_move_resize (MetaWindow *window)
 {
@@ -4691,12 +4645,7 @@ meta_window_idle_move_resize (MetaWindow *window)
            META_MOVE_RESIZE_CONSTRAIN);
   if (!window->unconstrained_rect_valid)
     flags |= META_MOVE_RESIZE_RECT_INVALID;
-  meta_window_move_resize (window,
-                           META_MOVE_RESIZE_MOVE_ACTION |
-                           META_MOVE_RESIZE_RESIZE_ACTION |
-                           META_MOVE_RESIZE_CONSTRAIN |
-                           META_MOVE_RESIZE_RECT_INVALID,
-                           window->unconstrained_rect);
+  meta_window_move_resize (window, flags, window->unconstrained_rect);
 }
 
 gboolean
@@ -8473,10 +8422,12 @@ meta_window_stage_to_protocol_rect (MetaWindow         *window,
 
   klass->stage_to_protocol (window,
                             stage_rect->x, stage_rect->y,
-                            &protocol_rect->x, &protocol_rect->y);
+                            &protocol_rect->x, &protocol_rect->y,
+                            MTK_ROUNDING_STRATEGY_SHRINK);
   klass->stage_to_protocol (window,
                             stage_rect->width, stage_rect->height,
-                            &protocol_rect->width, &protocol_rect->height);
+                            &protocol_rect->width, &protocol_rect->height,
+                            MTK_ROUNDING_STRATEGY_GROW);
 }
 
 /**
@@ -8500,7 +8451,8 @@ meta_window_stage_to_protocol_point (MetaWindow *window,
 
   klass->stage_to_protocol (window,
                             stage_x, stage_y,
-                            protocol_x, protocol_y);
+                            protocol_x, protocol_y,
+                            MTK_ROUNDING_STRATEGY_SHRINK);
 }
 
 /**

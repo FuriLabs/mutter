@@ -40,6 +40,7 @@
 #include "wayland/meta-wayland-client-private.h"
 #include "wayland/meta-wayland-filter-manager.h"
 #include "wayland/meta-wayland-surface-private.h"
+#include "wayland/meta-wayland-window-configuration.h"
 #include "wayland/meta-window-wayland.h"
 
 #include "dummy-client-protocol.h"
@@ -66,6 +67,27 @@ static MetaWindow *
 find_client_window (const char *title)
 {
   return meta_find_client_window (test_context, title);
+}
+
+static MetaWindow *
+map_test_window (MetaTestClient *test_client,
+                 const char     *script)
+{
+  MetaWindow *window;
+  GError *error = NULL;
+
+  meta_test_client_run (test_client, script);
+
+  while (!(window = meta_test_client_find_window (test_client, "1", &error)))
+    {
+      g_assert_no_error (error);
+      g_main_context_iteration (NULL, TRUE);
+    }
+  while (meta_window_is_hidden (window))
+    g_main_context_iteration (NULL, TRUE);
+  meta_wait_for_effects (window);
+
+  return window;
 }
 
 static void
@@ -524,6 +546,8 @@ subsurface_invalid_xdg_shell_actions (void)
     meta_wayland_test_client_new (test_context, "invalid-xdg-shell-actions");
   g_test_expect_message ("libmutter", G_LOG_LEVEL_WARNING,
                          "Invalid geometry * set on xdg_surface*");
+  g_test_expect_message ("libmutter", G_LOG_LEVEL_WARNING,
+                         "Buggy client * committed initial non-empty content*");
   meta_wayland_test_client_finish (wayland_test_client);
   g_test_assert_expected_messages ();
 }
@@ -769,6 +793,98 @@ toplevel_invalid_limits (void)
   meta_wayland_test_driver_terminate (test_driver);
   meta_wayland_test_client_finish (wayland_test_client);
   g_test_assert_expected_messages ();
+}
+
+static void
+toplevel_invalid_geometry_basic (void)
+{
+  GSettings *settings = g_settings_new ("org.gnome.mutter");
+  MetaWaylandTestClient *wayland_test_client;
+  MetaWindow *window;
+  MtkRectangle rect;
+
+  g_assert_true (g_settings_set_boolean (settings, "center-new-windows", TRUE));
+
+  wayland_test_client =
+    meta_wayland_test_client_new (test_context, "invalid-geometry");
+
+  g_test_expect_message ("libmutter", G_LOG_LEVEL_WARNING,
+                         "Client provided invalid window geometry for "
+                         "xdg_surface*");
+  g_test_expect_message ("libmutter", G_LOG_LEVEL_WARNING,
+                         "Client provided invalid window geometry for "
+                         "xdg_surface*");
+
+  while (!(window = find_client_window ("invalid-geometry")))
+    g_main_context_iteration (NULL, TRUE);
+  while (meta_window_is_hidden (window))
+    g_main_context_iteration (NULL, TRUE);
+
+  rect = meta_window_config_get_rect (window->config);
+  g_assert_cmpint (rect.width, ==, 200);
+  g_assert_cmpint (rect.height, ==, 200);
+  g_assert_cmpint (rect.x, ==, 220);
+  g_assert_cmpint (rect.y, ==, 140);
+
+  meta_wayland_test_driver_terminate (test_driver);
+  meta_wayland_test_client_finish (wayland_test_client);
+  g_test_assert_expected_messages ();
+}
+
+static void
+toplevel_invalid_geometry_subsurface (void)
+{
+  GSettings *settings = g_settings_new ("org.gnome.mutter");
+  GError *error = NULL;
+  MetaTestClient *test_client;
+  MetaWaylandTestClient *wayland_test_client;
+  MetaWindow *window;
+  MtkRectangle rect;
+
+  g_assert_true (g_settings_set_boolean (settings, "center-new-windows", TRUE));
+
+  test_client = meta_test_client_new (test_context,
+                                      "1",
+                                      META_WINDOW_CLIENT_TYPE_WAYLAND,
+                                      &error);
+  g_assert_no_error (error);
+  map_test_window (test_client,
+                   "create 1 csd\n"
+                   "resize 1 400 400\n"
+                   "show 1\n");
+
+  wayland_test_client =
+    meta_wayland_test_client_new_with_args (test_context,
+                                            "invalid-geometry",
+                                            "with-subsurface",
+                                            NULL);
+
+  g_test_expect_message ("libmutter", G_LOG_LEVEL_WARNING,
+                         "Client provided invalid window geometry for "
+                         "xdg_surface*");
+  g_test_expect_message ("libmutter", G_LOG_LEVEL_WARNING,
+                         "Client provided invalid window geometry for "
+                         "xdg_surface*");
+  g_test_expect_message ("libmutter", G_LOG_LEVEL_WARNING,
+                         "Client provided invalid window geometry for "
+                         "xdg_surface*");
+
+  while (!(window = find_client_window ("invalid-geometry")))
+    g_main_context_iteration (NULL, TRUE);
+  while (meta_window_is_hidden (window))
+    g_main_context_iteration (NULL, TRUE);
+
+  rect = meta_window_config_get_rect (window->config);
+  g_assert_cmpint (rect.width, ==, 200);
+  g_assert_cmpint (rect.height, ==, 200);
+  g_assert_cmpint (rect.x, ==, 220);
+  g_assert_cmpint (rect.y, ==, 140);
+
+  meta_wayland_test_driver_terminate (test_driver);
+  meta_wayland_test_client_finish (wayland_test_client);
+  g_test_assert_expected_messages ();
+
+  meta_test_client_destroy (test_client);
 }
 
 static void
@@ -1807,6 +1923,187 @@ toplevel_fixed_size_fullscreen_exceeds (void)
 }
 
 static void
+toplevel_focus_changes_remembers_size (void)
+{
+  GSettings *settings;
+  MetaWindow *window;
+  MetaWindowWayland *wl_window;
+  MtkRectangle rect;
+  MetaTestClient *test_client;
+  GError *error = NULL;
+  uint32_t serial;
+  MetaWaylandWindowConfiguration *pending_configuration;
+
+  settings = g_settings_new ("org.gnome.mutter");
+  g_assert_true (g_settings_set_boolean (settings, "center-new-windows", TRUE));
+
+  test_client = meta_test_client_new (test_context,
+                                      "1",
+                                      META_WINDOW_CLIENT_TYPE_WAYLAND,
+                                      &error);
+  g_assert_no_error (error);
+  meta_test_client_run (test_client,
+                        "create 1 csd\n"
+                        "resize 1 200 200\n"
+                        "maximize 1\n"
+                        "show 1\n");
+
+  while (!(window = meta_test_client_find_window (test_client, "1", &error)))
+    {
+      g_assert_no_error (error);
+      g_main_context_iteration (NULL, TRUE);
+    }
+  wl_window = META_WINDOW_WAYLAND (window);
+  while (meta_window_is_hidden (window))
+    g_main_context_iteration (NULL, TRUE);
+  meta_wait_for_effects (window);
+
+  rect = meta_window_config_get_rect (window->config);
+  g_assert_cmpint (rect.x, ==, 0);
+  g_assert_cmpint (rect.y, ==, 0);
+  g_assert_cmpint (rect.width, ==, 640);
+  g_assert_cmpint (rect.height, ==, 480);
+
+  meta_window_unmaximize (window);
+  meta_wait_wayland_window_reconfigure (window);
+  meta_wait_for_effects (window);
+  rect = meta_window_config_get_rect (window->config);
+  g_assert_cmpint (rect.x, ==, 220);
+  g_assert_cmpint (rect.y, ==, 140);
+  g_assert_cmpint (rect.width, ==, 200);
+  g_assert_cmpint (rect.height, ==, 200);
+
+  g_assert_true (meta_window_appears_focused (window));
+
+  /* Make the window unfocused by opening another window. */
+
+  g_assert_false (meta_window_wayland_get_pending_serial (wl_window, &serial));
+
+  meta_test_client_run (test_client,
+                        "create 2 csd\n"
+                        "show 2\n");
+
+  while (meta_window_appears_focused (window))
+    g_main_context_iteration (NULL, TRUE);
+  g_assert_true (meta_window_wayland_get_pending_serial (wl_window, &serial));
+  pending_configuration =
+    meta_window_wayland_peek_configuration (wl_window, serial);
+  g_assert_nonnull (pending_configuration);
+  g_assert_true (pending_configuration->has_size);
+  g_assert_cmpint (pending_configuration->width, ==, 200);
+  g_assert_cmpint (pending_configuration->height, ==, 200);
+  meta_wait_wayland_window_reconfigure (window);
+  g_assert_cmpint (rect.x, ==, 220);
+  g_assert_cmpint (rect.y, ==, 140);
+  g_assert_cmpint (rect.width, ==, 200);
+  g_assert_cmpint (rect.height, ==, 200);
+  meta_test_client_destroy (test_client);
+}
+
+static void
+toplevel_begin_interactive_resize (void)
+{
+  MetaBackend *backend = meta_context_get_backend (test_context);
+  ClutterSeat *seat = meta_backend_get_default_seat (backend);
+  ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
+  ClutterStage *stage = CLUTTER_STAGE (meta_backend_get_stage (backend));
+  ClutterInputDevice *pointer;
+  ClutterSprite *pointer_sprite;
+  GSettings *settings;
+  MetaWindow *window;
+  MetaWindowWayland *wl_window;
+  MtkRectangle rect;
+  MetaTestClient *test_client;
+  GError *error = NULL;
+  gboolean ret;
+  uint32_t serial;
+  MetaWaylandWindowConfiguration *pending_configuration;
+
+  settings = g_settings_new ("org.gnome.mutter");
+  g_assert_true (g_settings_set_boolean (settings, "center-new-windows", TRUE));
+
+  virtual_pointer = clutter_seat_create_virtual_device (seat,
+                                                        CLUTTER_POINTER_DEVICE);
+  pointer = clutter_seat_get_pointer (seat);
+  g_assert_nonnull (pointer);
+  clutter_virtual_input_device_notify_absolute_motion (virtual_pointer,
+                                                       g_get_monotonic_time (),
+                                                       0.0f, 0.0f);
+  meta_flush_input (test_context);
+
+  test_client = meta_test_client_new (test_context,
+                                      __func__,
+                                      META_WINDOW_CLIENT_TYPE_WAYLAND,
+                                      &error);
+  g_assert_no_error (error);
+  meta_test_client_run (test_client,
+                        "create 1 csd\n"
+                        "resize 1 200 200\n"
+                        "show 1\n");
+
+  while (!(window = meta_test_client_find_window (test_client, "1", &error)))
+    {
+      g_assert_no_error (error);
+      g_main_context_iteration (NULL, TRUE);
+    }
+  wl_window = META_WINDOW_WAYLAND (window);
+  while (meta_window_is_hidden (window))
+    g_main_context_iteration (NULL, TRUE);
+  meta_wait_for_effects (window);
+
+  rect = meta_window_config_get_rect (window->config);
+  g_assert_cmpint (rect.x, ==, 220);
+  g_assert_cmpint (rect.y, ==, 140);
+  g_assert_cmpint (rect.width, ==, 200);
+  g_assert_cmpint (rect.height, ==, 200);
+
+  pointer_sprite = clutter_backend_get_pointer_sprite (clutter_backend, stage);
+  ret = meta_window_begin_grab_op (window,
+                                   META_GRAB_OP_RESIZING_E,
+                                   pointer_sprite,
+                                   meta_display_get_current_time_roundtrip (window->display),
+                                   NULL);
+  g_assert_true (ret);
+
+  g_assert_true (meta_window_wayland_get_pending_serial (wl_window, &serial));
+  pending_configuration =
+    meta_window_wayland_peek_configuration (wl_window, serial);
+  g_assert_nonnull (pending_configuration);
+  g_assert_true (pending_configuration->has_size);
+  g_assert_cmpint (pending_configuration->width, ==, 200);
+  g_assert_cmpint (pending_configuration->height, ==, 200);
+  meta_wait_wayland_window_reconfigure (window);
+  rect = meta_window_config_get_rect (window->config);
+  g_assert_cmpint (rect.x, ==, 220);
+  g_assert_cmpint (rect.y, ==, 140);
+  g_assert_cmpint (rect.width, ==, 200);
+  g_assert_cmpint (rect.height, ==, 200);
+
+  clutter_virtual_input_device_notify_relative_motion (virtual_pointer,
+                                                       g_get_monotonic_time (),
+                                                       10.0f, 0.0f);
+  meta_flush_input (test_context);
+  meta_wait_for_update (test_context);
+  g_assert_true (meta_window_wayland_get_pending_serial (wl_window, &serial));
+  pending_configuration =
+    meta_window_wayland_peek_configuration (wl_window, serial);
+  g_assert_nonnull (pending_configuration);
+  g_assert_true (pending_configuration->has_size);
+  g_assert_cmpint (pending_configuration->width, ==, 210);
+  g_assert_cmpint (pending_configuration->height, ==, 200);
+  meta_wait_wayland_window_reconfigure (window);
+  rect = meta_window_config_get_rect (window->config);
+  g_assert_cmpint (rect.x, ==, 220);
+  g_assert_cmpint (rect.y, ==, 140);
+  g_assert_cmpint (rect.width, ==, 210);
+  g_assert_cmpint (rect.height, ==, 200);
+
+
+  meta_test_client_destroy (test_client);
+  g_clear_object (&virtual_pointer);
+}
+
+static void
 on_before_tests (void)
 {
   MetaWaylandCompositor *compositor =
@@ -1882,6 +2179,10 @@ init_tests (void)
                    toplevel_apply_limits);
   g_test_add_func ("/wayland/toplevel/invalid-limits",
                    toplevel_invalid_limits);
+  g_test_add_func ("/wayland/toplevel/invalid-geometry/basic",
+                   toplevel_invalid_geometry_basic);
+  g_test_add_func ("/wayland/toplevel/invalid-geometry/subsurface",
+                   toplevel_invalid_geometry_subsurface);
   g_test_add_func ("/wayland/toplevel/activation",
                    toplevel_activation);
   g_test_add_func ("/wayland/toplevel/sessions/basic",
@@ -1929,6 +2230,10 @@ init_tests (void)
                    toplevel_fixed_size_fullscreen);
   g_test_add_func ("/wayland/toplevel/fixed-size-fullscreen-exceeds",
                    toplevel_fixed_size_fullscreen_exceeds);
+  g_test_add_func ("/wayland/toplevel/focus-changes-remembers-size",
+                   toplevel_focus_changes_remembers_size);
+  g_test_add_func ("/wayland/toplevel/begin-interactive-resize",
+                   toplevel_begin_interactive_resize);
 }
 
 int
@@ -1942,10 +2247,12 @@ main (int   argc,
 
 #ifdef MUTTER_PRIVILEGED_TEST
   context = meta_create_test_context (META_CONTEXT_TEST_TYPE_VKMS,
-                                      META_CONTEXT_TEST_FLAG_NO_X11);
+                                      META_CONTEXT_TEST_FLAG_NO_X11 |
+                                      META_CONTEXT_TEST_FLAG_TEST_CLIENT);
 #else
   context = meta_create_test_context (META_CONTEXT_TEST_TYPE_HEADLESS,
-                                      META_CONTEXT_TEST_FLAG_NO_X11);
+                                      META_CONTEXT_TEST_FLAG_NO_X11 |
+                                      META_CONTEXT_TEST_FLAG_TEST_CLIENT);
 #endif
   g_assert_true (meta_context_configure (context, &argc, &argv, NULL));
   meta_context_test_set_background_color (META_CONTEXT_TEST (context),
