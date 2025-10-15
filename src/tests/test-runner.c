@@ -20,6 +20,7 @@
 #include "config.h"
 
 #include <gio/gio.h>
+#include <libevdev/libevdev.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1063,6 +1064,83 @@ find_logical_monitor_config (MetaMonitorsConfig *config,
   return NULL;
 }
 
+typedef struct _PointerMotionInterpolation
+{
+  TestCase *test;
+  ClutterInterval *interval_x;
+  ClutterInterval *interval_y;
+  float last_x;
+  float last_y;
+} PointerMotionInterpolation;
+
+static void
+on_pointer_motion_frame (ClutterTimeline            *timeline,
+                         int                         elapsed_ms,
+                         PointerMotionInterpolation *interpolation)
+{
+  ClutterVirtualInputDevice *pointer = interpolation->test->pointer;
+  float progress;
+  const GValue *x_value, *y_value;
+  float x, y;
+
+  progress = (float) elapsed_ms / clutter_timeline_get_duration (timeline);
+  x_value = clutter_interval_compute (interpolation->interval_x, progress);
+  y_value = clutter_interval_compute (interpolation->interval_y, progress);
+  x = g_value_get_float (x_value);
+  y = g_value_get_float (y_value);
+
+  if (x == interpolation->last_x &&
+      y == interpolation->last_y)
+    return;
+
+  interpolation->last_x = x;
+  interpolation->last_y = y;
+
+  clutter_virtual_input_device_notify_absolute_motion (pointer,
+                                                       CLUTTER_CURRENT_TIME,
+                                                       x, y);
+  meta_flush_input (interpolation->test->context);
+}
+
+static gboolean
+interpolate_pointer_motion (TestCase  *test,
+                            float      x,
+                            float      y,
+                            uint32_t   duration_ms,
+                            GError   **error)
+{
+  ClutterSeat *seat =
+    clutter_virtual_input_device_get_seat (test->pointer);
+  MetaBackend *backend = meta_context_get_backend (test->context);
+  ClutterActor *stage = meta_backend_get_stage (backend);
+  PointerMotionInterpolation interpolation = {
+    .test = test,
+  };
+  g_autoptr (ClutterTimeline) timeline = NULL;
+  graphene_point_t source;
+
+  clutter_seat_query_state (seat, NULL, &source, NULL);
+  interpolation.interval_x = clutter_interval_new (G_TYPE_FLOAT,
+                                                   source.x, x);
+  interpolation.interval_y = clutter_interval_new (G_TYPE_FLOAT,
+                                                   source.y, y);
+
+  timeline = clutter_timeline_new_for_actor (stage, duration_ms);
+  g_signal_connect (timeline, "new-frame", G_CALLBACK (on_pointer_motion_frame),
+                    &interpolation);
+  clutter_timeline_start (timeline);
+  while (clutter_timeline_is_playing (timeline))
+    g_main_context_iteration (NULL, TRUE);
+
+  g_object_unref (interpolation.interval_x);
+  g_object_unref (interpolation.interval_y);
+
+  if (!test_case_dispatch (test, error))
+    return FALSE;
+
+  return TRUE;
+}
+
 static gboolean
 warp_pointer_to (TestCase  *test,
                  float      x,
@@ -1276,16 +1354,38 @@ test_case_do (TestCase    *test,
   else if (strcmp (argv[0], "resize") == 0 ||
            strcmp (argv[0], "resize_ignore_titlebar") == 0)
     {
+      MetaTestClient *client;
+      const char *window_id;
+      MetaWindow *window;
+      int width, height;
+      g_autofree char *width_str = NULL;
+      g_autofree char *height_str = NULL;
+
       if (argc != 4)
         BAD_COMMAND ("usage: %s <client-id>/<window-id> width height", argv[0]);
 
-      MetaTestClient *client;
-      const char *window_id;
       if (!test_case_parse_window_id (test, argv[1], &client, &window_id, error))
         return FALSE;
 
+      window = meta_test_client_find_window (client, window_id, NULL);
+      if (window)
+        {
+          width = parse_window_size (window, argv[2]);
+          height = parse_window_size (window, argv[3]);
+        }
+      else
+        {
+          width = atoi (argv[2]);
+          height = atoi (argv[3]);
+        }
+      if (width == 0 || height == 0)
+        BAD_COMMAND ("Invalid resize dimension %s x %s", argv[2], argv[3]);
+
+      width_str = g_strdup_printf ("%d", width);
+      height_str = g_strdup_printf ("%d", height);
+
       if (!meta_test_client_do (client, error, argv[0], window_id,
-                                argv[2], argv[3], NULL))
+                                width_str, height_str, NULL))
         return FALSE;
     }
   else if (strcmp (argv[0], "x11_geometry") == 0)
@@ -1432,6 +1532,29 @@ test_case_do (TestCase    *test,
 
       meta_window_move_frame (window, TRUE, atoi (argv[2]), atoi (argv[3]));
     }
+  else if (strcmp (argv[0], "move_to_monitor") == 0)
+    {
+      MetaTestClient *client;
+      const char *window_id;
+      MetaWindow *window;
+      MetaLogicalMonitor *logical_monitor;
+
+      if (argc != 3)
+        BAD_COMMAND ("usage: %s <client-id>/<window-id> <monitor-id>", argv[0]);
+
+      if (!test_case_parse_window_id (test, argv[1], &client, &window_id, error))
+        return FALSE;
+
+      window = meta_test_client_find_window (client, window_id, error);
+      if (!window)
+        return FALSE;
+
+      logical_monitor = get_logical_monitor (test, argv[2], error);
+      if (!logical_monitor)
+        BAD_COMMAND ("Unknown monitor %s", argv[1]);
+
+      meta_window_move_to_monitor (window, logical_monitor->number);
+    }
   else if (strcmp (argv[0], "tile") == 0)
     {
       MetaWindow *window;
@@ -1485,6 +1608,42 @@ test_case_do (TestCase    *test,
         return FALSE;
 
       meta_window_untile (window);
+    }
+  else if (strcmp (argv[0], "set_maximize_flag") == 0)
+    {
+      MetaWindow *window;
+      MetaTestClient *client;
+      const char *window_id;
+      MetaMaximizeFlags flags;
+
+      if (argc != 3)
+        BAD_COMMAND ("usage: %s <client-id>/<window-id> [vertically|horizontally]", argv[0]);
+
+      if (!test_case_parse_window_id (test, argv[1], &client, &window_id, error))
+        return FALSE;
+
+      window = meta_test_client_find_window (client, window_id, error);
+      if (!window)
+        return FALSE;
+
+      if (strcmp (argv[2], "vertically") == 0)
+        {
+          flags = META_MAXIMIZE_VERTICAL;
+        }
+      else if (strcmp (argv[2], "horizontally") == 0)
+        {
+          flags = META_MAXIMIZE_HORIZONTAL;
+        }
+      else
+        {
+          g_set_error (error,
+                       META_TEST_CLIENT_ERROR,
+                       META_TEST_CLIENT_ERROR_ASSERTION_FAILED,
+                       "Invalid tile mode '%s'", argv[2]);
+          return FALSE;
+        }
+
+      meta_window_set_maximize_flags (window, flags);
     }
   else if (strcmp (argv[0], "hide") == 0 ||
            strcmp (argv[0], "activate") == 0 ||
@@ -2513,14 +2672,32 @@ test_case_do (TestCase    *test,
     }
   else if (strcmp (argv[0], "move_cursor_to") == 0)
     {
-      if (argc != 3)
-        BAD_COMMAND ("usage: %s <x> <y>", argv[0]);
-
       float x = (float) atof (argv[1]);
       float y = (float) atof (argv[2]);
 
-      if (!warp_pointer_to (test, x, y, error))
-        return FALSE;
+      if (argc != 3 && argc != 4)
+        BAD_COMMAND ("usage: %s <x> <y> [<interpolation duration (s/ms)>]", argv[0]);
+
+      if (argc == 4)
+        {
+          char *duration_str = argv[3];
+          int duration_ms;
+
+          if (g_str_has_suffix (duration_str, "ms"))
+            duration_ms = atoi (duration_str);
+          else if (g_str_has_suffix (duration_str, "s"))
+            duration_ms = s2ms (atoi (duration_str));
+          else
+            BAD_COMMAND ("Unknown interpolation time granularity");
+
+          if (!interpolate_pointer_motion (test, x, y, duration_ms, error))
+            return FALSE;
+        }
+      else
+        {
+          if (!warp_pointer_to (test, x, y, error))
+            return FALSE;
+        }
     }
   else if (strcmp (argv[0], "click") == 0)
     {
@@ -2559,6 +2736,30 @@ test_case_do (TestCase    *test,
                                                   CLUTTER_CURRENT_TIME,
                                                   CLUTTER_BUTTON_PRIMARY,
                                                   CLUTTER_BUTTON_STATE_RELEASED);
+      meta_flush_input (test->context);
+      if (!test_case_dispatch (test, error))
+        return FALSE;
+    }
+  else if (strcmp (argv[0], "key_press") == 0 ||
+           strcmp (argv[0], "key_release") == 0)
+    {
+      ClutterKeyState key_state;
+      int key;
+
+      if (argc != 2)
+        BAD_COMMAND ("usage: %s <key-code>", argv[0]);
+
+      key_state = strcmp (argv[0], "key_press") == 0 ?
+        CLUTTER_KEY_STATE_PRESSED : CLUTTER_KEY_STATE_RELEASED;
+
+      key = libevdev_event_code_from_name (EV_KEY, argv[1]);
+      if (key == -1)
+        BAD_COMMAND ("Invalid key code %s", argv[1]);
+
+      clutter_virtual_input_device_notify_key (test->keyboard,
+                                               CLUTTER_CURRENT_TIME,
+                                               key, key_state);
+
       meta_flush_input (test->context);
       if (!test_case_dispatch (test, error))
         return FALSE;
@@ -2647,6 +2848,16 @@ test_case_do (TestCase    *test,
             BAD_COMMAND ("usage: %s %s [true|false]", argv[0], argv[1]);
 
           g_assert_true (g_settings_set_boolean (mutter, "auto-maximize",
+                                                 value));
+        }
+      else if (strcmp (argv[1], "edge-tiling") == 0)
+        {
+          gboolean value;
+
+          if (!str_to_bool (argv[2], &value))
+            BAD_COMMAND ("usage: %s %s [true|false]", argv[0], argv[1]);
+
+          g_assert_true (g_settings_set_boolean (mutter, "edge-tiling",
                                                  value));
         }
       else
@@ -2811,9 +3022,16 @@ test_case_do (TestCase    *test,
       MetaTestClient *client;
       const char *window_id;
       const char *parent_id;
+      g_autoptr (GStrvBuilder) args_builder = NULL;
+      g_auto (GStrv) args = NULL;
+      int i;
 
-      if (argc != 6 && argc != 7)
-        BAD_COMMAND ("usage: %s <client-id>/<popup-id> <parent-id> <top|bottom|left|right|center> <width> <height> [grab]", argv[0]);
+      if (argc < 6)
+        {
+          BAD_COMMAND ("usage: %s <client-id>/<popup-id> <parent-id> "
+                       "<top|bottom|left|right|center> "
+                       "<width> <height> [<grab>,<resize>,<flip>]", argv[0]);
+        }
 
       if (!test_case_parse_window_id (test, argv[1],
                                       &client, &window_id, error))
@@ -2821,15 +3039,17 @@ test_case_do (TestCase    *test,
 
       parent_id = argv[2];
 
-      if (!meta_test_client_do (client, error,
-                                argv[0],
-                                window_id,
-                                parent_id,
-                                argv[3],
-                                argv[4],
-                                argv[5],
-                                argc == 7 ? argv[6] : NULL,
-                                NULL))
+      args_builder = g_strv_builder_new ();
+      g_strv_builder_add_many (args_builder,
+                               argv[0],
+                               window_id,
+                               parent_id,
+                               NULL);
+      for (i = 3; i < argc; i++)
+        g_strv_builder_add (args_builder, argv[i]);
+
+      args = g_strv_builder_end (args_builder);
+      if (!meta_test_client_do_strv (client, (const char **) args, error))
         return FALSE;
 
       if (!track_popup (test, client, window_id, parent_id, error))
@@ -2964,6 +3184,19 @@ sanity_check_transient_children (MetaWindow *window,
 }
 
 static void
+sanity_check_monitor (MetaWindow *window)
+{
+  if (!meta_window_is_hidden (window))
+    {
+      MtkRectangle rect;
+
+      g_assert_nonnull (window->monitor);
+      rect = meta_window_config_get_rect (window->config);
+      g_assert_true (mtk_rectangle_overlap (&rect, &window->monitor->rect));
+    }
+}
+
+static void
 sanity_check (MetaContext *context)
 {
   MetaDisplay *display = meta_context_get_display (context);
@@ -2977,6 +3210,7 @@ sanity_check (MetaContext *context)
 
       sanity_check_transient_for (window, windows);
       sanity_check_transient_children (window, windows);
+      sanity_check_monitor (window);
     }
 }
 

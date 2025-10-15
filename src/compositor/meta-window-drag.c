@@ -63,8 +63,7 @@ struct _MetaWindowDrag {
   double anchor_rel_y;
   int anchor_root_x;
   int anchor_root_y;
-  MetaTileMode tile_mode;
-  int tile_monitor_number;
+  MetaWindowConfig *initial_window_config;
   int latest_motion_x;
   int latest_motion_y;
   MtkRectangle initial_window_pos;
@@ -74,6 +73,9 @@ struct _MetaWindowDrag {
   unsigned int move_resize_later_id;
   /* if TRUE, window was maximized at start of current grab op */
   gboolean shaken_loose;
+  int target_monitor_number;
+
+  MtkRectangle drag_rect;
 
   gulong unmanaged_id;
   gulong size_changed_id;
@@ -174,13 +176,23 @@ hide_tile_preview (MetaWindowDrag *window_drag)
 }
 
 static void
-meta_window_drag_finalize (GObject *object)
+meta_window_drag_dispose (GObject *object)
 {
   MetaWindowDrag *window_drag = META_WINDOW_DRAG (object);
 
   hide_tile_preview (window_drag);
   if (window_drag->grab)
     g_clear_object (&window_drag->grab);
+  g_clear_object (&window_drag->initial_window_config);
+
+  G_OBJECT_CLASS (meta_window_drag_parent_class)->dispose (object);
+}
+
+static void
+meta_window_drag_finalize (GObject *object)
+{
+  MetaWindowDrag *window_drag = META_WINDOW_DRAG (object);
+
   g_clear_object (&window_drag->effective_grab_window);
 
   G_OBJECT_CLASS (meta_window_drag_parent_class)->finalize (object);
@@ -235,6 +247,7 @@ meta_window_drag_class_init (MetaWindowDragClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
+  object_class->dispose = meta_window_drag_dispose;
   object_class->finalize = meta_window_drag_finalize;
   object_class->set_property = meta_window_drag_set_property;
   object_class->get_property = meta_window_drag_get_property;
@@ -264,6 +277,7 @@ meta_window_drag_class_init (MetaWindowDragClass *klass)
 static void
 meta_window_drag_init (MetaWindowDrag *window_drag)
 {
+  window_drag->target_monitor_number = -1;
 }
 
 MetaWindowDrag *
@@ -429,7 +443,7 @@ warp_grab_pointer (MetaWindowDrag *window_drag,
                    int            *x,
                    int            *y)
 {
-  MtkRectangle rect;
+  MtkRectangle rect = window_drag->drag_rect;
   MtkRectangle display_rect = { 0 };
   MetaDisplay *display = window->display;
   MetaCompositor *compositor = meta_display_get_compositor (display);
@@ -444,8 +458,6 @@ warp_grab_pointer (MetaWindowDrag *window_drag,
 
   /* We may not have done begin_grab_op yet, i.e. may not be in a grab
    */
-
-  meta_window_get_frame_rect (window, &rect);
 
   if (grab_op & META_GRAB_OP_WINDOW_DIR_WEST)
     *x = 0;
@@ -549,27 +561,34 @@ process_mouse_move_resize_grab (MetaWindowDrag  *window_drag,
 
   if (clutter_event_get_key_symbol ((ClutterEvent *) event) == CLUTTER_KEY_Escape)
     {
-      MetaTileMode tile_mode;
+      MetaWindowConfig *initial_window_config =
+        window_drag->initial_window_config;
+      MetaTileMode initial_tile_mode;
+      int tile_monitor_number;
 
       /* Hide the tiling preview if necessary */
       if (window_drag->preview_tile_mode != META_TILE_NONE)
         hide_tile_preview (window_drag);
 
       /* Restore the original tile mode */
-      tile_mode = window_drag->tile_mode;
+      initial_tile_mode = meta_window_config_get_tile_mode (initial_window_config);
+      tile_monitor_number =
+        meta_window_config_get_tile_monitor_number (initial_window_config);
       meta_window_config_set_tile_monitor_number (window->config,
-                                                  window_drag->tile_monitor_number);
+                                                  tile_monitor_number);
 
       /* End move or resize and restore to original state.  If the
        * window was a maximized window that had been "shaken loose" we
        * need to remaximize it.  In normal cases, we need to do a
        * moveresize now to get the position back to the original.
        */
-      if (window_drag->shaken_loose || tile_mode == META_TILE_MAXIMIZED)
+      if (window_drag->shaken_loose ||
+          meta_window_config_is_maximized (initial_window_config) ||
+          initial_tile_mode == META_TILE_MAXIMIZED)
         meta_window_maximize (window);
-      else if (tile_mode != META_TILE_NONE)
+      else if (initial_tile_mode != META_TILE_NONE)
         meta_window_restore_tile (window,
-                                  tile_mode,
+                                  initial_tile_mode,
                                   window_drag->initial_window_pos.width,
                                   window_drag->initial_window_pos.height);
       else
@@ -634,20 +653,27 @@ process_keyboard_move_grab (MetaWindowDrag  *window_drag,
 
   if (keyval == CLUTTER_KEY_Escape)
     {
+      meta_topic (META_DEBUG_KEYBINDINGS, "Cancelling keyboard resize drag");
+
       /* End move and restore to original state.  If the window was a
        * maximized window that had been "shaken loose" we need to
        * remaximize it.  In normal cases, we need to do a moveresize
        * now to get the position back to the original.
        */
       if (window_drag->shaken_loose)
-        meta_window_maximize (window);
+        {
+          meta_window_maximize (window);
+        }
       else
-        meta_window_move_resize_frame (window_drag->effective_grab_window,
-                                       TRUE,
-                                       window_drag->initial_window_pos.x,
-                                       window_drag->initial_window_pos.y,
-                                       window_drag->initial_window_pos.width,
-                                       window_drag->initial_window_pos.height);
+        {
+          meta_window_move_resize_frame (window_drag->effective_grab_window,
+                                         TRUE,
+                                         window_drag->initial_window_pos.x,
+                                         window_drag->initial_window_pos.y,
+                                         window_drag->initial_window_pos.width,
+                                         window_drag->initial_window_pos.height);
+          window_drag->drag_rect = window_drag->initial_window_pos;
+        }
     }
 
   /* When moving by increments, we still snap to edges if the move
@@ -706,6 +732,9 @@ process_keyboard_move_grab (MetaWindowDrag  *window_drag,
                                                  flags);
 
       meta_window_move_frame (window, TRUE, x, y);
+      window_drag->drag_rect.x = x;
+      window_drag->drag_rect.y = y;
+
       update_keyboard_move (window_drag);
     }
 
@@ -841,6 +870,57 @@ process_keyboard_resize_grab_op_change (MetaWindowDrag  *window_drag,
   return FALSE;
 }
 
+static void
+adjust_size_for_tile_match (MetaWindow *window,
+                            int        *new_width,
+                            int        *new_height)
+{
+  MtkRectangle work_area, rect;
+  MetaWindow *tile_match = meta_window_config_get_tile_match (window->config);
+  int tile_monitor_number;
+
+  if (!meta_window_is_tiled_side_by_side (window) || !tile_match)
+    return;
+
+  tile_monitor_number =
+    meta_window_config_get_tile_monitor_number (window->config);
+  meta_window_get_work_area_for_monitor (window, tile_monitor_number,
+                                         &work_area);
+
+  /* Make sure the resize does not break minimum sizes */
+  rect = work_area;
+  rect.width = *new_width;
+
+  meta_window_frame_rect_to_client_rect (window, &rect, &rect);
+  *new_width += MAX (0, window->size_hints.min_width - rect.width);
+
+  /* Make sure we're not resizing the tile match below its min width */
+  rect = work_area;
+  rect.width = work_area.width - *new_width;
+
+  meta_window_frame_rect_to_client_rect (tile_match, &rect, &rect);
+  *new_width -= MAX (0, tile_match->size_hints.min_width - rect.width);
+}
+
+static void
+resize_window_frame (MetaWindowDrag *window_drag,
+                     MetaWindow     *window,
+                     int             width,
+                     int             height)
+{
+  MtkRectangle rect = MTK_RECTANGLE_INIT (0, 0, width, height);
+
+  adjust_size_for_tile_match (window, &rect.width, &rect.height);
+  meta_window_update_tile_fraction (window, rect.width, rect.height);
+  meta_window_move_resize_internal (window,
+                                    (META_MOVE_RESIZE_USER_ACTION |
+                                     META_MOVE_RESIZE_RESIZE_ACTION |
+                                     META_MOVE_RESIZE_CONSTRAIN),
+                                    META_PLACE_FLAG_NONE,
+                                    rect,
+                                    &window_drag->drag_rect);
+}
+
 static gboolean
 process_keyboard_resize_grab (MetaWindowDrag  *window_drag,
                               MetaWindow      *window,
@@ -878,6 +958,7 @@ process_keyboard_resize_grab (MetaWindowDrag  *window_drag,
                                      window_drag->initial_window_pos.y,
                                      window_drag->initial_window_pos.width,
                                      window_drag->initial_window_pos.height);
+      window_drag->drag_rect = window_drag->initial_window_pos;
 
       return FALSE;
     }
@@ -1072,10 +1153,7 @@ process_keyboard_resize_grab (MetaWindowDrag  *window_drag,
                                                    gravity,
                                                    flags);
 
-      meta_window_resize_frame (window,
-				TRUE,
-				width,
-				height);
+      resize_window_frame (window_drag, window, width, height);
 
       update_keyboard_resize (window_drag, FALSE);
     }
@@ -1182,6 +1260,61 @@ update_move_maybe_tile (MetaWindowDrag *window_drag,
 }
 
 static void
+calculate_window_position (MetaWindowDrag          *window_drag,
+                           MetaEdgeResistanceFlags  flags,
+                           int                      window_width,
+                           int                      window_height,
+                           int                      motion_x,
+                           int                      motion_y,
+                           int                     *out_x,
+                           int                     *out_y)
+{
+  MetaWindow *window;
+  MtkRectangle frame_rect;
+  int new_x, new_y;
+
+  window = window_drag->effective_grab_window;
+  g_assert (window);
+
+  meta_window_get_frame_rect (window, &frame_rect);
+  new_x = (int) (motion_x - (window_width * window_drag->anchor_rel_x));
+  new_y = (int) (motion_y - (window_height * window_drag->anchor_rel_y));
+
+  /* Don't allow movement in the maximized directions or while tiled */
+  if (meta_window_config_is_maximized_horizontally (window->config) ||
+      meta_window_is_tiled_side_by_side (window))
+    new_x = frame_rect.x;
+  if (meta_window_config_is_maximized_vertically (window->config))
+    new_y = frame_rect.y;
+
+  /* Do any edge resistance/snapping */
+  meta_window_drag_edge_resistance_for_move (window_drag,
+                                             &new_x,
+                                             &new_y,
+                                             flags);
+
+  *out_x = new_x;
+  *out_y = new_y;
+}
+
+void
+meta_window_drag_calculate_window_position (MetaWindowDrag *window_drag,
+                                            int             window_width,
+                                            int             window_height,
+                                            int            *out_x,
+                                            int            *out_y)
+{
+  calculate_window_position (window_drag,
+                             window_drag->last_edge_resistance_flags,
+                             window_width,
+                             window_height,
+                             window_drag->latest_motion_x,
+                             window_drag->latest_motion_y,
+                             out_x,
+                             out_y);
+}
+
+static void
 update_move (MetaWindowDrag          *window_drag,
              MetaEdgeResistanceFlags  flags,
              int                      x,
@@ -1190,7 +1323,7 @@ update_move (MetaWindowDrag          *window_drag,
   MetaWindow *window;
   int dx, dy;
   int new_x, new_y;
-  MtkRectangle old, frame_rect;
+  MtkRectangle frame_rect;
   int shake_threshold;
 
   window = window_drag->effective_grab_window;
@@ -1206,8 +1339,12 @@ update_move (MetaWindowDrag          *window_drag,
   dy = y - window_drag->anchor_root_y;
 
   meta_window_get_frame_rect (window, &frame_rect);
-  new_x = (int) (x - (frame_rect.width * window_drag->anchor_rel_x));
-  new_y = (int) (y - (frame_rect.height * window_drag->anchor_rel_y));
+  calculate_window_position (window_drag,
+                             flags,
+                             frame_rect.width,
+                             frame_rect.height,
+                             x, y,
+                             &new_x, &new_y);
 
   meta_topic (META_DEBUG_RENDER,
               "x,y = %d,%d anchor ptr %d,%d rel anchor pos %f,%f dx,dy %d,%d",
@@ -1279,9 +1416,6 @@ update_move (MetaWindowDrag          *window_drag,
       if (window_drag->anchor_root_y < window_drag->initial_window_pos.y)
         window_drag->anchor_root_y = window_drag->initial_window_pos.y + META_WINDOW_TITLEBAR_HEIGHT / 2;
 
-      window->saved_rect.x = window_drag->initial_window_pos.x;
-      window->saved_rect.y = window_drag->initial_window_pos.y;
-
       meta_window_unmaximize (window);
       return;
     }
@@ -1302,9 +1436,6 @@ update_move (MetaWindowDrag          *window_drag,
       const MetaLogicalMonitor *wmonitor;
       MtkRectangle work_area;
       int monitor;
-#ifdef HAVE_X11_CLIENT
-      MetaFrame *frame;
-#endif
 
       meta_window_config_set_tile_mode (window->config, META_TILE_NONE);
       wmonitor = window->monitor;
@@ -1324,30 +1455,45 @@ update_move (MetaWindowDrag          *window_drag,
               /* move the saved rect if window will become maximized on an
                * other monitor so user isn't surprised on a later unmaximize
                */
-              if (wmonitor->number != monitor)
+              if (wmonitor->number != monitor &&
+                  monitor != window_drag->target_monitor_number)
                 {
                   window->saved_rect.x = work_area.x;
                   window->saved_rect.y = work_area.y;
 
 #ifdef HAVE_X11_CLIENT
-                  frame = META_IS_WINDOW_X11 (window) ? meta_window_x11_get_frame (window) : NULL;
-                  if (frame)
+                  if (META_IS_WINDOW_X11 (window))
                     {
-                      window->saved_rect.x += frame->child_x;
-                      window->saved_rect.y += frame->child_y;
+                      MetaFrame *frame;
+
+                      frame = meta_window_x11_get_frame (window);
+                      if (frame)
+                        {
+                          window->saved_rect.x += frame->child_x;
+                          window->saved_rect.y += frame->child_y;
+                        }
                     }
 #endif
-                  window->unconstrained_rect.x = window->saved_rect.x;
-                  window->unconstrained_rect.y = window->saved_rect.y;
-
-                  meta_window_unmaximize (window);
 
                   window_drag->initial_window_pos = work_area;
                   window_drag->anchor_root_x = x;
                   window_drag->anchor_root_y = y;
                   window_drag->shaken_loose = FALSE;
 
-                  meta_window_maximize (window);
+                  if (meta_window_is_maximized (window))
+                    {
+
+                      meta_window_move_to_monitor (window, monitor);
+                    }
+                  else
+                    {
+                      meta_window_maximize_internal (window,
+                                                     META_MAXIMIZE_BOTH,
+                                                     &window->saved_rect);
+                      meta_window_move_to_monitor (window, monitor);
+                    }
+
+                  window_drag->target_monitor_number = monitor;
                 }
 
               return;
@@ -1355,33 +1501,23 @@ update_move (MetaWindowDrag          *window_drag,
         }
     }
 
-  /* Delay showing the tile preview slightly to make it more unlikely to
-   * trigger it unwittingly, e.g. when shaking loose the window or moving
-   * it to another monitor.
-   */
-  update_tile_preview (window_drag,
-                       meta_window_config_get_tile_mode (window->config) !=
-                       META_TILE_NONE);
+  if (meta_window_config_is_floating (window->config))
+    {
+      /* Delay showing the tile preview slightly to make it more unlikely to
+       * trigger it unwittingly, e.g. when shaking loose the window or moving
+       * it to another monitor.
+       */
+      update_tile_preview (window_drag,
+                           meta_window_config_get_tile_mode (window->config) !=
+                           META_TILE_NONE);
 
-  meta_window_get_frame_rect (window, &old);
+      window_drag->last_edge_resistance_flags =
+        flags & ~META_EDGE_RESISTANCE_KEYBOARD_OP;
 
-  /* Don't allow movement in the maximized directions or while tiled */
-  if (meta_window_config_is_maximized_horizontally (window->config) ||
-      meta_window_is_tiled_side_by_side (window))
-    new_x = old.x;
-  if (meta_window_config_is_maximized_vertically (window->config))
-    new_y = old.y;
-
-  window_drag->last_edge_resistance_flags =
-    flags & ~META_EDGE_RESISTANCE_KEYBOARD_OP;
-
-  /* Do any edge resistance/snapping */
-  meta_window_drag_edge_resistance_for_move (window_drag,
-                                             &new_x,
-                                             &new_y,
-                                             flags);
-
-  meta_window_move_frame (window, TRUE, new_x, new_y);
+      meta_window_move_frame (window, TRUE, new_x, new_y);
+      window_drag->drag_rect.x = new_x;
+      window_drag->drag_rect.y = new_y;
+    }
 }
 
 static gboolean
@@ -1434,14 +1570,11 @@ calculate_window_size (MetaWindowDrag          *window_drag,
                        int                     *out_width,
                        int                     *out_height)
 {
-  MetaWindow *window;
+  MetaWindow *window = window_drag->effective_grab_window;
   int dx, dy;
   MetaGravity gravity;
   MtkRectangle old_rect;
   MtkRectangle new_rect = {};
-
-  window = window_drag->effective_grab_window;
-  g_return_if_fail (window);
 
   meta_window_get_frame_rect (window, &old_rect);
 
@@ -1565,7 +1698,7 @@ update_resize (MetaWindowDrag          *window_drag,
   window_drag->last_edge_resistance_flags =
     flags & ~META_EDGE_RESISTANCE_KEYBOARD_OP;
 
-  meta_window_resize_frame (window, TRUE, new_width, new_height);
+  resize_window_frame (window_drag, window, new_width, new_height);
 }
 
 static gboolean
@@ -1687,9 +1820,15 @@ end_grab_op (MetaWindowDrag     *window_drag,
       if (meta_grab_op_is_moving (window_drag->grab_op))
         {
           if (window_drag->preview_tile_mode != META_TILE_NONE)
-            meta_window_tile (window, window_drag->preview_tile_mode);
+            {
+              meta_window_tile_internal (window,
+                                         window_drag->preview_tile_mode,
+                                         &window_drag->initial_window_pos);
+            }
           else
-            update_move (window_drag, flags, (int) x, (int) y);
+            {
+              update_move (window_drag, flags, (int) x, (int) y);
+            }
         }
       else if (meta_grab_op_is_resizing (window_drag->grab_op))
         {
@@ -1824,6 +1963,16 @@ meta_window_drag_begin (MetaWindowDrag      *window_drag,
   ClutterStage *stage;
   int root_x, root_y;
 
+  grab_window = window;
+
+  /* If we're trying to move a window, move the first
+   * non-attached dialog instead.
+   */
+  if (meta_grab_op_is_moving (grab_op))
+    grab_window = get_first_freefloating_window (window);
+
+  meta_window_get_frame_rect (grab_window, &window_drag->drag_rect);
+
   if ((grab_op & META_GRAB_OP_KEYBOARD_MOVING) == META_GRAB_OP_KEYBOARD_MOVING)
     {
       warp_grab_pointer (window_drag, window, grab_op, &root_x, &root_y);
@@ -1857,14 +2006,6 @@ meta_window_drag_begin (MetaWindowDrag      *window_drag,
       window_drag->initial_y = root_y;
       window_drag->threshold_movement_reached = FALSE;
     }
-
-  grab_window = window;
-
-  /* If we're trying to move a window, move the first
-   * non-attached dialog instead.
-   */
-  if (meta_grab_op_is_moving (grab_op))
-    grab_window = get_first_freefloating_window (window);
 
   g_assert (grab_window != NULL);
   g_assert (grab_op != META_GRAB_OP_NONE);
@@ -1903,10 +2044,8 @@ meta_window_drag_begin (MetaWindowDrag      *window_drag,
                       G_CALLBACK (on_grab_window_unmanaged), window_drag);
 
   window_drag->leading_sprite = sprite;
-  window_drag->tile_mode =
-    meta_window_config_get_tile_mode (grab_window->config);
-  window_drag->tile_monitor_number =
-    meta_window_config_get_tile_monitor_number (grab_window->config);
+  window_drag->initial_window_config =
+    meta_window_config_new_from (grab_window->config);
   window_drag->anchor_root_x = root_x;
   window_drag->anchor_root_y = root_y;
   window_drag->latest_motion_x = root_x;
@@ -1921,8 +2060,7 @@ meta_window_drag_begin (MetaWindowDrag      *window_drag,
               "Grab op %u on window %s successful",
               grab_op, window ? window->desc : "(null)");
 
-  meta_window_get_frame_rect (window_drag->effective_grab_window,
-                              &window_drag->initial_window_pos);
+  window_drag->initial_window_pos = window_drag->drag_rect;
 
   window_drag->anchor_rel_x =
     CLAMP ((double) (root_x - window_drag->initial_window_pos.x) /
@@ -1954,10 +2092,8 @@ meta_window_drag_calculate_window_size (MetaWindowDrag *window_drag,
                                         int            *out_width,
                                         int            *out_height)
 {
-  calculate_window_size (window_drag,
-                         window_drag->last_edge_resistance_flags,
-                         out_width,
-                         out_height);
+  *out_width = window_drag->drag_rect.width;
+  *out_height = window_drag->drag_rect.height;
 }
 
 MetaWindow *
@@ -1985,4 +2121,11 @@ meta_window_drag_set_position_hint (MetaWindowDrag   *window_drag,
   window_drag->pos_hint_set = pos_hint != NULL;
   if (pos_hint)
     window_drag->pos_hint = *pos_hint;
+}
+
+void
+meta_window_drag_destroy (MetaWindowDrag *window_drag)
+{
+  g_object_run_dispose (G_OBJECT (window_drag));
+  g_object_unref (window_drag);
 }

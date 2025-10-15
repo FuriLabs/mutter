@@ -1569,7 +1569,7 @@ on_window_drag_ended (MetaWindowDrag *window_drag,
     meta_compositor_get_instance_private (compositor);
 
   g_assert (priv->current_drag == window_drag);
-  g_clear_object (&priv->current_drag);
+  g_clear_pointer (&priv->current_drag, meta_window_drag_destroy);
 }
 
 gboolean
@@ -1598,12 +1598,12 @@ meta_compositor_drag_window (MetaCompositor      *compositor,
   if (!meta_window_drag_begin (priv->current_drag, sprite,
                                timestamp, flags))
     {
-      g_clear_object (&priv->current_drag);
+      g_clear_pointer (&priv->current_drag, meta_window_drag_destroy);
       return FALSE;
     }
 
-  g_signal_connect (priv->current_drag, "ended",
-                    G_CALLBACK (on_window_drag_ended), compositor);
+  g_signal_connect_after (priv->current_drag, "ended",
+                          G_CALLBACK (on_window_drag_ended), compositor);
   return TRUE;
 }
 
