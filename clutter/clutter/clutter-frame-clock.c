@@ -1193,17 +1193,17 @@ clutter_frame_clock_schedule_update (ClutterFrameClock *frame_clock)
                                      CLUTTER_FRAME_CLOCK_STATE_SCHEDULED);
       return;
     case CLUTTER_FRAME_CLOCK_STATE_IDLE:
+    case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_LATER:
       clutter_frame_clock_set_state (frame_clock,
                                      CLUTTER_FRAME_CLOCK_STATE_SCHEDULED);
       break;
     case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED:
     case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_NOW:
-    case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_LATER:
     case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE_AND_SCHEDULED:
     case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE_AND_SCHEDULED_NOW:
-    case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE_AND_SCHEDULED_LATER:
       return;
     case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE:
+    case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE_AND_SCHEDULED_LATER:
       if (want_triple_buffering (frame_clock))
         {
           clutter_frame_clock_set_state (frame_clock,
@@ -1321,7 +1321,7 @@ clutter_frame_clock_schedule_update_later (ClutterFrameClock *frame_clock,
         frame_clock->refresh_interval_us;
       extrapolated_presentation_time_us =
         next_presentation_time_us + frame_clock->refresh_interval_us * cycles;
-      max_update_time_estimate_us = next_presentation_time_us - next_frame_deadline_us;
+      max_update_time_estimate_us = next_presentation_time_us - next_update_time_us;
       ready_time_us = extrapolated_presentation_time_us - max_update_time_estimate_us;
       break;
     case CLUTTER_FRAME_CLOCK_MODE_VARIABLE:
