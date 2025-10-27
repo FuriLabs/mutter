@@ -174,8 +174,7 @@ Architecture: linux-any
 Multi-Arch: same
 Depends: libmutter-17-0 (= ${binary:Version}),
          ${gir:Depends},
-         ${misc:Depends},
-         ${shlibs:Depends}
+         ${misc:Depends}
 Provides: ${gir:Provides}
 Description: GObject introspection data for Mutter
  Mutter is a Wayland display server and X11 window manager and
