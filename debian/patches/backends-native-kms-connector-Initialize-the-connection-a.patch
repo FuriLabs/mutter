@@ -1,0 +1,31 @@
+From: =?utf-8?b?Ik1hcmNvIFRyZXZpc2FuIChUcmV2acOxbyki?= <mail@3v1n0.net>
+Date: Fri, 29 Aug 2025 02:04:21 +0200
+Subject: backends/native/kms-connector: Initialize the connection as
+ disconnected
+
+DRM enums do not user zero for default values, but ideally we want to
+consider all connectors as disconnected by default.
+
+Also this will be relevant next commits as if a connector is marked
+as disconnected on startup, then we'll trigger a timeout and a potential
+reconfiguration that we can avoid in this way
+
+Origin: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4610
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/1607
+Bug-Ubuntu: https://launchpad.net/bugs/1971434
+---
+ src/backends/native/meta-kms-connector.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/backends/native/meta-kms-connector.c b/src/backends/native/meta-kms-connector.c
+index d47d9c8..8b6fa60 100644
+--- a/src/backends/native/meta-kms-connector.c
++++ b/src/backends/native/meta-kms-connector.c
+@@ -1642,6 +1642,7 @@ meta_kms_connector_finalize (GObject *object)
+ static void
+ meta_kms_connector_init (MetaKmsConnector *connector)
+ {
++  connector->connection = DRM_MODE_DISCONNECTED;
+ }
+ 
+ static void

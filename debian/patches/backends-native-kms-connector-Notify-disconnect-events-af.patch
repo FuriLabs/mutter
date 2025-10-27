@@ -1,0 +1,239 @@
+From: =?utf-8?b?Ik1hcmNvIFRyZXZpc2FuIChUcmV2acOxbyki?= <mail@3v1n0.net>
+Date: Fri, 29 Aug 2025 00:51:36 +0200
+Subject: backends/native/kms-connector: Notify disconnect events after a
+ timeout
+
+Before the recent reverts and since commit 313860e2fab we were waiting
+for a delay before advertising any KMS state change.
+
+This allowed to properly address the issue it meant to fix (avoiding
+monitors re-configurations on quick monitors re-connections, signal
+loss or inputs probing), but it has also the side effect of causing a
+late notification for KMS events that we want to address immediately
+(such as privacy screen or gamma changes).
+
+Since the change was only meant to delay the connector's connection
+state changes and, in particular, the disconnections, we can just handle
+this in the KMS connector side.
+
+So now if a disconnect event happens:
+ - We start a per-connector timeout and do nothing so that the rest of
+   the stack won't notice any connector-related change.
+   Then, depending on the future events:
+   1) If nothing happens after a delay (3 seconds as before), we make
+      the KMS machinery to verify again the current state and eventually
+      make it to emit a resource change
+   2) If the connector gets re-connected before the delay is over, the
+      timeout is cancelled and all the other potential changes are
+      checked again (potentially leading to a NO-CHANGE).
+
+In this way, all the other kinds of KMS changes that are affecting other
+connectors or other aspects of the same connector won't be delayed and
+reported when they happen
+
+Origin: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4610
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/1607
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/4287
+Bug-Ubuntu: https://launchpad.net/bugs/1971434
+---
+ src/backends/native/meta-kms-connector.c | 123 ++++++++++++++++++++++++++++++-
+ src/tests/native-kms-hotplug.c           |   8 ++
+ 2 files changed, 129 insertions(+), 2 deletions(-)
+
+diff --git a/src/backends/native/meta-kms-connector.c b/src/backends/native/meta-kms-connector.c
+index 8b6fa60..ce76882 100644
+--- a/src/backends/native/meta-kms-connector.c
++++ b/src/backends/native/meta-kms-connector.c
+@@ -25,10 +25,14 @@
+ 
+ #include "backends/native/meta-kms-crtc.h"
+ #include "backends/native/meta-kms-device-private.h"
++#include "backends/native/meta-kms-impl.h"
+ #include "backends/native/meta-kms-impl-device.h"
+ #include "backends/native/meta-kms-mode-private.h"
++#include "backends/native/meta-kms-private.h"
+ #include "backends/native/meta-kms-update-private.h"
+ 
++#define CONNECTION_CHANGE_TIMEOUT 3 /* in seconds */
++
+ /* CTA-861.3 HDR Static Metadata Extension, Table 3,
+  * Electro-Optical Transfer Function */
+ typedef enum
+@@ -73,6 +77,9 @@ struct _MetaKmsConnector
+   drmModeConnection connection;
+   MetaKmsConnectorState *current_state;
+ 
++  drmModeConnection pending_connection;
++  GSource *connection_change_timeout;
++
+   MetaKmsConnectorPropTable prop_table;
+ 
+   uint32_t edid_blob_id;
+@@ -1034,6 +1041,77 @@ meta_kms_connector_update_state_changes (MetaKmsConnector       *connector,
+     current_state->privacy_screen_state = new_state->privacy_screen_state;
+ }
+ 
++static gboolean
++connection_change_timeout (gpointer user_data)
++{
++  MetaKmsConnector *connector = user_data;
++  MetaKmsImpl *impl = meta_kms_impl_device_get_impl (connector->impl_device);
++  MetaKms *kms = meta_kms_impl_get_kms (impl);
++  g_autoptr (GSource) timeout = NULL;
++  MetaKmsResourceChanges changes;
++
++  timeout = g_steal_pointer (&connector->connection_change_timeout);
++
++  if (meta_is_topic_enabled (META_DEBUG_KMS))
++    {
++      int64_t dispatch_time = g_source_get_time (timeout);
++      int64_t ready_time = g_source_get_ready_time (timeout);
++
++      meta_topic (META_DEBUG_KMS,
++                  "%s: %" G_GINT64_FORMAT " (dispatch time)"
++                  " - %" G_GINT64_FORMAT " (ready time)"
++                  " = %" G_GINT64_FORMAT "µs",
++                  __func__, dispatch_time, ready_time,
++                  dispatch_time - ready_time);
++    }
++
++  changes = meta_kms_update_states_sync (kms);
++
++  meta_topic (META_DEBUG_KMS, "%s, changes=0x%x", G_STRFUNC, changes);
++
++  if (changes != META_KMS_RESOURCE_CHANGE_NONE)
++    meta_kms_emit_resources_changed (kms, changes);
++
++  return G_SOURCE_REMOVE;
++}
++
++
++static void
++ensure_connection_change_timeout (MetaKmsConnector *connector)
++{
++  g_autoptr (GSource) timeout = NULL;
++
++  if (connector->connection_change_timeout)
++    {
++      int64_t now = g_get_monotonic_time ();
++
++      meta_topic (META_DEBUG_KMS, "%s, renewing previous timeout. Called at %"
++                  G_GINT64_FORMAT, __func__, now);
++
++      g_source_set_ready_time (connector->connection_change_timeout,
++                               now + CONNECTION_CHANGE_TIMEOUT * G_USEC_PER_SEC);
++      return;
++    }
++
++  if (meta_is_topic_enabled (META_DEBUG_KMS))
++    {
++      int64_t now = g_get_monotonic_time ();
++
++      meta_topic (META_DEBUG_KMS, "%s, no previous timeout set. Called at %"
++                  G_GINT64_FORMAT, __func__, now);
++    }
++
++  timeout = g_timeout_source_new_seconds (CONNECTION_CHANGE_TIMEOUT);
++  g_source_set_callback (timeout, connection_change_timeout,
++                         connector, NULL);
++  g_source_set_name (timeout,
++                     "[mutter] MetaKmsConnector connection change timeout");
++  g_source_attach (timeout, NULL);
++
++  connector->connection_change_timeout = g_steal_pointer (&timeout);
++}
++
++
+ static MetaKmsResourceChanges
+ meta_kms_connector_read_state (MetaKmsConnector  *connector,
+                                MetaKmsImplDevice *impl_device,
+@@ -1066,13 +1144,48 @@ meta_kms_connector_read_state (MetaKmsConnector  *connector,
+     {
+       if (drm_connector->connection != connector->connection)
+         {
+-          connector->connection = drm_connector->connection;
+-          changes |= META_KMS_RESOURCE_CHANGE_FULL;
++          meta_topic (META_DEBUG_KMS,
++                      "%s: connector %u appears to have been disconnected",
++                      G_STRFUNC, connector->id);
++
++          if (drm_connector->connection == connector->pending_connection &&
++              !connector->connection_change_timeout)
++            {
++              meta_topic (META_DEBUG_KMS, "%s: connector %u state has not "
++                          "changed after a timeout, we can call it really "
++                          "disconnected now",
++                          G_STRFUNC, connector->id);
++
++              connector->connection = connector->pending_connection;
++              changes |= META_KMS_RESOURCE_CHANGE_FULL;
++              goto out;
++            }
++
++          connector->pending_connection = drm_connector->connection;
++          ensure_connection_change_timeout (connector);
++
++          /* Let's ignore any change for this connector for now */
++          g_assert (changes == META_KMS_RESOURCE_CHANGE_NONE);
++          connector->current_state = g_steal_pointer (&current_state);
++
++          goto out;
+         }
+ 
+       goto out;
+     }
+ 
++  connector->pending_connection = drm_connector->connection;
++
++  if (connector->connection_change_timeout)
++    {
++      meta_topic (META_DEBUG_KMS, "%s: connector %u connection has been "
++                  "restored before the timeout had expired",
++                  G_STRFUNC, connector->id);
++
++      g_source_destroy (connector->connection_change_timeout);
++      g_clear_pointer (&connector->connection_change_timeout, g_source_unref);
++    }
++
+   state = meta_kms_connector_state_new ();
+ 
+   state_set_blobs (state, connector, impl_device, drm_connector);
+@@ -1633,6 +1746,12 @@ meta_kms_connector_finalize (GObject *object)
+   if (connector->fd_held)
+     meta_kms_impl_device_unhold_fd (connector->impl_device);
+ 
++  if (connector->connection_change_timeout)
++    {
++      g_source_destroy (connector->connection_change_timeout);
++      g_clear_pointer (&connector->connection_change_timeout, g_source_unref);
++    }
++
+   g_clear_pointer (&connector->current_state, meta_kms_connector_state_free);
+   g_free (connector->name);
+ 
+diff --git a/src/tests/native-kms-hotplug.c b/src/tests/native-kms-hotplug.c
+index f703c65..bf38a70 100644
+--- a/src/tests/native-kms-hotplug.c
++++ b/src/tests/native-kms-hotplug.c
+@@ -173,6 +173,10 @@ meta_test_disconnect_connect (void)
+   drm_mock_set_resource_filter (DRM_MOCK_CALL_FILTER_GET_CONNECTOR,
+                                 disconnect_connector_filter, NULL);
+   g_signal_emit_by_name (udev, "hotplug", udev_device);
++  logical_monitors =
++    meta_monitor_manager_get_logical_monitors (monitor_manager);
++  g_assert_cmpuint (g_list_length (logical_monitors), ==, 1);
++  meta_wait_for_monitors_changed (test_context);
+   logical_monitors =
+     meta_monitor_manager_get_logical_monitors (monitor_manager);
+   g_assert_cmpuint (g_list_length (logical_monitors), ==, 0);
+@@ -198,6 +202,10 @@ meta_test_disconnect_connect (void)
+   drm_mock_set_resource_filter (DRM_MOCK_CALL_FILTER_GET_CONNECTOR,
+                                 disconnect_connector_filter, NULL);
+   g_signal_emit_by_name (udev, "hotplug", udev_device);
++  logical_monitors =
++    meta_monitor_manager_get_logical_monitors (monitor_manager);
++  g_assert_cmpuint (g_list_length (logical_monitors), ==, 1);
++  meta_wait_for_monitors_changed (test_context);
+   logical_monitors =
+     meta_monitor_manager_get_logical_monitors (monitor_manager);
+   g_assert_cmpuint (g_list_length (logical_monitors), ==, 0);
