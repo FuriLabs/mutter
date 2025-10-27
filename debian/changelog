@@ -1,3 +1,11 @@
+mutter (46.2-1ubuntu0.24.04.11) noble; urgency=medium
+
+  [ Marco Trevisan (Treviño) ]
+  * d/p: Fix privacy screen enum definitions (LP: #2085423)
+  * d/p: Correctly track the current privacy screen state (LP: #2121517)
+
+ -- Alessandro Astone <alessandro.astone@canonical.com>  Mon, 27 Oct 2025 15:31:56 +0100
+
 mutter (46.2-1ubuntu0.24.04.10) noble; urgency=medium
 
   * Add proposed patch fixing crash on window drag (LP: #2107454)
