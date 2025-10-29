@@ -1,3 +1,9 @@
+mutter (49.0-2ubuntu5.1) questing; urgency=medium
+
+  * Fix sticky keys not locking (LP: #2127039)
+
+ -- Alessandro Astone <alessandro.astone@canonical.com>  Wed, 29 Oct 2025 17:24:03 +0100
+
 mutter (49.0-2ubuntu5) questing; urgency=medium
 
   [ Daniel van Vugt ]
