@@ -1,0 +1,158 @@
+From: Alessandro Astone <alessandro.astone@canonical.com>
+Date: Tue, 21 Oct 2025 12:08:58 +0200
+Subject: backends/native: Fix sticky keys not locking
+
+When pressing a modifier twice with sticky keys enabled it is supposed
+to become locked, but that was not happening.
+
+xkb_state_update_key unsets a locked modifier on KEY_UP.
+So consider the following sequence with sticky keys enabled:
+* Press Shift
+  -> Shift is latched
+* Release Shift
+  -> No change
+* Press Shift
+  -> Shift is locked
+* Release Shift
+  -> Shift is unlocked
+
+We tried to lock the modifier, but it was unlocked by the final release event
+
+One possible solution is to delay latching/locking to the release event:
+* Press Shift
+  -> No change
+* Release Shift
+  -> Shift is latched
+* Press Shift
+  -> No change
+* Release Shift
+  -> Shift is locked
+
+Prior to https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4546 the issue
+was only visible when typing in GNOME Shell widgets. After that, the issue now
+also affects Wayland applications, as they now receive the modifiers state from
+the clutter keymap instead of doing its separate tracking.
+
+Bug-Ubuntu: https://launchpad.net/bugs/2127039
+Forwarded: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4728
+---
+ src/backends/native/meta-input-device-native.c | 80 ++++++++++++++------------
+ 1 file changed, 43 insertions(+), 37 deletions(-)
+
+diff --git a/src/backends/native/meta-input-device-native.c b/src/backends/native/meta-input-device-native.c
+index 6fc295f..7d0339f 100644
+--- a/src/backends/native/meta-input-device-native.c
++++ b/src/backends/native/meta-input-device-native.c
+@@ -623,9 +623,6 @@ handle_stickykeys_press (ClutterEvent          *event,
+                          MetaInputDeviceNative *device)
+ {
+   MetaSeatImpl *seat_impl = seat_impl_from_device_native (device);
+-  xkb_mod_mask_t depressed_mods;
+-  xkb_mod_mask_t new_latched_mask;
+-  xkb_mod_mask_t new_locked_mask;
+   struct xkb_state *xkb_state;
+ 
+   if (!key_event_is_modifier (event))
+@@ -640,59 +637,68 @@ handle_stickykeys_press (ClutterEvent          *event,
+     }
+ 
+   xkb_state = meta_seat_impl_get_xkb_state_in_impl (seat_impl);
+-  depressed_mods = xkb_state_serialize_mods (xkb_state, XKB_STATE_MODS_DEPRESSED);
++  device->stickykeys_depressed_mask = xkb_state_serialize_mods (xkb_state, XKB_STATE_MODS_DEPRESSED);
++
+   /* Ignore the lock modifier mask, that one cannot be sticky, yet the
+    * CAPS_LOCK key itself counts as a modifier as it might be remapped
+    * to some other modifier which can be sticky.
+    */
+-  depressed_mods &= ~CLUTTER_LOCK_MASK;
+-
+-  new_latched_mask = device->stickykeys_latched_mask;
+-  new_locked_mask = device->stickykeys_locked_mask;
++  device->stickykeys_depressed_mask &= ~CLUTTER_LOCK_MASK;
+ 
+-  device->stickykeys_depressed_mask = depressed_mods;
+-
+-  if (new_locked_mask & depressed_mods)
+-    {
+-      new_locked_mask &= ~depressed_mods;
+-    }
+-  else if (new_latched_mask & depressed_mods)
+-    {
+-      new_locked_mask |= depressed_mods;
+-      new_latched_mask &= ~depressed_mods;
+-    }
+-  else
+-    {
+-      new_latched_mask |= depressed_mods;
+-    }
+-
+-  rewrite_stickykeys_event (event, device, new_latched_mask, new_locked_mask);
+-  return TRUE;
++  return FALSE;
+ }
+ 
+ static gboolean
+ handle_stickykeys_release (ClutterEvent          *event,
+                            MetaInputDeviceNative *device)
+ {
+-  MetaSeatImpl *seat_impl = seat_impl_from_device_native (device);
+-  struct xkb_state *xkb_state;
+-
+-  xkb_state = meta_seat_impl_get_xkb_state_in_impl (seat_impl);
+-  device->stickykeys_depressed_mask =
+-    xkb_state_serialize_mods (xkb_state, XKB_STATE_MODS_DEPRESSED);
++  xkb_mod_mask_t depressed_mods;
++  xkb_mod_mask_t new_latched_mask;
++  xkb_mod_mask_t new_locked_mask;
+ 
+   if (key_event_is_modifier (event))
+     {
++      MetaSeatImpl *seat_impl = seat_impl_from_device_native (device);
++      struct xkb_state *xkb_state = meta_seat_impl_get_xkb_state_in_impl (seat_impl);
++
++      depressed_mods = device->stickykeys_depressed_mask;
++      device->stickykeys_depressed_mask = xkb_state_serialize_mods (xkb_state, XKB_STATE_MODS_DEPRESSED);
++
++      if (!depressed_mods)
++        return FALSE;
++
++      new_latched_mask = device->stickykeys_latched_mask;
++      new_locked_mask = device->stickykeys_locked_mask;
++
++      if (new_locked_mask & depressed_mods)
++        {
++          new_locked_mask &= ~depressed_mods;
++        }
++      else if (new_latched_mask & depressed_mods)
++        {
++          new_locked_mask |= depressed_mods;
++          new_latched_mask &= ~depressed_mods;
++        }
++      else
++        {
++          new_latched_mask |= depressed_mods;
++        }
++
+       if (device->a11y_flags & META_A11Y_STICKY_KEYS_BEEP)
+         meta_input_device_native_bell_notify (device);
+-
+-      return FALSE;
+     }
++  else
++    {
++      device->stickykeys_depressed_mask = 0;
+ 
+-  if (device->stickykeys_latched_mask == 0)
+-    return FALSE;
++      if (!device->stickykeys_latched_mask)
++        return FALSE;
+ 
+-  rewrite_stickykeys_event (event, device, 0, device->stickykeys_locked_mask);
++      new_latched_mask = 0;
++      new_locked_mask = device->stickykeys_locked_mask;
++    }
++
++  rewrite_stickykeys_event (event, device, new_latched_mask, new_locked_mask);
+   return TRUE;
+ }
+ 
