@@ -1,3 +1,10 @@
+mutter (49.1.1-2) unstable; urgency=medium
+
+  * Team upload
+  * Release to unstable (starts transition: #1116394)
+
+ -- Simon McVittie <smcv@debian.org>  Fri, 31 Oct 2025 10:42:22 +0000
+
 mutter (49.1.1-1) experimental; urgency=medium
 
   * New upstream release
