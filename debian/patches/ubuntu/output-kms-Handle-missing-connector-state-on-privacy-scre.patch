@@ -1,0 +1,73 @@
+From: =?utf-8?b?Ik1hcmNvIFRyZXZpc2FuIChUcmV2acOxbyki?= <mail@3v1n0.net>
+Date: Sat, 1 Nov 2025 21:25:20 +0100
+Subject: output-kms: Handle missing connector state on privacy screen check
+
+During initialization or during KMS state updates the connector state is
+not available, as such we cannot use it to provide the current privacy
+screen state either, and just mark it as unavailable.
+
+Fixes a crash we're getting in 49:
+
+    meta_output_kms_get_privacy_screen_state (
+        output=<optimized out>)
+    at ../src/backends/native/meta-output-kms.c:72
+    meta_output_get_privacy_screen_state (
+        output=0x63e8ab7f4b40)
+    at ../src/backends/meta-output.c:455
+    meta_monitor_manager_rebuild (
+        manager=0x63e8a7d86cb0, config=0x63e8a85bb3a0)
+    at ../src/backends/meta-monitor-manager.c:4299
+    meta_monitor_manager_native_apply_monitors_config (
+        manager=0x63e8a7d86cb0, config=0x63e8a85bb3a0,
+        method=META_MONITORS_CONFIG_METHOD_PERSISTENT, error=<optimized out>)
+    at ../src/backends/native/meta-monitor-manager-native.c:304
+    meta_monitor_manager_apply_monitors_config (
+        manager=manager@entry=0x63e8a7d86cb0,
+        config=config@entry=0x63e8a85bb3a0,
+        method=method@entry=META_MONITORS_CONFIG_METHOD_PERSISTENT,
+        error=error@entry=0x7ffdf4b7f640)
+    at ../src/backends/meta-monitor-manager.c:726
+    meta_monitor_manager_ensure_configured (
+        manager=0x63e8a7d86cb0)
+    at ../src/backends/meta-monitor-manager.c:887
+    [...]
+    g_signal_emit (
+        instance=instance@entry=0x63e8a8781870, signal_id=<optimized out>,
+        detail=detail@entry=0)
+    at ../../../gobject/gsignal.c:3598
+    on_properties_changed (
+        connection=<optimized out>, sender_name=<optimized out>,
+        object_path=<optimized out>, interface_name=<optimized out>,
+        signal_name=<optimized out>, parameters=<optimized out>,
+        user_data=0x63e8a8774960)
+    at ../../../gio/gdbusproxy.c:1088
+    interface_name_for_signal = 0x63e8a8e92fa0 "org.freedesktop.login1.Manager"
+
+Origin: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4742
+Bug-Ubuntu: https://launchpad.net/bugs/2130619
+---
+ src/backends/native/meta-output-kms.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/backends/native/meta-output-kms.c b/src/backends/native/meta-output-kms.c
+index d5e075a..be725f6 100644
+--- a/src/backends/native/meta-output-kms.c
++++ b/src/backends/native/meta-output-kms.c
+@@ -32,6 +32,7 @@
+ #include "backends/meta-color-manager.h"
+ #include "backends/meta-crtc.h"
+ #include "backends/meta-monitor-private.h"
++#include "backends/meta-output.h"
+ #include "backends/native/meta-crtc-kms.h"
+ #include "backends/native/meta-crtc-mode-kms.h"
+ #include "backends/native/meta-kms.h"
+@@ -69,6 +70,9 @@ meta_output_kms_get_privacy_screen_state (MetaOutput *output)
+   connector_state =
+     meta_kms_connector_get_current_state (output_kms->kms_connector);
+ 
++  if (!connector_state)
++    return META_PRIVACY_SCREEN_UNAVAILABLE;
++
+   return connector_state->privacy_screen_state;
+ }
+ 

@@ -14,3 +14,4 @@ ubuntu/wayland-Check-modifier-state-from-event-prior-to-event-de.patch
 ubuntu/wayland-Always-send-configure-event-after-xdg_popup-repos.patch
 ubuntu/window-Do-not-unqueue-wayland-window-for-move-resize-when.patch
 ubuntu/backends-native-Fix-sticky-keys-not-locking.patch
+ubuntu/output-kms-Handle-missing-connector-state-on-privacy-scre.patch
