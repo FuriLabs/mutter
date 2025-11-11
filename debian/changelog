@@ -1,3 +1,11 @@
+mutter (46.2-1ubuntu0.24.04.12) noble; urgency=medium
+
+  * d/salsa-ci: Configure for ubuntu/noble
+  * Fix possible crash during output changes, introduced in the
+    previous upload (LP: #2130619)
+
+ -- Alessandro Astone <alessandro.astone@canonical.com>  Tue, 11 Nov 2025 09:36:29 +0100
+
 mutter (46.2-1ubuntu0.24.04.11) noble; urgency=medium
 
   [ Marco Trevisan (Treviño) ]
