@@ -52,3 +52,4 @@ backends-native-kms-connector-private-Fix-definition-of-p.patch
 backends-output-Fix-privacy-screen-enabled-getter.patch
 backends-output-Use-the-current-state-to-check-if-privacy.patch
 backends-monitor-manager-Only-return-true-if-a-privacy-sc.patch
+output-kms-Handle-missing-connector-state-on-privacy-scre.patch
