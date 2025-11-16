@@ -1,5 +1,22 @@
-mutter (48.5-1~deb13u1) UNRELEASED; urgency=medium
+mutter (48.6-0+deb13u1) UNRELEASED; urgency=medium
 
+  * New upstream stable release
+    - Fix drag-and-drop actions not working reliably in some X11 clients
+      (mutter#4288 upstream)
+    - Fix delayed frame presentation with the commit-timing-v1 Wayland
+      extension (mutter#4258 upstream)
+    - Avoid a crash if a GNOME Shell extension tries to delete the same
+      window more than once (mutter#4319 upstream)
+    - Avoid a crash in the Wayland session if a non-GNOME desktop
+      environment previously set the cursor size in GSettings to zero;
+      recover by resetting it to the default, 24px (mutter#3933 upstream)
+    - Fix crashes if a GNOME Shell extension uses certain Cogl pipeline
+      APIs (mutter#4352 upstream)
+    - Save the intended size for tiled windows when saving session state
+      (mutter!4697 upstream)
+    - Avoid potential crashes when saving the state of a window with no
+      valid toplevel state (mutter!4697 upstream)
+    - Remove dead code detected by static analysis (mutter!4697 upstream)
   * Revert "d/gbp/conf, d/control: Switch packaging branch for forky"
 
  -- Simon McVittie <smcv@debian.org>  Sun, 16 Nov 2025 15:34:30 +0000
