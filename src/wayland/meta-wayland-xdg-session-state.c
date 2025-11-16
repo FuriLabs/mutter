@@ -292,7 +292,7 @@ meta_wayland_xdg_session_state_parse (MetaSessionState  *session_state,
       tiled_rect = gvdb_table_get_value (toplevel, "tiled-rect");
       if (tiled_rect && g_variant_is_of_type (tiled_rect, G_VARIANT_TYPE ("(iiii)")))
         {
-          variant_to_rect (floating_rect, &toplevel_state->tiled.rect);
+          variant_to_rect (tiled_rect, &toplevel_state->tiled.rect);
         }
 
       is_minimized = gvdb_table_get_value (toplevel, "is-minimized");
@@ -397,6 +397,8 @@ meta_wayland_xdg_session_state_restore_window (MetaSessionState *state,
   toplevel_state = g_hash_table_lookup (xdg_session_state->toplevels, name);
   if (!toplevel_state)
     return FALSE;
+  if (toplevel_state->window_state == WINDOW_STATE_NONE)
+    return FALSE;
 
   switch (toplevel_state->window_state)
     {
@@ -438,6 +440,7 @@ meta_wayland_xdg_session_state_restore_window (MetaSessionState *state,
   switch (toplevel_state->window_state)
     {
     case WINDOW_STATE_NONE:
+      break;
     case WINDOW_STATE_FLOATING:
       break;
     case WINDOW_STATE_TILED_LEFT:
