@@ -15,3 +15,5 @@ ubuntu/wayland-Always-send-configure-event-after-xdg_popup-repos.patch
 ubuntu/window-Do-not-unqueue-wayland-window-for-move-resize-when.patch
 ubuntu/backends-native-Fix-sticky-keys-not-locking.patch
 ubuntu/output-kms-Handle-missing-connector-state-on-privacy-scre.patch
+tests-monitor-abstraction-Assign-non-conflicting-CRTCs-fo.patch
+backends-monitor-manager-Use-normal-modes-when-tiles-are-.patch
