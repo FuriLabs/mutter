@@ -74,6 +74,7 @@ typedef enum
   META_MOVE_RESIZE_WAYLAND_CLIENT_RESIZE = 1 << 12,
   META_MOVE_RESIZE_CONSTRAIN = 1 << 13,
   META_MOVE_RESIZE_RECT_INVALID = 1 << 14,
+  META_MOVE_RESIZE_WAYLAND_FORCE_CONFIGURE = 1 << 15,
 } MetaMoveResizeFlags;
 
 typedef enum _MetaPlaceFlag
@@ -614,11 +615,12 @@ struct _MetaWindowClass
   gboolean (*set_transient_for) (MetaWindow *window,
                                  MetaWindow *parent);
 
-  void (*stage_to_protocol) (MetaWindow *window,
-                             int         stage_x,
-                             int         stage_y,
-                             int        *protocol_x,
-                             int        *protocol_y);
+  void (*stage_to_protocol) (MetaWindow          *window,
+                             int                  stage_x,
+                             int                  stage_y,
+                             int                 *protocol_x,
+                             int                 *protocol_y,
+                             MtkRoundingStrategy  rounding_strategy);
   void (*protocol_to_stage) (MetaWindow          *window,
                              int                  protocol_x,
                              int                  protocol_y,
@@ -627,6 +629,8 @@ struct _MetaWindowClass
                              MtkRoundingStrategy  rounding_strategy);
 
   MetaGravity (* get_gravity) (MetaWindow *window);
+
+  void (* save_rect) (MetaWindow *window);
 };
 
 void        meta_window_unmanage           (MetaWindow  *window,
@@ -636,6 +640,9 @@ void        meta_window_queue              (MetaWindow  *window,
 META_EXPORT_TEST
 void        meta_window_untile             (MetaWindow        *window);
 
+void        meta_window_tile_internal      (MetaWindow        *window,
+                                            MetaTileMode       mode,
+                                            MtkRectangle      *saved_rect);
 META_EXPORT_TEST
 void        meta_window_tile               (MetaWindow        *window,
                                             MetaTileMode       mode);
@@ -660,12 +667,6 @@ gboolean    meta_window_has_fullscreen_monitors (MetaWindow *window);
 
 void        meta_window_adjust_fullscreen_monitor_rect (MetaWindow    *window,
                                                         MtkRectangle  *monitor_rect);
-
-META_EXPORT_TEST
-void        meta_window_resize_frame (MetaWindow  *window,
-                                      gboolean     user_op,
-                                      int          w,
-                                      int          h);
 
 gboolean    meta_window_should_be_showing_on_workspace (MetaWindow    *window,
                                                         MetaWorkspace *workspace);
@@ -801,7 +802,8 @@ void meta_window_move_resize (MetaWindow          *window,
 void meta_window_move_resize_internal (MetaWindow          *window,
                                        MetaMoveResizeFlags  flags,
                                        MetaPlaceFlag        place_flags,
-                                       MtkRectangle         frame_rect);
+                                       MtkRectangle         frame_rect,
+                                       MtkRectangle        *result_rect);
 
 void meta_window_grab_op_began (MetaWindow *window, MetaGrabOp op);
 void meta_window_grab_op_ended (MetaWindow *window, MetaGrabOp op);
@@ -896,6 +898,10 @@ gboolean meta_window_is_tiled_side_by_side (MetaWindow *window);
 gboolean meta_window_is_tiled_left (MetaWindow *window);
 
 gboolean meta_window_is_tiled_right (MetaWindow *window);
+
+void meta_window_update_tile_fraction (MetaWindow *window,
+                                       int         new_w,
+                                       int         new_h);
 
 void meta_window_apply_config (MetaWindow           *window,
                                MetaWindowConfig     *config,

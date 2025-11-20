@@ -111,11 +111,12 @@ meta_window_x11_get_private (MetaWindowX11 *window_x11)
 }
 
 static void
-meta_window_x11_stage_to_protocol (MetaWindow *window,
-                                   int         stage_x,
-                                   int         stage_y,
-                                   int        *protocol_x,
-                                   int        *protocol_y)
+meta_window_x11_stage_to_protocol (MetaWindow          *window,
+                                   int                  stage_x,
+                                   int                  stage_y,
+                                   int                 *protocol_x,
+                                   int                 *protocol_y,
+                                   MtkRoundingStrategy  rounding_strategy)
 {
   if (protocol_x)
     *protocol_x = stage_x;
@@ -563,7 +564,7 @@ meta_window_x11_initialize_state (MetaWindow *window)
       adjust_for_gravity (window, TRUE, gravity, &rect);
       meta_window_client_rect_to_frame_rect (window, &rect, &rect);
 
-      meta_window_move_resize_internal (window, flags, place_flags, rect);
+      meta_window_move_resize_internal (window, flags, place_flags, rect, NULL);
     }
 
   meta_window_x11_update_shape_region (window);
@@ -2019,6 +2020,35 @@ meta_window_x11_get_gravity (MetaWindow *window)
   return gravity;
 }
 
+static void
+meta_window_x11_save_rect (MetaWindow *window)
+{
+  MtkRectangle rect;
+  MetaWindowDrag *window_drag;
+
+  if (!meta_window_config_is_floating (window->config))
+    return;
+
+  window_drag =
+    meta_compositor_get_current_window_drag (window->display->compositor);
+  if (window_drag &&
+      meta_window_drag_get_window (window_drag) == window)
+    return;
+
+  rect = meta_window_config_get_rect (window->config);
+
+  if (!meta_window_config_is_maximized_horizontally (window->config))
+    {
+      window->saved_rect.x = rect.x;
+      window->saved_rect.width = rect.width;
+    }
+  if (!meta_window_config_is_maximized_vertically (window->config))
+    {
+      window->saved_rect.y = rect.y;
+      window->saved_rect.height = rect.height;
+    }
+}
+
 gboolean
 meta_window_x11_is_ssd (MetaWindow *window)
 {
@@ -2190,6 +2220,7 @@ meta_window_x11_class_init (MetaWindowX11Class *klass)
   window_class->stage_to_protocol = meta_window_x11_stage_to_protocol;
   window_class->protocol_to_stage = meta_window_x11_protocol_to_stage;
   window_class->get_gravity = meta_window_x11_get_gravity;
+  window_class->save_rect = meta_window_x11_save_rect;
 
   klass->freeze_commits = meta_window_x11_impl_freeze_commits;
   klass->thaw_commits = meta_window_x11_impl_thaw_commits;
@@ -4447,6 +4478,15 @@ meta_window_x11_get_client_rect (MetaWindowX11 *window_x11)
   return priv->client_rect;
 }
 
+void
+meta_window_x11_set_client_rect (MetaWindowX11 *window_x11,
+                                 MtkRectangle  *client_rect)
+{
+  MetaWindowX11Private *priv = meta_window_x11_get_instance_private (window_x11);
+
+  priv->client_rect = *client_rect;
+}
+
 static gboolean
 has_requested_dont_bypass_compositor (MetaWindowX11 *window_x11)
 {
@@ -4807,7 +4847,9 @@ meta_window_x11_configure (MetaWindow *window)
   g_autoptr (MetaWindowConfig) window_config = NULL;
   MtkRectangle new_rect;
 
-  window_config = meta_window_config_new_from (window, window->config);
+  window_config = meta_window_config_new_from (window->config);
+  if (window->showing_for_first_time)
+    meta_window_config_set_initial (window_config);
   meta_window_emit_configure (window, window_config);
 
   new_rect = meta_window_config_get_rect (window_config);

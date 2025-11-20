@@ -144,6 +144,8 @@ meta_window_config_init (MetaWindowConfig *window_config)
 gboolean
 meta_window_config_get_is_initial (MetaWindowConfig *window_config)
 {
+  g_return_val_if_fail (META_IS_WINDOW_CONFIG (window_config), FALSE);
+
   return window_config->is_initial;
 }
 
@@ -151,6 +153,8 @@ void
 meta_window_config_set_rect (MetaWindowConfig *window_config,
                              MtkRectangle      rect)
 {
+  g_return_if_fail (META_IS_WINDOW_CONFIG (window_config));
+
   window_config->rect = rect;
   window_config->has_position = TRUE;
 }
@@ -158,6 +162,9 @@ meta_window_config_set_rect (MetaWindowConfig *window_config,
 MtkRectangle
 meta_window_config_get_rect (MetaWindowConfig *window_config)
 {
+  g_return_val_if_fail (META_IS_WINDOW_CONFIG (window_config),
+                        MTK_RECTANGLE_INIT (0,0,0,0));
+
   return window_config->rect;
 }
 
@@ -165,6 +172,8 @@ void
 meta_window_config_set_is_fullscreen (MetaWindowConfig *window_config,
                                       gboolean          is_fullscreen)
 {
+  g_return_if_fail (META_IS_WINDOW_CONFIG (window_config));
+
   window_config->is_fullscreen = is_fullscreen;
 }
 
@@ -173,6 +182,8 @@ meta_window_config_get_position (MetaWindowConfig *window_config,
                                  int              *x,
                                  int              *y)
 {
+  g_return_if_fail (META_IS_WINDOW_CONFIG (window_config));
+
   if (x)
     *x = window_config->rect.x;
   if (y)
@@ -184,6 +195,8 @@ meta_window_config_set_position (MetaWindowConfig *window_config,
                                  int               x,
                                  int               y)
 {
+  g_return_if_fail (META_IS_WINDOW_CONFIG (window_config));
+
   window_config->rect.x = x;
   window_config->rect.y = y;
   window_config->has_position = TRUE;
@@ -194,6 +207,8 @@ meta_window_config_get_size (MetaWindowConfig *window_config,
                              int              *width,
                              int              *height)
 {
+  g_return_if_fail (window_config);
+
   if (width)
     *width = window_config->rect.width;
   if (height)
@@ -205,6 +220,8 @@ meta_window_config_set_size (MetaWindowConfig *window_config,
                              int               width,
                              int               height)
 {
+  g_return_if_fail (META_IS_WINDOW_CONFIG (window_config));
+
   window_config->rect.width = width;
   window_config->rect.height = height;
 }
@@ -212,30 +229,40 @@ meta_window_config_set_size (MetaWindowConfig *window_config,
 gboolean
 meta_window_config_get_is_fullscreen (MetaWindowConfig *window_config)
 {
+  g_return_val_if_fail (META_IS_WINDOW_CONFIG (window_config), FALSE);
+
   return window_config->is_fullscreen;
 }
 
 gboolean
 meta_window_config_is_maximized (MetaWindowConfig *config)
 {
+  g_return_val_if_fail (META_IS_WINDOW_CONFIG (config), FALSE);
+
   return config->maximized_horizontally && config->maximized_vertically;
 }
 
 gboolean
 meta_window_config_is_any_maximized (MetaWindowConfig *config)
 {
+  g_return_val_if_fail (META_IS_WINDOW_CONFIG (config), FALSE);
+
   return config->maximized_horizontally || config->maximized_vertically;
 }
 
 gboolean
 meta_window_config_is_maximized_horizontally (MetaWindowConfig *config)
 {
+  g_return_val_if_fail (META_IS_WINDOW_CONFIG (config), FALSE);
+
   return config->maximized_horizontally;
 }
 
 gboolean
 meta_window_config_is_maximized_vertically (MetaWindowConfig *config)
 {
+  g_return_val_if_fail (META_IS_WINDOW_CONFIG (config), FALSE);
+
   return config->maximized_vertically;
 }
 
@@ -244,6 +271,8 @@ meta_window_config_set_maximized_directions (MetaWindowConfig *config,
                                              gboolean          horizontally,
                                              gboolean          vertically)
 {
+  g_return_if_fail (META_IS_WINDOW_CONFIG (config));
+
   config->maximized_horizontally = horizontally;
   config->maximized_vertically = vertically;
 }
@@ -251,24 +280,32 @@ meta_window_config_set_maximized_directions (MetaWindowConfig *config,
 MetaTileMode
 meta_window_config_get_tile_mode (MetaWindowConfig *config)
 {
+  g_return_val_if_fail (META_IS_WINDOW_CONFIG (config), META_TILE_NONE);
+
   return config->tile_mode;
 }
 
 int
 meta_window_config_get_tile_monitor_number (MetaWindowConfig *config)
 {
+  g_return_val_if_fail (META_IS_WINDOW_CONFIG (config), -1);
+
   return config->tile_monitor_number;
 }
 
 double
 meta_window_config_get_tile_hfraction (MetaWindowConfig *config)
 {
+  g_return_val_if_fail (META_IS_WINDOW_CONFIG (config), -1.0);
+
   return config->tile_hfraction;
 }
 
 MetaWindow *
 meta_window_config_get_tile_match (MetaWindowConfig *config)
 {
+  g_return_val_if_fail (META_IS_WINDOW_CONFIG (config), NULL);
+
   return config->tile_match;
 }
 
@@ -283,6 +320,8 @@ void
 meta_window_config_set_tile_monitor_number (MetaWindowConfig *config,
                                             int               tile_monitor_number)
 {
+  g_return_if_fail (META_IS_WINDOW_CONFIG (config));
+
   config->tile_monitor_number = tile_monitor_number;
 }
 
@@ -290,6 +329,8 @@ void
 meta_window_config_set_tile_hfraction (MetaWindowConfig *config,
                                        double            hfraction)
 {
+  g_return_if_fail (META_IS_WINDOW_CONFIG (config));
+
   config->tile_hfraction = hfraction;
 }
 
@@ -297,19 +338,33 @@ void
 meta_window_config_set_tile_match (MetaWindowConfig *config,
                                    MetaWindow       *tile_match)
 {
+  g_return_if_fail (META_IS_WINDOW_CONFIG (config));
+
   config->tile_match = tile_match;
 }
 
 gboolean
 meta_window_config_is_floating (MetaWindowConfig *config)
 {
-  return (!config->is_fullscreen &&
-          !meta_window_config_is_any_maximized (config));
+  g_return_val_if_fail (META_IS_WINDOW_CONFIG (config), FALSE);
+
+  if (config->is_fullscreen)
+    return FALSE;
+
+  if (meta_window_config_is_maximized (config))
+    return FALSE;
+
+  if (meta_window_config_get_tile_mode (config))
+    return FALSE;
+
+  return TRUE;
 }
 
 gboolean
 meta_window_config_has_position (MetaWindowConfig *config)
 {
+  g_return_val_if_fail (META_IS_WINDOW_CONFIG (config), FALSE);
+
   return config->has_position;
 }
 
@@ -332,16 +387,14 @@ meta_window_config_initial_new (void)
 }
 
 MetaWindowConfig *
-meta_window_config_new_from (MetaWindow       *window,
-                             MetaWindowConfig *other_config)
+meta_window_config_new_from (MetaWindowConfig *other_config)
 {
   MetaWindowConfig *config;
 
-  if (window->showing_for_first_time)
-    config = meta_window_config_initial_new ();
-  else
-    config = meta_window_config_new ();
+  g_return_val_if_fail (META_IS_WINDOW_CONFIG (other_config), NULL);
 
+  config = meta_window_config_new ();
+  config->is_initial = other_config->is_initial;
   config->rect = meta_window_config_get_rect (other_config);
   config->is_fullscreen = other_config->is_fullscreen;
   config->maximized_horizontally = other_config->maximized_horizontally;
@@ -352,4 +405,36 @@ meta_window_config_new_from (MetaWindow       *window,
   config->tile_match = other_config->tile_match;
 
   return config;
+}
+
+void
+meta_window_config_set_initial (MetaWindowConfig *config)
+{
+  g_return_if_fail (META_IS_WINDOW_CONFIG (config));
+
+  config->is_initial = TRUE;
+}
+
+gboolean
+meta_window_config_is_equivalent (MetaWindowConfig *config,
+                                  MetaWindowConfig *other_config)
+{
+  g_return_val_if_fail (META_IS_WINDOW_CONFIG (config), FALSE);
+  g_return_val_if_fail (META_IS_WINDOW_CONFIG (other_config), FALSE);
+
+  return (mtk_rectangle_equal (&config->rect, &other_config->rect) &&
+          config->is_fullscreen == other_config->is_fullscreen &&
+          config->maximized_horizontally == other_config->maximized_horizontally &&
+          config->maximized_vertically == other_config->maximized_vertically &&
+          config->tile_mode == other_config->tile_mode &&
+          config->tile_monitor_number == other_config->tile_monitor_number &&
+          config->tile_hfraction == other_config->tile_hfraction);
+}
+
+gboolean
+meta_window_config_is_tiled_side_by_side (MetaWindowConfig *config)
+{
+  return (meta_window_config_is_maximized_vertically (config) &&
+          !meta_window_config_is_maximized_horizontally (config) &&
+          meta_window_config_get_tile_mode (config) != META_TILE_NONE);
 }

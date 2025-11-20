@@ -1473,15 +1473,15 @@ process_event (MetaDisplay          *display,
 
           invoke_handler (display, binding->handler, window, event, binding);
           binding->release_pending = FALSE;
-          return CLUTTER_EVENT_STOP;
         }
       else
         {
           meta_topic (META_DEBUG_KEYBINDINGS,
                       "Ignore release for handler %s",
                       binding->name);
-          return CLUTTER_EVENT_PROPAGATE;
         }
+
+      return CLUTTER_EVENT_STOP;
     }
   else
     {
@@ -1537,18 +1537,10 @@ process_special_modifier_key (MetaDisplay          *display,
            * work, since global keybindings won't be activated ("this
            * time, however, the function ignores any passive grabs at
            * above (toward the root of) the grab_window of the grab
-           * just released.") So, we first explicitly check for one of
-           * our global keybindings, and if not found, we then replay
-           * the event. Other clients with global grabs will be out of
-           * luck.
+           * just released.") So, it must be delayed until we know
+           * it is not handled by our global keybindings.
            */
-          if (!process_event (display, window, event))
-            {
-              /* Replay the event so it gets delivered to our
-               * per-window key bindings or to the application */
-              meta_compositor_handle_event (compositor, event, window,
-                                            META_EVENT_MODE_REPLAY);
-            }
+          return CLUTTER_EVENT_PROPAGATE;
         }
       else if (clutter_event_type (event) == CLUTTER_KEY_RELEASE)
         {
@@ -1564,7 +1556,7 @@ process_special_modifier_key (MetaDisplay          *display,
 
       meta_compositor_handle_event (compositor, event, window,
                                     META_EVENT_MODE_THAW);
-      return TRUE;
+      return CLUTTER_EVENT_STOP;
     }
   else if (clutter_event_type (event) == CLUTTER_KEY_PRESS &&
            ((modifiers & ~(IGNORED_MODIFIERS)) & CLUTTER_MODIFIER_MASK) == 0 &&
@@ -1576,10 +1568,10 @@ process_special_modifier_key (MetaDisplay          *display,
       meta_compositor_handle_event (compositor, event, window,
                                     META_EVENT_MODE_KEEP_FROZEN);
 
-      return TRUE;
+      return CLUTTER_EVENT_PROPAGATE;
     }
   else
-    return FALSE;
+    return CLUTTER_EVENT_PROPAGATE;
 }
 
 
@@ -1682,11 +1674,21 @@ process_key_event (MetaDisplay     *display,
   if (process_iso_next_group (display, event))
     return TRUE;
 
-  meta_compositor_handle_event (compositor, event, window,
-                                META_EVENT_MODE_THAW);
-
   /* Do the normal keybindings */
-  return process_event (display, window, event);
+  if (process_event (display, window, event))
+    {
+      meta_compositor_handle_event (compositor, event, window,
+                                    META_EVENT_MODE_THAW);
+      return TRUE;
+    }
+  else
+    {
+      /* Replay the event so it gets delivered to our
+       * per-window key bindings or to the application */
+      meta_compositor_handle_event (compositor, event, window,
+                                    META_EVENT_MODE_REPLAY);
+      return FALSE;
+    }
 }
 
 /* Handle a key event. May be called recursively: some key events cause

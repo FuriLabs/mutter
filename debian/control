@@ -26,7 +26,6 @@ Build-Depends: debhelper-compat (= 13),
                gir1.2-xlib-2.0-dev,
                libglycin-2-dev (>= 2.0~beta.2),
                gnome-control-center-data,
-               gnome-pkg-tools,
                gnome-settings-daemon-common <!nocheck>,
                gnome-settings-daemon-dev,
                gobject-introspection (>= 1.80),
@@ -179,8 +178,7 @@ Architecture: linux-any
 Multi-Arch: same
 Depends: libmutter-17-0 (= ${binary:Version}),
          ${gir:Depends},
-         ${misc:Depends},
-         ${shlibs:Depends}
+         ${misc:Depends}
 Provides: ${gir:Provides}
 Description: GObject introspection data for Mutter
  Mutter is a Wayland display server and X11 window manager and

@@ -49,6 +49,7 @@ libmutter-test-17.so libmutter-test-17 #MINVER#
  meta_set_custom_monitor_system_config@Base 42~beta
  meta_test_client_destroy@Base 41.0
  meta_test_client_do@Base 41.0
+ meta_test_client_do_strv@Base 49.1~
  meta_test_client_dov@Base 42~beta
  meta_test_client_error_quark@Base 41.0
  meta_test_client_find_window@Base 41.0

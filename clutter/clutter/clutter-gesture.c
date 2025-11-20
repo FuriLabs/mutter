@@ -818,6 +818,27 @@ is_sequence_end_event (const ClutterEvent *event)
 }
 
 static gboolean
+supported_gesture_event (ClutterEventType event_type)
+{
+  switch (event_type)
+    {
+    case CLUTTER_ENTER:
+    case CLUTTER_LEAVE:
+    case CLUTTER_BUTTON_PRESS:
+    case CLUTTER_MOTION:
+    case CLUTTER_BUTTON_RELEASE:
+    case CLUTTER_TOUCH_BEGIN:
+    case CLUTTER_TOUCH_UPDATE:
+    case CLUTTER_TOUCH_END:
+    case CLUTTER_TOUCH_CANCEL:
+      return TRUE;
+
+    default:
+      return FALSE;
+    }
+}
+
+static gboolean
 clutter_gesture_handle_event (ClutterAction      *action,
                               const ClutterEvent *event)
 {
@@ -829,8 +850,8 @@ clutter_gesture_handle_event (ClutterAction      *action,
   ClutterStage *stage = CLUTTER_STAGE (clutter_actor_get_stage (actor));
   ClutterContext *context = clutter_actor_get_context (actor);
   ClutterBackend *backend = clutter_context_get_backend (context);
-  ClutterSprite *sprite = clutter_backend_get_sprite (backend, stage, event);
   ClutterEventType event_type = clutter_event_type (event);
+  ClutterSprite *sprite;
   GestureSequenceData *seq_data;
   unsigned int seq_index;
   gboolean is_first_event;
@@ -838,13 +859,14 @@ clutter_gesture_handle_event (ClutterAction      *action,
   gboolean may_remove_point = TRUE;
   ClutterGestureState old_state = priv->state;
 
-  if (event_type == CLUTTER_TOUCHPAD_PINCH ||
-      event_type == CLUTTER_TOUCHPAD_SWIPE ||
-      event_type == CLUTTER_TOUCHPAD_HOLD ||
-      event_type == CLUTTER_SCROLL)
+  if (clutter_event_get_flags (event) & CLUTTER_EVENT_FLAG_SYNTHETIC)
     return CLUTTER_EVENT_PROPAGATE;
 
-  if (clutter_event_get_flags (event) & CLUTTER_EVENT_FLAG_SYNTHETIC)
+  if (!supported_gesture_event (event_type))
+    return CLUTTER_EVENT_PROPAGATE;
+
+  sprite = clutter_backend_get_sprite (backend, stage, event);
+  if (!sprite)
     return CLUTTER_EVENT_PROPAGATE;
 
   if ((seq_data = get_sequence_data (self, sprite, &seq_index)) == NULL)
@@ -923,25 +945,9 @@ clutter_gesture_handle_event (ClutterAction      *action,
       seq_data->latest_event = clutter_event_copy (event);
 
       priv->latest_index = seq_index;
-
       seq_data->seen = TRUE;
 
-      switch (event_type)
-        {
-        case CLUTTER_BUTTON_PRESS:
-        case CLUTTER_MOTION:
-        case CLUTTER_BUTTON_RELEASE:
-        case CLUTTER_TOUCH_BEGIN:
-        case CLUTTER_TOUCH_UPDATE:
-        case CLUTTER_TOUCH_END:
-        case CLUTTER_TOUCH_CANCEL:
-          handle_pointer_event (self, seq_index, event);
-          break;
-
-        default:
-          g_assert_not_reached ();
-          break;
-        }
+      handle_pointer_event (self, seq_index, event);
     }
 
   if (may_remove_point && is_sequence_end_event (event))

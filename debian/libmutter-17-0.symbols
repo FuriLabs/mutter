@@ -914,7 +914,6 @@ libmutter-17.so.0 libmutter-17-0 #MINVER#
  meta_window_protocol_to_stage_rect@Base 47~rc
  meta_window_raise@Base 43.0
  meta_window_raise_and_make_recent_on_workspace@Base 46~beta
- meta_window_resize_frame@Base 48~rc
  meta_window_set_compositor_private@Base 43.0
  meta_window_set_demands_attention@Base 43.0
  meta_window_set_icon_geometry@Base 43.0
