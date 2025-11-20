@@ -1,3 +1,19 @@
+mutter (49.1.1-2ubuntu1) resolute; urgency=medium
+
+  [ Mitchell Augustin ]
+  * backends/monitor-manager: Improve tiled monitor handling (LP: #2131575)
+
+  [ Alessandro Astone ]
+  * Merge with Debian. Remaining changes:
+    - Add window-Add-ability-to-override-the-edge-constraints.patch
+      + Make possible for extensions (such as Tiling Assistant) to override
+        window constraints
+    - Add backends-native-Fix-sticky-keys-not-locking.patch (LP #2127039)
+  * d/p: Drop Ubuntu patches applied upstream
+  * d/p: Refresh Ubuntu patches
+
+ -- Alessandro Astone <alessandro.astone@canonical.com>  Thu, 20 Nov 2025 09:54:37 +0100
+
 mutter (49.1.1-2) unstable; urgency=medium
 
   * Team upload
