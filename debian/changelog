@@ -1,3 +1,10 @@
+mutter (49.0-2ubuntu5.3) questing; urgency=medium
+
+  [ Mitchell Augustin ]
+  * backends/monitor-manager: Improve tiled monitor handling (LP: #2131575)
+
+ -- Alessandro Astone <alessandro.astone@canonical.com>  Thu, 20 Nov 2025 10:23:36 +0100
+
 mutter (49.0-2ubuntu5.2) questing; urgency=medium
 
   * Fix possible crash during output changes (LP: #2130619)
