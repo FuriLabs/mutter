@@ -4,15 +4,6 @@ workarounds/tests-Skip-thread-priority-test.patch
 workarounds/Mark-several-additional-tests-as-flaky.patch
 workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
 ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
-ubuntu/clutter-Use-event-type-to-determine-ClutterFocus-to-deliv.patch
-ubuntu/clutter-Bail-out-in-gesture-event-handler-on-sprite-less-.patch
-ubuntu/clutter-gesture-Do-not-crash-on-unknown-events.patch
-ubuntu/cursor-renderer-native-Sanity-check-texture-size-before-a.patch
-ubuntu/prefs-Fallback-cursor-size-to-24-when-invalid-value-in-se.patch
-ubuntu/core-Let-key-presses-of-special-modifiers-through.patch
-ubuntu/wayland-Check-modifier-state-from-event-prior-to-event-de.patch
-ubuntu/wayland-Always-send-configure-event-after-xdg_popup-repos.patch
-ubuntu/window-Do-not-unqueue-wayland-window-for-move-resize-when.patch
 ubuntu/backends-native-Fix-sticky-keys-not-locking.patch
 tests-monitor-abstraction-Assign-non-conflicting-CRTCs-fo.patch
 backends-monitor-manager-Use-normal-modes-when-tiles-are-.patch
