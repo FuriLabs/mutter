@@ -1,3 +1,13 @@
+mutter (46.2-1ubuntu0.24.04.13) UNRELEASED; urgency=medium
+
+  [ Alessandro Astone ]
+  * d/p: Make sure the monitor is powered off when screen blanks (LP: #1971434)
+
+  [ Mitchell Augustin ]
+  * d/p: monitor-manager: Improve tiled monitor handling (LP: #2131575)
+
+ -- Alessandro Astone <alessandro.astone@canonical.com>  Fri, 21 Nov 2025 10:43:42 +0100
+
 mutter (46.2-1ubuntu0.24.04.12) noble; urgency=medium
 
   * d/salsa-ci: Configure for ubuntu/noble
