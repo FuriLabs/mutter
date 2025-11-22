@@ -18,6 +18,7 @@ mutter (48.6-0+deb13u1) UNRELEASED; urgency=medium
       valid toplevel state (mutter!4697 upstream)
     - Remove dead code detected by static analysis (mutter!4697 upstream)
   * Revert "d/gbp/conf, d/control: Switch packaging branch for forky"
+  * Add a mention of #1121170 to the previous changelog entry
 
  -- Simon McVittie <smcv@debian.org>  Sun, 16 Nov 2025 15:34:30 +0000
 
@@ -30,7 +31,7 @@ mutter (48.5-1) unstable; urgency=medium
       (mutter#3914 upstream)
     - Fix a file descriptor leak that would cause a crash after a long
       screencast
-      (mutter#4251 upstream)
+      (mutter#4251 upstream, Closes: #1121170)
     - Fix crash with an assertion failure when screencasting from an
       Apple aarch64 system
       (mutter#4224 upstream)
