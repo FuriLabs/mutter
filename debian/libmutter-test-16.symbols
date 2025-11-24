@@ -61,6 +61,7 @@ libmutter-test-16.so libmutter-test-16 #MINVER#
  meta_test_shell_disable_animations@Base 47.4
  meta_test_shell_get_type@Base 44.3-4~
  meta_test_shell_set_background_color@Base 47.4
+ meta_wait_for_effects@Base 48.7
  meta_wait_for_monitors_changed@Base 46~beta
  meta_wait_for_orientation@Base 42~beta
  meta_wait_for_paint@Base 42~beta
@@ -70,3 +71,4 @@ libmutter-test-16.so libmutter-test-16 #MINVER#
  meta_wait_for_window_cursor@Base 47.4
  meta_wait_for_window_shown@Base 47.4
  meta_wait_test_process@Base 47.4
+ meta_wait_wayland_window_reconfigure@Base 48.7
