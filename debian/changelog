@@ -1,8 +1,11 @@
-mutter (49.2-1) UNRELEASED; urgency=medium
+mutter (49.2-1) unstable; urgency=medium
 
+  * Team upload
   * New upstream release (Closes: #1121120)
+  * d/libmutter-17-0.symbols: Don't generate dependencies on prereleases
+  * d/libmutter-17-0.symbols: Update
 
- -- Simon McVittie <smcv@debian.org>  Mon, 24 Nov 2025 16:23:01 +0000
+ -- Simon McVittie <smcv@debian.org>  Mon, 24 Nov 2025 17:28:41 +0000
 
 mutter (49.1.1-2) unstable; urgency=medium
 
