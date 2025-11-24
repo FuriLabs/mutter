@@ -18,7 +18,16 @@ mutter (48.7-0+deb13u1) UNRELEASED; urgency=medium
       valid toplevel state (mutter!4697 upstream)
     - Remove dead code detected by static analysis (mutter!4697 upstream)
   * New upstream stable release 48.7
-    - TODO
+    - For fullscreen Wayland windows, if the window has a size limit
+      smaller than the screen, add black borders around the limited size
+      and log a warning
+      (mutter!4587 upstream)
+    - Avoid a crash when activating a notification that has no app info
+      (mutter!4705 upstream)
+    - Avoid a potential crash when checking whether a client owns a window
+      that is disappearing
+      (mutter!4643 upstream)
+    - Test suite enhancements
   * Revert "d/gbp/conf, d/control: Switch packaging branch for forky"
   * Add a mention of #1121170 to the previous changelog entry
 
