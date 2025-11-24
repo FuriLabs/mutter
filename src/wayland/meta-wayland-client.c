@@ -20,7 +20,7 @@
 
 /**
  * MetaWaylandClient:
- * 
+ *
  * A class that allows to launch a trusted client and detect if an specific
  * Wayland window belongs to it.
  */
@@ -423,6 +423,7 @@ meta_wayland_client_owns_window (MetaWaylandClient *client,
   g_return_val_if_fail (meta_is_wayland_compositor (), FALSE);
   g_return_val_if_fail (client->subprocess.subprocess != NULL, FALSE);
   g_return_val_if_fail (client->subprocess.process_running, FALSE);
+  g_return_val_if_fail (!window->unmanaging, FALSE);
 
   surface = meta_window_get_wayland_surface (window);
   if (surface == NULL || surface->resource == NULL)
