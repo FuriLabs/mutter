@@ -28,10 +28,14 @@ mutter (48.7-0+deb13u1) UNRELEASED; urgency=medium
       that is disappearing
       (mutter!4643 upstream)
     - Test suite enhancements
+  * d/libmutter-test-16.symbols:
+    Update for new ABI added by the test suite enhancements
+    (nothing in Debian outside the mutter source package is likely to
+    use this, except possibly a future version of gnome-shell)
   * Revert "d/gbp/conf, d/control: Switch packaging branch for forky"
   * Add a mention of #1121170 to the previous changelog entry
 
- -- Simon McVittie <smcv@debian.org>  Mon, 24 Nov 2025 16:28:52 +0000
+ -- Simon McVittie <smcv@debian.org>  Mon, 24 Nov 2025 22:04:56 +0000
 
 mutter (48.5-1) unstable; urgency=medium
 
