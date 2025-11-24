@@ -1,6 +1,6 @@
 mutter (49.2-1) UNRELEASED; urgency=medium
 
-  * New upstream release
+  * New upstream release (Closes: #1121120)
 
  -- Simon McVittie <smcv@debian.org>  Mon, 24 Nov 2025 16:23:01 +0000
 
