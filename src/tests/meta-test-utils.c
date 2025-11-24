@@ -31,10 +31,12 @@
 #include "backends/native/meta-backend-native.h"
 #include "backends/native/meta-input-thread.h"
 #include "backends/native/meta-seat-native.h"
+#include "compositor/meta-window-actor-private.h"
 #include "core/display-private.h"
 #include "core/window-private.h"
 #include "meta-test/meta-context-test.h"
 #include "wayland/meta-wayland.h"
+#include "wayland/meta-window-wayland.h"
 #include "wayland/meta-xwayland.h"
 #include "x11/meta-x11-display-private.h"
 
@@ -1155,5 +1157,35 @@ meta_wait_for_window_cursor (MetaContext *context)
   MetaCursorTracker *cursor_tracker = meta_backend_get_cursor_tracker (backend);
 
   while (!meta_cursor_tracker_has_window_cursor (cursor_tracker))
+    g_main_context_iteration (NULL, TRUE);
+}
+
+void
+meta_wait_for_effects (MetaWindow *window)
+{
+  MetaWindowActor *window_actor;
+
+  window_actor = meta_window_actor_from_window (window);
+  g_object_add_weak_pointer (G_OBJECT (window_actor),
+                             (gpointer *) &window_actor);
+
+  while (window_actor && meta_window_actor_effect_in_progress (window_actor))
+    g_main_context_iteration (NULL, TRUE);
+
+  if (window_actor)
+    {
+      g_object_remove_weak_pointer (G_OBJECT (window_actor),
+                                    (gpointer *) &window_actor);
+    }
+}
+
+void
+meta_wait_wayland_window_reconfigure (MetaWindow *window)
+{
+  MetaWindowWayland *wl_window = META_WINDOW_WAYLAND (window);
+  uint32_t serial;
+
+  g_assert_true (meta_window_wayland_get_pending_serial (wl_window, &serial));
+  while (meta_window_wayland_peek_configuration (wl_window, serial))
     g_main_context_iteration (NULL, TRUE);
 }
