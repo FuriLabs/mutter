@@ -28,6 +28,8 @@ mutter (48.7-0+deb13u1) UNRELEASED; urgency=medium
       that is disappearing
       (mutter!4643 upstream)
     - Test suite enhancements
+
+  [ Simon McVittie ]
   * d/libmutter-test-16.symbols:
     Update for new ABI added by the test suite enhancements
     (nothing in Debian outside the mutter source package is likely to
