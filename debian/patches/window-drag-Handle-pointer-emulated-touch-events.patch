@@ -1,0 +1,47 @@
+From: Alessandro Astone <alessandro.astone@canonical.com>
+Date: Tue, 2 Dec 2025 13:09:39 +0100
+Subject: window-drag: Handle pointer emulated touch events
+
+In X11 a compositor-side drag uses pointer emulated events rather than touch
+events, so accept and react to pointer emulated events.
+
+Forwarded: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4787
+Bug-Ubuntu: https://launchpad.net/bugs/2133206
+---
+ src/compositor/meta-window-drag.c | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/src/compositor/meta-window-drag.c b/src/compositor/meta-window-drag.c
+index 09dd491..35d871c 100644
+--- a/src/compositor/meta-window-drag.c
++++ b/src/compositor/meta-window-drag.c
+@@ -1683,13 +1683,19 @@ process_pointer_event (MetaWindowDrag     *window_drag,
+   MetaWindow *window;
+   gfloat x, y;
+   int button;
++  gboolean pointer_emulating;
+ 
+   window = window_drag->effective_grab_window;
+   if (!window)
+     return;
+   if (window_drag->leading_device != device)
+     return;
+-  if (window_drag->leading_touch_sequence != sequence)
++
++  pointer_emulating =
++    clutter_event_is_pointer_emulated (event) &&
++    meta_display_is_pointer_emulating_sequence (window->display, window_drag->leading_touch_sequence);
++
++  if (window_drag->leading_touch_sequence != sequence && !pointer_emulating)
+     return;
+ 
+   switch (clutter_event_type (event))
+@@ -1706,7 +1712,7 @@ process_pointer_event (MetaWindowDrag     *window_drag,
+       end_grab_op (window_drag, event);
+       break;
+     case CLUTTER_BUTTON_RELEASE:
+-      if (window_drag->leading_touch_sequence)
++      if (window_drag->leading_touch_sequence && !pointer_emulating)
+         return;
+ 
+       button = clutter_event_get_button (event);

@@ -58,3 +58,4 @@ backends-native-kms-connector-Initialize-the-connection-a.patch
 backends-native-kms-connector-Notify-disconnect-events-af.patch
 kms-connector-Only-trigger-a-connector-update-on-disconne.patch
 backends-monitor-manager-Use-normal-modes-when-tiles-are-.patch
+window-drag-Handle-pointer-emulated-touch-events.patch
