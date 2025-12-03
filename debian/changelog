@@ -1,12 +1,14 @@
-mutter (46.2-1ubuntu0.24.04.13) UNRELEASED; urgency=medium
+mutter (46.2-1ubuntu0.24.04.13) noble; urgency=medium
 
   [ Alessandro Astone ]
   * d/p: Make sure the monitor is powered off when screen blanks (LP: #1971434)
+  * d/p: Fix input deadlock when dragging windows with touch on X11
+    (LP: #2133206)
 
   [ Mitchell Augustin ]
   * d/p: monitor-manager: Improve tiled monitor handling (LP: #2131575)
 
- -- Alessandro Astone <alessandro.astone@canonical.com>  Fri, 21 Nov 2025 10:43:42 +0100
+ -- Alessandro Astone <alessandro.astone@canonical.com>  Wed, 03 Dec 2025 17:54:37 +0100
 
 mutter (46.2-1ubuntu0.24.04.12) noble; urgency=medium
 
