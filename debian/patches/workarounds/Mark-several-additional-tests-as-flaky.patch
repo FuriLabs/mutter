@@ -165,11 +165,11 @@ index 8c37730..8424d0c 100644
      args: [
        files('stacking' / stacking_test + '.metatest'),
 diff --git a/src/tests/monitor-tests-common.c b/src/tests/monitor-tests-common.c
-index d03fecf..46f04b9 100644
+index 44dcb10..2780d94 100644
 --- a/src/tests/monitor-tests-common.c
 +++ b/src/tests/monitor-tests-common.c
-@@ -226,7 +226,11 @@ meta_check_monitor_test_clients_state (void)
- {
+@@ -276,7 +276,11 @@ meta_check_monitor_test_clients_state (void)
+ 
    meta_check_test_client_state (wayland_monitor_test_client);
    meta_check_test_client_state (x11_monitor_test_client);
 -  check_test_client_x11_state (x11_monitor_test_client);
