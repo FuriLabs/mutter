@@ -4,6 +4,3 @@ workarounds/tests-Skip-thread-priority-test.patch
 workarounds/Mark-several-additional-tests-as-flaky.patch
 workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
 ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
-ubuntu/backends-native-Fix-sticky-keys-not-locking.patch
-tests-monitor-abstraction-Assign-non-conflicting-CRTCs-fo.patch
-backends-monitor-manager-Use-normal-modes-when-tiles-are-.patch
