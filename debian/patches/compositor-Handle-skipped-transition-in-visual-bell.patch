@@ -1,0 +1,51 @@
+From: =?utf-8?q?Florian_M=C3=BCllner?= <fmuellner@gnome.org>
+Date: Fri, 5 Jul 2024 00:20:23 +0200
+Subject: compositor: Handle skipped transition in visual bell
+
+Implicit transitions may be skipped, for example when the actor
+isn't currently mapped.
+
+Failing to check for that case not only results in a couple of
+warnings, it also means that the "flash" actor is never destroyed,
+and the window remains darkened.
+
+Close: https://gitlab.gnome.org/GNOME/gnome-shell/-/issues/7760
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3872>
+Origin: upstream
+Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/gnome-terminal/+bug/2064716
+---
+ src/compositor/compositor.c | 18 ++++++++++++------
+ 1 file changed, 12 insertions(+), 6 deletions(-)
+
+diff --git a/src/compositor/compositor.c b/src/compositor/compositor.c
+index 7068fda..85d61b4 100644
+--- a/src/compositor/compositor.c
++++ b/src/compositor/compositor.c
+@@ -1383,15 +1383,21 @@ meta_compositor_flash_window (MetaCompositor *compositor,
+   clutter_actor_set_easing_mode (flash, CLUTTER_EASE_IN_QUAD);
+   clutter_actor_set_easing_duration (flash, FLASH_TIME_MS);
+   clutter_actor_set_opacity (flash, 192);
++  clutter_actor_restore_easing_state (flash);
+ 
+   transition = clutter_actor_get_transition (flash, "opacity");
+-  clutter_timeline_set_auto_reverse (CLUTTER_TIMELINE (transition), TRUE);
+-  clutter_timeline_set_repeat_count (CLUTTER_TIMELINE (transition), 2);
+-
+-  g_signal_connect (transition, "stopped",
+-                    G_CALLBACK (window_flash_out_completed), flash);
++  if (transition)
++    {
++      clutter_timeline_set_auto_reverse (CLUTTER_TIMELINE (transition), TRUE);
++      clutter_timeline_set_repeat_count (CLUTTER_TIMELINE (transition), 2);
+ 
+-  clutter_actor_restore_easing_state (flash);
++      g_signal_connect (transition, "stopped",
++                        G_CALLBACK (window_flash_out_completed), flash);
++    }
++  else /* implicit transition was skipped, likely because the window is hidden */
++    {
++      clutter_actor_destroy (flash);
++    }
+ }
+ 
+ /**

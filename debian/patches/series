@@ -60,3 +60,4 @@ kms-connector-Only-trigger-a-connector-update-on-disconne.patch
 backends-monitor-manager-Use-normal-modes-when-tiles-are-.patch
 window-drag-Handle-pointer-emulated-touch-events.patch
 backends-output-Allow-checking-whether-an-output-already-.patch
+compositor-Handle-skipped-transition-in-visual-bell.patch
