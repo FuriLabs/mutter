@@ -1,5 +1,6 @@
-mutter (48.7-0+deb13u1) UNRELEASED; urgency=medium
+mutter (48.7-0+deb13u1) trixie; urgency=medium
 
+  * Team upload
   * New upstream stable release 48.6
     - Fix drag-and-drop actions not working reliably in some X11 clients
       (mutter#4288 upstream)
@@ -37,7 +38,7 @@ mutter (48.7-0+deb13u1) UNRELEASED; urgency=medium
   * Revert "d/gbp/conf, d/control: Switch packaging branch for forky"
   * Add a mention of #1121170 to the previous changelog entry
 
- -- Simon McVittie <smcv@debian.org>  Mon, 24 Nov 2025 22:04:56 +0000
+ -- Simon McVittie <smcv@debian.org>  Tue, 09 Dec 2025 11:38:47 +0000
 
 mutter (48.5-1) unstable; urgency=medium
 
