@@ -1,3 +1,9 @@
+mutter (46.2-1ubuntu0.24.04.14) noble; urgency=medium
+
+  * d/p: Silence warning introduced in the previous upload (LP: #2135115)
+
+ -- Alessandro Astone <alessandro.astone@canonical.com>  Fri, 12 Dec 2025 11:12:12 +0100
+
 mutter (46.2-1ubuntu0.24.04.13) noble; urgency=medium
 
   [ Alessandro Astone ]
