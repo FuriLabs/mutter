@@ -1,0 +1,30 @@
+From: Alessandro Astone <alessandro.astone@canonical.com>
+Date: Fri, 12 Dec 2025 10:29:08 +0100
+Subject: backends/output: Allow checking whether an output already had a
+ monitor set
+
+Patch "backends/monitor-manager: Use normal modes when tiles are missing"
+shuffles around the monitor creation logic, which now needs to check whether
+an output was already assigned a monitor or not.
+
+Upstream applied the same change as part of a larger refactor, which we
+don't need: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4430
+
+Forwarded: not-needed
+---
+ src/backends/meta-output.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/src/backends/meta-output.c b/src/backends/meta-output.c
+index 6674b7e..a70b5fc 100644
+--- a/src/backends/meta-output.c
++++ b/src/backends/meta-output.c
+@@ -139,8 +139,6 @@ meta_output_get_monitor (MetaOutput *output)
+ {
+   MetaOutputPrivate *priv = meta_output_get_instance_private (output);
+ 
+-  g_warn_if_fail (priv->monitor);
+-
+   return priv->monitor;
+ }
+ 
