@@ -27,7 +27,7 @@ CONFFLAGS = \
 export deb_udevdir = $(shell pkg-config --variable=udevdir udev | sed s,^/,,)
 
 # Update the cogl_trace architectures in the symbols file to match this list:
-ifeq (,$(filter amd64 arm64 armel armhf mips64el ppc64el riscv64 s390x,$(DEB_HOST_ARCH)))
+ifeq (,$(filter amd64 arm64 armhf i386 ppc64el riscv64 s390x,$(DEB_HOST_ARCH)))
 CONFFLAGS +=-Dprofiler=false
 endif
 
@@ -58,7 +58,7 @@ TEST_COMMAND_FLAKY=env DEB_ALLOW_FLAKY_TESTS=1 $(TEST_COMMAND_BASE) --suite flak
 # because it is believed that significant debian-installer/tasksel issues
 # occur if task-gnome-desktop is not installable.
 #
-# We suspect that GNOME Shell might not work on mips64el and s390x.
+# We suspect that GNOME Shell might not work on s390x.
 # See gnome-settings-daemon where a simple mutter session fails there.
 #
 # But GNOME Shell is apparently usable on Ubuntu's riscv64:
@@ -67,7 +67,7 @@ TEST_COMMAND_FLAKY=env DEB_ALLOW_FLAKY_TESTS=1 $(TEST_COMMAND_BASE) --suite flak
 # Please keep this list in sync with debian/tests/installed-tests
 override_dh_auto_test-arch:
 	debian/tests/ensure-x11-dir
-ifeq (,$(filter mips64el riscv64 s390x,$(DEB_HOST_ARCH)))
+ifeq (,$(filter riscv64 s390x,$(DEB_HOST_ARCH)))
 	$(TEST_COMMAND)
 	-$(TEST_COMMAND_FLAKY) --logbase flaky-tests
 else
