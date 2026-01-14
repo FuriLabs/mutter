@@ -1,0 +1,54 @@
+<!DOCTYPE node PUBLIC
+'-//freedesktop//DTD D-BUS Object Introspection 1.0//EN'
+'http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd'>
+<node>
+
+  <interface name="io.furios.Mutter.ScreenCast">
+    <method name="CreateSession">
+      <arg name="properties" type="a{sv}" direction="in"/>
+      <arg name="session_path" type="o" direction="out"/>
+    </method>
+    <property name="Version" type="i" access="read"/>
+  </interface>
+
+  <interface name="io.furios.Mutter.ScreenCast.Session">
+    <method name="Start"/>
+    <method name="Stop"/>
+    <signal name="Closed"/>
+
+    <method name="CreateStream">
+      <arg name="properties" type="a{sv}" direction="in"/>
+      <arg name="stream_path" type="o" direction="out"/>
+    </method>
+  </interface>
+
+  <interface name="io.furios.Mutter.ScreenCast.Stream">
+    <method name="GetMemfd">
+      <arg name="fd" type="h" direction="out"/>
+    </method>
+
+    <method name="GetEisFd">
+      <arg name="fd" type="h" direction="out"/>
+    </method>
+
+    <method name="GetInfo">
+      <arg name="info" type="a{sv}" direction="out"/>
+    </method>
+
+    <method name="RequestFrame"/>
+
+    <signal name="FrameReady">
+      <arg name="seq" type="u" direction="out"/>
+      <arg name="slot" type="u" direction="out"/>
+    </signal>
+
+    <signal name="FrameReadyWithDamage">
+      <arg name="seq" type="u" direction="out"/>
+      <arg name="slot" type="u" direction="out"/>
+      <arg name="damage" type="a(iiii)" direction="out"/>
+    </signal>
+
+    <method name="Stop"/>
+  </interface>
+
+</node>
