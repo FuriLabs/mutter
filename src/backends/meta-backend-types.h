@@ -66,6 +66,7 @@ typedef struct _MetaRemoteDesktopSession MetaRemoteDesktopSession;
 typedef struct _MetaScreenCast MetaScreenCast;
 typedef struct _MetaScreenCastSession MetaScreenCastSession;
 typedef struct _MetaScreenCastStream MetaScreenCastStream;
+typedef struct _MetaFuriosScreenCast MetaFuriosScreenCast;
 
 typedef struct _MetaVirtualMonitor MetaVirtualMonitor;
 typedef struct _MetaVirtualMonitorInfo MetaVirtualMonitorInfo;
