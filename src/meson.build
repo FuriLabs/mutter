@@ -582,6 +582,19 @@ if have_remote_desktop
     'backends/meta-screen-cast-stream-src.h',
     'core/meta-selection-source-remote.c',
     'core/meta-selection-source-remote.h',
+    'backends/meta-furios-screen-cast.c',
+    'backends/meta-furios-screen-cast.h',
+    'backends/meta-furios-screen-cast-session.c',
+    'backends/meta-furios-screen-cast-session.h',
+    'backends/meta-furios-screen-cast-stream.c',
+    'backends/meta-furios-screen-cast-stream.h',
+    'backends/meta-furios-screen-cast-stream-eis.c',
+    'backends/meta-furios-screen-cast-stream-eis.h',
+    'backends/meta-furios-screen-cast-stream-eis-viewport.c',
+    'backends/meta-furios-screen-cast-stream-eis-viewport.h',
+    'backends/meta-furios-screen-cast-stream-src-memfd.c',
+    'backends/meta-furios-screen-cast-stream-src-memfd.h',
+    'backends/meta-furios-screen-cast-memfd-protocol.h',
   ]
 endif
 
@@ -1112,6 +1125,11 @@ if have_remote_desktop
       'name': 'meta-dbus-screen-cast',
       'interface': 'org.gnome.Mutter.ScreenCast.xml',
       'prefix': 'org.gnome.Mutter.',
+    },
+    {
+      'name': 'meta-dbus-furios-screen-cast',
+      'interface': 'io.furios.Mutter.ScreenCast.xml',
+      'prefix': 'io.furios.',
     },
   ]
 endif
