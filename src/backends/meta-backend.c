@@ -84,6 +84,7 @@
 #include "backends/meta-remote-access-controller-private.h"
 #include "backends/meta-remote-desktop.h"
 #include "backends/meta-screen-cast.h"
+#include "backends/meta-furios-screen-cast.h"
 #endif
 
 #ifdef HAVE_NATIVE_BACKEND
@@ -167,6 +168,7 @@ struct _MetaBackendPrivate
 #ifdef HAVE_REMOTE_DESKTOP
   MetaScreenCast *screen_cast;
   MetaRemoteDesktop *remote_desktop;
+  MetaFuriosScreenCast *furios_screen_cast;
 #endif
   MetaInputCapture *input_capture;
   MetaA11yManager *a11y_manager;
@@ -242,6 +244,7 @@ meta_backend_dispose (GObject *object)
 #ifdef HAVE_REMOTE_DESKTOP
   g_clear_object (&priv->remote_desktop);
   g_clear_object (&priv->screen_cast);
+  g_clear_object (&priv->furios_screen_cast);
 #endif
   g_clear_object (&priv->input_capture);
   g_clear_object (&priv->dbus_session_watcher);
@@ -1433,6 +1436,8 @@ meta_backend_initable_init (GInitable     *initable,
   meta_remote_access_controller_add (
     priv->remote_access_controller,
     META_DBUS_SESSION_MANAGER (priv->remote_desktop));
+
+  priv->furios_screen_cast = meta_furios_screen_cast_new (backend);
 #endif /* HAVE_REMOTE_DESKTOP */
 
   priv->input_capture = meta_input_capture_new (backend);
@@ -1651,6 +1656,14 @@ meta_backend_get_screen_cast (MetaBackend *backend)
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
 
   return priv->screen_cast;
+}
+
+MetaFuriosScreenCast *
+meta_backend_get_furios_screen_cast (MetaBackend *backend)
+{
+  MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
+
+  return priv->furios_screen_cast;
 }
 #endif /* HAVE_REMOTE_DESKTOP */
 
