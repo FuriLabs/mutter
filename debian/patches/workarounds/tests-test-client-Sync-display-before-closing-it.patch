@@ -1,0 +1,41 @@
+From: Daniel van Vugt <daniel.van.vugt@canonical.com>
+Date: Fri, 16 Jan 2026 16:36:57 +0800
+Subject: tests/test-client: Sync display before closing it
+
+Or else some operations may not be completed, leading to expected
+frame callbacks never arriving (`x11_monitor_test_client`).
+
+That's if we really need to be so aggressive with preventing detected
+leaks... Technically `gdk_display_get_default()` owns the display
+reference so we shouldn't really be closing it.
+
+Closes: https://gitlab.gnome.org/GNOME/mutter/-/issues/4556
+Fixes: e1a3ee4313 ("tests/test-client: Release window and close display on exit")
+Origin: Upstream commit 19030d64b1ef8262fc1f89aed24be8e9437bae17
+---
+ src/tests/test-client.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/src/tests/test-client.c b/src/tests/test-client.c
+index 30a8e2b..6728140 100644
+--- a/src/tests/test-client.c
++++ b/src/tests/test-client.c
+@@ -1413,6 +1413,7 @@ main(int    argc,
+   g_autoptr (GDataInputStream) in = NULL;
+   GHashTableIter iter;
+   gpointer key, value;
++  GdkDisplay *display;
+ 
+   g_log_writer_default_set_use_stderr (TRUE);
+ 
+@@ -1473,7 +1474,9 @@ main(int    argc,
+   while (g_hash_table_iter_next (&iter, &key, &value))
+     gtk_widget_destroy (value);
+ 
+-  gdk_display_close (gdk_display_get_default ());
++  display = gdk_display_get_default ();
++  gdk_display_sync (display);
++  gdk_display_close (display);
+ 
+   return 0;
+ }

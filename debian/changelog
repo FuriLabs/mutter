@@ -4,6 +4,9 @@ mutter (50~alpha-1) UNRELEASED; urgency=medium
   * Refreshed patches and fixed conflicts:
     - workarounds/Mark-several-additional-tests-as-flaky.patch
     - workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
+  * Add patches:
+    - workarounds/tests-test-client-Sync-display-before-closing-it.patch
+      to avoid spurious test failures with 50.alpha.
 
  -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Mon, 19 Jan 2026 15:46:11 +0800
 
