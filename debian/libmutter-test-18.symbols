@@ -1,5 +1,5 @@
-libmutter-test-17.so libmutter-test-17 #MINVER#
-* Build-Depends-Package: libmutter-17-dev
+libmutter-test-18.so libmutter-test-18 #MINVER#
+* Build-Depends-Package: libmutter-18-dev
  meta_async_waiter_destroy@Base 41.0
  meta_async_waiter_new@Base 41.0
  meta_async_waiter_process_x11_event@Base 41.0

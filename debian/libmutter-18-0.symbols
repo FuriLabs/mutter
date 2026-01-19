@@ -1,5 +1,5 @@
-libmutter-17.so.0 libmutter-17-0 #MINVER#
-* Build-Depends-Package: libmutter-17-dev
+libmutter-18.so.0 libmutter-18-0 #MINVER#
+* Build-Depends-Package: libmutter-18-dev
  meta_accelerator_name@Base 44.0
  meta_add_debug_paint_flag@Base 43.0
  meta_add_verbose_topic@Base 43.0
@@ -984,8 +984,8 @@ libmutter-17.so.0 libmutter-17-0 #MINVER#
  meta_xwayland_override_display_number@Base 43.0
  meta_xwayland_signal@Base 43.0
  set_output_hdr_metadata@Base 44.0
-libmutter-clutter-17.so.0 libmutter-17-0 #MINVER#
-* Build-Depends-Package: libmutter-17-dev
+libmutter-clutter-18.so.0 libmutter-18-0 #MINVER#
+* Build-Depends-Package: libmutter-18-dev
  _clutter_event_process_filters@Base 43.0
  _clutter_event_push@Base 43.0
  _clutter_flatten_effect_get_type@Base 46.0
@@ -2188,8 +2188,8 @@ libmutter-clutter-17.so.0 libmutter-17-0 #MINVER#
  clutter_virtual_input_device_notify_touch_down@Base 43.0
  clutter_virtual_input_device_notify_touch_motion@Base 43.0
  clutter_virtual_input_device_notify_touch_up@Base 43.0
-libmutter-cogl-17.so.0 libmutter-17-0 #MINVER#
-* Build-Depends-Package: libmutter-17-dev
+libmutter-cogl-18.so.0 libmutter-18-0 #MINVER#
+* Build-Depends-Package: libmutter-18-dev
  _cogl_bitmask_clear_all_in_array@Base 43.0
  _cogl_bitmask_foreach@Base 43.0
  _cogl_bitmask_get_from_array@Base 43.0
@@ -2627,8 +2627,8 @@ libmutter-cogl-17.so.0 libmutter-17-0 #MINVER#
  cogl_vertices_mode_get_type@Base 48.0
  cogl_winding_get_type@Base 48.0
  cogl_winsys_feature_get_type@Base 48.0
-libmutter-mtk-17.so.0 libmutter-17-0 #MINVER#
-* Build-Depends-Package: libmutter-17-dev
+libmutter-mtk-18.so.0 libmutter-18-0 #MINVER#
+* Build-Depends-Package: libmutter-18-dev
  mtk_anonymous_file_close_fd@Base 49.0
  mtk_anonymous_file_free@Base 49.0
  mtk_anonymous_file_new@Base 49.0
