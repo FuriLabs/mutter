@@ -111,7 +111,7 @@ variables:
     - .skip-git-clone
   variables:
     FDO_DISTRIBUTION_VERSION: 43
-    BASE_TAG: '2025-10-04.0'
+    BASE_TAG: '2026-01-14.0'
     MUTTER_USER: 'meta-user'
     FDO_DISTRIBUTION_PACKAGES:
       accountsservice-devel
@@ -151,6 +151,7 @@ variables:
       'pkgconfig(xrandr)'
       'pkgconfig(xrender)'
       'pkgconfig(xtst)'
+      qrencode-devel
 
 
     FDO_DISTRIBUTION_EXEC: |
@@ -173,6 +174,7 @@ variables:
       dnf builddep -y kernel --setopt=install_weak_deps=False
       dnf builddep -y gi-docgen --setopt=install_weak_deps=False
       dnf builddep -y wayland --setopt=install_weak_deps=False
+      dnf builddep -y gtk4 --setopt=install_weak_deps=False
 
       if [[ x"$(uname -m )" = "xx86_64" ]] ; then
         # deprecated header no longer included in openssl-devel
@@ -190,11 +192,6 @@ variables:
         main
 
       ./.gitlab-ci/install-meson-project.sh \
-        -Dglycin=disabled \
-        https://gitlab.gnome.org/GNOME/gdk-pixbuf.git \
-        2.44.3
-
-      ./.gitlab-ci/install-meson-project.sh \
         https://gitlab.gnome.org/GNOME/gi-docgen.git \
         main
 
@@ -202,6 +199,11 @@ variables:
         --commit ed36f4c6427fb1b0db03aaeb81d42f348f79690c \
         https://gitlab.gnome.org/GNOME/glib.git \
         main
+
+      ./.gitlab-ci/install-meson-project.sh \
+        --commit=8723146fca06edd5584d0a9e16668356af6ce308 \
+        https://gitlab.gnome.org/GNOME/gtk.git \
+        gtk-3-24
 
       ./.gitlab-ci/install-common-dependencies.sh
 
@@ -408,7 +410,6 @@ check-python-code-style:
       -Degl_device=true
       -Dwayland_eglstream=true
       -Dcatch=true
-      -Dx11=true
 
 .build-mutter:
   extends:
@@ -455,7 +456,7 @@ build-mutter@aarch64:
       artifacts: false
   when: manual
 
-build-without-opengl-and-glx@x86_64:
+build-without-opengl@x86_64:
   extends:
     - .mutter.distribution-image
     - .mutter.fedora@x86_64
@@ -470,61 +471,8 @@ build-without-opengl-and-glx@x86_64:
         --wrap-mode nofallback
         -Dbuildtype=debugoptimized
         -Dopengl=false
-        -Dglx=false
         -Degl_device=true
         -Dwayland_eglstream=true
-        -Dintrospection=false
-    - meson compile -C build
-    - sudo meson install --no-rebuild -C build
-  artifacts:
-    paths:
-      - build/meson-logs
-
-build-without-native-backend-and-wayland@x86_64:
-  extends:
-    - .mutter.distribution-image
-    - .mutter.fedora@x86_64
-  stage: build
-  needs:
-    - job: build-fedora-container@x86_64
-      artifacts: false
-  script:
-    - meson setup . build
-        --prefix /usr
-        --werror
-        --wrap-mode nofallback
-        -Dbuildtype=debugoptimized
-        -Dx11=true
-        -Dnative_backend=false
-        -Dudev=false
-        -Dwayland=false
-        -Dxwayland=false
-        -Dtests=disabled
-        -Dintrospection=false
-    - meson compile -C build
-    - sudo meson install --no-rebuild -C build
-  artifacts:
-    paths:
-      - build/meson-logs
-
-build-wayland-xwayland@x86_64:
-  extends:
-    - .mutter.distribution-image
-    - .mutter.fedora@x86_64
-  stage: build
-  needs:
-    - job: build-fedora-container@x86_64
-      artifacts: false
-  script:
-    - meson setup . build
-        --prefix /usr
-        --werror
-        --wrap-mode nofallback
-        -Dbuildtype=debugoptimized
-        -Dwayland=true
-        -Dxwayland=true
-        -Dx11=false
-        -Dtests=disabled
         -Dintrospection=false
     - meson compile -C build
     - sudo meson install --no-rebuild -C build
@@ -546,9 +494,7 @@ build-wayland-only@x86_64:
         --werror
         --wrap-mode nofallback
         -Dbuildtype=debugoptimized
-        -Dwayland=true
         -Dxwayland=false
-        -Dx11=false
         -Dtests=disabled
         -Dintrospection=false
     - meson compile -C build

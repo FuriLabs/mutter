@@ -63,6 +63,9 @@ gboolean clutter_actor_is_effectively_on_stage_view (ClutterActor     *self,
                                                      ClutterStageView *view);
 
 CLUTTER_EXPORT
+int64_t clutter_stage_get_frame_counter (ClutterStage *stage);
+
+CLUTTER_EXPORT
 void clutter_stage_capture_view_into (ClutterStage     *stage,
                                       ClutterStageView *view,
                                       MtkRectangle     *rect,
@@ -96,12 +99,6 @@ CLUTTER_EXPORT
 void clutter_actor_get_relative_transformation_matrix (ClutterActor      *self,
                                                        ClutterActor      *ancestor,
                                                        graphene_matrix_t *matrix);
-
-CLUTTER_EXPORT
-ClutterSprite * clutter_backend_lookup_sprite (ClutterBackend       *backend,
-                                               ClutterStage         *stage,
-                                               ClutterInputDevice   *device,
-                                               ClutterEventSequence *sequence);
 
 CLUTTER_EXPORT
 void clutter_backend_destroy_sprite (ClutterBackend *backend,

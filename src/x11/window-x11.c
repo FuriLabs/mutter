@@ -31,10 +31,10 @@
 #include <X11/Xlib-xcb.h>
 #include <X11/extensions/shape.h>
 #include <X11/extensions/Xcomposite.h>
+#include <X11/extensions/XInput2.h>
 #include <xcb/res.h>
 
 #include "backends/meta-logical-monitor-private.h"
-#include "backends/x11/meta-backend-x11.h"
 #include "compositor/compositor-private.h"
 #include "compositor/meta-window-actor-private.h"
 #include "core/boxes-private.h"
@@ -47,17 +47,13 @@
 #include "meta/meta-later.h"
 #include "meta/prefs.h"
 #include "mtk/mtk-x11.h"
-
-#ifdef HAVE_XWAYLAND
-#include "wayland/meta-window-xwayland.h"
-#endif
-
 #include "x11/meta-sync-counter.h"
 #include "x11/meta-x11-display-private.h"
 #include "x11/meta-x11-frame.h"
 #include "x11/meta-x11-group-private.h"
 #include "x11/window-props.h"
 #include "x11/xprops.h"
+#include "wayland/meta-window-xwayland.h"
 
 #define TAKE_FOCUS_FALLBACK_DELAY_MS 150
 
@@ -111,6 +107,19 @@ meta_window_x11_get_private (MetaWindowX11 *window_x11)
 }
 
 static void
+meta_window_x11_stage_to_protocol_size (MetaWindow *window,
+                                        int         stage_w,
+                                        int         stage_h,
+                                        int        *protocol_w,
+                                        int        *protocol_h)
+{
+  if (protocol_w)
+    *protocol_w = stage_w;
+  if (protocol_h)
+    *protocol_h = stage_h;
+}
+
+static void
 meta_window_x11_stage_to_protocol (MetaWindow          *window,
                                    int                  stage_x,
                                    int                  stage_y,
@@ -118,10 +127,22 @@ meta_window_x11_stage_to_protocol (MetaWindow          *window,
                                    int                 *protocol_y,
                                    MtkRoundingStrategy  rounding_strategy)
 {
-  if (protocol_x)
-    *protocol_x = stage_x;
-  if (protocol_y)
-    *protocol_y = stage_y;
+  meta_window_x11_stage_to_protocol_size (window,
+                                          stage_x, stage_y,
+                                          protocol_x, protocol_y);
+}
+
+static void
+meta_window_x11_protocol_to_stage_size (MetaWindow *window,
+                                        int         protocol_w,
+                                        int         protocol_h,
+                                        int        *stage_w,
+                                        int        *stage_h)
+{
+  if (stage_w)
+    *stage_w = protocol_w;
+  if (stage_h)
+    *stage_h = protocol_h;
 }
 
 static void
@@ -132,10 +153,9 @@ meta_window_x11_protocol_to_stage (MetaWindow          *window,
                                    int                 *stage_y,
                                    MtkRoundingStrategy  rounding_strategy)
 {
-  if (stage_x)
-    *stage_x = protocol_x;
-  if (stage_y)
-    *stage_y = protocol_y;
+  meta_window_x11_protocol_to_stage_size (window,
+                                          protocol_x, protocol_y,
+                                          stage_x, stage_y);
 }
 
 static MtkRectangle *
@@ -350,14 +370,14 @@ send_configure_notify (MetaWindow *window)
           event.xconfigure.y += dy;
         }
     }
-  meta_window_stage_to_protocol_point (window,
-                                       priv->client_rect.width,
-                                       priv->client_rect.height,
-                                       &event.xconfigure.width,
-                                       &event.xconfigure.height);
-  meta_window_stage_to_protocol_point (window,
-                                       priv->border_width, 0,
-                                       &event.xconfigure.border_width, NULL);
+  meta_window_stage_to_protocol_size (window,
+                                      priv->client_rect.width,
+                                      priv->client_rect.height,
+                                      &event.xconfigure.width,
+                                      &event.xconfigure.height);
+  meta_window_stage_to_protocol_size (window,
+                                      priv->border_width, 0,
+                                      &event.xconfigure.border_width, NULL);
   event.xconfigure.above = None; /* FIXME */
   event.xconfigure.override_redirect = False;
 
@@ -1081,16 +1101,16 @@ update_net_frame_extents (MetaWindow *window)
   Window xwindow = meta_window_x11_get_xwindow (window);
 
   meta_frame_calc_borders (priv->frame, &borders);
-  meta_window_stage_to_protocol_point (window,
-                                       borders.visible.left,
-                                       borders.visible.right,
-                                       &left,
-                                       &right);
-  meta_window_stage_to_protocol_point (window,
-                                       borders.visible.top,
-                                       borders.visible.bottom,
-                                       &top,
-                                       &bottom);
+  meta_window_stage_to_protocol_size (window,
+                                      borders.visible.left,
+                                      borders.visible.right,
+                                      &left,
+                                      &right);
+  meta_window_stage_to_protocol_size (window,
+                                      borders.visible.top,
+                                      borders.visible.bottom,
+                                      &top,
+                                      &bottom);
 
   data[0] = left;
   data[1] = right;
@@ -2105,10 +2125,9 @@ meta_window_x11_constructed (GObject *object)
   window->hidden = FALSE;
   priv->xclient_leader = None;
 
-  meta_window_protocol_to_stage_point (window,
-                                       attrs.border_width, 0,
-                                       &priv->border_width, NULL,
-                                       MTK_ROUNDING_STRATEGY_GROW);
+  meta_window_protocol_to_stage_size (window,
+                                      attrs.border_width, 0,
+                                      &priv->border_width, NULL);
 
   g_signal_connect (window, "notify::decorated",
                     G_CALLBACK (meta_window_x11_update_input_region),
@@ -2219,6 +2238,8 @@ meta_window_x11_class_init (MetaWindowX11Class *klass)
   window_class->set_transient_for = meta_window_x11_set_transient_for;
   window_class->stage_to_protocol = meta_window_x11_stage_to_protocol;
   window_class->protocol_to_stage = meta_window_x11_protocol_to_stage;
+  window_class->stage_to_protocol_size = meta_window_x11_stage_to_protocol_size;
+  window_class->protocol_to_stage_size = meta_window_x11_protocol_to_stage_size;
   window_class->get_gravity = meta_window_x11_get_gravity;
   window_class->save_rect = meta_window_x11_save_rect;
 
@@ -2714,27 +2735,6 @@ meta_window_x11_get_gravity_position (MetaWindow  *window,
     *root_y = y;
 }
 
-/* Get geometry for saving in the session; x/y are gravity
- * position, and w/h are in resize inc above the base size.
- */
-void
-meta_window_x11_get_session_geometry (MetaWindow  *window,
-                                      int         *x,
-                                      int         *y,
-                                      int         *width,
-                                      int         *height)
-{
-  meta_window_x11_get_gravity_position (window,
-                                        window->size_hints.win_gravity,
-                                        x, y);
-
-  meta_window_config_get_position (window->config, width, height);
-  *width -= window->size_hints.base_width;
-  *width /= window->size_hints.width_inc;
-  *height -= window->size_hints.base_height;
-  *height /= window->size_hints.height_inc;
-}
-
 static void
 meta_window_move_resize_request (MetaWindow  *window,
                                  guint        value_mask,
@@ -2963,10 +2963,9 @@ meta_window_x11_configure_request (MetaWindow *window,
    */
   if (event->xconfigurerequest.value_mask & CWBorderWidth)
     {
-      meta_window_protocol_to_stage_point (window,
-                                           event->xconfigurerequest.border_width, 0,
-                                           &priv->border_width, NULL,
-                                           MTK_ROUNDING_STRATEGY_GROW);
+      meta_window_protocol_to_stage_size (window,
+                                          event->xconfigurerequest.border_width, 0,
+                                          &priv->border_width, NULL);
     }
 
   rect = MTK_RECTANGLE_INIT (event->xconfigurerequest.x, event->xconfigurerequest.y,
@@ -3095,27 +3094,6 @@ meta_window_x11_property_notify (MetaWindow *window,
 #define _NET_WM_MOVERESIZE_MOVE_KEYBOARD    10
 #define _NET_WM_MOVERESIZE_CANCEL           11
 
-static int
-query_pressed_buttons (MetaWindow *window)
-{
-  MetaContext *context = meta_display_get_context (window->display);
-  MetaBackend *backend = meta_context_get_backend (context);
-  MetaCursorTracker *tracker = meta_backend_get_cursor_tracker (backend);
-  ClutterModifierType mods;
-  int button = 0;
-
-  meta_cursor_tracker_get_pointer (tracker, NULL, &mods);
-
-  if (mods & CLUTTER_BUTTON1_MASK)
-    button |= 1 << 1;
-  if (mods & CLUTTER_BUTTON2_MASK)
-    button |= 1 << 2;
-  if (mods & CLUTTER_BUTTON3_MASK)
-    button |= 1 << 3;
-
-  return button;
-}
-
 static void
 handle_net_restack_window (MetaDisplay *display,
                            XEvent      *event)
@@ -3140,7 +3118,6 @@ handle_net_restack_window (MetaDisplay *display,
     }
 }
 
-#ifdef HAVE_XWAYLAND
 typedef struct {
   ClutterSprite *sprite;
   graphene_point_t device_point;
@@ -3163,7 +3140,7 @@ nearest_device_func (ClutterStage  *stage,
 
   clutter_seat_query_state (seat, sprite, &point, &mods);
 
-  if (!clutter_sprite_get_sequence (sprite))
+  if (clutter_sprite_get_role (sprite) != CLUTTER_SPRITE_ROLE_TOUCHPOINT)
     {
       ClutterModifierType accepted_buttons = 0;
       ClutterModifierType mask =
@@ -3215,7 +3192,6 @@ guess_nearest_device (MetaWindow            *window,
 
   return data.sprite != NULL;
 }
-#endif /* HAVE_XWAYLAND */
 
 gboolean
 meta_window_x11_client_message (MetaWindow *window,
@@ -3555,25 +3531,10 @@ meta_window_x11_client_message (MetaWindow *window,
                 (op != META_GRAB_OP_MOVING &&
                  op != META_GRAB_OP_KEYBOARD_MOVING))))
         {
-          MetaContext *context = meta_display_get_context (display);
-          MetaBackend *backend = meta_context_get_backend (context);
-          ClutterStage *stage = CLUTTER_STAGE (meta_backend_get_stage (backend));
-          ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
           ClutterSprite *sprite = NULL;
-          int button_mask;
 
-#ifdef HAVE_XWAYLAND
-          if (meta_is_wayland_compositor ())
-            {
-              if (!guess_nearest_device (window, x_root, y_root, button, &sprite))
-                return FALSE;
-            }
-          else
-#endif
-            {
-              sprite = clutter_backend_get_pointer_sprite (clutter_backend,
-                                                           stage);
-            }
+          if (!guess_nearest_device (window, x_root, y_root, button, &sprite))
+            return FALSE;
 
           g_assert (sprite);
           meta_topic (META_DEBUG_WINDOW_OPS,
@@ -3582,50 +3543,6 @@ meta_window_x11_client_message (MetaWindow *window,
                                      sprite,
                                      timestamp,
                                      &GRAPHENE_POINT_INIT (x_root, y_root));
-
-          window_drag =
-            meta_compositor_get_current_window_drag (window->display->compositor);
-
-#ifdef HAVE_XWAYLAND
-          if (!meta_is_wayland_compositor ())
-#endif
-            {
-              button_mask = query_pressed_buttons (window);
-
-              if (button == 0)
-                {
-                  /*
-                   * the button SHOULD already be included in the message
-                   */
-                  if ((button_mask & (1 << 1)) != 0)
-                    button = 1;
-                  else if ((button_mask & (1 << 2)) != 0)
-                    button = 2;
-                  else if ((button_mask & (1 << 3)) != 0)
-                    button = 3;
-
-                  if (button == 0 && window_drag)
-                    meta_window_drag_end (window_drag);
-                }
-              else
-                {
-                  /* There is a potential race here. If the user presses and
-                   * releases their mouse button very fast, it's possible for
-                   * both the ButtonPress and ButtonRelease to be sent to the
-                   * client before it can get a chance to send _NET_WM_MOVERESIZE
-                   * to us. When that happens, we'll become stuck in a grab
-                   * state, as we haven't received a ButtonRelease to cancel the
-                   * grab.
-                   *
-                   * We can solve this by querying after we take the explicit
-                   * pointer grab -- if the button isn't pressed, we cancel the
-                   * drag immediately.
-                   */
-
-                  if (window_drag && (button_mask & (1 << button)) == 0)
-                    meta_window_drag_end (window_drag);
-                }
-            }
         }
 
       return TRUE;
@@ -3863,12 +3780,6 @@ is_our_xwindow (MetaX11Display    *x11_display,
                 Window             xwindow,
                 XWindowAttributes *attrs)
 {
-#ifdef HAVE_X11
-  MetaDisplay *display;
-  MetaContext *context;
-  MetaBackend *backend;
-#endif
-
   if (xwindow == x11_display->no_focus_window)
     return TRUE;
 
@@ -3883,16 +3794,6 @@ is_our_xwindow (MetaX11Display    *x11_display,
 
   if (xwindow == x11_display->composite_overlay_window)
     return TRUE;
-
-#ifdef HAVE_X11
-  display = meta_x11_display_get_display (x11_display);
-  context = meta_display_get_context (display);
-  backend = meta_context_get_backend (context);
-
-  if (META_IS_BACKEND_X11 (backend) &&
-      xwindow == meta_backend_x11_get_xwindow (META_BACKEND_X11 (backend)))
-    return TRUE;
-#endif
 
   /* Any windows created via meta_create_offscreen_window */
   if (attrs->override_redirect &&
@@ -4069,28 +3970,14 @@ meta_window_x11_new (MetaDisplay       *display,
       goto error;
     }
 
-#ifdef HAVE_XWAYLAND
-  if (meta_is_wayland_compositor ())
-    {
-      window = g_initable_new (META_TYPE_WINDOW_XWAYLAND,
-                               NULL, NULL,
-                               "display", display,
-                               "effect", effect,
-                               "attributes", &attrs,
-                               "xwindow", xwindow,
-                               NULL);
-    }
-  else
-#endif
-    {
-      window = g_initable_new (META_TYPE_WINDOW_X11,
-                               NULL, NULL,
-                               "display", display,
-                               "effect", effect,
-                               "attributes", &attrs,
-                               "xwindow", xwindow,
-                               NULL);
-    }
+    window = g_initable_new (META_TYPE_WINDOW_XWAYLAND,
+                             NULL, NULL,
+                             "display", display,
+                             "effect", effect,
+                             "attributes", &attrs,
+                             "xwindow", xwindow,
+                             NULL);
+
   if (existing_wm_state == IconicState)
     {
       /* WM_STATE said minimized */
@@ -4485,56 +4372,6 @@ meta_window_x11_set_client_rect (MetaWindowX11 *window_x11,
   MetaWindowX11Private *priv = meta_window_x11_get_instance_private (window_x11);
 
   priv->client_rect = *client_rect;
-}
-
-static gboolean
-has_requested_dont_bypass_compositor (MetaWindowX11 *window_x11)
-{
-  MetaWindowX11Private *priv = meta_window_x11_get_instance_private (window_x11);
-
-  return priv->bypass_compositor == META_BYPASS_COMPOSITOR_HINT_OFF;
-}
-
-gboolean
-meta_window_x11_can_unredirect (MetaWindowX11 *window_x11)
-{
-  MetaWindow *window = META_WINDOW (window_x11);
-  MetaWindowX11Private *priv =
-    meta_window_x11_get_instance_private (window_x11);
-
-  if (has_requested_dont_bypass_compositor (window_x11))
-    return FALSE;
-
-  if (window->opacity != 0xFF)
-    return FALSE;
-
-  if (priv->shape_region != NULL)
-    return FALSE;
-
-  if (!window->monitor)
-    return FALSE;
-
-  if (meta_window_is_fullscreen (window))
-    return TRUE;
-
-  if (meta_window_is_screen_sized (window))
-    return TRUE;
-
-  if (window->override_redirect)
-    {
-      MtkRectangle window_rect;
-      MtkRectangle logical_monitor_layout;
-      MetaLogicalMonitor *logical_monitor = window->monitor;
-
-      meta_window_get_frame_rect (window, &window_rect);
-      logical_monitor_layout =
-        meta_logical_monitor_get_layout (logical_monitor);
-
-      if (mtk_rectangle_equal (&window_rect, &logical_monitor_layout))
-        return TRUE;
-    }
-
-  return FALSE;
 }
 
 MetaSyncCounter *

@@ -28,18 +28,11 @@
 #include "compositor/meta-shaped-texture-private.h"
 #include "compositor/meta-surface-actor.h"
 #include "compositor/meta-window-actor-private.h"
+#include "compositor/meta-surface-actor-wayland.h"
 #include "core/boxes-private.h"
 #include "core/window-private.h"
 #include "meta/window.h"
-
-#ifdef HAVE_X11_CLIENT
-#include "compositor/meta-surface-actor-x11.h"
-#endif
-
-#ifdef HAVE_WAYLAND
-#include "compositor/meta-surface-actor-wayland.h"
 #include "wayland/meta-wayland-surface-private.h"
-#endif
 
 typedef enum
 {
@@ -591,21 +584,8 @@ init_surface_actor (MetaWindowActor *self)
   MetaWindowActorPrivate *priv =
     meta_window_actor_get_instance_private (self);
   MetaWindow *window = priv->window;
-  MetaSurfaceActor *surface_actor = NULL;
-
-#ifdef HAVE_X11
-  if (!meta_is_wayland_compositor ())
-    {
-      surface_actor = meta_surface_actor_x11_new (window);
-    }
-  else
-#endif
-#ifdef HAVE_WAYLAND
-    {
-      MetaWaylandSurface *surface = meta_window_get_wayland_surface (window);
-      surface_actor = surface ? meta_wayland_surface_get_actor (surface) : NULL;
-    }
-#endif
+  MetaWaylandSurface *surface = meta_window_get_wayland_surface (window);
+  MetaSurfaceActor *surface_actor = surface ? meta_wayland_surface_get_actor (surface) : NULL;
 
   if (surface_actor)
     meta_window_actor_assign_surface_actor (self, surface_actor);
@@ -1049,13 +1029,6 @@ meta_window_actor_sync_actor_geometry (MetaWindowActor *self,
 
   meta_window_get_buffer_rect (priv->window, &actor_rect);
 
-  /* When running as a Wayland compositor we catch size changes when new
-   * buffers are attached */
-#ifdef HAVE_X11
-  if (META_IS_SURFACE_ACTOR_X11 (priv->surface))
-    meta_surface_actor_x11_set_size (META_SURFACE_ACTOR_X11 (priv->surface),
-                                     actor_rect.width, actor_rect.height);
-#endif
   /* Normally we want freezing a window to also freeze its position; this allows
    * windows to atomically move and resize together, either under app control,
    * or because the user is resizing from the left/top. But on initial placement

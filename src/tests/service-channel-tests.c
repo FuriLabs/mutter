@@ -151,6 +151,9 @@ service_client_thread_func (gpointer user_data)
 
   g_atomic_int_set (&testdata->client_terminated, TRUE);
 
+  g_clear_object (&service_channel_proxy);
+  while (g_main_context_iteration (thread_main_context, FALSE));
+
   return NULL;
 }
 
@@ -195,7 +198,7 @@ meta_test_service_channel_open_wayland_connection (void)
     g_main_context_iteration (NULL, TRUE);
 
   g_debug ("Waiting for thread to terminate");
-  g_thread_join (thread);
+  g_thread_join (g_steal_pointer (&thread));
 }
 
 static void

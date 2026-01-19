@@ -90,6 +90,11 @@ GList * meta_kms_feedback_get_failed_planes (const MetaKmsFeedback *feedback);
 
 const GError * meta_kms_feedback_get_error (const MetaKmsFeedback *feedback);
 
+int64_t meta_kms_feedback_get_ready_time_us (const MetaKmsFeedback *feedback);
+
+void meta_kms_feedback_set_ready_time_us (MetaKmsFeedback *feedback,
+                                          int64_t          ready_time_us);
+
 META_EXPORT_TEST
 void meta_kms_feedback_dispatch_result (MetaKmsFeedback *feedback,
                                         MetaKms         *kms,
@@ -151,6 +156,14 @@ META_EXPORT_TEST
 void meta_kms_update_set_vrr (MetaKmsUpdate *update,
                               MetaKmsCrtc   *crtc,
                               gboolean       enabled);
+
+void meta_kms_update_set_crtc_degamma (MetaKmsUpdate      *update,
+                                       MetaKmsCrtc        *crtc,
+                                       const MetaGammaLut *degamma);
+
+void meta_kms_update_set_crtc_ctm (MetaKmsUpdate *update,
+                                   MetaKmsCrtc   *crtc,
+                                   const MetaCtm *ctm);
 
 META_EXPORT_TEST
 void meta_kms_update_set_crtc_gamma (MetaKmsUpdate      *update,

@@ -59,6 +59,7 @@
 #include "compositor/meta-cullable.h"
 #include "compositor/meta-later-private.h"
 #include "compositor/meta-window-actor-private.h"
+#include "compositor/meta-window-actor-wayland.h"
 #include "compositor/meta-window-group-private.h"
 #include "core/util-private.h"
 #include "core/window-private.h"
@@ -69,18 +70,11 @@
 #include "meta/meta-context.h"
 #include "meta/prefs.h"
 #include "meta/window.h"
-
-#ifdef HAVE_WAYLAND
-#include "compositor/meta-window-actor-wayland.h"
 #include "wayland/meta-wayland-private.h"
-#endif
 
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
 #include <X11/extensions/Xcomposite.h>
 
-#include "backends/x11/meta-backend-x11.h"
-#include "backends/x11/meta-event-x11.h"
-#include "backends/x11/meta-stage-x11.h"
 
 #include "compositor/meta-window-actor-x11.h"
 
@@ -346,19 +340,17 @@ meta_compositor_real_add_window (MetaCompositor    *compositor,
 
   switch (window->client_type)
     {
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
     case META_WINDOW_CLIENT_TYPE_X11:
       window_actor_type = META_TYPE_WINDOW_ACTOR_X11;
       accessible_name = "X11 window";
       break;
 #endif
 
-#ifdef HAVE_WAYLAND
     case META_WINDOW_CLIENT_TYPE_WAYLAND:
       window_actor_type = META_TYPE_WINDOW_ACTOR_WAYLAND;
       accessible_name = "Wayland window";
       break;
-#endif
 
     default:
       g_return_if_reached ();
@@ -446,7 +438,7 @@ meta_compositor_window_shape_changed (MetaCompositor *compositor,
   if (!window_actor)
     return;
 
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   meta_window_actor_x11_update_shape (META_WINDOW_ACTOR_X11 (window_actor));
 #endif
 }
@@ -983,9 +975,6 @@ meta_compositor_real_after_paint (MetaCompositor     *compositor,
   status = cogl_context_get_graphics_reset_status (priv->context);
   switch (status)
     {
-    case COGL_GRAPHICS_RESET_STATUS_NO_ERROR:
-      break;
-
     case COGL_GRAPHICS_RESET_STATUS_PURGED_CONTEXT_RESET:
       g_signal_emit_by_name (priv->display, "gl-video-memory-purged");
       g_signal_emit_by_name (stage_actor, "gl-video-memory-purged");
@@ -993,14 +982,7 @@ meta_compositor_real_after_paint (MetaCompositor     *compositor,
       break;
 
     default:
-      /* The ARB_robustness spec says that, on error, the application
-         should destroy the old context and create a new one. Since we
-         don't have the necessary plumbing to do this we'll simply
-         restart the process. Obviously we can't do this when we are
-         a wayland compositor but in that case we shouldn't get here
-         since we don't enable robustness in that case. */
-      g_assert (!meta_is_wayland_compositor ());
-      meta_restart (NULL, meta_display_get_context (priv->display));
+    case COGL_GRAPHICS_RESET_STATUS_NO_ERROR:
       break;
     }
 

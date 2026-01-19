@@ -203,6 +203,8 @@ meta_async_waiter_destroy (MetaAsyncWaiter *waiter)
                                     (gpointer *) &waiter->x11_display);
     }
   g_main_loop_unref (waiter->loop);
+
+  g_free (waiter);
 }
 
 static int
@@ -656,7 +658,6 @@ meta_test_client_new (MetaContext           *context,
   launcher =  g_subprocess_launcher_new ((G_SUBPROCESS_FLAGS_STDIN_PIPE |
                                           G_SUBPROCESS_FLAGS_STDOUT_PIPE));
 
-  g_assert_true (meta_is_wayland_compositor ());
   compositor = meta_context_get_wayland_compositor (context);
   wayland_display_name = meta_wayland_get_wayland_display_name (compositor);
 #ifdef HAVE_XWAYLAND
@@ -788,7 +789,7 @@ meta_set_custom_monitor_config_full (MetaBackend            *backend,
     meta_backend_get_monitor_manager (backend);
   MetaMonitorConfigManager *config_manager = monitor_manager->config_manager;
   MetaMonitorConfigStore *config_store;
-  GError *error = NULL;
+  g_autoptr (GError) error = NULL;
   g_autofree char *path = NULL;
 
   g_assert_nonnull (config_manager);

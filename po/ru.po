@@ -15,8 +15,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: metacity ru\n"
 "Report-Msgid-Bugs-To: https://gitlab.gnome.org/GNOME/mutter/issues/\n"
-"POT-Creation-Date: 2025-08-21 19:45+0000\n"
-"PO-Revision-Date: 2025-08-22 12:54+0300\n"
+"POT-Creation-Date: 2025-12-16 21:32+0000\n"
+"PO-Revision-Date: 2025-12-17 19:43+0300\n"
 "Last-Translator: Artur So <arturios2005@mail.ru>\n"
 "Language-Team: Русский <gnome-cyr@gnome.org>\n"
 "Language: ru\n"
@@ -25,7 +25,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
 "n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
-"X-Generator: Poedit 3.6\n"
+"X-Generator: Poedit 3.8\n"
 
 #: data/50-mutter-navigation.xml:6
 msgid "Navigation"
@@ -691,22 +691,30 @@ msgid "_Inhibit system shortcuts"
 msgstr "_Блокировка системных комбинаций клавиш"
 
 #: mdk/mdk-main-window.ui:20
+msgid "_Monitors"
+msgstr "_Мониторы"
+
+#: mdk/mdk-main-window.ui:22
+msgid "_Resizable"
+msgstr "Изменяемый _размер"
+
+#: mdk/mdk-main-window.ui:29
 msgid "_Launchers"
 msgstr "_Ярлыки"
 
-#: mdk/mdk-main-window.ui:24
+#: mdk/mdk-main-window.ui:33
 msgid "_Edit launchers"
 msgstr "_Изменить ярлыки"
 
-#: mdk/mdk-main-window.ui:31
+#: mdk/mdk-main-window.ui:40
 msgid "_About Mutter Development Kit"
 msgstr "_О приложении"
 
-#: mdk/mdk-main-window.ui:37 mdk/mdk-main.c:56
+#: mdk/mdk-main-window.ui:46 mdk/mdk-main.c:56
 msgid "Mutter Development Kit"
 msgstr "Набор для разработки Mutter"
 
-#: mdk/mdk-main-window.ui:47
+#: mdk/mdk-main-window.ui:56
 msgid "Main Menu"
 msgstr "Главное меню"
 
@@ -722,7 +730,7 @@ msgstr "Набор для разработки программного обес
 msgid "About Mutter Development Kit"
 msgstr "О приложении"
 
-#: mdk/mdk-monitor.c:672
+#: mdk/mdk-monitor.c:792
 msgid "Failed to create monitor"
 msgstr "Не удалось создать монитор"
 
@@ -757,74 +765,54 @@ msgstr "%s %s"
 msgid "Bell event"
 msgstr "Событие звонка"
 
-#: src/core/display.c:741
+#: src/core/display.c:657
 msgid "Privacy Screen Enabled"
 msgstr "Экран конфиденциальности включен"
 
-#: src/core/display.c:742
+#: src/core/display.c:658
 msgid "Privacy Screen Disabled"
 msgstr "Экран конфиденциальности отключен"
 
-#: src/core/meta-context-main.c:630
-msgid "Replace the running window manager"
-msgstr "Заменить запущенный оконный менеджер"
-
-#: src/core/meta-context-main.c:636
-msgid "X Display to use"
-msgstr "Используемый дисплей X"
-
-#: src/core/meta-context-main.c:642
-msgid "Make X calls synchronous"
-msgstr "Сделать X-вызовы синхронными"
-
-#: src/core/meta-context-main.c:650
+#: src/core/meta-context-main.c:359
 msgid "Run as a wayland compositor"
 msgstr "Запустить в качестве композитора wayland"
 
-#: src/core/meta-context-main.c:657
-msgid "Run as a nested compositor"
-msgstr "Запустить в качестве встроенного композитора"
-
-#: src/core/meta-context-main.c:665
+#: src/core/meta-context-main.c:366
 msgid "Run wayland compositor without starting Xwayland"
 msgstr "Запуск wayland compositor без запуска Xwayland"
 
-#: src/core/meta-context-main.c:672
+#: src/core/meta-context-main.c:373
 msgid "Specify Wayland display name to use"
 msgstr "Указать отображаемое имя Wayland для использования"
 
-#: src/core/meta-context-main.c:680
+#: src/core/meta-context-main.c:380
 msgid "Run as a full display server, rather than nested"
 msgstr "Запустить в качестве полноэкранного сервера вместо встроенного"
 
-#: src/core/meta-context-main.c:685
+#: src/core/meta-context-main.c:385
 msgid "Run as a headless display server"
 msgstr "Запуск в качестве сервера отображения без дисплея"
 
-#: src/core/meta-context-main.c:690
+#: src/core/meta-context-main.c:390
 msgid "Add persistent virtual monitor (WxH or WxH@R)"
 msgstr "Добавить постоянный виртуальный монитор (WxH или WxH@R)"
 
-#: src/core/meta-context-main.c:697
+#: src/core/meta-context-main.c:397
 msgid "Run development kit"
 msgstr "Запустить набор для разработки"
 
-#: src/core/meta-context-main.c:709
-msgid "Run with X11 backend"
-msgstr "Запуск с бэкендом X11"
-
-#: src/core/meta-context-main.c:715
+#: src/core/meta-context-main.c:408
 msgid "Profile performance using trace instrumentation"
 msgstr "Производительность профиля с использованием инструментария трассировки"
 
-#: src/core/meta-context-main.c:721
+#: src/core/meta-context-main.c:414
 msgid "Enable debug control D-Bus interface"
 msgstr "Включить управление отладкой интерфейса D-Bus"
 
 #. TRANSLATORS: This string refers to a button that switches between
 #. * different modes in that button group.
 #.
-#: src/core/meta-pad-action-mapper.c:615
+#: src/core/meta-pad-action-mapper.c:617
 #, c-format
 msgid "Mode Switch (Group %d)"
 msgstr "Переключатель режима: группа %d"
@@ -832,7 +820,7 @@ msgstr "Переключатель режима: группа %d"
 #. TRANSLATORS: This string refers to a button that switches between
 #. * different modes.
 #.
-#: src/core/meta-pad-action-mapper.c:622
+#: src/core/meta-pad-action-mapper.c:624
 #, c-format
 msgid "Mode Switch"
 msgstr "Переключатель режима"
@@ -840,11 +828,11 @@ msgstr "Переключатель режима"
 #. TRANSLATORS: This string refers to an action, cycles drawing tablets'
 #. * mapping through the available outputs.
 #.
-#: src/core/meta-pad-action-mapper.c:645
+#: src/core/meta-pad-action-mapper.c:647
 msgid "Switch monitor"
 msgstr "Переключить монитор"
 
-#: src/core/meta-pad-action-mapper.c:647
+#: src/core/meta-pad-action-mapper.c:649
 msgid "Show on-screen help"
 msgstr "Показать справку на экране"
 
@@ -853,20 +841,20 @@ msgstr "Показать справку на экране"
 msgid "Compositor"
 msgstr "Композитор"
 
-#: src/core/mutter.c:74
+#: src/core/mutter.c:75
 msgid "Print version"
 msgstr "Вывести версию"
 
-#: src/core/mutter.c:80
+#: src/core/mutter.c:81
 msgid "Mutter plugin to use"
 msgstr "Использовать модуль mutter"
 
-#: src/core/prefs.c:1869
+#: src/core/prefs.c:1874
 #, c-format
 msgid "Workspace %d"
 msgstr "Рабочий стол %d"
 
-#: src/core/util.c:150
+#: src/core/util.c:149
 msgid "Mutter was compiled without support for verbose mode"
 msgstr "Mutter был скомпилирован без поддержки режима verbose"
 
@@ -879,28 +867,24 @@ msgstr "Рабочий стол переключен"
 msgid "Mode Switch: Mode %d"
 msgstr "Переключатель режима: режим %d"
 
-#: src/x11/meta-x11-display.c:855
+#: src/x11/meta-x11-display.c:771
 #, c-format
-msgid ""
-"Display “%s” already has a window manager; try using the --replace option to "
-"replace the current window manager."
-msgstr ""
-"Дисплей «%s» уже использует менеджер окон; попробуйте использовать параметр "
-"--replace, чтобы заменить текущий менеджер окон."
+msgid "Display “%s” already has a window manager"
+msgstr "Дисплей «%s» уже имеет оконный менеджер"
 
-#: src/x11/meta-x11-display.c:1240
+#: src/x11/meta-x11-display.c:1134
 #, c-format
 msgid "Failed to open X Window System display “%s”"
 msgstr "Не удалось открыть дисплей X Window System «%s»"
 
-#: src/x11/meta-x11-display.c:1473
+#: src/x11/meta-x11-display.c:1308
 #, c-format
 msgid "Screen %d on display “%s” is invalid"
 msgstr "Экран %d на дисплее «%s» недействителен"
 
 #. This probably means that a non-WM compositor like xcompmgr is running;
 #. * we have no way to get it to exit
-#: src/x11/meta-x11-display.c:2801
+#: src/x11/meta-x11-display.c:2491
 #, c-format
 msgid ""
 "Another compositing manager is already running on screen %i on display “%s”."
@@ -911,10 +895,33 @@ msgstr "На экране %i дисплея «%s» уже запущен дру�
 msgid "Format %s not supported"
 msgstr "Формат %s не поддерживается"
 
-#: src/x11/window-props.c:564
+#: src/x11/window-props.c:562
 #, c-format
 msgid "%s (on %s)"
 msgstr "%s (на %s)"
+
+#~ msgid "Replace the running window manager"
+#~ msgstr "Заменить запущенный оконный менеджер"
+
+#~ msgid "X Display to use"
+#~ msgstr "Используемый дисплей X"
+
+#~ msgid "Make X calls synchronous"
+#~ msgstr "Сделать X-вызовы синхронными"
+
+#~ msgid "Run as a nested compositor"
+#~ msgstr "Запустить в качестве встроенного композитора"
+
+#~ msgid "Run with X11 backend"
+#~ msgstr "Запуск с бэкендом X11"
+
+#, c-format
+#~ msgid ""
+#~ "Display “%s” already has a window manager; try using the --replace option "
+#~ "to replace the current window manager."
+#~ msgstr ""
+#~ "Дисплей «%s» уже использует менеджер окон; попробуйте использовать "
+#~ "параметр --replace, чтобы заменить текущий менеджер окон."
 
 #~ msgid "Disable connection to session manager"
 #~ msgstr "Запретить подключение к менеджеру сеансов"

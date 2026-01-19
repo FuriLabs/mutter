@@ -30,13 +30,10 @@
 #include "core/prefs-private.h"
 #include "core/util-private.h"
 #include "meta/meta-enums.h"
+#include "wayland/meta-wayland.h"
 
 #ifdef HAVE_PROFILER
 #include "core/meta-profiler.h"
-#endif
-
-#ifdef HAVE_WAYLAND
-#include "wayland/meta-wayland.h"
 #endif
 
 enum
@@ -89,9 +86,7 @@ typedef struct _MetaContextPrivate
 
   MetaBackend *backend;
   MetaDisplay *display;
-#ifdef HAVE_WAYLAND
   MetaWaylandCompositor *wayland_compositor;
-#endif
 
   GMainLoop *main_loop;
   GError *termination_error;
@@ -104,9 +99,7 @@ typedef struct _MetaContextPrivate
   MetaProfiler *profiler;
 #endif
 
-#ifdef HAVE_WAYLAND
   MetaServiceChannel *service_channel;
-#endif
 
   MetaDebugControl *debug_control;
 } MetaContextPrivate;
@@ -281,14 +274,11 @@ meta_context_get_display (MetaContext *context)
   return priv->display;
 }
 
-#ifdef HAVE_WAYLAND
 /**
  * meta_context_get_wayland_compositor:
  * @context: The #MetaContext
  *
- * Get the #MetaWaylandCompositor associated with the MetaContext. The might be
- * none currently associated if the context hasn't been started or if the
- * requested compositor type is not %META_COMPOSITOR_TYPE_WAYLAND.
+ * Get the #MetaWaylandCompositor associated with the MetaContext.
  *
  * Returns: (transfer none) (nullable): the #MetaWaylandCompositor
  */
@@ -307,37 +297,12 @@ meta_context_get_service_channel (MetaContext *context)
 
   return priv->service_channel;
 }
-#endif
-
-MetaCompositorType
-meta_context_get_compositor_type (MetaContext *context)
-{
-  g_return_val_if_fail (META_IS_CONTEXT (context), META_COMPOSITOR_TYPE_WAYLAND);
-
-  return META_CONTEXT_GET_CLASS (context)->get_compositor_type (context);
-}
-
-gboolean
-meta_context_is_replacing (MetaContext *context)
-{
-  g_return_val_if_fail (META_IS_CONTEXT (context), FALSE);
-
-  return META_CONTEXT_GET_CLASS (context)->is_replacing (context);
-}
 
 MetaX11DisplayPolicy
 meta_context_get_x11_display_policy (MetaContext *context)
 {
   return META_CONTEXT_GET_CLASS (context)->get_x11_display_policy (context);
 }
-
-#ifdef HAVE_X11
-gboolean
-meta_context_is_x11_sync (MetaContext *context)
-{
-  return META_CONTEXT_GET_CLASS (context)->is_x11_sync (context);
-}
-#endif
 
 #ifdef HAVE_PROFILER
 MetaProfiler *
@@ -403,7 +368,6 @@ meta_context_configure (MetaContext   *context,
                         GError       **error)
 {
   MetaContextPrivate *priv = meta_context_get_instance_private (context);
-  MetaCompositorType compositor_type;
 
   g_return_val_if_fail (META_IS_CONTEXT (context), FALSE);
 
@@ -419,34 +383,9 @@ meta_context_configure (MetaContext   *context,
   priv->profiler = meta_profiler_new (priv->trace_file);
 #endif
 
-  compositor_type = meta_context_get_compositor_type (context);
-  switch (compositor_type)
-    {
-    case META_COMPOSITOR_TYPE_WAYLAND:
-      meta_set_is_wayland_compositor (TRUE);
-      break;
-    case META_COMPOSITOR_TYPE_X11:
-      meta_set_is_wayland_compositor (FALSE);
-      break;
-    }
-
   priv->state = META_CONTEXT_STATE_CONFIGURED;
 
   return TRUE;
-}
-
-static const char *
-compositor_type_to_description (MetaCompositorType compositor_type)
-{
-  switch (compositor_type)
-    {
-    case META_COMPOSITOR_TYPE_WAYLAND:
-      return "Wayland display server";
-    case META_COMPOSITOR_TYPE_X11:
-      return "X11 window and compositing manager";
-    }
-
-  g_assert_not_reached ();
 }
 
 static void
@@ -477,7 +416,6 @@ meta_context_setup (MetaContext  *context,
                     GError      **error)
 {
   MetaContextPrivate *priv = meta_context_get_instance_private (context);
-  MetaCompositorType compositor_type;
 
   g_return_val_if_fail (META_IS_CONTEXT (context), FALSE);
 
@@ -493,10 +431,8 @@ meta_context_setup (MetaContext  *context,
 
   meta_init_debug_utils ();
 
-  compositor_type = meta_context_get_compositor_type (context);
-  g_message ("Running %s (using mutter %s) as a %s",
-             priv->name, VERSION,
-             compositor_type_to_description (compositor_type));
+  g_message ("Running %s (using mutter %s) as a Wayland display server",
+             priv->name, VERSION);
 
   if (priv->plugin_name)
     meta_plugin_manager_load (priv->plugin_name);
@@ -528,11 +464,7 @@ meta_context_start (MetaContext  *context,
 
   meta_prefs_init ();
 
-#ifdef HAVE_WAYLAND
-  if (meta_context_get_compositor_type (context) ==
-      META_COMPOSITOR_TYPE_WAYLAND)
-    priv->wayland_compositor = meta_wayland_compositor_new (context);
-#endif
+  priv->wayland_compositor = meta_wayland_compositor_new (context);
 
   plugin_options = g_steal_pointer (&priv->plugin_options),
   priv->display = meta_display_new (context, plugin_options, error);
@@ -542,9 +474,7 @@ meta_context_start (MetaContext  *context,
       return FALSE;
     }
 
-#ifdef HAVE_WAYLAND
   priv->service_channel = meta_service_channel_new (context);
-#endif
 
   priv->main_loop = g_main_loop_new (NULL, FALSE);
 
@@ -866,20 +796,16 @@ meta_context_dispose (GObject *object)
 
   g_signal_emit (context, signals[PREPARE_SHUTDOWN], 0);
 
-#ifdef HAVE_WAYLAND
   g_clear_object (&priv->service_channel);
 
   if (priv->wayland_compositor)
     meta_wayland_compositor_prepare_shutdown (priv->wayland_compositor);
-#endif
 
   if (priv->display)
     meta_display_close (priv->display, META_CURRENT_TIME);
   g_clear_object (&priv->display);
 
-#ifdef HAVE_WAYLAND
   g_clear_object (&priv->wayland_compositor);
-#endif
 
   g_clear_pointer (&priv->backend, meta_backend_destroy);
 

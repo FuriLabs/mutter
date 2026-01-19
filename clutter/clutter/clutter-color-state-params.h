@@ -40,7 +40,7 @@ typedef enum
 {
   CLUTTER_TRANSFER_FUNCTION_SRGB,
   CLUTTER_TRANSFER_FUNCTION_PQ,
-  CLUTTER_TRANSFER_FUNCTION_BT709,
+  CLUTTER_TRANSFER_FUNCTION_BT1886,
   CLUTTER_TRANSFER_FUNCTION_LINEAR,
 } ClutterTransferFunction;
 
@@ -93,10 +93,10 @@ typedef struct _ClutterEOTF
 typedef struct _ClutterLuminance
 {
   ClutterLuminanceType type : 1;
-  guint ref_is_1_0 : 1;
   float min;
   float max;
   float ref;
+  float mastering_max;
 } ClutterLuminance;
 
 typedef enum
@@ -151,7 +151,7 @@ ClutterColorState * clutter_color_state_params_new_full (ClutterContext         
                                                          float                    min_lum,
                                                          float                    max_lum,
                                                          float                    ref_lum,
-                                                         gboolean                 ref_is_1_0);
+                                                         float                    mastering_max_lum);
 
 CLUTTER_EXPORT
 ClutterColorState * clutter_color_state_params_new_from_primitives (ClutterContext     *context,

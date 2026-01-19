@@ -79,8 +79,7 @@ meta_seat_native_handle_event_post (ClutterSeat        *seat,
     }
   else if (event_type == CLUTTER_DEVICE_ADDED)
     {
-      if (clutter_input_device_get_device_mode (device) != CLUTTER_INPUT_MODE_LOGICAL)
-        seat_native->devices = g_list_prepend (seat_native->devices, g_object_ref (device));
+      seat_native->devices = g_list_prepend (seat_native->devices, g_object_ref (device));
     }
   else if (event_type == CLUTTER_DEVICE_REMOVED)
     {
@@ -168,9 +167,6 @@ meta_seat_native_constructed (GObject *object)
   g_signal_connect (seat->impl, "bell",
                     G_CALLBACK (proxy_bell), seat);
 
-  seat->core_pointer = meta_seat_impl_get_pointer (seat->impl);
-  seat->core_keyboard = meta_seat_impl_get_keyboard (seat->impl);
-
   if (!meta_seat_native_set_keyboard_map_sync (seat,
                                                "us", "", "", DEFAULT_XKB_MODEL,
                                                NULL, &error))
@@ -238,8 +234,6 @@ meta_seat_native_dispose (GObject *object)
   MetaSeatNative *seat = META_SEAT_NATIVE (object);
 
   g_clear_pointer (&seat->xkb_keymap, xkb_keymap_unref);
-  g_clear_object (&seat->core_pointer);
-  g_clear_object (&seat->core_keyboard);
   g_clear_pointer (&seat->impl, meta_seat_impl_destroy);
   g_list_free_full (g_steal_pointer (&seat->devices), g_object_unref);
   g_clear_pointer (&seat->reserved_virtual_slots, g_hash_table_destroy);
@@ -249,22 +243,6 @@ meta_seat_native_dispose (GObject *object)
   g_clear_pointer (&seat->seat_id, g_free);
 
   G_OBJECT_CLASS (meta_seat_native_parent_class)->dispose (object);
-}
-
-static ClutterInputDevice *
-meta_seat_native_get_pointer (ClutterSeat *seat)
-{
-  MetaSeatNative *seat_native = META_SEAT_NATIVE (seat);
-
-  return seat_native->core_pointer;
-}
-
-static ClutterInputDevice *
-meta_seat_native_get_keyboard (ClutterSeat *seat)
-{
-  MetaSeatNative *seat_native = META_SEAT_NATIVE (seat);
-
-  return seat_native->core_keyboard;
 }
 
 static const GList *
@@ -387,14 +365,30 @@ meta_seat_native_query_state (ClutterSeat         *seat,
     CLUTTER_STAGE (meta_backend_get_stage (seat_native->backend));
   ClutterBackend *clutter_backend =
     meta_backend_get_clutter_backend (seat_native->backend);
+  ClutterInputDevice *sprite_device = NULL;
+  ClutterEventSequence *event_sequence = NULL;
 
   if (sprite == clutter_backend_get_pointer_sprite (clutter_backend, stage))
     sprite = NULL;
 
+  if (sprite)
+    {
+      sprite_device = clutter_sprite_get_sprite_device (sprite);
+      event_sequence = clutter_sprite_get_sequence (sprite);
+    }
+
   return meta_seat_impl_query_state (seat_native->impl,
-                                     sprite ? clutter_sprite_get_device (sprite) : NULL,
-                                     sprite ? clutter_sprite_get_sequence (sprite) : NULL,
+                                     sprite_device,
+                                     event_sequence,
                                      coords, modifiers);
+}
+
+static ClutterInputDevice *
+meta_seat_native_get_virtual_source_pointer (ClutterSeat *seat)
+{
+  MetaSeatNative *seat_native = META_SEAT_NATIVE (seat);
+
+  return meta_seat_impl_get_virtual_source_pointer (seat_native->impl);
 }
 
 static void
@@ -408,8 +402,6 @@ meta_seat_native_class_init (MetaSeatNativeClass *klass)
   object_class->get_property = meta_seat_native_get_property;
   object_class->dispose = meta_seat_native_dispose;
 
-  seat_class->get_pointer = meta_seat_native_get_pointer;
-  seat_class->get_keyboard = meta_seat_native_get_keyboard;
   seat_class->peek_devices = meta_seat_native_peek_devices;
   seat_class->bell_notify = meta_seat_native_bell_notify;
   seat_class->get_keymap = meta_seat_native_get_keymap;
@@ -419,6 +411,7 @@ meta_seat_native_class_init (MetaSeatNativeClass *klass)
   seat_class->init_pointer_position = meta_seat_native_init_pointer_position;
   seat_class->handle_event_post = meta_seat_native_handle_event_post;
   seat_class->query_state = meta_seat_native_query_state;
+  seat_class->get_virtual_source_pointer = meta_seat_native_get_virtual_source_pointer;
 
   props[PROP_SEAT_ID] =
     g_param_spec_string ("seat-id", NULL, NULL,
@@ -787,51 +780,58 @@ MetaCursorRenderer *
 meta_seat_native_maybe_ensure_cursor_renderer (MetaSeatNative *seat_native,
                                                ClutterSprite  *sprite)
 {
-  ClutterInputDevice *device;
+  ClutterSpriteRole role;
 
-  device = clutter_sprite_get_device (sprite);
+  role = clutter_sprite_get_role (sprite);
 
-  if (device == seat_native->core_pointer)
+  switch (role)
     {
-      if (!seat_native->cursor_renderer)
-        {
-          MetaCursorRendererNative *cursor_renderer_native;
+    case CLUTTER_SPRITE_ROLE_POINTER:
+      {
+        if (!seat_native->cursor_renderer)
+          {
+            MetaCursorRendererNative *cursor_renderer_native;
 
-          cursor_renderer_native =
-            meta_cursor_renderer_native_new (seat_native->backend,
-                                             sprite);
-          seat_native->cursor_renderer =
-            META_CURSOR_RENDERER (cursor_renderer_native);
-        }
+            cursor_renderer_native =
+              meta_cursor_renderer_native_new (seat_native->backend,
+                                               sprite);
+            seat_native->cursor_renderer =
+              META_CURSOR_RENDERER (cursor_renderer_native);
+          }
 
-      return seat_native->cursor_renderer;
-    }
+        return seat_native->cursor_renderer;
+      }
+    case CLUTTER_SPRITE_ROLE_TABLET:
+      {
+        ClutterInputDevice *device;
+        MetaCursorRenderer *cursor_renderer = NULL;
 
-  if (clutter_input_device_get_device_type (device) == CLUTTER_TABLET_DEVICE)
-    {
-      MetaCursorRenderer *cursor_renderer = NULL;
+        device = clutter_sprite_get_sprite_device (sprite);
 
-      if (!seat_native->tablet_cursors)
-        {
-          seat_native->tablet_cursors =
-            g_hash_table_new_full (NULL, NULL, NULL,
-                                   g_object_unref);
-        }
-      else
-        {
-          cursor_renderer = g_hash_table_lookup (seat_native->tablet_cursors,
-                                                 device);
-        }
+        if (!seat_native->tablet_cursors)
+          {
+            seat_native->tablet_cursors =
+              g_hash_table_new_full (NULL, NULL, NULL,
+                                     g_object_unref);
+          }
+        else
+          {
+            cursor_renderer = g_hash_table_lookup (seat_native->tablet_cursors,
+                                                   device);
+          }
 
-      if (!cursor_renderer)
-        {
-          cursor_renderer = meta_cursor_renderer_new (seat_native->backend,
-                                                      sprite);
-          g_hash_table_insert (seat_native->tablet_cursors,
-                               device, cursor_renderer);
-        }
+        if (!cursor_renderer)
+          {
+            cursor_renderer = meta_cursor_renderer_new (seat_native->backend,
+                                                        sprite);
+            g_hash_table_insert (seat_native->tablet_cursors,
+                                 device, cursor_renderer);
+          }
 
-      return cursor_renderer;
+        return cursor_renderer;
+      }
+    case CLUTTER_SPRITE_ROLE_TOUCHPOINT:
+      break;
     }
 
   return NULL;

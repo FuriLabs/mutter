@@ -144,12 +144,18 @@ maybe_record_frame_on_idle (gpointer user_data)
   MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (monitor_src);
   MetaScreenCastPaintPhase paint_phase;
   MetaScreenCastRecordFlag flags;
+  MtkRectangle empty_rect;
+  MtkRegion *empty_region;
 
   monitor_src->maybe_record_idle_id = 0;
 
   flags = META_SCREEN_CAST_RECORD_FLAG_NONE;
   paint_phase = META_SCREEN_CAST_PAINT_PHASE_DETACHED;
-  meta_screen_cast_stream_src_maybe_record_frame (src, flags, paint_phase, NULL);
+  empty_rect.x = empty_rect.y = 0;
+  empty_rect.width = empty_rect.height = 0;
+  empty_region = mtk_region_create_rectangle (&empty_rect);
+  meta_screen_cast_stream_src_maybe_record_frame (src, flags, paint_phase,
+                                                  empty_region);
 }
 
 static void
@@ -162,6 +168,7 @@ stage_painted (MetaStage        *stage,
   MetaScreenCastMonitorStreamSrc *monitor_src =
     META_SCREEN_CAST_MONITOR_STREAM_SRC (user_data);
   MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (monitor_src);
+  MetaScreenCastRecordFlag flags = META_SCREEN_CAST_RECORD_FLAG_NONE;
   MetaScreenCastRecordResult record_result =
     META_SCREEN_CAST_RECORD_RESULT_RECORDED_NOTHING;
   int64_t presentation_time_us;
@@ -174,7 +181,6 @@ stage_painted (MetaStage        *stage,
 
   if (meta_screen_cast_stream_src_uses_dma_bufs (src))
     {
-      MetaScreenCastRecordFlag flags = META_SCREEN_CAST_RECORD_FLAG_NONE;
       MetaScreenCastPaintPhase paint_phase =
         META_SCREEN_CAST_PAINT_PHASE_PRE_SWAP_BUFFER;
 
@@ -182,12 +188,15 @@ stage_painted (MetaStage        *stage,
         meta_screen_cast_stream_src_maybe_record_frame_with_timestamp (src,
                                                                        flags,
                                                                        paint_phase,
-                                                                       NULL,
+                                                                       redraw_clip,
                                                                        presentation_time_us);
     }
 
   if (!(record_result & META_SCREEN_CAST_RECORD_RESULT_RECORDED_FRAME))
     {
+      meta_screen_cast_stream_src_accumulate_damage (src,
+                                                     flags,
+                                                     redraw_clip);
       monitor_src->maybe_record_idle_id = g_idle_add_once (maybe_record_frame_on_idle,
                                                            src);
       g_source_set_name_by_id (monitor_src->maybe_record_idle_id,
@@ -226,7 +235,7 @@ before_stage_painted (MetaStage        *stage,
   meta_screen_cast_stream_src_maybe_record_frame_with_timestamp (src,
                                                                  flags,
                                                                  paint_phase,
-                                                                 NULL,
+                                                                 redraw_clip,
                                                                  presentation_time_us);
 }
 
@@ -449,6 +458,17 @@ static void
 on_monitors_changed (MetaMonitorManager             *monitor_manager,
                      MetaScreenCastMonitorStreamSrc *monitor_src)
 {
+  MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (monitor_src);
+  MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
+  MetaScreenCastMonitorStream *monitor_stream =
+    META_SCREEN_CAST_MONITOR_STREAM (stream);
+  MetaMonitor *monitor =
+    meta_screen_cast_monitor_stream_get_monitor (monitor_stream);
+  MetaLogicalMonitor *logical_monitor =
+    meta_monitor_get_logical_monitor (monitor);
+  MtkRectangle layout = meta_logical_monitor_get_layout (logical_monitor);
+
+  g_object_set (G_OBJECT (src), "layout", &layout, NULL);
   reattach_watches (monitor_src);
 }
 
@@ -607,7 +627,6 @@ meta_screen_cast_monitor_stream_src_record_to_framebuffer (MetaScreenCastStreamS
   MetaBackend *backend = get_backend (monitor_src);
   MetaRenderer *renderer = meta_backend_get_renderer (backend);
   ClutterStage *stage = get_stage (monitor_src);
-  g_autoptr (GError) local_error = NULL;
   MetaMonitor *monitor;
   MetaLogicalMonitor *logical_monitor;
   MetaRendererView *renderer_view;
@@ -618,7 +637,6 @@ meta_screen_cast_monitor_stream_src_record_to_framebuffer (MetaScreenCastStreamS
   gboolean do_stage_paint = TRUE;
   float view_scale;
   GList *outputs;
-  int x, y;
 
   monitor = get_monitor (monitor_src);
   logical_monitor = meta_monitor_get_logical_monitor (monitor);
@@ -644,9 +662,6 @@ meta_screen_cast_monitor_stream_src_record_to_framebuffer (MetaScreenCastStreamS
   view = CLUTTER_STAGE_VIEW (renderer_view);
   clutter_stage_view_get_layout (view, &view_layout);
 
-  x = (int) roundf ((view_layout.x - logical_monitor_layout.x) * view_scale);
-  y = (int) roundf ((view_layout.y - logical_monitor_layout.y) * view_scale);
-
   switch (paint_phase)
     {
     case META_SCREEN_CAST_PAINT_PHASE_PRE_PAINT:
@@ -655,11 +670,20 @@ meta_screen_cast_monitor_stream_src_record_to_framebuffer (MetaScreenCastStreamS
 
         if (scanout)
           {
-            cogl_scanout_blit_to_framebuffer (scanout,
-                                              framebuffer,
-                                              x, y,
-                                              &local_error);
-            cogl_framebuffer_flush (framebuffer);
+            g_autoptr (GError) local_error = NULL;
+
+            if (cogl_scanout_copy_to_framebuffer (scanout,
+                                                  framebuffer,
+                                                  &local_error))
+              {
+                cogl_framebuffer_flush (framebuffer);
+                do_stage_paint = FALSE;
+              }
+            else
+              {
+                g_warning ("Error copying to screencast framebuffer: %s",
+                           local_error->message);
+              }
           }
       }
       break;
@@ -668,29 +692,36 @@ meta_screen_cast_monitor_stream_src_record_to_framebuffer (MetaScreenCastStreamS
       {
         CoglFramebuffer *view_framebuffer =
           clutter_stage_view_get_framebuffer (view);
+        CoglContext *cogl_context =
+          cogl_framebuffer_get_context (view_framebuffer);
 
-        cogl_framebuffer_blit (view_framebuffer,
-                               framebuffer,
-                               0, 0,
-                               x, y,
-                               cogl_framebuffer_get_width (view_framebuffer),
-                               cogl_framebuffer_get_height (view_framebuffer),
-                               &local_error);
-        cogl_framebuffer_flush (framebuffer);
+        if (cogl_context_has_feature (cogl_context, COGL_FEATURE_ID_BLIT_FRAMEBUFFER))
+          {
+            g_autoptr (GError) local_error = NULL;
+
+            if (cogl_framebuffer_blit (view_framebuffer,
+                                       framebuffer,
+                                       0, 0,
+                                       0, 0,
+                                       cogl_framebuffer_get_width (view_framebuffer),
+                                       cogl_framebuffer_get_height (view_framebuffer),
+                                       &local_error))
+              {
+                cogl_framebuffer_flush (framebuffer);
+                do_stage_paint = FALSE;
+              }
+            else
+              {
+                g_warning ("Failed to blit view framebuffer: %s",
+                           local_error->message);
+              }
+          }
       }
       break;
 
     case META_SCREEN_CAST_PAINT_PHASE_DETACHED:
       g_assert_not_reached ();
     }
-
-  if (local_error)
-    {
-      g_warning ("Error blitting to screencast framebuffer: %s",
-                 local_error->message);
-    }
-
-  do_stage_paint = local_error != NULL;
 
 stage_paint:
   if (do_stage_paint)
@@ -898,8 +929,15 @@ MetaScreenCastMonitorStreamSrc *
 meta_screen_cast_monitor_stream_src_new (MetaScreenCastMonitorStream  *monitor_stream,
                                          GError                      **error)
 {
+  MetaMonitor *monitor =
+    meta_screen_cast_monitor_stream_get_monitor (monitor_stream);
+  MetaLogicalMonitor *logical_monitor =
+    meta_monitor_get_logical_monitor (monitor);
+  MtkRectangle layout = meta_logical_monitor_get_layout (logical_monitor);
+
   return g_initable_new (META_TYPE_SCREEN_CAST_MONITOR_STREAM_SRC, NULL, error,
                          "stream", monitor_stream,
+                         "layout", &layout,
                          NULL);
 }
 

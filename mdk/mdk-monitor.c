@@ -36,19 +36,33 @@
 
 #define BUTTON_BASE (BTN_LEFT - 1)
 
+enum
+{
+  PROP_0,
+
+  PROP_IS_RESIZABLE,
+
+  N_PROPS
+};
+
+static GParamSpec *obj_props[N_PROPS];
+
 struct _MdkMonitor
 {
-  GtkBox parent;
+  GtkWidget parent;
 
+  GtkWidget *box;
   GtkPicture *picture;
 
   MdkContext *context;
   MdkStream *stream;
 
   gboolean emulated_touch_down;
+
+  gboolean is_resizable;
 };
 
-G_DEFINE_FINAL_TYPE (MdkMonitor, mdk_monitor, GTK_TYPE_BOX)
+G_DEFINE_FINAL_TYPE (MdkMonitor, mdk_monitor, GTK_TYPE_WIDGET)
 
 static MdkPointer *
 get_pointer (MdkMonitor *monitor)
@@ -581,6 +595,45 @@ mdk_monitor_unmap (GtkWidget *widget)
   GTK_WIDGET_CLASS (mdk_monitor_parent_class)->unmap (widget);
 }
 
+static void
+mdk_monitor_measure (GtkWidget      *widget,
+                     GtkOrientation  orientation,
+                     int             for_size,
+                     int            *minimum,
+                     int            *natural,
+                     int            *minimum_baseline,
+                     int            *natural_baseline)
+{
+  MdkMonitor *monitor = MDK_MONITOR (widget);
+
+  gtk_widget_measure (GTK_WIDGET (monitor->box),
+                      orientation,
+                      for_size,
+                      minimum,
+                      natural,
+                      minimum_baseline,
+                      natural_baseline);
+}
+
+static void
+mdk_monitor_size_allocate (GtkWidget *widget,
+                           int        width,
+                           int        height,
+                           int        baseline)
+{
+  MdkMonitor *monitor = MDK_MONITOR (widget);
+
+  gtk_widget_allocate (GTK_WIDGET (monitor->box),
+                       width, height, baseline, NULL);
+
+  GTK_WIDGET_CLASS (mdk_monitor_parent_class)->size_allocate (widget,
+                                                              width,
+                                                              height,
+                                                              baseline);
+
+  mdk_stream_resize (monitor->stream, width, height);
+}
+
 static gboolean
 mdk_monitor_focus (GtkWidget        *widget,
                    GtkDirectionType  direction)
@@ -592,6 +645,52 @@ mdk_monitor_focus (GtkWidget        *widget,
     }
 
   return FALSE;
+}
+
+static void
+mdk_monitor_set_property (GObject      *object,
+                          guint         prop_id,
+                          const GValue *value,
+                          GParamSpec   *pspec)
+{
+  MdkMonitor *monitor = MDK_MONITOR (object);
+
+  switch (prop_id)
+    {
+    case PROP_IS_RESIZABLE:
+      monitor->is_resizable = g_value_get_boolean (value);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+    }
+}
+
+static void
+mdk_monitor_get_property (GObject    *object,
+                          guint       prop_id,
+                          GValue     *value,
+                          GParamSpec *pspec)
+{
+  MdkMonitor *monitor = MDK_MONITOR (object);
+
+  switch (prop_id)
+    {
+    case PROP_IS_RESIZABLE:
+      g_value_set_boolean (value, monitor->is_resizable);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+    }
+}
+
+static void
+mdk_monitor_dispose (GObject *object)
+{
+  gtk_widget_dispose_template (GTK_WIDGET (object), MDK_TYPE_MONITOR);
+
+  G_OBJECT_CLASS (mdk_monitor_parent_class)->dispose (object);
 }
 
 static void
@@ -610,13 +709,30 @@ mdk_monitor_class_init (MdkMonitorClass *klass)
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
   GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (klass);
 
+  object_class->dispose = mdk_monitor_dispose;
   object_class->finalize = mdk_monitor_finalize;
+  object_class->set_property = mdk_monitor_set_property;
+  object_class->get_property = mdk_monitor_get_property;
 
   widget_class->realize = mdk_monitor_realize;
   widget_class->unrealize = mdk_monitor_unrealize;
   widget_class->focus = mdk_monitor_focus;
   widget_class->map = mdk_monitor_map;
   widget_class->unmap = mdk_monitor_unmap;
+  widget_class->measure = mdk_monitor_measure;
+  widget_class->size_allocate = mdk_monitor_size_allocate;
+
+  gtk_widget_class_set_template_from_resource (widget_class,
+                                               "/ui/mdk-monitor.ui");
+
+  obj_props[PROP_IS_RESIZABLE] =
+    g_param_spec_boolean ("is-resizable", NULL, NULL,
+                          FALSE,
+                          G_PARAM_READWRITE |
+                          G_PARAM_STATIC_STRINGS);
+  g_object_class_install_properties (object_class, N_PROPS, obj_props);
+
+  gtk_widget_class_bind_template_child (widget_class, MdkMonitor, box);
 }
 
 static void
@@ -626,6 +742,8 @@ mdk_monitor_init (MdkMonitor *monitor)
   GtkEventController *scroll_controller;
   GtkEventController *key_controller;
   GtkEventController *event_controller;
+
+  gtk_widget_init_template (GTK_WIDGET (monitor));
 
   motion_controller = gtk_event_controller_motion_new ();
   g_signal_connect (motion_controller,
@@ -675,7 +793,7 @@ on_stream_error (MdkStream    *stream,
   gtk_widget_set_size_request (label,
                                DEFAULT_MONITOR_WIDTH,
                                DEFAULT_MONITOR_HEIGHT);
-  gtk_box_append (GTK_BOX (monitor), label);
+  gtk_box_append (GTK_BOX (monitor->box), label);
   gtk_widget_set_visible (GTK_WIDGET (monitor->picture), FALSE);
 
   g_warning ("Failed to create monitor: %s", error->message);
@@ -688,12 +806,7 @@ mdk_monitor_new (MdkContext *context)
   MdkMonitor *monitor;
   GdkPaintable *paintable;
 
-  monitor = g_object_new (MDK_TYPE_MONITOR,
-                          "orientation", GTK_ORIENTATION_VERTICAL,
-                          "vexpand", TRUE,
-                          "hexpand", TRUE,
-                          "focusable", TRUE,
-                          NULL);
+  monitor = g_object_new (MDK_TYPE_MONITOR, NULL);
   monitor->context = context;
   monitor->stream = mdk_stream_new (session,
                                     DEFAULT_MONITOR_WIDTH,
@@ -707,12 +820,18 @@ mdk_monitor_new (MdkContext *context)
   monitor->picture = GTK_PICTURE (gtk_picture_new_for_paintable (paintable));
   gtk_widget_add_css_class (GTK_WIDGET (monitor->picture), "monitor");
   gtk_widget_set_sensitive (GTK_WIDGET (monitor->picture), FALSE);
-  gtk_box_append (GTK_BOX (monitor), GTK_WIDGET (monitor->picture));
+  gtk_box_append (GTK_BOX (monitor->box), GTK_WIDGET (monitor->picture));
 
   update_cursor (monitor);
   g_signal_connect_object (context, "notify::emulate-touch",
                            G_CALLBACK (on_emulate_touch_changed),
                            monitor, 0);
+
+  g_object_bind_property (G_OBJECT (context),
+                          "resizable-monitors",
+                          G_OBJECT (monitor),
+                          "is-resizable",
+                          G_BINDING_SYNC_CREATE);
 
   return monitor;
 }
