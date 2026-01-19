@@ -1,6 +1,9 @@
 mutter (50~alpha-1) UNRELEASED; urgency=medium
 
   * New upstream release 50.alpha
+  * Refreshed patches and fixed conflicts:
+    - workarounds/Mark-several-additional-tests-as-flaky.patch
+    - workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
 
  -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Mon, 19 Jan 2026 15:46:11 +0800
 
