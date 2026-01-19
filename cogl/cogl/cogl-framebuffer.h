@@ -1034,6 +1034,20 @@ typedef enum /*< prefix=COGL_FRAMEBUFFER_ERROR >*/
 } CoglFramebufferError;
 
 /**
+ * cogl_can_blit_between_formats:
+ * @src_format: The #CoglPixelFormat to blit from
+ * @dst_format: The #CoglPixelFormat to blit to
+ *
+ * Checks whether the preconditions for blitting between the formats are met.
+ * This does not imply that blitting will definitely succeed.
+ *
+ * @return TRUE if the preconditions for blitting between the formats are met.
+ */
+COGL_EXPORT gboolean
+cogl_can_blit_between_formats (CoglPixelFormat src_format,
+                               CoglPixelFormat dst_format);
+
+/**
  * cogl_framebuffer_blit:
  * @framebuffer: The source #CoglFramebuffer
  * @dst: The destination #CoglFramebuffer
@@ -1107,20 +1121,6 @@ cogl_framebuffer_blit (CoglFramebuffer *framebuffer,
  */
 COGL_EXPORT void
 cogl_framebuffer_flush (CoglFramebuffer *framebuffer);
-
-/**
- * cogl_framebuffer_create_timestamp_query: (skip)
- *
- * Creates a query for the GPU timestamp that will complete upon completion of
- * all previously submitted GL commands related to this framebuffer. E.g. when
- * the rendering is finished on this framebuffer.
- *
- * This function should only be called if the COGL_FEATURE_ID_TIMESTAMP_QUERY
- * feature is advertised.
- */
-COGL_EXPORT CoglTimestampQuery *
-cogl_framebuffer_create_timestamp_query (CoglFramebuffer *framebuffer);
-
 
 /**
  * cogl_framebuffer_get_internal_format: (skip)

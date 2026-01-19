@@ -27,12 +27,10 @@
 #include <X11/Xatom.h>
 #include <X11/XKBlib.h>
 #include <X11/extensions/Xdamage.h>
+#include <X11/extensions/XInput2.h>
 #include <X11/extensions/shape.h>
 
 #include "backends/meta-cursor-tracker-private.h"
-#include "backends/x11/meta-backend-x11.h"
-#include "backends/x11/meta-cursor-tracker-x11.h"
-#include "compositor/meta-compositor-x11.h"
 #include "cogl/cogl.h"
 #include "core/bell.h"
 #include "core/display-private.h"
@@ -53,12 +51,9 @@
 #include "x11/window-x11.h"
 #include "x11/window-x11-private.h"
 #include "x11/xprops.h"
-
-#ifdef HAVE_XWAYLAND
 #include "wayland/meta-wayland-private.h"
 #include "wayland/meta-xwayland-private.h"
 #include "wayland/meta-xwayland.h"
-#endif
 
 static XIEvent *
 get_input_event (MetaX11Display *x11_display,
@@ -934,9 +929,6 @@ handle_input_xevent (MetaX11Display *x11_display,
   MetaWindow *window;
   MetaDisplay *display = x11_display->display;
   MetaWorkspaceManager *workspace_manager = display->workspace_manager;
-  MetaContext *context = meta_display_get_context (display);
-  MetaBackend *backend = meta_context_get_backend (context);
-  ClutterStage *stage = CLUTTER_STAGE (meta_backend_get_stage (backend));
 
   if (input_event == NULL)
     return FALSE;
@@ -959,38 +951,6 @@ handle_input_xevent (MetaX11Display *x11_display,
 
   switch (input_event->evtype)
     {
-    case XI_Enter:
-      if (clutter_stage_get_grab_actor (stage) != NULL)
-        break;
-
-      /* Check if we've entered a window; do this even if window->has_focus to
-       * avoid races.
-       */
-      if (window &&
-          enter_event->mode != XINotifyGrab &&
-          enter_event->mode != XINotifyUngrab &&
-          enter_event->detail != XINotifyInferior &&
-          !meta_is_wayland_compositor () &&
-          enter_event->sourceid != enter_event->deviceid)
-        {
-          meta_display_handle_window_enter (display,
-                                            window,
-                                            enter_event->time,
-                                            (int) enter_event->root_x,
-                                            (int) enter_event->root_y);
-        }
-      break;
-    case XI_Leave:
-      if (clutter_stage_get_grab_actor (stage) != NULL)
-        break;
-
-      if (window != NULL &&
-          enter_event->mode != XINotifyGrab &&
-          enter_event->mode != XINotifyUngrab)
-        {
-          meta_display_handle_window_leave (display, window);
-        }
-      break;
     case XI_FocusIn:
     case XI_FocusOut:
       if (handle_window_focus_event (x11_display, window, enter_event, serial) &&
@@ -1190,9 +1150,11 @@ process_selection_request (MetaX11Display *x11_display,
         reply.property = event->xselectionrequest.property;
     }
 
+  mtk_x11_error_trap_push (x11_display->xdisplay);
   XSendEvent (x11_display->xdisplay,
               event->xselectionrequest.requestor,
               False, 0L, (XEvent*)&reply);
+  mtk_x11_error_trap_pop (x11_display->xdisplay);
 
   meta_topic (META_DEBUG_X11, "Handled selection request");
 }
@@ -1645,7 +1607,6 @@ handle_other_xevent (MetaX11Display *x11_display,
     case ClientMessage:
       if (window)
         {
-#ifdef HAVE_XWAYLAND
           if (event->xclient.message_type == x11_display->atom_WL_SURFACE_ID)
             {
               guint32 surface_id = event->xclient.data.l[0];
@@ -1654,13 +1615,11 @@ handle_other_xevent (MetaX11Display *x11_display,
           else if (event->xclient.message_type ==
                    x11_display->atom__XWAYLAND_MAY_GRAB_KEYBOARD)
             {
-              if (meta_is_wayland_compositor ())
-                g_object_set (G_OBJECT (window),
-                              "xwayland-may-grab-keyboard", (event->xclient.data.l[0] != 0),
-                              NULL);
+              g_object_set (G_OBJECT (window),
+                            "xwayland-may-grab-keyboard", (event->xclient.data.l[0] != 0),
+                            NULL);
             }
           else
-#endif
             meta_window_x11_client_message (window, event);
         }
       else
@@ -1867,15 +1826,9 @@ meta_x11_display_handle_xevent (MetaX11Display *x11_display,
 {
   MetaDisplay *display = x11_display->display;
   MetaContext *context = meta_display_get_context (display);
-#ifdef HAVE_X11
-  MetaCursorTracker *cursor_tracker;
-  MetaBackend *backend = meta_context_get_backend (context);
-#endif
   gboolean bypass_compositor G_GNUC_UNUSED = FALSE;
   XIEvent *input_event;
-#ifdef HAVE_XWAYLAND
   MetaWaylandCompositor *wayland_compositor;
-#endif
 
   COGL_TRACE_BEGIN_SCOPED (MetaX11DisplayHandleXevent,
                            "Meta::X11Display::handle_xevent()");
@@ -1895,17 +1848,14 @@ meta_x11_display_handle_xevent (MetaX11Display *x11_display,
       goto out;
     }
 
-#ifdef HAVE_XWAYLAND
   wayland_compositor = meta_context_get_wayland_compositor (context);
 
-  if (meta_is_wayland_compositor () &&
-      meta_xwayland_manager_handle_xevent (&wayland_compositor->xwayland_manager,
+  if (meta_xwayland_manager_handle_xevent (&wayland_compositor->xwayland_manager,
                                            event))
     {
       bypass_compositor = TRUE;
       goto out;
     }
-#endif
 
   if (process_selection_event (x11_display, event))
     {
@@ -1914,11 +1864,6 @@ meta_x11_display_handle_xevent (MetaX11Display *x11_display,
     }
 
   display->current_time = event_get_time (x11_display, event);
-
-#ifdef HAVE_X11
-  if (META_IS_BACKEND_X11 (backend))
-    meta_backend_x11_reset_cached_logical_monitor (META_BACKEND_X11 (backend));
-#endif
 
   if (x11_display->focused_by_us &&
       event->xany.serial > x11_display->focus_serial &&
@@ -1934,24 +1879,6 @@ meta_x11_display_handle_xevent (MetaX11Display *x11_display,
                                     meta_display_get_current_time_roundtrip (display));
       x11_display->is_server_focus = FALSE;
     }
-
-#ifdef HAVE_X11
-  if (event->xany.window == x11_display->xroot)
-    {
-      cursor_tracker = meta_backend_get_cursor_tracker (backend);
-      if (META_IS_CURSOR_TRACKER_X11 (cursor_tracker))
-        {
-          MetaCursorTrackerX11 *cursor_tracker_x11 =
-            META_CURSOR_TRACKER_X11 (cursor_tracker);
-
-          if (meta_cursor_tracker_x11_handle_xevent (cursor_tracker_x11, event))
-            {
-              bypass_compositor = TRUE;
-              goto out;
-            }
-        }
-    }
-#endif
 
   input_event = get_input_event (x11_display, event);
 
@@ -1970,24 +1897,6 @@ meta_x11_display_handle_xevent (MetaX11Display *x11_display,
     }
 
  out:
-#ifdef HAVE_X11
-  if (!bypass_compositor && META_IS_COMPOSITOR_X11 (display->compositor))
-    {
-      MetaCompositorX11 *compositor_x11 =
-        META_COMPOSITOR_X11 (display->compositor);
-      MetaWindow *window;
-      Window modified;
-
-      modified = event_get_modified_window (x11_display, event);
-
-      if (modified != None)
-        window = meta_x11_display_lookup_x_window (x11_display, modified);
-      else
-        window = NULL;
-
-      meta_compositor_x11_process_xevent (compositor_x11, event, window);
-    }
-#endif /* HAVE_X11 */
 
   display->current_time = META_CURRENT_TIME;
 

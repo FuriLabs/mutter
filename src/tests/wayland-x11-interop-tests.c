@@ -79,6 +79,7 @@ get_x11_interop (WaylandDisplay *display)
   registry = wl_display_get_registry (display->display);
   wl_registry_add_listener (registry, &registry_listener, &x11_interop);
   wl_display_roundtrip (display->display);
+  wl_registry_destroy (registry);
 
   return x11_interop;
 }
@@ -121,7 +122,7 @@ meta_test_wayland_client_x11_interop_hidden_by_default (void)
     g_main_context_iteration (NULL, TRUE);
 
   g_debug ("Waiting for thread to terminate");
-  g_thread_join (thread);
+  g_thread_join (g_steal_pointer (&thread));
 }
 
 typedef struct
@@ -200,6 +201,9 @@ service_client_thread_func (gpointer user_data)
 
   g_atomic_int_set (&data->client_terminated, TRUE);
 
+  g_clear_object (&service_channel);
+  while (g_main_context_iteration (thread_main_context, FALSE));
+
   return NULL;
 }
 
@@ -248,7 +252,7 @@ meta_test_wayland_client_x11_interop_x11_parent (void)
   meta_test_client_destroy (x11_client);
 
   g_debug ("Waiting for thread to terminate");
-  g_thread_join (thread);
+  g_thread_join (g_steal_pointer (&thread));
 }
 
 static void

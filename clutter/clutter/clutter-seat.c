@@ -339,28 +339,6 @@ clutter_seat_init (ClutterSeat *seat)
 }
 
 /**
- * clutter_seat_get_pointer: (skip)
- **/
-ClutterInputDevice *
-clutter_seat_get_pointer (ClutterSeat *seat)
-{
-  g_return_val_if_fail (CLUTTER_IS_SEAT (seat), NULL);
-
-  return CLUTTER_SEAT_GET_CLASS (seat)->get_pointer (seat);
-}
-
-/**
- * clutter_seat_get_keyboard: (skip)
- **/
-ClutterInputDevice *
-clutter_seat_get_keyboard (ClutterSeat *seat)
-{
-  g_return_val_if_fail (CLUTTER_IS_SEAT (seat), NULL);
-
-  return CLUTTER_SEAT_GET_CLASS (seat)->get_keyboard (seat);
-}
-
-/**
  * clutter_seat_peek_devices: (skip)
  **/
 const GList *
@@ -708,8 +686,7 @@ clutter_seat_has_touchscreen (ClutterSeat *seat)
     {
       ClutterInputDevice *device = l->data;
 
-      if (clutter_input_device_get_device_mode (device) != CLUTTER_INPUT_MODE_LOGICAL &&
-          clutter_input_device_get_device_type (device) == CLUTTER_TOUCHSCREEN_DEVICE)
+      if (clutter_input_device_get_device_type (device) == CLUTTER_TOUCHSCREEN_DEVICE)
         {
           has_touchscreen = TRUE;
           break;
@@ -787,4 +764,12 @@ clutter_seat_get_context (ClutterSeat *seat)
   ClutterSeatPrivate *priv = clutter_seat_get_instance_private (seat);
 
   return priv->context;
+}
+
+ClutterInputDevice *
+clutter_seat_get_virtual_source_pointer (ClutterSeat *seat)
+{
+  g_return_val_if_fail (CLUTTER_IS_SEAT (seat), NULL);
+
+  return CLUTTER_SEAT_GET_CLASS (seat)->get_virtual_source_pointer (seat);
 }

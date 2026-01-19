@@ -271,6 +271,13 @@ gboolean meta_egl_query_dma_buf_modifiers (MetaEgl      *egl,
                                            EGLint       *num_formats,
                                            GError      **error);
 
+gboolean meta_egl_query_surface (MetaEgl     *egl,
+                                 EGLDisplay   display,
+                                 EGLSurface   surface,
+                                 EGLint       attribute,
+                                 EGLint      *value,
+                                 GError     **error);
+
 gboolean meta_egl_query_display_attrib (MetaEgl     *egl,
                                         EGLDisplay   display,
                                         EGLint       attribute,
@@ -293,4 +300,8 @@ gboolean meta_egl_wait_sync (MetaEgl     *egl,
                              EGLDisplay   display,
                              EGLSync      sync,
                              EGLint       flags,
+                             GError     **error);
+
+int meta_egl_create_sync_fd (MetaEgl     *egl,
+                             EGLDisplay   display,
                              GError     **error);

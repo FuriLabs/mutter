@@ -34,6 +34,16 @@ typedef struct _MetaKmsCrtcColorUpdate
   struct {
     gboolean has_update;
     MetaGammaLut *state;
+  } degamma;
+
+  struct {
+    gboolean has_update;
+    MetaCtm *state;
+  } ctm;
+
+  struct {
+    gboolean has_update;
+    MetaGammaLut *state;
   } gamma;
 } MetaKmsCrtcColorUpdate;
 
@@ -42,6 +52,7 @@ typedef struct _MetaKmsFeedback
   gatomicrefcount ref_count;
 
   MetaKmsFeedbackResult result;
+  int64_t ready_time_us;
 
   GList *failed_planes;
   GError *error;

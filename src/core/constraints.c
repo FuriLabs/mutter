@@ -37,9 +37,10 @@
 #include "core/meta-workspace-manager-private.h"
 #include "core/place.h"
 #include "core/workspace-private.h"
+#include "meta/meta-external-constraint.h"
 #include "meta/prefs.h"
 
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
 #include "x11/meta-x11-frame.h"
 #include "x11/window-x11-private.h"
 #endif
@@ -115,7 +116,8 @@ typedef enum
   PRIORITY_TITLEBAR_VISIBLE = 4,
   PRIORITY_PARTIALLY_VISIBLE_ON_WORKAREA = 4,
   PRIORITY_CUSTOM_RULE = 4,
-  PRIORITY_MAXIMUM = 4 /* Dummy value used for loop end = max(all priorities) */
+  PRIORITY_EXTERNAL_CONSTRAINT = 5, /* External constraints - highest priority */
+  PRIORITY_MAXIMUM = 5 /* Dummy value used for loop end = max(all priorities) */
 } ConstraintPriority;
 
 typedef enum
@@ -164,6 +166,10 @@ static gboolean do_screen_and_monitor_relative_constraints (MetaWindow     *wind
                                                             GList          *region_spanning_rectangles,
                                                             ConstraintInfo *info,
                                                             gboolean        check_only);
+static gboolean constrain_external           (MetaWindow         *window,
+                                              ConstraintInfo     *info,
+                                              ConstraintPriority  priority,
+                                              gboolean            check_only);
 static gboolean constrain_custom_rule        (MetaWindow         *window,
                                               ConstraintInfo     *info,
                                               ConstraintPriority  priority,
@@ -249,6 +255,7 @@ static const Constraint all_constraints[] = {
   {constrain_fully_onscreen,     "constrain_fully_onscreen"},
   {constrain_titlebar_visible,   "constrain_titlebar_visible"},
   {constrain_partially_onscreen, "constrain_partially_onscreen"},
+  {constrain_external,           "constrain_external"},
   {NULL,                         NULL}
 };
 
@@ -375,7 +382,7 @@ setup_constraint_info (MetaBackend         *backend,
   info->rel_y = 0;
   info->flags = flags;
 
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   if (window->client_type == META_WINDOW_CLIENT_TYPE_X11)
     {
       if (info->current.width < 1)
@@ -725,7 +732,7 @@ update_onscreen_requirements (MetaWindow     *window,
   /* Update whether we want future constraint runs to require the
    * titlebar to be visible.
    */
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   if (window->client_type == META_WINDOW_CLIENT_TYPE_X11 && window->decorated)
     {
       MtkRectangle frame_rect;
@@ -875,6 +882,45 @@ is_custom_rule_satisfied (MtkRectangle      *rect,
     return FALSE;
   else
     return TRUE;
+}
+
+static MetaExternalConstraintFlags
+get_external_constraint_flags (ConstraintInfo *info)
+{
+  MetaExternalConstraintFlags flags = META_EXTERNAL_CONSTRAINT_FLAGS_NONE;
+
+  if (info->flags & META_MOVE_RESIZE_MOVE_ACTION)
+    flags |= META_EXTERNAL_CONSTRAINT_FLAGS_MOVE;
+  if (info->flags & META_MOVE_RESIZE_RESIZE_ACTION)
+    flags |= META_EXTERNAL_CONSTRAINT_FLAGS_RESIZE;
+
+  return flags;
+}
+
+static gboolean
+constrain_external (MetaWindow         *window,
+                    ConstraintInfo     *info,
+                    ConstraintPriority  priority,
+                    gboolean            check_only)
+{
+  MtkRectangle current_rect = info->current;
+  gboolean constraint_satisfied;
+
+  if (priority > PRIORITY_EXTERNAL_CONSTRAINT)
+    return TRUE;
+
+  constraint_satisfied =
+    meta_window_apply_external_constraints (window,
+                                            info->resize_gravity,
+                                            &current_rect,
+                                            get_external_constraint_flags (info));
+
+  if (check_only)
+    return constraint_satisfied;
+
+  info->current = current_rect;
+
+  return constraint_satisfied;
 }
 
 static gboolean
@@ -1417,7 +1463,7 @@ constrain_fullscreen (MetaWindow         *window,
 
   monitor = info->entire_monitor;
 
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   if (window->client_type == META_WINDOW_CLIENT_TYPE_X11)
     {
       MtkRectangle min_size, max_size;
@@ -1429,7 +1475,7 @@ constrain_fullscreen (MetaWindow         *window,
       if (too_big || too_small)
         return TRUE;
     }
-#endif /* HAVE_X11_CLIENT */
+#endif /* HAVE_XWAYLAND */
 
   /* Determine whether constraint is already satisfied; exit if it is */
   constraint_already_satisfied =
@@ -1539,11 +1585,9 @@ constrain_size_limits (MetaWindow         *window,
   if (info->action_type == ACTION_MOVE)
     return TRUE;
 
-#ifdef HAVE_WAYLAND
   if (window->client_type == META_WINDOW_CLIENT_TYPE_WAYLAND &&
       meta_window_is_fullscreen (window))
     return TRUE;
-#endif
 
   if (mtk_rectangle_is_empty (&info->current))
     return TRUE;
@@ -1804,7 +1848,7 @@ constrain_to_single_monitor (MetaWindow         *window,
   if (priority > PRIORITY_ENTIRELY_VISIBLE_ON_SINGLE_MONITOR)
     return TRUE;
 
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   if (window->client_type == META_WINDOW_CLIENT_TYPE_X11)
     client_driven_interactive_move = meta_window_x11_get_frame (window) == NULL;
 #endif
@@ -1873,7 +1917,7 @@ constrain_titlebar_visible (MetaWindow         *window,
   int horiz_amount_offscreen, vert_amount_offscreen;
   int horiz_amount_onscreen,  vert_amount_onscreen;
   MetaWindowDrag *window_drag;
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   MetaFrameBorders borders;
 #endif
 
@@ -1937,7 +1981,7 @@ constrain_titlebar_visible (MetaWindow         *window,
   /* Allow the titlebar to touch the bottom panel;  If there is no titlebar,
    * require vert_amount to remain on the screen.
    */
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   if (window->client_type == META_WINDOW_CLIENT_TYPE_X11 &&
       meta_window_x11_get_frame_borders (window, &borders))
     {
@@ -1982,7 +2026,7 @@ constrain_partially_onscreen (MetaWindow         *window,
   int top_amount, bottom_amount;
   int horiz_amount_offscreen, vert_amount_offscreen;
   int horiz_amount_onscreen,  vert_amount_onscreen;
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   MetaFrameBorders borders;
 #endif
 
@@ -2019,7 +2063,7 @@ constrain_partially_onscreen (MetaWindow         *window,
   /* Allow the titlebar to touch the bottom panel;  If there is no titlebar,
    * require vert_amount to remain on the screen.
    */
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   if (window->client_type == META_WINDOW_CLIENT_TYPE_X11 &&
       meta_window_x11_get_frame_borders (window, &borders))
     {

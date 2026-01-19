@@ -74,9 +74,6 @@ struct _ClutterSeatClass
 {
   GObjectClass parent_class;
 
-  ClutterInputDevice * (* get_pointer)  (ClutterSeat *seat);
-  ClutterInputDevice * (* get_keyboard) (ClutterSeat *seat);
-
   const GList * (* peek_devices) (ClutterSeat *seat);
 
   void (* bell_notify) (ClutterSeat *seat);
@@ -108,6 +105,8 @@ struct _ClutterSeatClass
   ClutterVirtualInputDevice * (* create_virtual_device) (ClutterSeat            *seat,
                                                          ClutterInputDeviceType  device_type);
   ClutterVirtualDeviceType (* get_supported_virtual_device_types) (ClutterSeat *seat);
+
+  ClutterInputDevice * (* get_virtual_source_pointer) (ClutterSeat *seat);
 };
 
 CLUTTER_EXPORT

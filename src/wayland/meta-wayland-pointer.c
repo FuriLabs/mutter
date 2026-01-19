@@ -469,6 +469,8 @@ meta_wayland_pointer_send_button (MetaWaylandPointer *pointer,
       time = clutter_event_get_time (event);
       serial = meta_wayland_input_device_next_serial (input_device);
 
+      pointer->click_serial = serial;
+
       wl_resource_for_each (resource, &pointer->focus_client->pointer_resources)
         {
           wl_pointer_send_button (resource, serial,
@@ -688,24 +690,19 @@ meta_wayland_pointer_update (MetaWaylandPointer *pointer,
 
       if (event_type == CLUTTER_ENTER || event_type == CLUTTER_LEAVE)
         {
-          ClutterInputDevice *device;
           graphene_point_t pos;
           MetaWindow *focus_window = NULL;
 
-          device = clutter_event_get_source_device (event);
           clutter_event_get_coords (event, &pos.x, &pos.y);
 
-          if (clutter_input_device_get_device_mode (device) != CLUTTER_INPUT_MODE_LOGICAL)
-            {
-              if (pointer->focus_surface)
-                focus_window = meta_wayland_surface_get_window (pointer->focus_surface);
+          if (pointer->focus_surface)
+            focus_window = meta_wayland_surface_get_window (pointer->focus_surface);
 
-              meta_display_handle_window_enter (display,
-                                                focus_window,
-                                                clutter_event_get_time (event),
-                                                (int) pos.x,
-                                                (int) pos.y);
-            }
+          meta_display_handle_window_enter (display,
+                                            focus_window,
+                                            clutter_event_get_time (event),
+                                            (int) pos.x,
+                                            (int) pos.y);
         }
     }
 
@@ -1010,9 +1007,12 @@ meta_wayland_pointer_send_enter (MetaWaylandPointer *pointer,
                                  uint32_t            serial,
                                  MetaWaylandSurface *surface)
 {
+  float xf, yf;
   wl_fixed_t sx, sy;
 
-  meta_wayland_pointer_get_relative_coordinates (pointer, surface, &sx, &sy);
+  meta_wayland_pointer_get_relative_coordinates (pointer, surface, &xf, &yf);
+  sx = wl_fixed_from_double (xf);
+  sy = wl_fixed_from_double (yf);
   wl_pointer_send_enter (pointer_resource,
                          serial,
                          surface->resource,
@@ -1189,17 +1189,13 @@ meta_wayland_pointer_focus_surface (MetaWaylandPointer *pointer,
 void
 meta_wayland_pointer_get_relative_coordinates (MetaWaylandPointer *pointer,
 					       MetaWaylandSurface *surface,
-					       wl_fixed_t         *sx,
-					       wl_fixed_t         *sy)
+					       float              *x,
+					       float              *y)
 {
-  float xf = 0.0f, yf = 0.0f;
   graphene_point_t pos;
 
   clutter_sprite_get_coords (pointer->sprite, &pos);
-  meta_wayland_surface_get_relative_coordinates (surface, pos.x, pos.y, &xf, &yf);
-
-  *sx = wl_fixed_from_double (xf);
-  *sy = wl_fixed_from_double (yf);
+  meta_wayland_surface_get_relative_coordinates (surface, pos.x, pos.y, x, y);
 }
 
 void
@@ -1444,7 +1440,8 @@ meta_wayland_pointer_can_grab_surface (MetaWaylandPointer *pointer,
                                        MetaWaylandSurface *surface,
                                        uint32_t            serial)
 {
-  return (pointer->grab_serial == serial &&
+  return ((pointer->grab_serial == serial ||
+           pointer->click_serial == serial) &&
           pointer_can_grab_surface (pointer, surface));
 }
 

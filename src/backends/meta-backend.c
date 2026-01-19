@@ -78,6 +78,7 @@
 #include "meta/meta-context.h"
 #include "meta/meta-enum-types.h"
 #include "meta/util.h"
+#include "wayland/meta-wayland.h"
 
 #ifdef HAVE_REMOTE_DESKTOP
 #include "backends/meta-dbus-session-watcher.h"
@@ -90,9 +91,6 @@
 #include "backends/native/meta-backend-native.h"
 #endif
 
-#ifdef HAVE_WAYLAND
-#include "wayland/meta-wayland.h"
-#endif
 
 #ifdef HAVE_LOGIND
 #include "backends/meta-launcher.h"
@@ -394,8 +392,7 @@ meta_backend_update_last_device (MetaBackend        *backend,
   if (priv->current_device == device)
     return;
 
-  if (!device ||
-      clutter_input_device_get_device_mode (device) == CLUTTER_INPUT_MODE_LOGICAL)
+  if (!device)
     return;
 
   g_set_object (&priv->current_device, device);
@@ -433,12 +430,7 @@ determine_hotplug_pointer_visibility (ClutterSeat *seat)
       if (device_type == CLUTTER_TABLET_DEVICE ||
           device_type == CLUTTER_PEN_DEVICE ||
           device_type == CLUTTER_ERASER_DEVICE)
-        {
-          if (meta_is_wayland_compositor ())
-            has_tablet = TRUE;
-          else
-            has_pointer = TRUE;
-        }
+        has_tablet = TRUE;
     }
 
   return has_pointer && !has_touchscreen && !has_tablet;
@@ -471,10 +463,6 @@ on_device_added (ClutterSeat        *seat,
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
   ClutterInputDeviceType device_type;
 
-  if (clutter_input_device_get_device_mode (device) ==
-      CLUTTER_INPUT_MODE_LOGICAL)
-    return;
-
   device_type = clutter_input_device_get_device_type (device);
 
   if (!priv->in_init &&
@@ -503,10 +491,6 @@ on_device_removed (ClutterSeat        *seat,
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
 
   g_warn_if_fail (!priv->in_init);
-
-  if (clutter_input_device_get_device_mode (device) ==
-      CLUTTER_INPUT_MODE_LOGICAL)
-    return;
 
   meta_input_mapper_remove_device (priv->input_mapper, device);
 
@@ -1153,8 +1137,7 @@ update_pointer_visibility_from_event (MetaBackend  *backend,
     case CLUTTER_PEN_DEVICE:
     case CLUTTER_ERASER_DEVICE:
     case CLUTTER_CURSOR_DEVICE:
-      if (meta_is_wayland_compositor () &&
-          time_ms > priv->last_pointer_motion + HIDDEN_POINTER_TIMEOUT)
+      if (time_ms > priv->last_pointer_motion + HIDDEN_POINTER_TIMEOUT)
         set_cursor_visible (backend, FALSE);
       break;
     case CLUTTER_KEYBOARD_DEVICE:

@@ -762,6 +762,8 @@ clutter_stage_compress_motion (ClutterStage       *stage,
 CLUTTER_EXPORT void
 _clutter_stage_process_queued_events (ClutterStage *stage)
 {
+  ClutterContext *context;
+  ClutterBackend *backend;
   ClutterStagePrivate *priv;
   GList *events, *l;
 
@@ -784,15 +786,16 @@ _clutter_stage_process_queued_events (ClutterStage *stage)
   priv->event_queue->tail = NULL;
   priv->event_queue->length = 0;
 
+  context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
+  backend = clutter_context_get_backend (context);
+
   for (l = events; l != NULL; l = l->next)
     {
       ClutterEvent *event;
       ClutterEvent *next_event;
-      ClutterInputDevice *device;
-      ClutterInputDevice *next_device;
-      ClutterInputDeviceTool *tool;
-      ClutterInputDeviceTool *next_tool;
-      gboolean check_device = FALSE;
+      ClutterSprite *sprite;
+      ClutterSprite *next_sprite = NULL;
+      gboolean check_sprite = FALSE;
 
       event = l->data;
       next_event = l->next ? l->next->data : NULL;
@@ -801,22 +804,13 @@ _clutter_stage_process_queued_events (ClutterStage *stage)
                                "Clutter::Stage::process_queued_events#event()");
       COGL_TRACE_DESCRIBE (ProcessEvent, clutter_event_get_name (event));
 
-      device = clutter_event_get_device (event);
-      tool = clutter_event_get_device_tool (event);
+      sprite = clutter_backend_get_sprite (backend, stage, event);
 
       if (next_event != NULL)
-        {
-          next_device = clutter_event_get_device (next_event);
-          next_tool = clutter_event_get_device_tool (next_event);
-        }
-      else
-        {
-          next_device = NULL;
-          next_tool = NULL;
-        }
+        next_sprite = clutter_backend_get_sprite (backend, stage, next_event);
 
-      if (device != NULL && next_device != NULL)
-        check_device = TRUE;
+      if (sprite != NULL && next_sprite != NULL)
+        check_sprite = TRUE;
 
       /* Skip consecutive motion events coming from the same device. */
       if (next_event != NULL)
@@ -828,7 +822,7 @@ _clutter_stage_process_queued_events (ClutterStage *stage)
           if (clutter_event_type (event) == CLUTTER_MOTION &&
               (clutter_event_type (next_event) == CLUTTER_MOTION ||
                clutter_event_type (next_event) == CLUTTER_LEAVE) &&
-              (!check_device || (device == next_device && tool == next_tool)))
+              (!check_sprite || (sprite == next_sprite)))
             {
               CLUTTER_NOTE (EVENT,
                             "Omitting motion event at %d, %d",
@@ -855,7 +849,7 @@ _clutter_stage_process_queued_events (ClutterStage *stage)
                    clutter_event_type (next_event) == CLUTTER_TOUCH_UPDATE &&
                    clutter_event_get_event_sequence (event) ==
                    clutter_event_get_event_sequence (next_event) &&
-                   (!check_device || (device == next_device)))
+                   (!check_sprite || (sprite == next_sprite)))
             {
               CLUTTER_NOTE (EVENT,
                             "Omitting touch update event at %d, %d",
@@ -2520,6 +2514,15 @@ clutter_stage_add_to_redraw_clip (ClutterStage       *stage,
   clutter_stage_add_redraw_clip (stage, &stage_clip);
 }
 
+int64_t
+clutter_stage_get_frame_counter (ClutterStage          *stage)
+{
+  ClutterStageWindow *stage_window;
+
+  stage_window = _clutter_stage_get_window (stage);
+  return _clutter_stage_window_get_frame_counter (stage_window);
+}
+
 void
 clutter_stage_presented (ClutterStage     *stage,
                          ClutterStageView *view,
@@ -3577,7 +3580,7 @@ update_devices_in_view_foreach_cb (ClutterStage  *stage,
   graphene_point_t coords;
 
   /* touchpoints are implicitly grabbed */
-  if (clutter_sprite_get_sequence (sprite))
+  if (clutter_sprite_get_role (sprite) == CLUTTER_SPRITE_ROLE_TOUCHPOINT)
     return TRUE;
 
   clutter_sprite_get_coords (sprite, &coords);
