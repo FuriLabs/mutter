@@ -50,8 +50,8 @@ TEST_COMMAND_BASE=env \
 	dbus-run-session -- \
 	dh_auto_test -- -C $(BUILDDIR) --no-rebuild --verbose --timeout-multiplier 6 \
 	           --no-stdsplit --print-errorlogs
-TEST_COMMAND=$(TEST_COMMAND_BASE) --no-suite flaky --no-suite broken --no-suite mutter/x11
-TEST_COMMAND_FLAKY=env DEB_ALLOW_FLAKY_TESTS=1 $(TEST_COMMAND_BASE) --suite flaky --suite mutter/x11
+TEST_COMMAND=$(TEST_COMMAND_BASE) --no-suite flaky --no-suite broken
+TEST_COMMAND_FLAKY=env DEB_ALLOW_FLAKY_TESTS=1 $(TEST_COMMAND_BASE) --suite flaky
 
 # Ignore test failures on official architectures
 # because it is believed that significant debian-installer/tasksel issues
