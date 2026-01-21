@@ -1,9 +1,10 @@
-mutter (50~alpha-1) UNRELEASED; urgency=medium
+mutter (50~alpha-0ubuntu1) UNRELEASED; urgency=medium
 
   * New upstream release 50.alpha
   * Refreshed patches and fixed conflicts:
     - workarounds/Mark-several-additional-tests-as-flaky.patch
     - workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
+    - ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
   * Add patches:
     - workarounds/tests-test-client-Sync-display-before-closing-it.patch
       to avoid spurious test failures with 50.alpha.
