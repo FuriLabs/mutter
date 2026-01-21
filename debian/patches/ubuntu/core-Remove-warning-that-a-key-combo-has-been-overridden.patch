@@ -1,0 +1,41 @@
+From: Daniel van Vugt <daniel.van.vugt@canonical.com>
+Date: Fri, 19 Dec 2025 15:59:43 +0800
+Subject: core: Remove warning that a key combo has been overridden
+
+It was only ever "overridden" and not really "overwritten".
+
+Although we are overwriting an entry in the secondary hash
+`key_bindings_index`, that's just a temporary index. It's not the primary
+set of keybindings which is `key_bindings`. So we're perfectly capable
+of tracking when an extension overloads some existing key combo without
+losing track of its original binding.
+
+This warning was hard to read because it only gave keysyms in hex and
+omitted any modifiers. So generally people just got annoyed at seeing the
+message in duplicate every time a related extension loaded and overrode
+a combo.
+
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/1857392
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/554
+Origin: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4816
+---
+ src/core/keybindings.c | 6 ------
+ 1 file changed, 6 deletions(-)
+
+diff --git a/src/core/keybindings.c b/src/core/keybindings.c
+index 1a73d28..5693553 100644
+--- a/src/core/keybindings.c
++++ b/src/core/keybindings.c
+@@ -612,12 +612,6 @@ index_binding (MetaKeyBindingManager *keys,
+            * over non-first ones. */
+           if (i > 0)
+             continue;
+-
+-          g_warning ("Overwriting existing binding of keysym %x"
+-                     " with keysym %x (keycode %x).",
+-                     binding->combo.keysym,
+-                     existing->combo.keysym,
+-                     binding->resolved_combo.keycodes[i]);
+         }
+ 
+       g_hash_table_replace (keys->key_bindings_index,
