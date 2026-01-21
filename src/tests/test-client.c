@@ -1131,6 +1131,7 @@ process_line (const char       *line,
           output_info = XRRGetOutputInfo (xdisplay, resources, primary_output);
           if (!output_info)
             {
+              XRRFreeScreenResources (resources);
               g_print ("Failed to retrieve primary XRANDR output info\n");
               goto out;
             }
@@ -1138,12 +1139,14 @@ process_line (const char       *line,
           if (g_strcmp0 (expected_name, output_info->name) != 0)
             {
               XRRFreeOutputInfo (output_info);
+              XRRFreeScreenResources (resources);
               g_print ("XRANDR output %s primary, expected %s\n",
                        output_info->name, expected_name);
               goto out;
             }
           XRRFreeOutputInfo (output_info);
         }
+      XRRFreeScreenResources (resources);
     }
   else if (strcmp (argv[0], "stop_after_next") == 0)
     {
@@ -1402,13 +1405,18 @@ int
 main(int    argc,
      char **argv)
 {
-  GOptionContext *context = g_option_context_new (NULL);
+  g_autoptr (GOptionContext) context = NULL;
   GdkScreen *screen;
   GtkCssProvider *provider;
-  GError *error = NULL;
+  g_autoptr (GError) error = NULL;
+  g_autoptr (GInputStream) raw_in = NULL;
+  g_autoptr (GDataInputStream) in = NULL;
+  GHashTableIter iter;
+  gpointer key, value;
 
   g_log_writer_default_set_use_stderr (TRUE);
 
+  context = g_option_context_new (NULL);
   g_option_context_add_main_entries (context, options, NULL);
 
   if (!g_option_context_parse (context,
@@ -1454,12 +1462,18 @@ main(int    argc,
   event_handlers_quark = g_quark_from_static_string ("event-handlers");
   can_take_focus_quark = g_quark_from_static_string ("can-take-focus");
 
-  GInputStream *raw_in = g_unix_input_stream_new (0, FALSE);
-  GDataInputStream *in = g_data_input_stream_new (raw_in);
+  raw_in = g_unix_input_stream_new (0, FALSE);
+  in = g_data_input_stream_new (raw_in);
 
   read_next_line (in);
 
   gtk_main ();
+
+  g_hash_table_iter_init (&iter, windows);
+  while (g_hash_table_iter_next (&iter, &key, &value))
+    gtk_widget_destroy (value);
+
+  gdk_display_close (gdk_display_get_default ());
 
   return 0;
 }

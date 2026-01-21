@@ -178,3 +178,17 @@ mdk_window_get_context (MdkWindow *window)
 
   return priv->context;
 }
+
+void
+mdk_window_set_monitor (MdkWindow  *window,
+                        MdkMonitor *monitor)
+{
+  gtk_window_set_child (GTK_WINDOW (window), GTK_WIDGET (monitor));
+  gtk_window_set_focus (GTK_WINDOW (window), GTK_WIDGET (monitor));
+
+  g_object_bind_property (G_OBJECT (monitor),
+                          "is-resizable",
+                          G_OBJECT (window),
+                          "resizable",
+                          G_BINDING_SYNC_CREATE);
+}

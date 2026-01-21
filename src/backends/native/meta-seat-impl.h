@@ -35,6 +35,7 @@
 #include "backends/native/meta-backend-native-types.h"
 #include "backends/native/meta-barrier-native.h"
 #include "backends/native/meta-cursor-renderer-native.h"
+#include "backends/native/meta-keyboard-a11y.h"
 #include "backends/native/meta-keymap-native.h"
 #include "backends/native/meta-pointer-constraint-native.h"
 #include "backends/native/meta-xkb-utils.h"
@@ -64,9 +65,6 @@ struct _MetaSeatImpl
   GSList *devices;
   GHashTable *tools;
 
-  ClutterInputDevice *core_pointer;
-  ClutterInputDevice *core_keyboard;
-
   GHashTable *cursor_renderers;
 
   struct xkb_state *xkb;
@@ -77,8 +75,10 @@ struct _MetaSeatImpl
   MetaBarrierManagerNative *barrier_manager;
   MetaPointerConstraintImpl *pointer_constraint;
 
+  MetaKeyboardA11y *keyboard_a11y;
   MetaKeymapNative *keymap;
   MetaInputSettings *input_settings;
+  ClutterInputDevice *virtual_source_pointer;
 
   MetaViewportInfo *viewports;
 
@@ -228,8 +228,6 @@ gboolean meta_seat_impl_query_state (MetaSeatImpl         *seat_impl,
                                      ClutterEventSequence *sequence,
                                      graphene_point_t     *coords,
                                      ClutterModifierType  *modifiers);
-ClutterInputDevice * meta_seat_impl_get_pointer (MetaSeatImpl *seat_impl);
-ClutterInputDevice * meta_seat_impl_get_keyboard (MetaSeatImpl *seat_impl);
 
 MetaKeymapNative * meta_seat_impl_get_keymap (MetaSeatImpl *seat_impl);
 
@@ -259,3 +257,5 @@ void meta_seat_impl_remove_virtual_input_device (MetaSeatImpl       *seat_impl,
 void meta_seat_impl_set_a11y_modifiers (MetaSeatImpl   *seat_impl,
                                         const uint32_t *modifiers,
                                         int             n_modifiers);
+
+ClutterInputDevice * meta_seat_impl_get_virtual_source_pointer (MetaSeatImpl *seat_impl);

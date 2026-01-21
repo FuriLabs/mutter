@@ -36,29 +36,9 @@
 #include "cogl/cogl-texture-driver.h"
 #include "cogl/cogl-context.h"
 #include "cogl/cogl-closure-list-private.h"
-#include "cogl/winsys/cogl-winsys-private.h"
-
-typedef const CoglWinsysVtable *(*CoglCustomWinsysVtableGetter) (CoglRenderer *renderer);
-
-typedef CoglFilterReturn (* CoglNativeFilterFunc) (void *native_event,
-                                                   void *data);
-
-void
-_cogl_renderer_add_native_filter (CoglRenderer *renderer,
-                                  CoglNativeFilterFunc func,
-                                  void *data);
-
-void
-_cogl_renderer_remove_native_filter (CoglRenderer *renderer,
-                                     CoglNativeFilterFunc func,
-                                     void *data);
+#include "cogl/winsys/cogl-winsys.h"
 
 CoglDriver * cogl_renderer_get_driver (CoglRenderer *renderer);
-
-const CoglWinsysVtable * cogl_renderer_get_winsys_vtable (CoglRenderer *renderer);
-
-void cogl_renderer_set_custom_winsys_data (CoglRenderer *renderer,
-                                           void         *winsys_data);
 
 CoglClosure * cogl_renderer_add_idle_closure (CoglRenderer  *renderer,
                                               void (*closure)(void *),
@@ -67,8 +47,3 @@ CoglClosure * cogl_renderer_add_idle_closure (CoglRenderer  *renderer,
 CoglList * cogl_renderer_get_idle_closures (CoglRenderer *renderer);
 
 GModule * cogl_renderer_get_gl_module (CoglRenderer *renderer);
-
-void cogl_renderer_set_display (CoglRenderer *renderer,
-                                CoglDisplay   *display);
-
-CoglDisplay * cogl_renderer_get_display (CoglRenderer *renderer);

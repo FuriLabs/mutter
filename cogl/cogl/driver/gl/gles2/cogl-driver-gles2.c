@@ -38,7 +38,6 @@
 #include "cogl/cogl-feature-private.h"
 #include "cogl/cogl-private.h"
 #include "cogl/driver/gl/cogl-texture-gl-private.h"
-#include "cogl/driver/gl/cogl-util-gl-private.h"
 
 #ifndef GL_UNSIGNED_INT_24_8
 #define GL_UNSIGNED_INT_24_8 0x84FA
@@ -250,6 +249,16 @@ cogl_driver_gles2_pixel_format_to_gl (CoglDriverGL    *driver,
         {
           g_assert_not_reached ();
         }
+      break;
+
+    case COGL_PIXEL_FORMAT_RGBX_16161616:
+      required_format =
+        cogl_driver_gles2_pixel_format_to_gl (driver,
+                                              context,
+                                              COGL_PIXEL_FORMAT_RGBA_16161616_PRE,
+                                              &glintformat,
+                                              &glformat,
+                                              &gltype);
       break;
 
     case COGL_PIXEL_FORMAT_RGBA_16161616:
@@ -506,7 +515,7 @@ cogl_driver_gles2_texture_size_supported (CoglDriverGL *driver,
 
   /* GLES doesn't support a proxy texture target so let's at least
      check whether the size is greater than GL_MAX_TEXTURE_SIZE */
-  GE( ctx, glGetIntegerv (GL_MAX_TEXTURE_SIZE, &max_size) );
+  GE (driver, glGetIntegerv (GL_MAX_TEXTURE_SIZE, &max_size));
 
   return width <= max_size && height <= max_size;
 }
@@ -595,6 +604,7 @@ cogl_driver_gles2_get_read_pixels_format (CoglDriverGL    *driver,
     /* fixed point normalized 16bpc */
     case COGL_PIXEL_FORMAT_R_16:
     case COGL_PIXEL_FORMAT_RG_1616:
+    case COGL_PIXEL_FORMAT_RGBX_16161616:
     case COGL_PIXEL_FORMAT_RGBA_16161616:
     case COGL_PIXEL_FORMAT_RGBA_16161616_PRE:
       required_gl_format = GL_RGBA;
@@ -631,31 +641,31 @@ cogl_driver_gles2_get_read_pixels_format (CoglDriverGL    *driver,
 }
 
 static gboolean
-_cogl_get_gl_version (CoglContext *ctx,
-                      int *major_out,
-                      int *minor_out)
+_cogl_get_gl_version (CoglDriverGL *driver,
+                      int          *major_out,
+                      int          *minor_out)
 {
   const char *version_string;
 
   /* Get the OpenGL version number */
-  if ((version_string = _cogl_context_get_gl_version (ctx)) == NULL)
+  if ((version_string = cogl_driver_gl_get_gl_version (driver)) == NULL)
     return FALSE;
 
   if (!g_str_has_prefix (version_string, "OpenGL ES "))
     return FALSE;
 
-  return _cogl_gl_util_parse_gl_version (version_string + 10,
-                                         major_out,
-                                         minor_out);
+  return cogl_parse_gl_version (version_string + 10,
+                                major_out,
+                                minor_out);
 }
 
 static gboolean
-check_gl_version (CoglContext  *ctx,
+check_gl_version (CoglDriverGL *driver,
                   GError      **error)
 {
   int major, minor;
 
-  if (!_cogl_get_gl_version (ctx, &major, &minor))
+  if (!_cogl_get_gl_version (driver, &major, &minor))
     {
       g_set_error (error,
                    COGL_DRIVER_ERROR,
@@ -677,30 +687,28 @@ check_gl_version (CoglContext  *ctx,
 }
 
 static gboolean
-_cogl_get_glsl_version (CoglContext *ctx,
-                        int         *major_out,
-                        int         *minor_out)
+_cogl_get_glsl_version (CoglDriverGL *driver,
+                        int          *major_out,
+                        int          *minor_out)
 {
-  const char *version_string;
-
-  version_string = (char *)ctx->glGetString (GL_SHADING_LANGUAGE_VERSION);
+  const char *version_string = cogl_driver_gl_get_gl_string (driver,
+                                                             GL_SHADING_LANGUAGE_VERSION);
 
   if (!g_str_has_prefix (version_string, "OpenGL ES GLSL ES "))
     return FALSE;
 
-  return _cogl_gl_util_parse_gl_version (version_string + 18,
-                                         major_out,
-                                         minor_out);
+  return cogl_parse_gl_version (version_string + 18,
+                                major_out,
+                                minor_out);
 }
 
 static gboolean
-check_glsl_version (CoglContext  *ctx,
+check_glsl_version (CoglDriverGL *driver,
                     GError      **error)
 {
-  CoglDriver *driver = cogl_context_get_driver (ctx);
   int driver_major, driver_minor, major, minor;
 
-  if (!_cogl_get_glsl_version (ctx, &major, &minor))
+  if (!_cogl_get_glsl_version (driver, &major, &minor))
     {
       g_set_error (error,
                    COGL_DRIVER_ERROR,
@@ -709,7 +717,7 @@ check_glsl_version (CoglContext  *ctx,
       return FALSE;
     }
 
-  cogl_driver_gl_get_glsl_version (COGL_DRIVER_GL (driver),
+  cogl_driver_gl_get_glsl_version (driver,
                                    &driver_major, &driver_minor);
   if (!COGL_CHECK_GL_VERSION (major, minor, driver_major, driver_minor))
     {
@@ -729,6 +737,8 @@ cogl_driver_gles2_update_features (CoglDriver   *driver,
                                    CoglContext  *context,
                                    GError      **error)
 {
+  CoglDriverGLPrivate *priv_gl =
+    cogl_driver_gl_get_private (COGL_DRIVER_GL (driver));
   unsigned long private_features
     [COGL_FLAGS_N_LONGS_FOR_SIZE (COGL_N_PRIVATE_FEATURES)] = { 0 };
   g_auto (GStrv) gl_extensions = 0;
@@ -738,17 +748,18 @@ cogl_driver_gles2_update_features (CoglDriver   *driver,
   /* We have to special case getting the pointer to the glGetString
      function because we need to use it to determine what functions we
      can expect */
-  context->glGetString =
+  priv_gl->glGetString =
     (void *) cogl_renderer_get_proc_address (context->display->renderer,
                                              "glGetString");
 
-  if (!check_gl_version (context, error))
+  if (!check_gl_version (COGL_DRIVER_GL (driver), error))
     return FALSE;
 
-  if (!check_glsl_version (context, error))
+  if (!check_glsl_version (COGL_DRIVER_GL (driver), error))
     return FALSE;
 
-  gl_extensions = _cogl_context_get_gl_extensions (context);
+  gl_extensions = cogl_driver_gl_get_gl_extensions (COGL_DRIVER_GL (driver),
+                                                    context->display->renderer);
 
   if (G_UNLIKELY (COGL_DEBUG_ENABLED (COGL_DEBUG_WINSYS)))
     {
@@ -760,13 +771,13 @@ cogl_driver_gles2_update_features (CoglDriver   *driver,
                  "  GL_RENDERER: %s\n"
                  "  GL_VERSION: %s\n"
                  "  GL_EXTENSIONS: %s",
-                 context->glGetString (GL_VENDOR),
-                 context->glGetString (GL_RENDERER),
-                 _cogl_context_get_gl_version (context),
+                 cogl_driver_gl_get_gl_string (COGL_DRIVER_GL (driver), GL_VENDOR),
+                 cogl_driver_gl_get_gl_string (COGL_DRIVER_GL (driver), GL_RENDERER),
+                 cogl_driver_gl_get_gl_version (COGL_DRIVER_GL (driver)),
                  all_extensions);
     }
 
-  _cogl_get_gl_version (context, &gl_major, &gl_minor);
+  _cogl_get_gl_version (COGL_DRIVER_GL (driver), &gl_major, &gl_minor);
 
   _cogl_feature_check_ext_functions (context,
                                      gl_major,
@@ -790,10 +801,10 @@ cogl_driver_gles2_update_features (CoglDriver   *driver,
   COGL_FLAGS_SET (private_features, COGL_PRIVATE_FEATURE_ANY_GL, TRUE);
   COGL_FLAGS_SET (private_features, COGL_PRIVATE_FEATURE_ALPHA_TEXTURES, TRUE);
 
-  if (context->glGenSamplers)
+  if (GE_HAS (driver, glGenSamplers))
     COGL_FLAGS_SET (private_features, COGL_PRIVATE_FEATURE_SAMPLER_OBJECTS, TRUE);
 
-  if (context->glBlitFramebuffer)
+  if (GE_HAS (driver, glBlitFramebuffer))
     COGL_FLAGS_SET (context->features,
                     COGL_FEATURE_ID_BLIT_FRAMEBUFFER, TRUE);
 
@@ -803,7 +814,7 @@ cogl_driver_gles2_update_features (CoglDriver   *driver,
                       COGL_FEATURE_ID_UNSIGNED_INT_INDICES, TRUE);
     }
 
-  if (context->glMapBuffer)
+  if (GE_HAS (driver, glMapBuffer))
     {
       /* The GL_OES_mapbuffer extension doesn't support mapping for
          read */
@@ -811,16 +822,16 @@ cogl_driver_gles2_update_features (CoglDriver   *driver,
                       COGL_FEATURE_ID_MAP_BUFFER_FOR_WRITE, TRUE);
     }
 
-  if (context->glMapBufferRange)
+  if (GE_HAS (driver, glMapBufferRange))
     {
       /* MapBufferRange in ES3+ does support mapping for read */
-      COGL_FLAGS_SET(context->features,
-                     COGL_FEATURE_ID_MAP_BUFFER_FOR_WRITE, TRUE);
-      COGL_FLAGS_SET(context->features,
-                     COGL_FEATURE_ID_MAP_BUFFER_FOR_READ, TRUE);
+      COGL_FLAGS_SET (context->features,
+                      COGL_FEATURE_ID_MAP_BUFFER_FOR_WRITE, TRUE);
+      COGL_FLAGS_SET (context->features,
+                      COGL_FEATURE_ID_MAP_BUFFER_FOR_READ, TRUE);
     }
 
-  if (context->glEGLImageTargetTexture2D)
+  if (GE_HAS (driver, glEGLImageTargetTexture2D))
     COGL_FLAGS_SET (private_features,
                     COGL_PRIVATE_FEATURE_TEXTURE_2D_FROM_EGL_IMAGE, TRUE);
 
@@ -856,7 +867,7 @@ cogl_driver_gles2_update_features (CoglDriver   *driver,
     COGL_FLAGS_SET (private_features, COGL_PRIVATE_FEATURE_OES_EGL_SYNC, TRUE);
 
 #ifdef GL_ARB_sync
-  if (context->glFenceSync)
+  if (GE_HAS (driver, glFenceSync))
     COGL_FLAGS_SET (context->features, COGL_FEATURE_ID_FENCE, TRUE);
 #endif
 
@@ -872,10 +883,7 @@ cogl_driver_gles2_update_features (CoglDriver   *driver,
                       COGL_PRIVATE_FEATURE_TEXTURE_LOD_BIAS, TRUE);
     }
 
-  if (context->glGenQueries && context->glQueryCounter && context->glGetInteger64v)
-    COGL_FLAGS_SET (context->features, COGL_FEATURE_ID_TIMESTAMP_QUERY, TRUE);
-
-  if (!g_strcmp0 ((char *) context->glGetString (GL_RENDERER), "Mali-400 MP"))
+  if (!g_strcmp0 (cogl_driver_gl_get_gl_string (COGL_DRIVER_GL (driver), GL_RENDERER), "Mali-400 MP"))
     {
       COGL_FLAGS_SET (private_features,
                       COGL_PRIVATE_QUIRK_GENERATE_MIPMAP_NEEDS_FLUSH,
@@ -966,6 +974,7 @@ cogl_driver_gles2_format_supports_upload (CoglDriver      *driver,
         return FALSE;
     case COGL_PIXEL_FORMAT_R_16:
     case COGL_PIXEL_FORMAT_RG_1616:
+    case COGL_PIXEL_FORMAT_RGBX_16161616:
     case COGL_PIXEL_FORMAT_RGBA_16161616:
     case COGL_PIXEL_FORMAT_RGBA_16161616_PRE:
       if (cogl_context_has_feature (ctx, COGL_FEATURE_ID_TEXTURE_NORM16))

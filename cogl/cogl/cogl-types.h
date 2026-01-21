@@ -218,19 +218,6 @@ typedef enum /*< prefix=COGL_RENDERER_ERROR >*/
   COGL_RENDERER_ERROR_BAD_CONSTRAINT
 } CoglRendererError;
 
-/**
- * CoglFilterReturn:
- * @COGL_FILTER_CONTINUE: The event was not handled, continues the
- *                        processing
- * @COGL_FILTER_REMOVE: Remove the event, stops the processing
- *
- * Return values for the #CoglXlibFilterFunc and #CoglWin32FilterFunc functions.
- */
-typedef enum _CoglFilterReturn { /*< prefix=COGL_FILTER >*/
-  COGL_FILTER_CONTINUE,
-  COGL_FILTER_REMOVE
-} CoglFilterReturn;
-
 typedef enum _CoglWinsysFeature
 {
   /* Available if its possible to query a counter that
@@ -346,7 +333,6 @@ typedef struct _CoglSubTexture CoglSubTexture;
 typedef struct _CoglTexture CoglTexture;
 typedef struct _CoglTexture2D CoglTexture2D;
 typedef struct _CoglTexture2DSliced CoglTexture2DSliced;
-typedef struct _CoglTimestampQuery CoglTimestampQuery;
 
 #define COGL_SCANOUT_ERROR (cogl_scanout_error_quark ())
 

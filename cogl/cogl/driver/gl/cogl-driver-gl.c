@@ -35,7 +35,6 @@
 #include "cogl/driver/gl/cogl-gl-framebuffer-back.h"
 #include "cogl/driver/gl/cogl-texture-2d-gl-private.h"
 #include "cogl/driver/gl/cogl-texture-gl-private.h"
-#include "cogl/driver/gl/cogl-util-gl-private.h"
 
 /* This is a relatively new extension */
 #ifndef GL_PURGED_CONTEXT_RESET_NV
@@ -85,7 +84,7 @@ cogl_driver_gl_context_init (CoglDriver  *driver,
 {
   /* See cogl-pipeline.c for more details about why we leave texture unit 1
    * active by default... */
-  GE (context, glActiveTexture (GL_TEXTURE1));
+  GE (driver, glActiveTexture (GL_TEXTURE1));
 
   return TRUE;
 }
@@ -94,7 +93,8 @@ static const char *
 cogl_driver_gl_get_gl_vendor (CoglDriver  *driver,
                               CoglContext *context)
 {
-  return (const char *) context->glGetString (GL_VENDOR);
+  return cogl_driver_gl_get_gl_string (COGL_DRIVER_GL (driver),
+                                       GL_VENDOR);
 }
 
 /*
@@ -111,7 +111,8 @@ static gboolean
 cogl_driver_gl_is_hardware_accelerated (CoglDriver  *driver,
                                         CoglContext *ctx)
 {
-  const char *renderer = (const char *) ctx->glGetString (GL_RENDERER);
+  const char *renderer = cogl_driver_gl_get_gl_string (COGL_DRIVER_GL (driver),
+                                                       GL_RENDERER);
   gboolean software;
 
   if (!renderer)
@@ -134,10 +135,13 @@ static CoglGraphicsResetStatus
 cogl_driver_gl_get_graphics_reset_status (CoglDriver  *driver,
                                           CoglContext *context)
 {
-  if (!context->glGetGraphicsResetStatus)
+  int status;
+
+  if (!GE_HAS (driver, glGetGraphicsResetStatus))
     return COGL_GRAPHICS_RESET_STATUS_NO_ERROR;
 
-  switch (context->glGetGraphicsResetStatus ())
+  GE_RET (status, driver, glGetGraphicsResetStatus ());
+  switch (status)
     {
     case GL_GUILTY_CONTEXT_RESET_ARB:
       return COGL_GRAPHICS_RESET_STATUS_GUILTY_CONTEXT_RESET;
@@ -310,21 +314,21 @@ cogl_driver_gl_sampler_init_init (CoglDriver            *driver,
   if (_cogl_has_private_feature (context,
                                  COGL_PRIVATE_FEATURE_SAMPLER_OBJECTS))
     {
-      GE( context, glGenSamplers (1, &entry->sampler_object) );
+      GE (driver, glGenSamplers (1, &entry->sampler_object));
 
-      GE( context, glSamplerParameteri (entry->sampler_object,
-                                        GL_TEXTURE_MIN_FILTER,
-                                        entry->min_filter) );
-      GE( context, glSamplerParameteri (entry->sampler_object,
-                                        GL_TEXTURE_MAG_FILTER,
-                                        entry->mag_filter) );
+      GE (driver, glSamplerParameteri (entry->sampler_object,
+                                       GL_TEXTURE_MIN_FILTER,
+                                       entry->min_filter));
+      GE (driver, glSamplerParameteri (entry->sampler_object,
+                                       GL_TEXTURE_MAG_FILTER,
+                                       entry->mag_filter));
 
-      GE (context, glSamplerParameteri (entry->sampler_object,
-                                        GL_TEXTURE_WRAP_S,
-                                        entry->wrap_mode_s) );
-      GE (context, glSamplerParameteri (entry->sampler_object,
-                                        GL_TEXTURE_WRAP_T,
-                                        entry->wrap_mode_t) );
+      GE (driver, glSamplerParameteri (entry->sampler_object,
+                                       GL_TEXTURE_WRAP_S,
+                                       entry->wrap_mode_s));
+      GE (driver, glSamplerParameteri (entry->sampler_object,
+                                       GL_TEXTURE_WRAP_T,
+                                       entry->wrap_mode_t));
 
       /* While COGL_PRIVATE_FEATURE_SAMPLER_OBJECTS implies support for
        * GL_TEXTURE_LOD_BIAS in GL, the same is not true in GLES. So check,
@@ -337,9 +341,9 @@ cogl_driver_gl_sampler_init_init (CoglDriver            *driver,
         {
           GLfloat bias = _cogl_texture_min_filter_get_lod_bias (entry->min_filter);
 
-          GE (context, glSamplerParameterf (entry->sampler_object,
-                                            GL_TEXTURE_LOD_BIAS,
-                                            bias));
+          GE (driver, glSamplerParameterf (entry->sampler_object,
+                                           GL_TEXTURE_LOD_BIAS,
+                                           bias));
         }
     }
   else
@@ -362,7 +366,7 @@ cogl_driver_gl_sampler_free (CoglDriver            *driver,
 {
   if (_cogl_has_private_feature (context,
                                  COGL_PRIVATE_FEATURE_SAMPLER_OBJECTS))
-    GE( context, glDeleteSamplers (1, &entry->sampler_object) );
+    GE (driver, glDeleteSamplers (1, &entry->sampler_object));
 }
 
 static void
@@ -388,16 +392,16 @@ cogl_driver_gl_set_uniform (CoglDriver           *driver,
         switch (value->size)
           {
           case 1:
-            GE( ctx, glUniform1iv (location, value->count, ptr) );
+            GE (driver, glUniform1iv (location, value->count, ptr));
             break;
           case 2:
-            GE( ctx, glUniform2iv (location, value->count, ptr) );
+            GE (driver, glUniform2iv (location, value->count, ptr));
             break;
           case 3:
-            GE( ctx, glUniform3iv (location, value->count, ptr) );
+            GE (driver, glUniform3iv (location, value->count, ptr));
             break;
           case 4:
-            GE( ctx, glUniform4iv (location, value->count, ptr) );
+            GE (driver, glUniform4iv (location, value->count, ptr));
             break;
           }
       }
@@ -415,16 +419,16 @@ cogl_driver_gl_set_uniform (CoglDriver           *driver,
         switch (value->size)
           {
           case 1:
-            GE( ctx, glUniform1fv (location, value->count, ptr) );
+            GE (driver, glUniform1fv (location, value->count, ptr));
             break;
           case 2:
-            GE( ctx, glUniform2fv (location, value->count, ptr) );
+            GE (driver, glUniform2fv (location, value->count, ptr));
             break;
           case 3:
-            GE( ctx, glUniform3fv (location, value->count, ptr) );
+            GE (driver, glUniform3fv (location, value->count, ptr));
             break;
           case 4:
-            GE( ctx, glUniform4fv (location, value->count, ptr) );
+            GE (driver, glUniform4fv (location, value->count, ptr));
             break;
           }
       }
@@ -442,85 +446,21 @@ cogl_driver_gl_set_uniform (CoglDriver           *driver,
         switch (value->size)
           {
           case 2:
-            GE( ctx, glUniformMatrix2fv (location, value->count,
-                                         FALSE, ptr) );
+            GE (driver, glUniformMatrix2fv (location, value->count,
+                                            FALSE, ptr));
             break;
           case 3:
-            GE( ctx, glUniformMatrix3fv (location, value->count,
-                                         FALSE, ptr) );
+            GE (driver, glUniformMatrix3fv (location, value->count,
+                                            FALSE, ptr));
             break;
           case 4:
-            GE( ctx, glUniformMatrix4fv (location, value->count,
-                                         FALSE, ptr) );
+            GE (driver, glUniformMatrix4fv (location, value->count,
+                                            FALSE, ptr));
             break;
           }
       }
       break;
     }
-}
-
-static CoglTimestampQuery *
-cogl_driver_gl_create_timestamp_query (CoglDriver  *driver,
-                                       CoglContext *context)
-{
-  CoglTimestampQuery *query;
-
-  g_return_val_if_fail (cogl_context_has_feature (context,
-                                                  COGL_FEATURE_ID_TIMESTAMP_QUERY),
-                        NULL);
-
-  query = g_new0 (CoglTimestampQuery, 1);
-
-  GE (context, glGenQueries (1, &query->id));
-  GE (context, glQueryCounter (query->id, GL_TIMESTAMP));
-
-  /* Flush right away so GL knows about our timestamp query.
-   *
-   * E.g. the direct scanout path doesn't call SwapBuffers or any other
-   * glFlush-inducing operation, and skipping explicit glFlush here results in
-   * the timestamp query being placed at the point of glGetQueryObject much
-   * later, resulting in a GPU timestamp much later on in time.
-   */
-  context->glFlush ();
-
-  return query;
-}
-
-static void
-cogl_driver_gl_free_timestamp_query (CoglDriver         *driver,
-                                     CoglContext        *context,
-                                     CoglTimestampQuery *query)
-{
-  GE (context, glDeleteQueries (1, &query->id));
-  g_free (query);
-}
-
-static int64_t
-cogl_driver_gl_timestamp_query_get_time_ns (CoglDriver         *driver,
-                                            CoglContext        *context,
-                                            CoglTimestampQuery *query)
-{
-  int64_t query_time_ns;
-
-  GE (context, glGetQueryObjecti64v (query->id,
-                                     GL_QUERY_RESULT,
-                                     &query_time_ns));
-
-  return query_time_ns;
-}
-
-static int64_t
-cogl_driver_gl_get_gpu_time_ns (CoglDriver  *driver,
-                                CoglContext *context)
-{
-  int64_t gpu_time_ns;
-
-  g_return_val_if_fail (cogl_context_has_feature (context,
-                                                  COGL_FEATURE_ID_TIMESTAMP_QUERY),
-                        0);
-
-  GE (context, glGetInteger64v (GL_TIMESTAMP, &gpu_time_ns));
-  return gpu_time_ns;
 }
 
 static void
@@ -543,10 +483,6 @@ cogl_driver_gl_class_init (CoglDriverGLClass *klass)
   driver_klass->sampler_init = cogl_driver_gl_sampler_init_init;
   driver_klass->sampler_free = cogl_driver_gl_sampler_free;
   driver_klass->set_uniform = cogl_driver_gl_set_uniform; /* XXX name is weird... */
-  driver_klass->create_timestamp_query = cogl_driver_gl_create_timestamp_query;
-  driver_klass->free_timestamp_query = cogl_driver_gl_free_timestamp_query;
-  driver_klass->timestamp_query_get_time_ns = cogl_driver_gl_timestamp_query_get_time_ns;
-  driver_klass->get_gpu_time_ns = cogl_driver_gl_get_gpu_time_ns;
 }
 
 static void
@@ -589,4 +525,207 @@ cogl_driver_gl_get_glsl_version (CoglDriverGL *driver,
 
   *major = priv->glsl_major;
   *minor = priv->glsl_minor;
+}
+
+void
+cogl_driver_gl_clear_gl_errors (CoglDriverGL *driver)
+{
+  CoglDriverGLPrivate *priv =
+    cogl_driver_gl_get_instance_private (driver);
+  GLenum gl_error;
+
+  while ((gl_error = priv->glGetError ()) != GL_NO_ERROR && gl_error != GL_CONTEXT_LOST)
+    ;
+}
+
+gboolean
+cogl_driver_gl_catch_out_of_memory (CoglDriverGL *driver,
+                                    GError      **error)
+{
+  CoglDriverGLPrivate *priv =
+    cogl_driver_gl_get_instance_private (driver);
+  GLenum gl_error;
+  gboolean out_of_memory = FALSE;
+
+  while ((gl_error = priv->glGetError ()) != GL_NO_ERROR && gl_error != GL_CONTEXT_LOST)
+    {
+      if (gl_error == GL_OUT_OF_MEMORY)
+        out_of_memory = TRUE;
+#ifdef COGL_ENABLE_DEBUG
+      else
+        {
+          g_warning ("%s: GL error (%d): %s\n",
+                     G_STRLOC,
+                     gl_error,
+                     cogl_gl_error_to_string (gl_error));
+        }
+#endif
+    }
+
+  if (out_of_memory)
+    {
+      g_set_error_literal (error, COGL_SYSTEM_ERROR,
+                           COGL_SYSTEM_ERROR_NO_MEMORY,
+                           "Out of memory");
+      return TRUE;
+    }
+
+  return FALSE;
+}
+
+const char *
+cogl_driver_gl_get_gl_string (CoglDriverGL  *driver,
+                              GLenum         name)
+{
+  CoglDriverGLPrivate *priv =
+    cogl_driver_gl_get_instance_private (driver);
+
+  return (const char *) priv->glGetString (name);
+}
+
+
+char **
+cogl_driver_gl_get_gl_extensions (CoglDriverGL *driver,
+                                  CoglRenderer *renderer)
+{
+  const char *env_disabled_extensions;
+  char **ret;
+
+  /* In GL 3, querying GL_EXTENSIONS is deprecated so we have to build
+   * the array using glGetStringi instead */
+#ifdef HAVE_GL
+  if (cogl_renderer_get_driver_id (renderer) == COGL_DRIVER_ID_GL3)
+    {
+      int num_extensions, i;
+
+      GE (driver, glGetIntegerv (GL_NUM_EXTENSIONS, &num_extensions));
+
+      ret = g_malloc (sizeof (char *) * (num_extensions + 1));
+
+      for (i = 0; i < num_extensions; i++)
+        {
+          const GLubyte *ext;
+
+          GE_RET (ext, driver, glGetStringi (GL_EXTENSIONS, i));
+
+          ret[i] = g_strdup ((const char *)ext);
+        }
+
+      ret[num_extensions] = NULL;
+    }
+  else
+#endif
+    {
+      const char *all_extensions = cogl_driver_gl_get_gl_string (COGL_DRIVER_GL (driver),
+                                                                 GL_EXTENSIONS);
+
+      ret = g_strsplit (all_extensions, " ", 0 /* max tokens */);
+    }
+
+  if ((env_disabled_extensions = g_getenv ("COGL_DISABLE_GL_EXTENSIONS")))
+    {
+      char **split_env_disabled_extensions;
+      char **src, **dst;
+
+      if (*env_disabled_extensions)
+        {
+          split_env_disabled_extensions =
+            g_strsplit (env_disabled_extensions,
+                        ",",
+                        0 /* no max tokens */);
+        }
+      else
+        {
+          split_env_disabled_extensions = NULL;
+        }
+
+      for (dst = ret, src = ret;
+           *src;
+           src++)
+        {
+          char **d;
+
+          if (split_env_disabled_extensions)
+            for (d = split_env_disabled_extensions; *d; d++)
+              if (!strcmp (*src, *d))
+                goto disabled;
+
+          *(dst++) = *src;
+          continue;
+
+        disabled:
+          g_free (*src);
+          continue;
+        }
+
+      *dst = NULL;
+
+      if (split_env_disabled_extensions)
+        g_strfreev (split_env_disabled_extensions);
+    }
+
+  return ret;
+}
+
+const char *
+cogl_driver_gl_get_gl_version (CoglDriverGL *driver)
+{
+  const char *version_override;
+
+  if ((version_override = g_getenv ("COGL_OVERRIDE_GL_VERSION")))
+    return version_override;
+  else
+    return cogl_driver_gl_get_gl_string (driver, GL_VERSION);
+}
+
+GLenum
+cogl_driver_gl_get_gl_error (CoglDriverGL *driver)
+{
+  GLenum gl_error;
+
+  GE_RET (gl_error, driver, glGetError ());
+
+  if (gl_error != GL_NO_ERROR && gl_error != GL_CONTEXT_LOST)
+    return gl_error;
+  else
+    return GL_NO_ERROR;
+}
+
+/* Parses a GL version number stored in a string. @version_string must
+ * point to the beginning of the version number (ie, it can't point to
+ * the "OpenGL ES" part on GLES). The version number can be followed
+ * by the end of the string, a space or a full stop. Anything else
+ * will be treated as invalid. Returns TRUE and sets major_out and
+ * minor_out if it is successfully parsed or FALSE otherwise. */
+gboolean
+cogl_parse_gl_version (const char *version_string,
+                       int        *major_out,
+                       int        *minor_out)
+{
+  const char *major_end, *minor_end;
+  int major = 0, minor = 0;
+
+  /* Extract the major number */
+  for (major_end = version_string; *major_end >= '0'
+         && *major_end <= '9'; major_end++)
+    major = (major * 10) + *major_end - '0';
+  /* If there were no digits or the major number isn't followed by a
+     dot then it is invalid */
+  if (major_end == version_string || *major_end != '.')
+    return FALSE;
+
+  /* Extract the minor number */
+  for (minor_end = major_end + 1; *minor_end >= '0'
+         && *minor_end <= '9'; minor_end++)
+    minor = (minor * 10) + *minor_end - '0';
+  /* If there were no digits or there is an unexpected character then
+     it is invalid */
+  if (minor_end == major_end + 1
+      || (*minor_end && *minor_end != ' ' && *minor_end != '.'))
+    return FALSE;
+
+  *major_out = major;
+  *minor_out = minor;
+
+  return TRUE;
 }

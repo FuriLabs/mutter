@@ -786,8 +786,8 @@ meta_wayland_surface_apply_placement_ops (MetaWaylandSurface      *parent,
 }
 
 static void
-meta_wayland_surface_apply_viewport_dst_size (MetaWaylandSurface      *surface,
-                                              MetaWaylandSurfaceState *state)
+meta_wayland_surface_apply_viewport (MetaWaylandSurface      *surface,
+                                     MetaWaylandSurfaceState *state)
 {
 #ifdef HAVE_XWAYLAND
   MtkRectangle buffer_rect, client_rect, unconstrained_rect;
@@ -800,6 +800,17 @@ meta_wayland_surface_apply_viewport_dst_size (MetaWaylandSurface      *surface,
   if (window && meta_wayland_surface_is_xwayland (surface))
     {
       gboolean has_dst_size = state->viewport_dst_width > 0;
+      int scale = surface->applied_state.scale;
+
+      /* Compensate for rootless Xwayland always calculating viewport based on
+       * buffer scale 1
+       */
+      state->viewport_src_rect.origin.x /= scale;
+      state->viewport_src_rect.origin.y /= scale;
+      state->viewport_src_rect.size.width /= scale;
+      state->viewport_src_rect.size.height /= scale;
+      state->viewport_dst_width /= scale;
+      state->viewport_dst_height /= scale;
 
       if (has_dst_size != surface->viewport.has_dst_size ||
           (has_dst_size &&
@@ -829,9 +840,21 @@ meta_wayland_surface_apply_viewport_dst_size (MetaWaylandSurface      *surface,
     }
 #endif
 
-  surface->viewport.dst_width = state->viewport_dst_width;
-  surface->viewport.dst_height = state->viewport_dst_height;
-  surface->viewport.has_dst_size = surface->viewport.dst_width > 0;
+  if (state->has_new_viewport_src_rect)
+    {
+      surface->viewport.src_rect.origin.x = state->viewport_src_rect.origin.x;
+      surface->viewport.src_rect.origin.y = state->viewport_src_rect.origin.y;
+      surface->viewport.src_rect.size.width = state->viewport_src_rect.size.width;
+      surface->viewport.src_rect.size.height = state->viewport_src_rect.size.height;
+      surface->viewport.has_src_rect = surface->viewport.src_rect.size.width > 0;
+    }
+
+  if (state->has_new_viewport_dst_size)
+    {
+      surface->viewport.dst_width = state->viewport_dst_width;
+      surface->viewport.dst_height = state->viewport_dst_height;
+      surface->viewport.has_dst_size = surface->viewport.dst_width > 0;
+    }
 
 #ifdef HAVE_XWAYLAND
   if (update_xwayland)
@@ -927,39 +950,24 @@ meta_wayland_surface_apply_state (MetaWaylandSurface      *surface,
   if (state->has_new_buffer_transform)
     surface->buffer_transform = state->buffer_transform;
 
-  if (state->has_new_viewport_src_rect)
-    {
-      surface->viewport.src_rect.origin.x = state->viewport_src_rect.origin.x;
-      surface->viewport.src_rect.origin.y = state->viewport_src_rect.origin.y;
-      surface->viewport.src_rect.size.width = state->viewport_src_rect.size.width;
-      surface->viewport.src_rect.size.height = state->viewport_src_rect.size.height;
-      surface->viewport.has_src_rect = surface->viewport.src_rect.size.width > 0;
-    }
-
-  if (state->has_new_viewport_dst_size)
-    meta_wayland_surface_apply_viewport_dst_size (surface, state);
-
   if (meta_wayland_surface_is_xwayland (surface))
     {
 #ifdef HAVE_XWAYLAND
       MetaXWaylandManager *xwayland_manager =
         &surface->compositor->xwayland_manager;
 
-      if (surface->viewport.has_dst_size)
-        {
-          surface->applied_state.scale = 1;
-        }
-      else
-        {
-          surface->applied_state.scale =
-            meta_xwayland_get_effective_scale (xwayland_manager);
-        }
+      surface->applied_state.scale =
+        meta_xwayland_get_effective_scale (xwayland_manager);
 #endif
     }
   else if (state->scale > 0)
     {
       surface->applied_state.scale = state->scale;
     }
+
+  if (state->has_new_viewport_src_rect ||
+      state->has_new_viewport_dst_size)
+    meta_wayland_surface_apply_viewport (surface, state);
 
   if (surface->resource)
     {
@@ -1001,8 +1009,24 @@ meta_wayland_surface_apply_state (MetaWaylandSurface      *surface,
   if (state->input_region_set)
     {
       g_clear_pointer (&surface->input_region, mtk_region_unref);
+
       if (state->input_region)
-        surface->input_region = mtk_region_ref (state->input_region);
+        {
+          if (meta_wayland_surface_is_xwayland (surface) &&
+              surface->applied_state.scale > 1)
+            {
+              /* Compensate for rootless Xwayland always calculating region based
+               * on buffer scale 1
+               */
+              surface->input_region =
+                mtk_region_downscale (state->input_region,
+                                      surface->applied_state.scale);
+            }
+          else
+            {
+              surface->input_region = mtk_region_ref (state->input_region);
+            }
+        }
     }
 
   if (state->has_new_color_state)
@@ -2603,7 +2627,16 @@ meta_wayland_surface_try_acquire_scanout (MetaWaylandSurface *surface,
 
   if (surface->viewport.has_src_rect)
     {
+      int buffer_scale = surface->applied_state.scale;
+
       src_rect = surface->viewport.src_rect;
+
+      /* Convert to buffer coordinates */
+      src_rect.origin.x *= buffer_scale;
+      src_rect.origin.y *= buffer_scale;
+      src_rect.size.width *= buffer_scale;
+      src_rect.size.height *= buffer_scale;
+
       src_rect_ptr = &src_rect;
     }
 

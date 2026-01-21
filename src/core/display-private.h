@@ -40,7 +40,7 @@
 #include "meta/common.h"
 #include "meta/meta-selection.h"
 #include "meta/prefs.h"
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
 #include "meta/meta-x11-types.h"
 #endif
 
@@ -63,7 +63,7 @@ typedef void (* MetaDisplayWindowFunc) (MetaWindow *window,
 
 
 /* To avoid ifdefing MetaX11Display usage when built without X11 support */
-#ifndef HAVE_X11_CLIENT
+#ifndef HAVE_XWAYLAND
 typedef struct _MetaX11Display MetaX11Display;
 #endif
 
@@ -185,7 +185,7 @@ MetaDisplay * meta_display_new (MetaContext  *context,
                                 GVariant     *plugin_options,
                                 GError      **error);
 
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
 void meta_display_manage_all_xwindows (MetaDisplay *display);
 #endif
 
@@ -261,17 +261,11 @@ void meta_display_remove_pending_pings_for_window (MetaDisplay *display,
 
 MetaGestureTracker * meta_display_get_gesture_tracker (MetaDisplay *display);
 
-gboolean meta_display_show_restart_message (MetaDisplay *display,
-                                            const char  *message);
-gboolean meta_display_request_restart      (MetaDisplay *display);
-
 gboolean meta_display_show_resize_popup (MetaDisplay  *display,
                                          gboolean      show,
                                          MtkRectangle *rect,
                                          int           display_w,
                                          int           display_h);
-
-void meta_set_is_restart (gboolean whether);
 
 void meta_display_cancel_touch (MetaDisplay *display);
 
@@ -335,6 +329,3 @@ void meta_display_handle_window_enter (MetaDisplay *display,
                                        uint32_t     timestamp_ms,
                                        int          root_x,
                                        int          root_y);
-
-void meta_display_handle_window_leave (MetaDisplay *display,
-                                       MetaWindow  *window);

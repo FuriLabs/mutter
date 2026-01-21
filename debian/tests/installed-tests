@@ -2,7 +2,7 @@
 
 set -eu
 
-namespace=mutter-17/
+namespace=mutter-18/
 
 if [ -z "${HOME-}" ] || ! [ -w "${HOME}" ]; then
     export HOME="${AUTOPKGTEST_TMP}"
@@ -37,7 +37,7 @@ if [ "$e" -ne 0 ]; then
     arch="$(dpkg --print-architecture)"
     case "$arch" in
         # Please keep this list in sync with debian/rules
-        (mips64el|riscv64|s390x)
+        (riscv64|s390x)
             echo "# Ignoring test failure on $arch"
             exit 77
             ;;

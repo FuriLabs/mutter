@@ -3,4 +3,5 @@ workarounds/tests-skip-monitor-width-size-check-as-it-may-lead-to-une.patch
 workarounds/tests-Skip-thread-priority-test.patch
 workarounds/Mark-several-additional-tests-as-flaky.patch
 workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
+workarounds/tests-test-client-Sync-display-before-closing-it.patch
 ubuntu/window-Add-ability-to-override-the-edge-constraints.patch

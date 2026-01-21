@@ -26,6 +26,7 @@
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include <EGL/eglmesaext.h>
+#include <EGL/eglplatform.h>
 #include <gio/gio.h>
 #include <glib.h>
 #include <glib-object.h>
@@ -47,6 +48,7 @@ struct _MetaEgl
   PFNEGLCREATESYNCPROC eglCreateSync;
   PFNEGLDESTROYSYNCPROC eglDestroySync;
   PFNEGLWAITSYNCPROC eglWaitSync;
+  PFNEGLDUPNATIVEFENCEFDANDROIDPROC eglDupNativeFenceFDANDROID;
 
   PFNEGLBINDWAYLANDDISPLAYWL eglBindWaylandDisplayWL;
   PFNEGLQUERYWAYLANDBUFFERWL eglQueryWaylandBufferWL;
@@ -76,6 +78,8 @@ struct _MetaEgl
   PFNEGLQUERYDMABUFMODIFIERSEXTPROC eglQueryDmaBufModifiersEXT;
 
   PFNEGLQUERYDISPLAYATTRIBEXTPROC eglQueryDisplayAttribEXT;
+
+  PFNEGLQUERYSURFACEPROC eglQuerySurface;
 };
 
 G_DEFINE_TYPE (MetaEgl, meta_egl, G_TYPE_OBJECT)
@@ -1148,6 +1152,26 @@ meta_egl_query_dma_buf_modifiers (MetaEgl      *egl,
 }
 
 gboolean
+meta_egl_query_surface (MetaEgl     *egl,
+                        EGLDisplay   display,
+                        EGLSurface   surface,
+                        EGLint       attribute,
+                        EGLint      *value,
+                        GError     **error)
+{
+  if (!is_egl_proc_valid (egl->eglQuerySurface, error))
+    return FALSE;
+
+  if (!egl->eglQuerySurface (display, surface, attribute, value))
+    {
+      set_egl_error (error);
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
+gboolean
 meta_egl_query_display_attrib (MetaEgl     *egl,
                                EGLDisplay   display,
                                EGLint       attribute,
@@ -1229,6 +1253,31 @@ meta_egl_wait_sync (MetaEgl     *egl,
   return TRUE;
 }
 
+int
+meta_egl_create_sync_fd (MetaEgl     *egl,
+                         EGLDisplay   display,
+                         GError     **error)
+{
+  EGLSync sync;
+  int sync_fd;
+
+  if (!is_egl_proc_valid (egl->eglDupNativeFenceFDANDROID, error))
+    return -1;
+
+  if (!meta_egl_create_sync (egl, display, EGL_SYNC_NATIVE_FENCE_ANDROID,
+                             NULL, &sync, error))
+    return -1;
+
+  sync_fd = egl->eglDupNativeFenceFDANDROID (display, sync);
+  if (sync_fd < 0)
+    set_egl_error (error);
+
+  if (!meta_egl_destroy_sync (egl, display, sync, NULL))
+    g_warn_if_reached ();
+
+  return sync_fd;
+}
+
 #define GET_EGL_PROC_ADDR(proc) \
   egl->proc = (void *) eglGetProcAddress (#proc);
 
@@ -1245,6 +1294,7 @@ meta_egl_constructed (GObject *object)
   GET_EGL_PROC_ADDR (eglCreateSync);
   GET_EGL_PROC_ADDR (eglDestroySync);
   GET_EGL_PROC_ADDR (eglWaitSync);
+  GET_EGL_PROC_ADDR (eglDupNativeFenceFDANDROID);
 
   GET_EGL_PROC_ADDR (eglBindWaylandDisplayWL);
   GET_EGL_PROC_ADDR (eglQueryWaylandBufferWL);
@@ -1274,6 +1324,8 @@ meta_egl_constructed (GObject *object)
   GET_EGL_PROC_ADDR (eglQueryDmaBufModifiersEXT);
 
   GET_EGL_PROC_ADDR (eglQueryDisplayAttribEXT);
+
+  GET_EGL_PROC_ADDR (eglQuerySurface);
 }
 
 #undef GET_EGL_PROC_ADDR

@@ -49,7 +49,7 @@
 #include "cogl/cogl-offscreen-private.h"
 #include "cogl/cogl-onscreen-private.h"
 #include "cogl/cogl-private.h"
-#include "cogl/winsys/cogl-winsys-private.h"
+#include "cogl/winsys/cogl-winsys.h"
 
 typedef struct
 {
@@ -57,11 +57,6 @@ typedef struct
   GLfloat t[2];
   GLubyte c[4];
 } CoglTextureGLVertex;
-
-struct _CoglTimestampQuery
-{
-  unsigned int id;
-};
 
 struct _CoglContext
 {
@@ -211,7 +206,6 @@ struct _CoglContext
 
   unsigned long winsys_features
     [COGL_FLAGS_N_LONGS_FOR_SIZE (COGL_WINSYS_FEATURE_N_FEATURES)];
-  void *winsys;
 
   /* Array of names of uniforms. These are used like quarks to give a
      unique number to each uniform name except that we ensure that
@@ -226,31 +220,8 @@ struct _CoglContext
   int n_uniform_names;
 
   GHashTable *named_pipelines;
-
-  /* This defines a list of function pointers that Cogl uses from
-     either GL or GLES. All functions are accessed indirectly through
-     these pointers rather than linking to them directly */
-#ifndef APIENTRY
-#define APIENTRY
-#endif
-
-#define COGL_EXT_BEGIN(name, \
-                       min_gl_major, min_gl_minor, \
-                       gles_availability, \
-                       extension_suffixes, extension_names)
-#define COGL_EXT_FUNCTION(ret, name, args) \
-  ret (APIENTRY * name) args;
-#define COGL_EXT_END()
-
-#include "gl-prototypes/cogl-all-functions.h"
-
-#undef COGL_EXT_BEGIN
-#undef COGL_EXT_FUNCTION
-#undef COGL_EXT_END
 };
 
-const CoglWinsysVtable *
-_cogl_context_get_winsys (CoglContext *context);
 
 /* Query the GL extensions and lookup the corresponding function
  * pointers. Theoretically the list of extensions can change for

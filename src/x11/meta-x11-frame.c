@@ -23,7 +23,6 @@
 
 #include "config.h"
 
-#include "backends/x11/meta-backend-x11.h"
 #include "compositor/compositor-private.h"
 #include "core/bell.h"
 #include "mtk/mtk-x11.h"
@@ -333,18 +332,16 @@ meta_frame_query_borders (MetaFrame        *frame,
     {
       int left, right, top, bottom;
 
-      meta_window_protocol_to_stage_point (window,
-                                           ((long *) data)[0],
-                                           ((long *) data)[1],
-                                           &left,
-                                           &right,
-                                           MTK_ROUNDING_STRATEGY_GROW);
-      meta_window_protocol_to_stage_point (window,
-                                           ((long *) data)[2],
-                                           ((long *) data)[3],
-                                           &top,
-                                           &bottom,
-                                           MTK_ROUNDING_STRATEGY_GROW);
+      meta_window_protocol_to_stage_size (window,
+                                          ((long *) data)[0],
+                                          ((long *) data)[1],
+                                          &left,
+                                          &right);
+      meta_window_protocol_to_stage_size (window,
+                                          ((long *) data)[2],
+                                          ((long *) data)[3],
+                                          &top,
+                                          &bottom);
 
       borders->invisible.left = left;
       borders->invisible.right = right;
@@ -374,18 +371,16 @@ meta_frame_query_borders (MetaFrame        *frame,
     {
       int left, right, top, bottom;
 
-      meta_window_protocol_to_stage_point (window,
-                                           ((long *) data)[0],
-                                           ((long *) data)[1],
-                                           &left,
-                                           &right,
-                                           MTK_ROUNDING_STRATEGY_GROW);
-      meta_window_protocol_to_stage_point (window,
-                                           ((long *) data)[2],
-                                           ((long *) data)[3],
-                                           &top,
-                                           &bottom,
-                                           MTK_ROUNDING_STRATEGY_GROW);
+      meta_window_protocol_to_stage_size (window,
+                                          ((long *) data)[0],
+                                          ((long *) data)[1],
+                                          &left,
+                                          &right);
+      meta_window_protocol_to_stage_size (window,
+                                          ((long *) data)[2],
+                                          ((long *) data)[3],
+                                          &top,
+                                          &bottom);
       borders->visible.left = left;
       borders->visible.right = right;
       borders->visible.top = top;

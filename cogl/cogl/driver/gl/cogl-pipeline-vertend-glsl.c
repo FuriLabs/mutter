@@ -39,7 +39,6 @@
 #include "cogl/cogl-feature-private.h"
 #include "cogl/cogl-pipeline-private.h"
 #include "cogl/driver/gl/cogl-driver-gl-private.h"
-#include "cogl/driver/gl/cogl-util-gl-private.h"
 #include "cogl/driver/gl/cogl-pipeline-gl-private.h"
 
 #include "cogl/cogl-context-private.h"
@@ -119,7 +118,11 @@ destroy_shader_state (void *user_data)
   if (--shader_state->ref_count == 0)
     {
       if (shader_state->gl_shader)
-        GE( ctx, glDeleteShader (shader_state->gl_shader) );
+        {
+          CoglDriver *driver = cogl_context_get_driver (ctx);
+
+          GE (driver, glDeleteShader (shader_state->gl_shader));
+        }
 
       g_free (shader_state);
     }
@@ -344,8 +347,8 @@ _cogl_glsl_shader_set_source_with_boilerplate (CoglContext *ctx,
       g_string_free (buf, TRUE);
     }
 
-  GE( ctx, glShaderSource (shader_gl_handle, count,
-                           (const char **) strings, lengths) );
+  GE (driver, glShaderSource (shader_gl_handle, count,
+                              (const char **) strings, lengths));
 }
 GLuint
 _cogl_pipeline_vertend_glsl_get_shader (CoglPipeline *pipeline)
@@ -484,7 +487,9 @@ _cogl_pipeline_vertend_glsl_start (CoglPipeline *pipeline,
         {
           if (shader_state->gl_shader)
             {
-              GE( ctx, glDeleteShader (shader_state->gl_shader) );
+              CoglDriver *driver = cogl_context_get_driver (ctx);
+
+              GE (driver, glDeleteShader (shader_state->gl_shader));
               shader_state->gl_shader = 0;
             }
           return;
@@ -619,6 +624,7 @@ _cogl_pipeline_vertend_glsl_end (CoglPipeline *pipeline,
 
   if (shader_state->source)
     {
+      CoglDriver *driver = cogl_context_get_driver (ctx);
       const char *source_strings[2];
       GLint lengths[2];
       GLint compile_status;
@@ -719,7 +725,7 @@ _cogl_pipeline_vertend_glsl_end (CoglPipeline *pipeline,
       g_string_append (shader_state->source,
                        "}\n");
 
-      GE_RET( shader, ctx, glCreateShader (GL_VERTEX_SHADER) );
+      GE_RET (shader, driver, glCreateShader (GL_VERTEX_SHADER));
 
       lengths[0] = shader_state->header->len;
       source_strings[0] = shader_state->header->str;
@@ -732,17 +738,17 @@ _cogl_pipeline_vertend_glsl_end (CoglPipeline *pipeline,
                                                      2, /* count */
                                                      source_strings, lengths);
 
-      GE( ctx, glCompileShader (shader) );
-      GE( ctx, glGetShaderiv (shader, GL_COMPILE_STATUS, &compile_status) );
+      GE (driver, glCompileShader (shader));
+      GE (driver, glGetShaderiv (shader, GL_COMPILE_STATUS, &compile_status));
 
       if (!compile_status)
         {
           GLint len = 0;
           char *shader_log;
 
-          GE( ctx, glGetShaderiv (shader, GL_INFO_LOG_LENGTH, &len) );
+          GE (driver, glGetShaderiv (shader, GL_INFO_LOG_LENGTH, &len));
           shader_log = g_alloca (len);
-          GE( ctx, glGetShaderInfoLog (shader, len, &len, shader_log) );
+          GE (driver, glGetShaderInfoLog (shader, len, &len, shader_log));
           g_warning ("Shader compilation failed:\n%s", shader_log);
         }
 

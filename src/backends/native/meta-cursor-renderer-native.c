@@ -56,11 +56,8 @@
 #include "meta/boxes.h"
 #include "meta/meta-backend.h"
 #include "meta/util.h"
-
-#ifdef HAVE_WAYLAND
 #include "wayland/meta-cursor-sprite-wayland.h"
 #include "wayland/meta-wayland-buffer.h"
-#endif
 
 static GQuark quark_cursor_sprite = 0;
 
@@ -971,7 +968,7 @@ load_scaled_and_transformed_cursor_sprite (MetaCursorRendererNative *native,
   if (width != crtc_dst_width || height != crtc_dst_height ||
       !graphene_matrix_is_identity (&matrix) ||
       gbm_format != cursor_renderer_gpu_data->drm_format ||
-      !clutter_color_state_equals (cursor_color_state, target_color_state))
+      clutter_color_state_needs_mapping (cursor_color_state, target_color_state))
     {
       const MetaFormatInfo *format_info;
       g_autoptr (GError) error = NULL;
@@ -1042,7 +1039,6 @@ load_scaled_and_transformed_cursor_sprite (MetaCursorRendererNative *native,
   return retval;
 }
 
-#ifdef HAVE_WAYLAND
 static gboolean
 realize_cursor_sprite_from_wl_buffer_for_crtc (MetaCursorRenderer      *renderer,
                                                MetaCrtcKms             *crtc_kms,
@@ -1190,7 +1186,6 @@ realize_cursor_sprite_from_wl_buffer_for_crtc (MetaCursorRenderer      *renderer
       return TRUE;
     }
 }
-#endif /* HAVE_WAYLAND */
 
 static gboolean
 realize_cursor_sprite_from_xcursor_for_crtc (MetaCursorRenderer      *renderer,
@@ -1241,7 +1236,6 @@ realize_cursor_sprite_for_crtc (MetaCursorRenderer *renderer,
                                                           target_color_state,
                                                           sprite_xcursor);
     }
-#ifdef HAVE_WAYLAND
   else if (META_IS_CURSOR_SPRITE_WAYLAND (cursor_sprite))
     {
       MetaCursorSpriteWayland *sprite_wayland =
@@ -1252,7 +1246,6 @@ realize_cursor_sprite_for_crtc (MetaCursorRenderer *renderer,
                                                             target_color_state,
                                                             sprite_wayland);
     }
-#endif
   else
     {
       return FALSE;
@@ -1439,7 +1432,6 @@ connect_seat_signals_in_input_impl (gpointer user_data)
   MetaSeatImpl *seat_impl = g_task_get_source_object (task);
   MetaKms *kms = meta_backend_native_get_kms (backend_native);
   MetaKmsCursorManager *kms_cursor_manager = meta_kms_get_cursor_manager (kms);
-  ClutterInputDevice *device;
   graphene_point_t position;
 
   priv->pointer_position_changed_in_impl_handler_id =
@@ -1447,9 +1439,7 @@ connect_seat_signals_in_input_impl (gpointer user_data)
                       G_CALLBACK (on_pointer_position_changed_in_input_impl),
                       backend);
 
-
-  device = meta_seat_impl_get_pointer (seat_impl);
-  meta_seat_impl_query_state (seat_impl, device, NULL, &position, NULL);
+  meta_seat_impl_query_state (seat_impl, NULL, NULL, &position, NULL);
   meta_kms_cursor_manager_position_changed_in_input_impl (kms_cursor_manager,
                                                           &position);
 

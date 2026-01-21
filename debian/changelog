@@ -1,3 +1,17 @@
+mutter (50~alpha-1) UNRELEASED; urgency=medium
+
+  * New upstream release 50.alpha
+  * Refreshed patches and fixed conflicts:
+    - workarounds/Mark-several-additional-tests-as-flaky.patch
+    - workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
+  * Add patches:
+    - workarounds/tests-test-client-Sync-display-before-closing-it.patch
+      to avoid spurious test failures with 50.alpha.
+  * Removed tests that relied strictly on the X11 backend which itself
+    has been removed in this release.
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Mon, 19 Jan 2026 15:46:11 +0800
+
 mutter (49.2-1ubuntu1) resolute; urgency=medium
 
   * Merge with Debian. Remaining changes:
