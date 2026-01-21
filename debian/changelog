@@ -1,4 +1,4 @@
-mutter (50~alpha-0ubuntu1) UNRELEASED; urgency=medium
+mutter (50~alpha-0ubuntu1) resolute; urgency=medium
 
   * New upstream release 50.alpha
   * Refreshed patches and fixed conflicts:
@@ -17,7 +17,7 @@ mutter (50~alpha-0ubuntu1) UNRELEASED; urgency=medium
   * Removed tests that relied strictly on the X11 backend which itself
     has been removed in this release.
 
- -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Mon, 19 Jan 2026 15:46:11 +0800
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Wed, 21 Jan 2026 16:19:13 +0800
 
 mutter (49.2-1ubuntu1) resolute; urgency=medium
 
