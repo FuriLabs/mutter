@@ -54,6 +54,7 @@
 
 #ifdef HAVE_WAYLAND
 #include "wayland/meta-wayland.h"
+#include "backends/wayland-nested/meta-backend-wayland-nested.h"
 #endif
 
 typedef struct _MetaContextMainOptions
@@ -473,17 +474,43 @@ create_x11_cm_backend (MetaContext  *context,
 }
 #endif
 
-#if defined (HAVE_X11) && defined (HAVE_WAYLAND)
 static MetaBackend *
 create_nested_backend (MetaContext  *context,
                        GError      **error)
 {
-  return g_initable_new (META_TYPE_BACKEND_X11_NESTED,
-                         NULL, error,
-                         "context", context,
-                         NULL);
+  const char *xdg_session_type;
+  const char *wayland_display;
+
+  xdg_session_type = g_getenv ("XDG_SESSION_TYPE");
+  wayland_display = g_getenv ("WAYLAND_DISPLAY");
+
+#ifdef HAVE_WAYLAND
+  if (wayland_display && *wayland_display)
+    return g_initable_new (META_TYPE_BACKEND_WAYLAND_NESTED,
+                           NULL, error,
+                           "context", context,
+                           NULL);
+
+  if (xdg_session_type && g_strcmp0 (xdg_session_type, "wayland") == 0)
+    return g_initable_new (META_TYPE_BACKEND_WAYLAND_NESTED,
+                           NULL, error,
+                           "context", context,
+                           NULL);
+#endif /* HAVE_WAYLAND */
+
+#if defined(HAVE_X11) && defined(HAVE_WAYLAND)
+  if (g_getenv ("DISPLAY"))
+    return g_initable_new (META_TYPE_BACKEND_X11_NESTED,
+                           NULL, error,
+                           "context", context,
+                           NULL);
+#endif /* HAVE_X11 && HAVE_WAYLAND */
+
+  g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+               "Nested mode requested but no suitable host was found "
+               "(need WAYLAND_DISPLAY or XDG_SESSION_TYPE for Wayland-nested or DISPLAY for X11-nested)");
+  return NULL;
 }
-#endif
 
 #ifdef HAVE_WAYLAND
 #ifdef HAVE_NATIVE_BACKEND
@@ -528,10 +555,9 @@ meta_context_main_create_backend (MetaContext  *context,
 #endif
     case META_COMPOSITOR_TYPE_WAYLAND:
 #ifdef HAVE_WAYLAND
-#ifdef HAVE_X11
       if (context_main->options.nested)
         return create_nested_backend (context, error);
-#endif
+
 #ifdef HAVE_NATIVE_BACKEND
       if (context_main->options.headless ||
           context_main->options.devkit)
@@ -650,14 +676,12 @@ meta_context_main_add_option_entries (MetaContextMain *context_main)
       N_("Run as a wayland compositor"),
       NULL
     },
-#ifdef HAVE_X11
     {
       "nested", 0, 0, G_OPTION_ARG_NONE,
       &context_main->options.nested,
       N_("Run as a nested compositor"),
       NULL
     },
-#endif
 #ifdef HAVE_XWAYLAND
     {
       "no-x11", 0, 0, G_OPTION_ARG_NONE,

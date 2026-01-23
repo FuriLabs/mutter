@@ -92,6 +92,7 @@
 
 #ifdef HAVE_NATIVE_BACKEND
 #include "backends/native/meta-backend-native.h"
+#include "backends/wayland-nested/meta-backend-wayland-nested.h"
 #endif
 
 /*
@@ -668,6 +669,8 @@ create_compositor (MetaDisplay *display)
   if (META_IS_BACKEND_X11_NESTED (backend))
     return META_COMPOSITOR (meta_compositor_server_new (display, backend));
 #endif
+  if (META_IS_BACKEND_WAYLAND_NESTED (backend))
+    return META_COMPOSITOR (meta_compositor_server_new (display, backend));
 #endif/* HAVE_WAYLAND */
 #ifdef HAVE_X11
   return META_COMPOSITOR (meta_compositor_x11_new (display, backend));
