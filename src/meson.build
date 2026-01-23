@@ -12,6 +12,8 @@ mutter_lib_deps = [
   m_dep,
 ]
 
+wayland_client_dep = dependency('wayland-client', required: have_wayland)
+
 mutter_pkg_deps = [
   cairo_dep,
   gio_unix_dep,
@@ -125,6 +127,7 @@ endif
 if have_wayland
   mutter_pkg_deps += [
     wayland_server_dep,
+    wayland_client_dep,
   ]
 endif
 
@@ -785,6 +788,28 @@ if have_wayland
   endif
 endif
 
+if have_wayland
+  mutter_sources += [
+    'backends/wayland-nested/meta-backend-wayland-nested.c',
+    'backends/wayland-nested/meta-backend-wayland-nested.h',
+    'backends/wayland-nested/meta-renderer-wayland-nested.c',
+    'backends/wayland-nested/meta-renderer-wayland-nested.h',
+    'backends/wayland-nested/meta-clutter-backend-wayland-nested.c',
+    'backends/wayland-nested/meta-clutter-backend-wayland-nested.h',
+    'backends/wayland-nested/meta-cursor-renderer-wayland-nested.c',
+    'backends/wayland-nested/meta-cursor-renderer-wayland-nested.h',
+    'backends/wayland-nested/meta-seat-wayland-nested.c',
+    'backends/wayland-nested/meta-seat-wayland-nested.h',
+    'backends/wayland-nested/meta-stage-wayland-nested.c',
+    'backends/wayland-nested/meta-stage-wayland-nested.h',
+    'backends/wayland-nested/meta-barrier-wayland-nested.c',
+    'backends/wayland-nested/meta-barrier-wayland-nested.h',
+    'backends/wayland-nested/meta-monitor-manager-wayland-nested.c',
+    'backends/wayland-nested/meta-monitor-manager-wayland-nested.h',
+    'backends/wayland-nested/meta-gpu-wayland-nested.c',
+    'backends/wayland-nested/meta-gpu-wayland-nested.h',
+  ]
+endif
 if have_native_backend
   mutter_sources += [
     'backends/native/meta-backend-native.c',
