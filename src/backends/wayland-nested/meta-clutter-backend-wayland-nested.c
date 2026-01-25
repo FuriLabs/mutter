@@ -24,12 +24,16 @@
 
 #include "backends/wayland-nested/meta-clutter-backend-wayland-nested.h"
 #include "backends/wayland-nested/meta-stage-wayland-nested.h"
+#include "backends/wayland-nested/meta-seat-wayland-nested.h"
 
 struct _MetaClutterBackendWaylandNested
 {
   ClutterBackend parent;
 
   MetaBackend *backend;
+  ClutterContext *context;
+
+  ClutterSeat *seat;
 
   ClutterSprite   *pointer_sprite;
   ClutterKeyFocus *key_focus;
@@ -46,6 +50,8 @@ meta_clutter_backend_wayland_nested_get_renderer (ClutterBackend  *clutter_backe
   MetaClutterBackendWaylandNested *self = META_CLUTTER_BACKEND_WAYLAND_NESTED (clutter_backend);
   MetaRenderer *renderer = meta_backend_get_renderer (self->backend);
 
+  (void) error;
+
   return meta_renderer_create_cogl_renderer (renderer);
 }
 
@@ -56,10 +62,30 @@ meta_clutter_backend_wayland_nested_create_stage (ClutterBackend  *clutter_backe
 {
   MetaClutterBackendWaylandNested *self = META_CLUTTER_BACKEND_WAYLAND_NESTED (clutter_backend);
 
+  (void) error;
+
   return g_object_new (META_TYPE_STAGE_WAYLAND_NESTED,
                        "backend", self->backend,
                        "wrapper", wrapper,
                        NULL);
+}
+
+static void
+ensure_seat (MetaClutterBackendWaylandNested *self)
+{
+  ClutterSeat *backend_seat;
+
+  if (self->seat)
+    return;
+
+  if (!self->backend)
+    return;
+
+  backend_seat = meta_backend_get_default_seat (self->backend);
+  if (!backend_seat)
+    return;
+
+  self->seat = g_object_ref (backend_seat);
 }
 
 static ClutterSeat *
@@ -67,12 +93,15 @@ meta_clutter_backend_wayland_nested_get_default_seat (ClutterBackend *clutter_ba
 {
   MetaClutterBackendWaylandNested *self = META_CLUTTER_BACKEND_WAYLAND_NESTED (clutter_backend);
 
-  return meta_backend_get_default_seat (self->backend);
+  ensure_seat (self);
+
+  return self->seat;
 }
 
 static gboolean
 meta_clutter_backend_wayland_nested_is_display_server (ClutterBackend *clutter_backend)
 {
+  (void) clutter_backend;
   return TRUE;
 }
 
@@ -83,11 +112,11 @@ ensure_pointer_sprite (MetaClutterBackendWaylandNested *self,
   if (self->pointer_sprite)
     return;
 
-  ClutterSeat *seat = meta_backend_get_default_seat (self->backend);
-  ClutterInputDevice *device = NULL;
+  ensure_seat (self);
 
-  if (seat)
-    device = clutter_seat_get_pointer (seat);
+  ClutterInputDevice *device = NULL;
+  if (self->seat)
+    device = clutter_seat_get_pointer (self->seat);
 
   self->pointer_sprite = g_object_new (CLUTTER_TYPE_SPRITE,
                                        "stage", stage,
@@ -117,7 +146,6 @@ meta_clutter_backend_wayland_nested_get_sprite (ClutterBackend     *clutter_back
     return NULL;
 
   ClutterInputDeviceType t = clutter_input_device_get_device_type (source_device);
-
   if (t == CLUTTER_KEYBOARD_DEVICE || t == CLUTTER_PAD_DEVICE)
     return NULL;
 
@@ -132,6 +160,8 @@ meta_clutter_backend_wayland_nested_lookup_sprite (ClutterBackend       *clutter
                                                    ClutterEventSequence *sequence)
 {
   MetaClutterBackendWaylandNested *self = META_CLUTTER_BACKEND_WAYLAND_NESTED (clutter_backend);
+
+  (void) sequence;
 
   if (!device)
     return NULL;
@@ -191,6 +221,10 @@ meta_clutter_backend_wayland_nested_finalize (GObject *object)
 
   g_clear_object (&self->pointer_sprite);
   g_clear_object (&self->key_focus);
+  g_clear_object (&self->seat);
+
+  self->backend = NULL;
+  self->context = NULL;
 
   G_OBJECT_CLASS (meta_clutter_backend_wayland_nested_parent_class)->finalize (object);
 }
@@ -220,7 +254,11 @@ meta_clutter_backend_wayland_nested_class_init (MetaClutterBackendWaylandNestedC
 static void
 meta_clutter_backend_wayland_nested_init (MetaClutterBackendWaylandNested *self)
 {
-  (void) self;
+  self->backend = NULL;
+  self->context = NULL;
+  self->seat = NULL;
+  self->pointer_sprite = NULL;
+  self->key_focus = NULL;
 }
 
 MetaClutterBackendWaylandNested *
@@ -232,7 +270,9 @@ meta_clutter_backend_wayland_nested_new (MetaBackend    *backend,
   self = g_object_new (META_TYPE_CLUTTER_BACKEND_WAYLAND_NESTED,
                        "context", context,
                        NULL);
+
   self->backend = backend;
+  self->context = context;
 
   return self;
 }

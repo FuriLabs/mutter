@@ -808,6 +808,12 @@ if have_wayland
     'backends/wayland-nested/meta-monitor-manager-wayland-nested.h',
     'backends/wayland-nested/meta-gpu-wayland-nested.c',
     'backends/wayland-nested/meta-gpu-wayland-nested.h',
+    'backends/wayland-nested/meta-keymap-wayland-nested.c',
+    'backends/wayland-nested/meta-keymap-wayland-nested.h',
+    'backends/wayland-nested/meta-input-device-wayland-nested.c',
+    'backends/wayland-nested/meta-input-device-wayland-nested.h',
+    'backends/wayland-nested/meta-virtual-input-device-wayland-nested.c',
+    'backends/wayland-nested/meta-virtual-input-device-wayland-nested.h',
   ]
 endif
 if have_native_backend

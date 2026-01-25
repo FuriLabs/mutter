@@ -61,8 +61,7 @@ G_DEFINE_TYPE_WITH_PRIVATE (MetaBackendWaylandNested,
 static void
 init_gpus (MetaBackendWaylandNested *self)
 {
-  MetaBackendWaylandNestedPrivate *priv =
-    meta_backend_wayland_nested_get_instance_private (self);
+  MetaBackendWaylandNestedPrivate *priv = meta_backend_wayland_nested_get_instance_private (self);
 
   priv->gpu = g_object_new (META_TYPE_GPU_WAYLAND_NESTED,
                             "backend", self,
@@ -79,59 +78,13 @@ get_seat_wayland_nested_or_null (MetaBackend *backend)
   return NULL;
 }
 
-static void
-on_context_started (MetaContext *context,
-                    MetaBackend *backend)
-{
-  MetaSeatWaylandNested *seat_wl = get_seat_wayland_nested_or_null (backend);
-  if (seat_wl)
-    meta_seat_wayland_nested_start (seat_wl);
-}
-
-static struct xkb_keymap *
-create_keymap (const char *layouts,
-               const char *variants,
-               const char *options,
-               const char *model)
-{
-  struct xkb_rule_names names;
-  struct xkb_context *context;
-  struct xkb_keymap *keymap;
-
-  memset (&names, 0, sizeof (names));
-  names.rules = "evdev";
-  names.model = model && *model ? model : "pc105";
-  names.layout = layouts && *layouts ? layouts : "us";
-  names.variant = variants && *variants ? variants : NULL;
-  names.options = options && *options ? options : NULL;
-
-  context = xkb_context_new (XKB_CONTEXT_NO_FLAGS);
-  if (!context)
-    return NULL;
-
-  keymap = xkb_keymap_new_from_names (context, &names, XKB_KEYMAP_COMPILE_NO_FLAGS);
-  xkb_context_unref (context);
-
-  return keymap;
-}
-
 static gboolean
 meta_backend_wayland_nested_init_basic (MetaBackend  *backend,
                                         GError      **error)
 {
-  MetaBackendClass *parent_backend_class = META_BACKEND_CLASS (meta_backend_wayland_nested_parent_class);
-
-  if (parent_backend_class->init_basic) {
-    if (!parent_backend_class->init_basic (backend, error))
-      return FALSE;
-  }
+  (void) error;
 
   init_gpus (META_BACKEND_WAYLAND_NESTED (backend));
-
-  g_signal_connect (meta_backend_get_context (backend),
-                    "started",
-                    G_CALLBACK (on_context_started),
-                    backend);
 
   return TRUE;
 }
@@ -142,6 +95,8 @@ meta_backend_wayland_nested_create_launcher (MetaBackend   *backend,
                                              MetaLauncher **launcher_out,
                                              GError       **error)
 {
+  (void) backend;
+  (void) error;
   *launcher_out = NULL;
   return TRUE;
 }
@@ -174,7 +129,7 @@ meta_backend_wayland_nested_create_default_seat (MetaBackend  *backend,
 
 static MetaRenderer *
 meta_backend_wayland_nested_create_renderer (MetaBackend *backend,
-                                             GError     **error)
+                                            GError     **error)
 {
   (void) error;
 
@@ -205,8 +160,7 @@ meta_backend_wayland_nested_create_color_manager (MetaBackend *backend)
 static MetaInputSettings *
 meta_backend_wayland_nested_get_input_settings (MetaBackend *backend)
 {
-  MetaBackendWaylandNestedPrivate *priv =
-    meta_backend_wayland_nested_get_instance_private (META_BACKEND_WAYLAND_NESTED (backend));
+  MetaBackendWaylandNestedPrivate *priv = meta_backend_wayland_nested_get_instance_private (META_BACKEND_WAYLAND_NESTED (backend));
 
   if (!priv->input_settings)
     priv->input_settings = g_object_new (META_TYPE_INPUT_SETTINGS_DUMMY,
@@ -246,6 +200,7 @@ meta_backend_wayland_nested_get_current_logical_monitor (MetaBackend *backend)
 {
   MetaMonitorManager *monitor_manager;
   MetaLogicalMonitor *logical_monitor;
+  const GList *logical_monitors;
 
   monitor_manager = meta_backend_get_monitor_manager (backend);
   if (!monitor_manager)
@@ -255,12 +210,38 @@ meta_backend_wayland_nested_get_current_logical_monitor (MetaBackend *backend)
   if (logical_monitor)
     return logical_monitor;
 
-  const GList *logical_monitors = meta_monitor_manager_get_logical_monitors (monitor_manager);
-
+  logical_monitors = meta_monitor_manager_get_logical_monitors (monitor_manager);
   if (logical_monitors)
     return logical_monitors->data;
 
   return NULL;
+}
+
+static struct xkb_keymap *
+create_keymap (const char *layouts,
+               const char *variants,
+               const char *options,
+               const char *model)
+{
+  struct xkb_rule_names names;
+  struct xkb_context *context;
+  struct xkb_keymap *keymap;
+
+  memset (&names, 0, sizeof (names));
+  names.rules = "evdev";
+  names.model = model && *model ? model : "pc105";
+  names.layout = layouts && *layouts ? layouts : "us";
+  names.variant = variants && *variants ? variants : NULL;
+  names.options = options && *options ? options : NULL;
+
+  context = xkb_context_new (XKB_CONTEXT_NO_FLAGS);
+  if (!context)
+    return NULL;
+
+  keymap = xkb_keymap_new_from_names (context, &names, XKB_KEYMAP_COMPILE_NO_FLAGS);
+  xkb_context_unref (context);
+
+  return keymap;
 }
 
 static void
@@ -425,4 +406,6 @@ meta_backend_wayland_nested_class_init (MetaBackendWaylandNestedClass *klass)
 
   backend_class->is_lid_closed = meta_backend_wayland_nested_is_lid_closed;
   backend_class->set_pointer_constraint = meta_backend_wayland_nested_set_pointer_constraint;
+
+  backend_class->get_capabilities = meta_backend_wayland_nested_get_capabilities;
 }

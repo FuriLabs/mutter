@@ -20,7 +20,7 @@
 
 #pragma once
 
-#include "clutter/clutter.h"
+#include "backends/meta-backend-private.h"
 
 G_BEGIN_DECLS
 
@@ -30,10 +30,16 @@ G_DECLARE_FINAL_TYPE (MetaSeatWaylandNested,
                       META, SEAT_WAYLAND_NESTED,
                       ClutterSeat)
 
-void meta_seat_wayland_nested_start (MetaSeatWaylandNested *self);
-
 void meta_seat_wayland_nested_set_keymap (MetaSeatWaylandNested *self,
                                           struct xkb_keymap     *keymap,
                                           xkb_layout_index_t     layout_index);
+
+MetaBackend * meta_seat_wayland_nested_get_backend (MetaSeatWaylandNested *self);
+
+struct xkb_state * meta_seat_wayland_nested_peek_xkb_state (MetaSeatWaylandNested *self);
+
+void meta_seat_wayland_nested_update_pointer_position (MetaSeatWaylandNested *self,
+                                                       float                  x,
+                                                       float                  y);
 
 G_END_DECLS
