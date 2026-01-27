@@ -381,8 +381,8 @@ mtk_region_contains_rectangle (const MtkRegion    *region,
 }
 
 MtkRegion *
-mtk_region_scale (MtkRegion *region,
-                  int        scale)
+mtk_region_downscale (MtkRegion *region,
+                      int        scale)
 {
   int n_rects, i;
   MtkRectangle *rects;
@@ -392,6 +392,36 @@ mtk_region_scale (MtkRegion *region,
     return mtk_region_copy (region);
 
   n_rects = mtk_region_num_rectangles (region);
+  MTK_RECTANGLE_CREATE_ARRAY_SCOPED (n_rects, rects);
+  for (i = 0; i < n_rects; i++)
+    {
+      rects[i] = mtk_region_get_rectangle (region, i);
+      rects[i].x /= scale;
+      rects[i].y /= scale;
+      rects[i].width = (rects[i].width + scale - 1) / scale;
+      rects[i].height = (rects[i].height + scale - 1) / scale;
+    }
+
+  scaled_region = mtk_region_create_rectangles (rects, n_rects);
+
+  return scaled_region;
+}
+
+MtkRegion *
+mtk_region_scale (MtkRegion *region,
+                  int        scale)
+{
+  int n_rects, i;
+  MtkRectangle *rects;
+  MtkRegion *scaled_region;
+
+  n_rects = mtk_region_num_rectangles (region);
+  if (!n_rects)
+    return mtk_region_create ();
+
+  if (scale == 1)
+    return mtk_region_copy (region);
+
   MTK_RECTANGLE_CREATE_ARRAY_SCOPED (n_rects, rects);
   for (i = 0; i < n_rects; i++)
     {
@@ -417,6 +447,10 @@ mtk_region_crop_and_scale (MtkRegion       *region,
   MtkRectangle *rects;
   MtkRegion *viewport_region;
 
+  n_rects = mtk_region_num_rectangles (region);
+  if (!n_rects)
+    return mtk_region_create ();
+
   if (G_APPROX_VALUE (src_rect->size.width, dst_width, FLT_EPSILON) &&
       G_APPROX_VALUE (src_rect->size.height, dst_height, FLT_EPSILON) &&
       G_APPROX_VALUE (roundf (src_rect->origin.x),
@@ -437,7 +471,6 @@ mtk_region_crop_and_scale (MtkRegion       *region,
       return viewport_region;
     }
 
-  n_rects = mtk_region_num_rectangles (region);
   MTK_RECTANGLE_CREATE_ARRAY_SCOPED (n_rects, rects);
   for (i = 0; i < n_rects; i++)
     {
@@ -463,10 +496,13 @@ mtk_region_apply_matrix_transform_expand (const MtkRegion   *region,
   MtkRectangle *rects;
   int n_rects, i;
 
+  n_rects = mtk_region_num_rectangles (region);
+  if (!n_rects)
+    return mtk_region_create ();
+
   if (graphene_matrix_is_identity (transform))
     return mtk_region_copy (region);
 
-  n_rects = mtk_region_num_rectangles (region);
   MTK_RECTANGLE_CREATE_ARRAY_SCOPED (n_rects, rects);
   for (i = 0; i < n_rects; i++)
     {
