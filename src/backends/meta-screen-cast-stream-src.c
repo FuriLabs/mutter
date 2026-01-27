@@ -80,6 +80,7 @@ enum
 
   PROP_STREAM,
   PROP_MUST_DRIVE,
+  PROP_LAYOUT,
 
   N_PROPS
 };
@@ -146,7 +147,8 @@ typedef struct _MetaScreenCastStreamSrcPrivate
    */
   GList *dequeued_buffers;
 
-  MtkRegion *redraw_clip;
+  MtkRectangle layout;
+  MtkRegion *damage;
 
   GHashTable *modifiers;
 
@@ -877,14 +879,11 @@ maybe_add_damaged_regions_metadata (MetaScreenCastStreamSrc *src,
     return;
 
   priv = meta_screen_cast_stream_src_get_instance_private (src);
-  if (!priv->redraw_clip)
+  if (!priv->damage)
     {
-      spa_meta_for_each (meta_region, spa_meta_video_damage)
-      {
-        meta_region->region = SPA_REGION (0, 0, priv->video_format.size.width,
-                                          priv->video_format.size.height);
-        break;
-      }
+      meta_region = spa_meta_first (spa_meta_video_damage);
+      meta_region->region = SPA_REGION (0, 0, priv->video_format.size.width,
+                                        priv->video_format.size.height);
     }
   else
     {
@@ -893,7 +892,7 @@ maybe_add_damaged_regions_metadata (MetaScreenCastStreamSrc *src,
       int num_buffers_available;
 
       i = 0;
-      n_rectangles = mtk_region_num_rectangles (priv->redraw_clip);
+      n_rectangles = mtk_region_num_rectangles (priv->damage);
       num_buffers_available = 0;
 
       spa_meta_for_each (meta_region, spa_meta_video_damage)
@@ -903,16 +902,15 @@ maybe_add_damaged_regions_metadata (MetaScreenCastStreamSrc *src,
 
       if (num_buffers_available < n_rectangles)
         {
-          spa_meta_for_each (meta_region, spa_meta_video_damage)
-          {
-            g_warning ("Not enough buffers (%d) to accommodate damaged "
-                       "regions (%d)", num_buffers_available, n_rectangles);
-            meta_region->region = SPA_REGION (0, 0,
-                                              priv->video_format.size.width,
-                                              priv->video_format.size.height);
+          MtkRectangle extents;
 
-            break;
-          }
+          meta_topic (META_DEBUG_SCREEN_CAST,
+                      "Not enough buffers (%d) to accommodate damaged "
+                      "regions (%d)", num_buffers_available, n_rectangles);
+          extents = mtk_region_get_extents (priv->damage);
+          meta_region = spa_meta_first (spa_meta_video_damage);
+          meta_region->region = SPA_REGION (extents.x, extents.y,
+                                            extents.width, extents.height);
         }
       else
         {
@@ -920,7 +918,7 @@ maybe_add_damaged_regions_metadata (MetaScreenCastStreamSrc *src,
           {
             MtkRectangle rect;
 
-            rect = mtk_region_get_rectangle (priv->redraw_clip, i);
+            rect = mtk_region_get_rectangle (priv->damage, i);
             meta_region->region = SPA_REGION (rect.x, rect.y,
                                               rect.width, rect.height);
 
@@ -930,7 +928,12 @@ maybe_add_damaged_regions_metadata (MetaScreenCastStreamSrc *src,
         }
     }
 
-  g_clear_pointer (&priv->redraw_clip, mtk_region_unref);
+  /* Set invalid region to mark end of array */
+  meta_region++;
+  if (spa_meta_check (meta_region, spa_meta_video_damage))
+    meta_region->region = SPA_REGION (0, 0, 0, 0);
+
+  g_clear_pointer (&priv->damage, mtk_region_unref);
 }
 
 MetaScreenCastRecordResult
@@ -1084,6 +1087,67 @@ dequeue_pw_buffer (MetaScreenCastStreamSrc  *src,
   return buffer;
 }
 
+void
+meta_screen_cast_stream_src_accumulate_damage (MetaScreenCastStreamSrc  *src,
+                                               MetaScreenCastRecordFlag  flags,
+                                               const MtkRegion          *redraw_clip)
+{
+  MetaScreenCastStreamSrcPrivate *priv =
+    meta_screen_cast_stream_src_get_instance_private (src);
+  MtkRectangle *layout = &priv->layout;
+
+  if (!redraw_clip)
+    {
+      if (!(flags & META_SCREEN_CAST_RECORD_FLAG_CURSOR_ONLY))
+        {
+          MtkRectangle rect;
+
+          g_clear_pointer (&priv->damage, mtk_region_unref);
+
+          /* Damage full stream area */
+          rect.x = rect.y = 0;
+          rect.width = priv->video_format.size.width;
+          rect.height = priv->video_format.size.height;
+          priv->damage = mtk_region_create_rectangle (&rect);
+        }
+
+      return;
+    }
+
+  /* Accumulate the damaged region since we might not schedule a frame capture
+   * eventually but once we do, we should report all the previous damaged areas.
+   */
+  if (!mtk_rectangle_is_empty (layout) &&
+      (layout->x != 0 || layout->y != 0 ||
+       layout->width != priv->video_format.size.width ||
+       layout->height != priv->video_format.size.height) &&
+      !mtk_region_is_empty (redraw_clip))
+    {
+      g_autoptr (MtkRegion) damage = NULL;
+      graphene_rect_t src_rect;
+
+      src_rect.origin.x = roundf ((float) -layout->x *
+                                  priv->video_format.size.width / layout->width);
+      src_rect.origin.y = roundf ((float) -layout->y *
+                                  priv->video_format.size.height / layout->width);
+      src_rect.size.width = priv->video_format.size.width;
+      src_rect.size.height = priv->video_format.size.height;
+      damage = mtk_region_crop_and_scale ((MtkRegion *) redraw_clip, &src_rect,
+                                          layout->width, layout->height);
+
+      if (priv->damage)
+        mtk_region_union (priv->damage, damage);
+      else
+        priv->damage = g_steal_pointer (&damage);
+
+      return;
+    }
+
+  if (priv->damage)
+    mtk_region_union (priv->damage, redraw_clip);
+  else
+    priv->damage = mtk_region_copy (redraw_clip);
+}
 
 MetaScreenCastRecordResult
 meta_screen_cast_stream_src_record_frame_with_timestamp (MetaScreenCastStreamSrc  *src,
@@ -1105,6 +1169,8 @@ meta_screen_cast_stream_src_record_frame_with_timestamp (MetaScreenCastStreamSrc
 
   if (!priv->pipewire_stream)
     return META_SCREEN_CAST_RECORD_RESULT_RECORDED_NOTHING;
+
+  meta_screen_cast_stream_src_accumulate_damage (src, flags, redraw_clip);
 
   meta_topic (META_DEBUG_SCREEN_CAST, "Recording %s frame on stream %u",
               flags & META_SCREEN_CAST_RECORD_FLAG_CURSOR_ONLY ?
@@ -1241,17 +1307,6 @@ meta_screen_cast_stream_src_maybe_record_frame_with_timestamp (MetaScreenCastStr
       return record_result;
     }
 
-  /* Accumulate the damaged region since we might not schedule a frame capture
-   * eventually but once we do, we should report all the previous damaged areas.
-   */
-  if (redraw_clip)
-    {
-      if (priv->redraw_clip)
-        mtk_region_union (priv->redraw_clip, redraw_clip);
-      else
-        priv->redraw_clip = mtk_region_copy (redraw_clip);
-    }
-
   if (priv->buffer_count == 0)
     {
       meta_topic (META_DEBUG_SCREEN_CAST,
@@ -1260,6 +1315,7 @@ meta_screen_cast_stream_src_maybe_record_frame_with_timestamp (MetaScreenCastStr
                   priv->node_id);
 
       priv->needs_follow_up_with_buffers = TRUE;
+      meta_screen_cast_stream_src_accumulate_damage (src, flags, redraw_clip);
       return record_result;
     }
 
@@ -1283,6 +1339,7 @@ meta_screen_cast_stream_src_maybe_record_frame_with_timestamp (MetaScreenCastStr
           meta_topic (META_DEBUG_SCREEN_CAST,
                       "Skipped recording frame on stream %u, too early",
                       priv->node_id);
+          meta_screen_cast_stream_src_accumulate_damage (src, flags, redraw_clip);
           return record_result;
         }
     }
@@ -2297,7 +2354,7 @@ meta_screen_cast_stream_src_dispose (GObject *object)
   g_clear_pointer (&priv->pipewire_core, pw_core_disconnect);
   g_clear_pointer (&priv->pipewire_context, pw_context_destroy);
   g_clear_pointer (&priv->pipewire_source, g_source_destroy);
-  g_clear_pointer (&priv->redraw_clip, mtk_region_unref);
+  g_clear_pointer (&priv->damage, mtk_region_unref);
 
   g_warn_if_fail (!priv->dequeued_buffers);
 
@@ -2313,6 +2370,7 @@ meta_screen_cast_stream_src_set_property (GObject      *object,
   MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (object);
   MetaScreenCastStreamSrcPrivate *priv =
     meta_screen_cast_stream_src_get_instance_private (src);
+  MtkRectangle *layout;
 
   switch (prop_id)
     {
@@ -2321,6 +2379,18 @@ meta_screen_cast_stream_src_set_property (GObject      *object,
       break;
     case PROP_MUST_DRIVE:
       priv->must_drive = g_value_get_boolean (value);
+      break;
+    case PROP_LAYOUT:
+      layout = g_value_get_boxed (value);
+      if (!mtk_rectangle_equal (&priv->layout, layout))
+        {
+          MetaScreenCastRecordFlag flag = META_SCREEN_CAST_RECORD_FLAG_NONE;
+          g_autoptr (MtkRegion) region = NULL;
+
+          priv->layout = *layout;
+          region = mtk_region_create_rectangle (layout);
+          meta_screen_cast_stream_src_accumulate_damage (src, flag, region);
+        }
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -2395,6 +2465,11 @@ meta_screen_cast_stream_src_class_init (MetaScreenCastStreamSrcClass *klass)
                           G_PARAM_WRITABLE |
                           G_PARAM_CONSTRUCT_ONLY |
                           G_PARAM_STATIC_STRINGS);
+  obj_props[PROP_LAYOUT] =
+    g_param_spec_boxed ("layout", NULL, NULL,
+                        MTK_TYPE_RECTANGLE,
+                        G_PARAM_WRITABLE |
+                        G_PARAM_STATIC_STRINGS);
   g_object_class_install_properties (object_class,
                                      N_PROPS,
                                      obj_props);
