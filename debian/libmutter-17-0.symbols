@@ -147,6 +147,7 @@ libmutter-17.so.0 libmutter-17-0 #MINVER#
  meta_context_get_type@Base 43.0
  meta_context_get_wayland_compositor@Base 43.0
  meta_context_is_replacing@Base 43.0
+ meta_context_is_x11_sync@Base 49.3
  meta_context_notify_ready@Base 43.0
  meta_context_raise_rlimit_nofile@Base 43.0
  meta_context_restore_rlimit_nofile@Base 43.0
@@ -1947,6 +1948,7 @@ libmutter-clutter-17.so.0 libmutter-17-0 #MINVER#
  clutter_stage_get_actor_at_pos@Base 43.0
  clutter_stage_get_capture_final_size@Base 43.0
  clutter_stage_get_event_actor@Base 43.0
+ clutter_stage_get_frame_counter@Base 49.3
  clutter_stage_get_grab_actor@Base 43.0
  clutter_stage_get_key_focus@Base 43.0
  clutter_stage_get_perspective@Base 43.0
@@ -2252,6 +2254,7 @@ libmutter-cogl-17.so.0 libmutter-17-0 #MINVER#
  cogl_buffer_set_update_hint@Base 43.0
  cogl_buffer_unmap@Base 43.0
  cogl_buffer_update_hint_get_type@Base 46.0
+ cogl_can_blit_between_formats@Base 49.3
  cogl_color_copy@Base 43.0
  cogl_color_equal@Base 43.0
  cogl_color_free@Base 43.0
@@ -2317,6 +2320,7 @@ libmutter-cogl-17.so.0 libmutter-17-0 #MINVER#
  cogl_float_to_half_slow@Base 46.0
  cogl_frame_closure_get_type@Base 46.0
  cogl_frame_info_get_frame_counter@Base 43.0
+ cogl_frame_info_get_global_frame_counter@Base 49.3
  cogl_frame_info_get_is_symbolic@Base 43.0
  cogl_frame_info_get_presentation_time_us@Base 43.0
  cogl_frame_info_get_refresh_rate@Base 43.0
@@ -2545,8 +2549,8 @@ libmutter-cogl-17.so.0 libmutter-17-0 #MINVER#
  cogl_renderer_set_custom_winsys@Base 43.0
  cogl_renderer_set_driver@Base 48.0
  cogl_renderer_set_winsys@Base 49.0
- cogl_scanout_blit_to_framebuffer@Base 43.0
  cogl_scanout_buffer_get_type@Base 46.0
+ cogl_scanout_copy_to_framebuffer@Base 49.3
  cogl_scanout_error_get_type@Base 48.0
  cogl_scanout_error_quark@Base 43.0
  cogl_scanout_get_buffer@Base 46.0
@@ -2684,6 +2688,7 @@ libmutter-mtk-17.so.0 libmutter-17-0 #MINVER#
  mtk_region_create_rectangle@Base 46.0
  mtk_region_create_rectangles@Base 46.0
  mtk_region_crop_and_scale@Base 46.0
+ mtk_region_downscale@Base 49.3
  mtk_region_equal@Base 46.0
  mtk_region_get_box@Base 48.0
  mtk_region_get_extents@Base 46.0
