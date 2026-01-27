@@ -1,11 +1,11 @@
-mutter (49.3-1) UNRELEASED; urgency=medium
+mutter (49.3-1) unstable; urgency=medium
 
   * New upstream release
   * d/gbp.conf, d/control, d/watch: Branch for 49.x.
     The debian/latest branch is already in use for early preparations
     for v50.
 
- -- Simon McVittie <smcv@debian.org>  Tue, 27 Jan 2026 16:28:26 +0000
+ -- Simon McVittie <smcv@debian.org>  Tue, 27 Jan 2026 19:53:34 +0000
 
 mutter (49.2-1) unstable; urgency=medium
 
