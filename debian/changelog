@@ -1,5 +1,9 @@
 mutter (50~alpha-1) UNRELEASED; urgency=medium
 
+  [ Simon McVittie ]
+  * Revert "d/gbp.conf, d/control, d/watch: Branch for 49.x"
+
+  [ Daniel van Vugt ]
   * New upstream release 50.alpha
   * Refreshed patches and fixed conflicts:
     - workarounds/Mark-several-additional-tests-as-flaky.patch
