@@ -82,6 +82,8 @@
 #include "wayland/meta-wayland-drm-lease.h"
 #endif
 
+#include "wayland/meta-wayland-virtual-keyboard.h"
+
 enum
 {
   PREPARE_SHUTDOWN,
@@ -1036,6 +1038,8 @@ meta_wayland_compositor_new (MetaContext *context)
   meta_wayland_init_cursor_shape (compositor);
   meta_wayland_init_color_representation (compositor);
   meta_wayland_init_fixes (compositor);
+
+  meta_wayland_virtual_keyboard_init (compositor);
 
 #ifdef HAVE_WAYLAND_EGLSTREAM
   {
