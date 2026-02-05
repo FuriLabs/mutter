@@ -762,6 +762,8 @@ if have_wayland
     'wayland/meta-window-wayland.h',
     'wayland/meta-wayland-virtual-keyboard.c',
     'wayland/meta-wayland-virtual-keyboard.h',
+    'wayland/meta-wayland-virtual-pointer.c',
+    'wayland/meta-wayland-virtual-pointer.h',
   ]
 
   if have_xwayland
@@ -1243,6 +1245,7 @@ if have_wayland
     ['xdg-toplevel-tag', 'staging', 1, ],
     ['xwayland-keyboard-grab', 'unstable', 1, ],
     ['virtual-keyboard-unstable-v1', 'private', ],
+    ['wlr-virtual-pointer-unstable-v1', 'private', ],
   ]
   if have_xwayland
     wayland_protocols += [

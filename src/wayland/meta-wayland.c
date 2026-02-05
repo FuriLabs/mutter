@@ -83,6 +83,7 @@
 #endif
 
 #include "wayland/meta-wayland-virtual-keyboard.h"
+#include "wayland/meta-wayland-virtual-pointer.h"
 
 enum
 {
@@ -1040,6 +1041,7 @@ meta_wayland_compositor_new (MetaContext *context)
   meta_wayland_init_fixes (compositor);
 
   meta_wayland_virtual_keyboard_init (compositor);
+  meta_wayland_virtual_pointer_init (compositor);
 
 #ifdef HAVE_WAYLAND_EGLSTREAM
   {
