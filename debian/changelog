@@ -1,20 +1,17 @@
-mutter (50~alpha-1) UNRELEASED; urgency=medium
+mutter (50~beta-1) UNRELEASED; urgency=medium
 
   [ Simon McVittie ]
   * Revert "d/gbp.conf, d/control, d/watch: Branch for 49.x"
 
   [ Daniel van Vugt ]
-  * New upstream release 50.alpha
+  * New upstream release 50.beta
   * Refreshed patches and fixed conflicts:
     - workarounds/Mark-several-additional-tests-as-flaky.patch
     - workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
-  * Add patches:
-    - workarounds/tests-test-client-Sync-display-before-closing-it.patch
-      to avoid spurious test failures with 50.alpha.
   * Removed tests that relied strictly on the X11 backend which itself
     has been removed in this release.
 
- -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Mon, 19 Jan 2026 15:46:11 +0800
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 05 Feb 2026 13:22:47 +0800
 
 mutter (49.3-1) unstable; urgency=medium
 
