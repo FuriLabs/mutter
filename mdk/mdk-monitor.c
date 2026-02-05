@@ -31,9 +31,6 @@
 #include "mdk-stream.h"
 #include "mdk-touch.h"
 
-#define DEFAULT_MONITOR_WIDTH 1280
-#define DEFAULT_MONITOR_HEIGHT 800
-
 #define BUTTON_BASE (BTN_LEFT - 1)
 
 enum
@@ -52,10 +49,11 @@ struct _MdkMonitor
   GtkWidget parent;
 
   GtkWidget *box;
-  GtkPicture *picture;
+  GtkWidget *picture;
 
   MdkContext *context;
   MdkStream *stream;
+  gulong invalidate_size_handler_id;
 
   gboolean emulated_touch_down;
 
@@ -550,23 +548,66 @@ has_focus_changed (GtkWidget *widget)
 }
 
 static void
-mdk_monitor_realize (GtkWidget *widget)
+show_fail_label (MdkMonitor   *monitor,
+                 const GError *error)
 {
-  MdkMonitor *monitor = MDK_MONITOR (widget);
+  GtkWidget *label;
 
-  GTK_WIDGET_CLASS (mdk_monitor_parent_class)->realize (widget);
+  label = gtk_label_new (_("Failed to create monitor"));
+  gtk_widget_set_size_request (label,
+                               DEFAULT_MONITOR_WIDTH,
+                               DEFAULT_MONITOR_HEIGHT);
+  gtk_box_append (GTK_BOX (monitor->box), label);
+  gtk_widget_set_visible (monitor->picture, FALSE);
 
-  mdk_stream_realize (monitor->stream);
+  g_warning ("Failed to create monitor: %s", error->message);
 }
 
 static void
-mdk_monitor_unrealize (GtkWidget *widget)
+on_stream_size_changed (GdkPaintable *paintable,
+                        MdkMonitor   *monitor)
 {
-  MdkMonitor *monitor = MDK_MONITOR (widget);
+  GtkWindow *window;
 
-  mdk_stream_unrealize (monitor->stream);
+  if (monitor->is_resizable)
+    return;
 
-  GTK_WIDGET_CLASS (mdk_monitor_parent_class)->unrealize (widget);
+  gtk_widget_queue_resize (GTK_WIDGET (monitor));
+
+  window = GTK_WINDOW (gtk_widget_get_root (GTK_WIDGET (monitor)));
+  gtk_window_set_default_size (window, 0, 0);
+}
+
+static void
+init_stream (MdkMonitor *monitor)
+{
+  MdkSession *session = mdk_context_get_session (monitor->context);
+  GtkNative *native = gtk_widget_get_native (GTK_WIDGET (monitor));
+  GdkSurface *surface = gtk_native_get_surface (native);
+  double scale;
+  g_autoptr (GError) error = NULL;
+
+  scale =  gdk_surface_get_scale (surface);
+
+  if (monitor->is_resizable)
+    monitor->stream = mdk_stream_new_resizable (session, scale, &error);
+  else
+    monitor->stream = mdk_stream_new_with_modes (session, scale, &error);
+
+  if (!monitor->stream)
+    {
+      show_fail_label (monitor, error);
+      return;
+    }
+
+  gtk_picture_set_paintable (GTK_PICTURE (monitor->picture),
+                             GDK_PAINTABLE (monitor->stream));
+
+  monitor->invalidate_size_handler_id =
+    g_signal_connect (monitor->stream,
+                      "invalidate-size",
+                      G_CALLBACK (on_stream_size_changed),
+                      monitor);
 }
 
 static void
@@ -605,14 +646,31 @@ mdk_monitor_measure (GtkWidget      *widget,
                      int            *natural_baseline)
 {
   MdkMonitor *monitor = MDK_MONITOR (widget);
+  GdkPaintable *paintable;
+  int size = 0;
 
-  gtk_widget_measure (GTK_WIDGET (monitor->box),
-                      orientation,
-                      for_size,
-                      minimum,
-                      natural,
-                      minimum_baseline,
-                      natural_baseline);
+  if (!monitor->stream)
+    init_stream (monitor);
+
+  gtk_widget_measure (monitor->box, orientation, for_size,
+                      NULL, NULL, NULL, NULL);
+
+  paintable = GDK_PAINTABLE (monitor->stream);
+
+  switch (orientation)
+    {
+    case GTK_ORIENTATION_HORIZONTAL:
+      size = gdk_paintable_get_intrinsic_width (paintable);
+      break;
+    case GTK_ORIENTATION_VERTICAL:
+      size = gdk_paintable_get_intrinsic_height (paintable);
+      break;
+    }
+
+  *minimum = monitor->is_resizable ? 1 : size;
+  *natural = size;
+  *minimum_baseline = -1;
+  *natural_baseline = -1;
 }
 
 static void
@@ -631,7 +689,8 @@ mdk_monitor_size_allocate (GtkWidget *widget,
                                                               height,
                                                               baseline);
 
-  mdk_stream_resize (monitor->stream, width, height);
+  if (monitor->is_resizable)
+    mdk_stream_resize (monitor->stream, width, height);
 }
 
 static gboolean
@@ -658,8 +717,26 @@ mdk_monitor_set_property (GObject      *object,
   switch (prop_id)
     {
     case PROP_IS_RESIZABLE:
-      monitor->is_resizable = g_value_get_boolean (value);
-      break;
+      {
+        gboolean is_resizable = g_value_get_boolean (value);
+
+        if (monitor->is_resizable != is_resizable)
+          {
+            monitor->is_resizable = is_resizable;
+
+            if (monitor->stream)
+              {
+                g_clear_signal_handler (&monitor->invalidate_size_handler_id,
+                                        monitor->stream);
+                g_clear_object (&monitor->stream);
+                init_stream (monitor);
+              }
+
+            if (monitor->is_resizable)
+              gtk_widget_set_size_request (GTK_WIDGET (monitor), 480, 480);
+          }
+        break;
+      }
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -698,6 +775,8 @@ mdk_monitor_finalize (GObject *object)
 {
   MdkMonitor *monitor = MDK_MONITOR (object);
 
+  g_clear_signal_handler (&monitor->invalidate_size_handler_id,
+                          monitor->stream);
   g_clear_object (&monitor->stream);
 
   G_OBJECT_CLASS (mdk_monitor_parent_class)->finalize (object);
@@ -714,8 +793,6 @@ mdk_monitor_class_init (MdkMonitorClass *klass)
   object_class->set_property = mdk_monitor_set_property;
   object_class->get_property = mdk_monitor_get_property;
 
-  widget_class->realize = mdk_monitor_realize;
-  widget_class->unrealize = mdk_monitor_unrealize;
   widget_class->focus = mdk_monitor_focus;
   widget_class->map = mdk_monitor_map;
   widget_class->unmap = mdk_monitor_unmap;
@@ -780,47 +857,20 @@ mdk_monitor_init (MdkMonitor *monitor)
   g_signal_connect (monitor, "notify::has-focus",
                     G_CALLBACK (has_focus_changed),
                     NULL);
-}
 
-static void
-on_stream_error (MdkStream    *stream,
-                 const GError *error,
-                 MdkMonitor   *monitor)
-{
-  GtkWidget *label;
-
-  label = gtk_label_new (_("Failed to create monitor"));
-  gtk_widget_set_size_request (label,
-                               DEFAULT_MONITOR_WIDTH,
-                               DEFAULT_MONITOR_HEIGHT);
-  gtk_box_append (GTK_BOX (monitor->box), label);
-  gtk_widget_set_visible (GTK_WIDGET (monitor->picture), FALSE);
-
-  g_warning ("Failed to create monitor: %s", error->message);
+  monitor->picture = gtk_picture_new ();
+  gtk_widget_add_css_class (monitor->picture, "monitor");
+  gtk_widget_set_sensitive (monitor->picture, FALSE);
+  gtk_box_append (GTK_BOX (monitor->box), monitor->picture);
 }
 
 MdkMonitor *
 mdk_monitor_new (MdkContext *context)
 {
-  MdkSession *session = mdk_context_get_session (context);
   MdkMonitor *monitor;
-  GdkPaintable *paintable;
 
   monitor = g_object_new (MDK_TYPE_MONITOR, NULL);
   monitor->context = context;
-  monitor->stream = mdk_stream_new (session,
-                                    DEFAULT_MONITOR_WIDTH,
-                                    DEFAULT_MONITOR_HEIGHT);
-  g_signal_connect (monitor->stream,
-                    "error",
-                    G_CALLBACK (on_stream_error),
-                    monitor);
-
-  paintable = GDK_PAINTABLE (monitor->stream);
-  monitor->picture = GTK_PICTURE (gtk_picture_new_for_paintable (paintable));
-  gtk_widget_add_css_class (GTK_WIDGET (monitor->picture), "monitor");
-  gtk_widget_set_sensitive (GTK_WIDGET (monitor->picture), FALSE);
-  gtk_box_append (GTK_BOX (monitor->box), GTK_WIDGET (monitor->picture));
 
   update_cursor (monitor);
   g_signal_connect_object (context, "notify::emulate-touch",
@@ -828,10 +878,11 @@ mdk_monitor_new (MdkContext *context)
                            monitor, 0);
 
   g_object_bind_property (G_OBJECT (context),
-                          "resizable-monitors",
+                          "emulate-monitor-modes",
                           G_OBJECT (monitor),
                           "is-resizable",
-                          G_BINDING_SYNC_CREATE);
+                          G_BINDING_SYNC_CREATE |
+                          G_BINDING_INVERT_BOOLEAN);
 
   return monitor;
 }

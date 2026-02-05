@@ -80,7 +80,6 @@ cogl_texture_driver_gl_texture_2d_can_create (CoglTextureDriver *tex_driver,
     return FALSE;
 
   driver_klass->pixel_format_to_gl (driver_gl,
-                                    ctx,
                                     internal_format,
                                     &gl_intformat,
                                     &gl_format,
@@ -88,7 +87,6 @@ cogl_texture_driver_gl_texture_2d_can_create (CoglTextureDriver *tex_driver,
 
   /* Check that the driver can create a texture with that size */
   if (!driver_klass->texture_size_supported (driver_gl,
-                                             ctx,
                                              GL_TEXTURE_2D,
                                              gl_intformat,
                                              gl_format,
@@ -140,7 +138,6 @@ allocate_with_size (CoglTexture2D     *tex_2d,
     }
 
   driver_klass->pixel_format_to_gl (driver_gl,
-                                    ctx,
                                     internal_format,
                                     &gl_intformat,
                                     &gl_format,
@@ -225,13 +222,11 @@ allocate_from_bitmap (CoglTexture2D     *tex_2d,
     return FALSE;
 
   driver_klass->pixel_format_to_gl (driver_gl,
-                                    ctx,
                                     cogl_bitmap_get_format (upload_bmp),
                                     NULL, /* internal format */
                                     &gl_format,
                                     &gl_type);
   driver_klass->pixel_format_to_gl (driver_gl,
-                                    ctx,
                                     internal_format,
                                     &gl_intformat,
                                     NULL,
@@ -441,10 +436,10 @@ cogl_texture_gl_set_max_level (CoglTexture *texture,
                                int          max_level)
 {
   CoglContext *ctx = cogl_texture_get_context (texture);
+  CoglDriver *driver = cogl_context_get_driver (ctx);
 
-  if (_cogl_has_private_feature (ctx, COGL_PRIVATE_FEATURE_TEXTURE_MAX_LEVEL))
+  if (cogl_driver_has_feature (driver, COGL_FEATURE_ID_TEXTURE_MAX_LEVEL))
     {
-      CoglDriver *driver = cogl_context_get_driver (ctx);
       GLuint gl_handle;
       GLenum gl_target;
 
@@ -525,7 +520,6 @@ cogl_texture_driver_gl_texture_2d_copy_from_bitmap (CoglTextureDriver *tex_drive
     return FALSE;
 
   driver_klass->pixel_format_to_gl (driver_gl,
-                                    ctx,
                                     upload_format,
                                     NULL, /* internal gl format */
                                     &gl_format,

@@ -32,6 +32,7 @@
 #include "core/events.h"
 
 const char *client_id = "0";
+const char *script_path = NULL;
 static gboolean wayland;
 static gboolean dont_exit_on_eof;
 static gboolean verbose;
@@ -206,7 +207,8 @@ window_add_x11_event_handler (GtkWidget     *window,
                            (GDestroyNotify) unref_and_maybe_destroy_gsource);
 
   handlers = g_list_append (handlers, handler);
-  g_object_set_qdata (G_OBJECT (window), event_handlers_quark, handlers);
+  g_object_set_qdata_full (G_OBJECT (window), event_handlers_quark,
+                           handlers, (GDestroyNotify) g_list_free);
 }
 
 static void
@@ -221,7 +223,8 @@ window_remove_x11_event_handler (GtkWidget     *window,
   g_object_set_qdata (G_OBJECT (window), event_source_quark, NULL);
 
   handlers = g_list_remove (handlers, handler);
-  g_object_set_qdata (G_OBJECT (window), event_handlers_quark, handlers);
+  g_object_set_qdata_full (G_OBJECT (window), event_handlers_quark,
+                           handlers, (GDestroyNotify) g_list_free);
 }
 
 static void
@@ -1393,6 +1396,12 @@ const GOptionEntry options[] = {
     "CLIENT_ID",
   },
   {
+    "script", 0, 0, G_OPTION_ARG_STRING,
+    &script_path,
+    "Test script to run",
+    "SCRIPT",
+  },
+  {
     "verbose", 'v', 0, G_OPTION_ARG_NONE,
     &verbose,
     "Verbose",
@@ -1413,6 +1422,7 @@ main(int    argc,
   g_autoptr (GDataInputStream) in = NULL;
   GHashTableIter iter;
   gpointer key, value;
+  GdkDisplay *display;
 
   g_log_writer_default_set_use_stderr (TRUE);
 
@@ -1462,7 +1472,24 @@ main(int    argc,
   event_handlers_quark = g_quark_from_static_string ("event-handlers");
   can_take_focus_quark = g_quark_from_static_string ("can-take-focus");
 
-  raw_in = g_unix_input_stream_new (0, FALSE);
+  if (script_path)
+    {
+      g_autoptr (GFile) file = NULL;
+
+      file = g_file_new_for_path (script_path);
+      raw_in = G_INPUT_STREAM (g_file_read (file, NULL, &error));
+      if (!raw_in)
+        {
+          g_printerr ("Failed to read file '%s': %s\n",
+                      script_path, error->message);
+          return 1;
+        }
+    }
+  else
+    {
+      raw_in = g_unix_input_stream_new (0, FALSE);
+    }
+
   in = g_data_input_stream_new (raw_in);
 
   read_next_line (in);
@@ -1473,7 +1500,9 @@ main(int    argc,
   while (g_hash_table_iter_next (&iter, &key, &value))
     gtk_widget_destroy (value);
 
-  gdk_display_close (gdk_display_get_default ());
+  display = gdk_display_get_default ();
+  gdk_display_sync (display);
+  gdk_display_close (display);
 
   return 0;
 }

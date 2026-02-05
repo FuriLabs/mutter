@@ -51,23 +51,11 @@
 #include "cogl/cogl-private.h"
 #include "cogl/winsys/cogl-winsys.h"
 
-typedef struct
-{
-  GLfloat v[3];
-  GLfloat t[2];
-  GLubyte c[4];
-} CoglTextureGLVertex;
-
 struct _CoglContext
 {
   GObject parent_instance;
 
   CoglDisplay *display;
-
-  /* Features cache */
-  unsigned long features[COGL_FLAGS_N_LONGS_FOR_SIZE (_COGL_N_FEATURE_IDS)];
-  unsigned long private_features
-    [COGL_FLAGS_N_LONGS_FOR_SIZE (COGL_N_PRIVATE_FEATURES)];
 
   CoglPipeline *default_pipeline;
   CoglPipelineLayer *default_layer_0;
@@ -169,10 +157,6 @@ struct _CoglContext
      chances of getting the same colour during an animation */
   uint8_t            journal_rectangles_color;
 
-  /* Cached values for GL_MAX_TEXTURE_[IMAGE_]UNITS to avoid calling
-     glGetInteger too often */
-  GLint             max_activateable_texture_units;
-
   /* Fragment processing programs */
   GLuint                  current_gl_program;
 
@@ -223,16 +207,6 @@ struct _CoglContext
 };
 
 
-/* Query the GL extensions and lookup the corresponding function
- * pointers. Theoretically the list of extensions can change for
- * different GL contexts so it is the winsys backend's responsibility
- * to know when to re-query the GL extensions. The backend should also
- * check whether the GL context is supported by Cogl. If not it should
- * return FALSE and set @error */
-gboolean
-_cogl_context_update_features (CoglContext *context,
-                               GError **error);
-
 void
 _cogl_context_set_current_projection_entry (CoglContext *context,
                                             CoglMatrixEntry *entry);
@@ -244,4 +218,4 @@ _cogl_context_set_current_modelview_entry (CoglContext *context,
 void
 _cogl_context_update_sync (CoglContext *context);
 
-CoglDriver * cogl_context_get_driver (CoglContext *context);
+void cogl_context_clear_onscreen_dirty_queue (CoglContext *context);

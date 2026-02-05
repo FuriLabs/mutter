@@ -117,6 +117,8 @@ struct _MetaDefaultPluginPrivate
   ClutterActor          *desktop2;
 
   ClutterActor          *background_group;
+
+  MetaKeymapDescription *keymap_description;
 };
 
 META_PLUGIN_DECLARE_WITH_CODE (MetaDefaultPlugin, meta_default_plugin,
@@ -150,9 +152,22 @@ typedef struct _DisplayTilePreview
 } DisplayTilePreview;
 
 static void
+meta_default_plugin_finalize (GObject *object)
+{
+  MetaDefaultPluginPrivate *priv = META_DEFAULT_PLUGIN (object)->priv;
+
+  g_clear_pointer (&priv->keymap_description, meta_keymap_description_unref);
+
+  G_OBJECT_CLASS (meta_default_plugin_parent_class)->finalize (object);
+}
+
+static void
 meta_default_plugin_class_init (MetaDefaultPluginClass *klass)
 {
+  GObjectClass *object_class = G_OBJECT_CLASS (klass);
   MetaPluginClass *plugin_class  = META_PLUGIN_CLASS (klass);
+
+  object_class->finalize = meta_default_plugin_finalize;
 
   plugin_class->start            = start;
   plugin_class->map              = map;
@@ -356,6 +371,7 @@ static void
 init_keymap (MetaDefaultPlugin *self,
              MetaBackend       *backend)
 {
+  MetaDefaultPluginPrivate *priv = self->priv;
   g_autoptr (GError) error = NULL;
   g_autoptr (GDBusProxy) proxy = NULL;
   g_autoptr (GVariant) result = NULL;
@@ -364,6 +380,7 @@ init_keymap (MetaDefaultPlugin *self,
   g_autofree char *x11_options = NULL;
   g_autofree char *x11_variant = NULL;
   g_autofree char *x11_model = NULL;
+  g_autoptr (MetaKeymapDescription) keymap_description = NULL;
 
   proxy = g_dbus_proxy_new_for_bus_sync (G_BUS_TYPE_SYSTEM,
                                          (G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES |
@@ -414,12 +431,18 @@ init_keymap (MetaDefaultPlugin *self,
   if (!g_variant_lookup (props, "X11Model", "s", &x11_model))
     x11_model = g_strdup ("");
 
+  keymap_description = meta_keymap_description_new_from_rules (x11_model,
+                                                               x11_layout,
+                                                               x11_variant,
+                                                               x11_options,
+                                                               NULL, NULL);
+
   meta_backend_set_keymap_async (backend,
-                                 x11_layout,
-                                 x11_variant,
-                                 x11_options,
-                                 x11_model,
+                                 keymap_description, 0,
                                  NULL, NULL, NULL);
+
+
+  priv->keymap_description = meta_keymap_description_ref (keymap_description);
 }
 
 static void
@@ -427,6 +450,18 @@ prepare_shutdown (MetaBackend       *backend,
                   MetaDefaultPlugin *plugin)
 {
   kill_switch_workspace (META_PLUGIN (plugin));
+}
+
+static MetaKeymapDescription *
+on_reset_keymap_description (MetaBackend       *backend,
+                             MetaDefaultPlugin *self)
+{
+  MetaDefaultPluginPrivate *priv = self->priv;
+
+  if (priv->keymap_description)
+    return meta_keymap_description_ref (priv->keymap_description);
+  else
+    return NULL;
 }
 
 static void
@@ -448,6 +483,9 @@ start (MetaPlugin *plugin)
                     G_CALLBACK (on_monitors_changed), plugin);
 
   on_monitors_changed (monitor_manager, plugin);
+
+  g_signal_connect (backend, "reset-keymap-description",
+                    G_CALLBACK (on_reset_keymap_description), self);
 
   g_signal_connect (backend, "prepare-shutdown",
                     G_CALLBACK (prepare_shutdown),

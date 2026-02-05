@@ -35,7 +35,7 @@
 #include <unistd.h>
 
 #include "backends/meta-backend-private.h"
-#include "backends/meta-cursor-sprite-xcursor.h"
+#include "backends/meta-cursor-xcursor.h"
 #include "backends/meta-cursor-tracker-private.h"
 #include "backends/meta-input-capture.h"
 #include "backends/meta-input-device-private.h"
@@ -139,7 +139,6 @@ G_DEFINE_TYPE_WITH_PRIVATE (MetaDisplay, meta_display, G_TYPE_OBJECT)
 /* Signals */
 enum
 {
-  CURSOR_UPDATED,
   X11_DISPLAY_SETUP,
   X11_DISPLAY_OPENED,
   X11_DISPLAY_CLOSING,
@@ -196,8 +195,6 @@ static void    prefs_changed_callback    (MetaPreference pref,
 
 static int mru_cmp (gconstpointer a,
                     gconstpointer b);
-
-static void meta_display_reload_cursor (MetaDisplay *display);
 
 static void meta_display_unmanage_windows (MetaDisplay *display,
                                            guint32      timestamp);
@@ -272,14 +269,6 @@ meta_display_class_init (MetaDisplayClass *klass)
   object_class->get_property = meta_display_get_property;
   object_class->set_property = meta_display_set_property;
 
-  display_signals[CURSOR_UPDATED] =
-    g_signal_new ("cursor-updated",
-                  G_TYPE_FROM_CLASS (klass),
-                  G_SIGNAL_RUN_LAST,
-                  0,
-                  NULL, NULL, NULL,
-                  G_TYPE_NONE, 0);
-
   display_signals[X11_DISPLAY_SETUP] =
     g_signal_new ("x11-display-setup",
                   G_TYPE_FROM_CLASS (klass),
@@ -334,18 +323,13 @@ meta_display_class_init (MetaDisplayClass *klass)
    *
    * The ::modifiers-accelerator-activated signal will be emitted when
    * a special modifiers-only keybinding is activated.
-   *
-   * Returns: %TRUE means that the keyboard device should remain
-   *    frozen and %FALSE for the default behavior of unfreezing the
-   *    keyboard.
    */
   display_signals[MODIFIERS_ACCELERATOR_ACTIVATED] =
     g_signal_new ("modifiers-accelerator-activated",
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_LAST,
-                  0,
-                  g_signal_accumulator_first_wins, NULL, NULL,
-                  G_TYPE_BOOLEAN, 0);
+                  0, NULL, NULL, NULL,
+                  G_TYPE_NONE, 0);
 
   display_signals[FOCUS_WINDOW] =
     g_signal_new ("focus-window",
@@ -613,39 +597,6 @@ meta_display_cancel_touch (MetaDisplay *display)
 }
 
 static void
-gesture_tracker_state_changed (MetaGestureTracker   *tracker,
-                               ClutterEventSequence *sequence,
-                               MetaSequenceState     state,
-                               MetaDisplay          *display)
-{
-  switch (state)
-    {
-    case META_SEQUENCE_NONE:
-    case META_SEQUENCE_PENDING_END:
-      return;
-    case META_SEQUENCE_ACCEPTED:
-      meta_display_cancel_touch (display);
-
-      G_GNUC_FALLTHROUGH;
-    case META_SEQUENCE_REJECTED:
-      {
-        MetaBackend *backend;
-
-        backend = backend_from_display (display);
-        meta_backend_finish_touch_sequence (backend, sequence, state);
-        break;
-      }
-    }
-}
-
-static void
-on_ui_scaling_factor_changed (MetaSettings *settings,
-                              MetaDisplay  *display)
-{
-  meta_display_reload_cursor (display);
-}
-
-static void
 on_monitor_privacy_screen_changed (MetaDisplay        *display,
                                    MetaLogicalMonitor *logical_monitor,
                                    gboolean            enabled)
@@ -839,7 +790,6 @@ meta_display_new (MetaContext  *context,
   MetaDisplayPrivate *priv;
   guint32 timestamp = 0;
   MetaMonitorManager *monitor_manager;
-  MetaSettings *settings;
   MetaInputCapture *input_capture;
 
   display = g_object_new (META_TYPE_DISPLAY, NULL);
@@ -859,7 +809,6 @@ meta_display_new (MetaContext  *context,
   display->x11_display = NULL;
 #endif
 
-  display->current_cursor = -1; /* invalid/unset */
   display->check_fullscreen_later = 0;
   display->work_area_later = 0;
 
@@ -887,6 +836,7 @@ meta_display_new (MetaContext  *context,
 
   display->pad_action_mapper = meta_pad_action_mapper_new (monitor_manager);
   display->tool_action_mapper = meta_tool_action_mapper_new (backend);
+  display->startup_notification = meta_startup_notification_new (display);
 
   input_capture = meta_backend_get_input_capture (backend);
   meta_input_capture_set_event_router (input_capture,
@@ -894,20 +844,12 @@ meta_display_new (MetaContext  *context,
                                        disable_input_capture,
                                        display);
 
-  settings = meta_backend_get_settings (backend);
-  g_signal_connect (settings, "ui-scaling-factor-changed",
-                    G_CALLBACK (on_ui_scaling_factor_changed), display);
-
   display->compositor = create_compositor (display);
-
-  meta_display_set_cursor (display, META_CURSOR_DEFAULT);
 
   display->stack = meta_stack_new (display);
   display->stack_tracker = meta_stack_tracker_new (display->stack);
 
   display->workspace_manager = meta_workspace_manager_new (display);
-
-  display->startup_notification = meta_startup_notification_new (display);
 
   display->bell = meta_bell_new (display);
 
@@ -951,11 +893,6 @@ meta_display_new (MetaContext  *context,
       meta_x11_display_create_guard_window (display->x11_display);
     }
 #endif
-
-  /* Set up touch support */
-  display->gesture_tracker = meta_gesture_tracker_new ();
-  g_signal_connect (display->gesture_tracker, "state-changed",
-                    G_CALLBACK (gesture_tracker_state_changed), display);
 
   meta_display_unset_input_focus (display, timestamp);
 
@@ -1102,8 +1039,6 @@ meta_display_close (MetaDisplay *display,
   meta_prefs_remove_listener (prefs_changed_callback, display);
 
   meta_display_remove_autoraise_callback (display);
-
-  g_clear_object (&display->gesture_tracker);
 
   g_clear_handle_id (&display->focus_timeout_id, g_source_remove);
 
@@ -1556,33 +1491,6 @@ meta_display_notify_window_created (MetaDisplay  *display,
 
   if (window->wm_state_demands_attention)
     g_signal_emit_by_name (display, "window-demands-attention", window);
-}
-
-void
-meta_display_reload_cursor (MetaDisplay *display)
-{
-  MetaCursor cursor = display->current_cursor;
-  MetaCursorSpriteXcursor *sprite_xcursor;
-  MetaBackend *backend = backend_from_display (display);
-  MetaCursorTracker *cursor_tracker = meta_backend_get_cursor_tracker (backend);
-
-  sprite_xcursor = meta_cursor_sprite_xcursor_new (cursor, cursor_tracker);
-  meta_cursor_tracker_set_root_cursor (cursor_tracker,
-                                       META_CURSOR_SPRITE (sprite_xcursor));
-  g_object_unref (sprite_xcursor);
-
-  g_signal_emit (display, display_signals[CURSOR_UPDATED], 0, display);
-}
-
-void
-meta_display_set_cursor (MetaDisplay *display,
-                         MetaCursor   cursor)
-{
-  if (cursor == display->current_cursor)
-    return;
-
-  display->current_cursor = cursor;
-  meta_display_reload_cursor (display);
 }
 
 /**
@@ -2243,10 +2151,6 @@ prefs_changed_callback (MetaPreference pref,
     case META_PREF_DRAGGABLE_BORDER_WIDTH:
       meta_display_queue_retheme_all_windows (display);
       break;
-    case META_PREF_CURSOR_THEME:
-    case META_PREF_CURSOR_SIZE:
-      meta_display_reload_cursor (display);
-      break;
     default:
       break;
     }
@@ -2337,14 +2241,10 @@ meta_display_accelerator_deactivate (MetaDisplay           *display,
                  clutter_event_get_time (event));
 }
 
-gboolean
+void
 meta_display_modifiers_accelerator_activate (MetaDisplay *display)
 {
-  gboolean freeze;
-
-  g_signal_emit (display, display_signals[MODIFIERS_ACCELERATOR_ACTIVATED], 0, &freeze);
-
-  return freeze;
+  g_signal_emit (display, display_signals[MODIFIERS_ACCELERATOR_ACTIVATED], 0);
 }
 
 /**
@@ -2433,12 +2333,6 @@ meta_display_clear_mouse_mode (MetaDisplay *display)
   display->mouse_mode = FALSE;
 }
 
-MetaGestureTracker *
-meta_display_get_gesture_tracker (MetaDisplay *display)
-{
-  return display->gesture_tracker;
-}
-
 gboolean
 meta_display_show_resize_popup (MetaDisplay  *display,
                                 gboolean      show,
@@ -2453,26 +2347,6 @@ meta_display_show_resize_popup (MetaDisplay  *display,
                  show, rect, display_w, display_h, &result);
 
   return result;
-}
-
-/**
- * meta_display_is_pointer_emulating_sequence:
- * @display: the display
- * @sequence: (nullable): a #ClutterEventSequence
- *
- * Tells whether the event sequence is the used for pointer emulation
- * and single-touch interaction.
- *
- * Returns: #TRUE if the sequence emulates pointer behavior
- **/
-gboolean
-meta_display_is_pointer_emulating_sequence (MetaDisplay          *display,
-                                            ClutterEventSequence *sequence)
-{
-  if (!sequence)
-    return FALSE;
-
-  return display->pointer_emulating_sequence == sequence;
 }
 
 void
@@ -2903,6 +2777,61 @@ meta_display_queue_workarea_recalc (MetaDisplay *display)
     }
 }
 
+static void
+classify_window_monitor_coverage (MetaWindow  *window,
+                                  GList       *logical_monitors,
+                                  GSList     **obscured_monitors,
+                                  GSList     **fullscreen_monitors)
+{
+  gboolean covers_monitors = FALSE;
+
+  if (window->hidden)
+    return;
+
+  if (meta_window_is_fullscreen (window))
+    {
+      covers_monitors = TRUE;
+    }
+  else if (window->override_redirect)
+    {
+      /* We want to handle the case where an application is creating an
+       * override-redirect window the size of the screen (monitor) and treat
+       * it similarly to a fullscreen window, though it doesn't have fullscreen
+       * window management behavior. (Being O-R, it's not managed at all.)
+       */
+      if (meta_window_is_monitor_sized (window))
+        covers_monitors = TRUE;
+    }
+  else if (meta_window_is_maximized (window))
+    {
+      MetaLogicalMonitor *logical_monitor;
+
+      logical_monitor = meta_window_get_main_logical_monitor (window);
+      if (!g_slist_find (*obscured_monitors, logical_monitor))
+        *obscured_monitors = g_slist_prepend (*obscured_monitors,
+                                              logical_monitor);
+    }
+
+  if (covers_monitors)
+    {
+      MtkRectangle window_rect;
+
+      meta_window_get_frame_rect (window, &window_rect);
+
+      for (GList *l = logical_monitors; l; l = l->next)
+        {
+          MetaLogicalMonitor *logical_monitor = l->data;
+
+          if (mtk_rectangle_overlap (&window_rect,
+                                     &logical_monitor->rect) &&
+              !g_slist_find (*fullscreen_monitors, logical_monitor) &&
+              !g_slist_find (*obscured_monitors, logical_monitor))
+            *fullscreen_monitors = g_slist_prepend (*fullscreen_monitors,
+                                                    logical_monitor);
+        }
+    }
+}
+
 static gboolean
 check_fullscreen_func (gpointer data)
 {
@@ -2915,6 +2844,8 @@ check_fullscreen_func (gpointer data)
   GSList *fullscreen_monitors = NULL;
   GSList *obscured_monitors = NULL;
   gboolean in_fullscreen_changed = FALSE;
+  MetaWindowActor *top_window_group_actor = NULL;
+  MetaWindow *top_window_group_window = NULL;
 
   display->check_fullscreen_later = 0;
 
@@ -2929,53 +2860,19 @@ check_fullscreen_func (gpointer data)
        window;
        window = meta_stack_get_below (display->stack, window, FALSE))
     {
-      gboolean covers_monitors = FALSE;
+      classify_window_monitor_coverage (window,
+                                        logical_monitors,
+                                        &obscured_monitors, &fullscreen_monitors);
+    }
 
-      if (window->hidden)
-        continue;
-
-      if (meta_window_is_fullscreen (window))
-        {
-          covers_monitors = TRUE;
-        }
-      else if (window->override_redirect)
-        {
-          /* We want to handle the case where an application is creating an
-           * override-redirect window the size of the screen (monitor) and treat
-           * it similarly to a fullscreen window, though it doesn't have fullscreen
-           * window management behavior. (Being O-R, it's not managed at all.)
-           */
-          if (meta_window_is_monitor_sized (window))
-            covers_monitors = TRUE;
-        }
-      else if (meta_window_is_maximized (window))
-        {
-          MetaLogicalMonitor *logical_monitor;
-
-          logical_monitor = meta_window_get_main_logical_monitor (window);
-          if (!g_slist_find (obscured_monitors, logical_monitor))
-            obscured_monitors = g_slist_prepend (obscured_monitors,
-                                                 logical_monitor);
-        }
-
-      if (covers_monitors)
-        {
-          MtkRectangle window_rect;
-
-          meta_window_get_frame_rect (window, &window_rect);
-
-          for (l = logical_monitors; l; l = l->next)
-            {
-              MetaLogicalMonitor *logical_monitor = l->data;
-
-              if (mtk_rectangle_overlap (&window_rect,
-                                         &logical_monitor->rect) &&
-                  !g_slist_find (fullscreen_monitors, logical_monitor) &&
-                  !g_slist_find (obscured_monitors, logical_monitor))
-                fullscreen_monitors = g_slist_prepend (fullscreen_monitors,
-                                                       logical_monitor);
-            }
-        }
+  /* Also consider O-R windows which are not part of the stack */
+  top_window_group_actor = meta_compositor_get_top_window_actor (display->compositor);
+  if (top_window_group_actor)
+    {
+      top_window_group_window = meta_window_actor_get_meta_window (top_window_group_actor);
+      classify_window_monitor_coverage (top_window_group_window,
+                                        logical_monitors,
+                                        &obscured_monitors, &fullscreen_monitors);
     }
 
   g_slist_free (obscured_monitors);

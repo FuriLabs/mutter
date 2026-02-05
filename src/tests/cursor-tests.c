@@ -18,7 +18,7 @@
 
 #include "config.h"
 
-#include "backends/meta-cursor-sprite-xcursor.h"
+#include "backends/meta-cursor-xcursor.h"
 #include "backends/meta-logical-monitor-private.h"
 #include "backends/meta-screen-cast.h"
 #include "clutter/clutter.h"
@@ -323,7 +323,7 @@ wait_for_no_windows (void)
 static void
 test_client_cursor (ClutterStageView    *view,
                     const char          *scale_method,
-                    MetaCursor           cursor,
+                    ClutterCursorType    cursor,
                     MtkMonitorTransform  transform,
                     const char          *ref_test_name,
                     int                  ref_test_seq,
@@ -334,8 +334,11 @@ test_client_cursor (ClutterStageView    *view,
   MetaWaylandTestClient *test_client;
   MetaWindow *window;
   MetaWindowActor *window_actor;
+  ClutterCursor *current_cursor;
 
   g_debug ("Testing cursor with client using %s", scale_method);
+
+  current_cursor = meta_get_current_cursor (test_context);
 
   cursor_name = meta_cursor_get_name (cursor);
   transform_name = mtk_monitor_transform_to_string (transform);
@@ -354,7 +357,7 @@ test_client_cursor (ClutterStageView    *view,
   meta_wait_for_window_shown (window);
   window_actor = meta_window_actor_from_window (window);
   g_assert_nonnull (window_actor);
-  meta_wait_for_window_cursor (test_context);
+  meta_wait_for_cursor_change (test_context, current_cursor);
 
   meta_ref_test_verify_view (view,
                              ref_test_name,
@@ -381,12 +384,12 @@ static void
 meta_test_native_cursor_scaling (void)
 {
   MetaBackend *backend = meta_context_get_backend (test_context);
-  MetaDisplay *display = meta_context_get_display (test_context);
   ClutterSeat *seat = meta_backend_get_default_seat (backend);
+  ClutterActor *stage = meta_backend_get_stage (backend);
   g_autoptr (ClutterVirtualInputDevice) virtual_pointer = NULL;
   ClutterActor *overlay_actor;
   ClutterStageView *view;
-  MetaCursor cursor;
+  ClutterCursorType cursor;
   struct {
     int width;
     int height;
@@ -420,8 +423,7 @@ meta_test_native_cursor_scaling (void)
   };
   int i;
 
-  cursor = META_CURSOR_MOVE;
-  meta_display_set_cursor (display, cursor);
+  cursor = CLUTTER_CURSOR_MOVE;
   virtual_pointer = clutter_seat_create_virtual_device (seat,
                                                         CLUTTER_POINTER_DEVICE);
   overlay_actor = create_overlay_actor ();
@@ -429,6 +431,8 @@ meta_test_native_cursor_scaling (void)
   for (i = 0; i < G_N_ELEMENTS (test_cases); i++)
     {
       g_autofree char *ref_test_name = NULL;
+
+      clutter_actor_set_cursor_type (stage, cursor);
 
       g_debug ("Testing monitor resolution %dx%d with scale %f and "
                "%s layout mode",
@@ -451,6 +455,8 @@ meta_test_native_cursor_scaling (void)
                                   META_SCREEN_CAST_CURSOR_MODE_EMBEDDED);
       verify_screen_cast_content (ref_test_name, 0,
                                   META_SCREEN_CAST_CURSOR_MODE_METADATA);
+
+      clutter_actor_set_cursor_type (stage, CLUTTER_CURSOR_DEFAULT);
 
       test_client_cursor (view,
                           CURSOR_SCALE_METHOD_BUFFER_SCALE,
@@ -479,7 +485,7 @@ static void
 meta_test_native_cursor_cropping (void)
 {
   MetaBackend *backend = meta_context_get_backend (test_context);
-  MetaDisplay *display = meta_context_get_display (test_context);
+  ClutterActor *stage = meta_backend_get_stage (backend);
   ClutterSeat *seat = meta_backend_get_default_seat (backend);
   g_autoptr (ClutterVirtualInputDevice) virtual_pointer = NULL;
   ClutterActor *overlay_actor;
@@ -517,7 +523,7 @@ meta_test_native_cursor_cropping (void)
   };
   int i;
 
-  meta_display_set_cursor (display, META_CURSOR_DEFAULT);
+  clutter_actor_set_cursor_type (stage, CLUTTER_CURSOR_DEFAULT);
   virtual_pointer = clutter_seat_create_virtual_device (seat,
                                                         CLUTTER_POINTER_DEVICE);
   overlay_actor = create_overlay_actor ();
@@ -542,7 +548,7 @@ meta_test_native_cursor_cropping (void)
 
       test_client_cursor (view,
                           CURSOR_SCALE_METHOD_VIEWPORT_CROPPED,
-                          META_CURSOR_MOVE,
+                          CLUTTER_CURSOR_MOVE,
                           MTK_MONITOR_TRANSFORM_NORMAL,
                           ref_test_name, 0,
                           meta_ref_test_determine_ref_test_flag ());
@@ -555,7 +561,7 @@ static void
 meta_test_native_cursor_transform (void)
 {
   MetaBackend *backend = meta_context_get_backend (test_context);
-  MetaDisplay *display = meta_context_get_display (test_context);
+  ClutterActor *stage = meta_backend_get_stage (backend);
   ClutterSeat *seat = meta_backend_get_default_seat (backend);
   g_autoptr (ClutterVirtualInputDevice) virtual_pointer = NULL;
   ClutterActor *overlay_actor;
@@ -599,7 +605,7 @@ meta_test_native_cursor_transform (void)
   };
   int i;
 
-  meta_display_set_cursor (display, META_CURSOR_DEFAULT);
+  clutter_actor_set_cursor_type (stage, CLUTTER_CURSOR_DEFAULT);
   virtual_pointer = clutter_seat_create_virtual_device (seat,
                                                         CLUTTER_POINTER_DEVICE);
   overlay_actor = create_overlay_actor ();
@@ -624,19 +630,19 @@ meta_test_native_cursor_transform (void)
 
       test_client_cursor (view,
                           CURSOR_SCALE_METHOD_BUFFER_SCALE,
-                          META_CURSOR_DEFAULT,
+                          CLUTTER_CURSOR_DEFAULT,
                           test_cases[i].transform,
                           ref_test_name, 0,
                           meta_ref_test_determine_ref_test_flag ());
       test_client_cursor (view,
                           CURSOR_SCALE_METHOD_VIEWPORT,
-                          META_CURSOR_DEFAULT,
+                          CLUTTER_CURSOR_DEFAULT,
                           test_cases[i].transform,
                           ref_test_name, 1,
                           meta_ref_test_determine_ref_test_flag ());
       test_client_cursor (view,
                           CURSOR_SCALE_METHOD_VIEWPORT_CROPPED,
-                          META_CURSOR_MOVE,
+                          CLUTTER_CURSOR_MOVE,
                           test_cases[i].transform,
                           ref_test_name, 2,
                           meta_ref_test_determine_ref_test_flag ());

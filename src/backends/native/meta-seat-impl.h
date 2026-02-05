@@ -117,7 +117,7 @@ void meta_seat_impl_setup (MetaSeatImpl *seat_impl);
 
 void meta_seat_impl_start (MetaSeatImpl *seat_impl);
 
-void meta_seat_impl_destroy (MetaSeatImpl *seat_impl);
+void meta_seat_impl_prepare_shutdown (MetaSeatImpl *seat_impl);
 
 META_EXPORT_TEST
 void meta_seat_impl_run_input_task (MetaSeatImpl *seat_impl,
@@ -185,25 +185,16 @@ void  meta_seat_impl_reclaim_devices (MetaSeatImpl *seat_impl);
 
 struct xkb_state * meta_seat_impl_get_xkb_state_in_impl (MetaSeatImpl *seat_impl);
 
-gboolean meta_seat_impl_set_keyboard_map_finish (MetaSeatImpl  *seat_impl,
-                                                 GAsyncResult  *result,
-                                                 GError       **error);
+gboolean meta_seat_impl_set_keymap_finish (MetaSeatImpl  *seat_impl,
+                                           GAsyncResult  *result,
+                                           GError       **error);
 
-void meta_seat_impl_set_keyboard_map_async (MetaSeatImpl        *seat_impl,
-                                            struct xkb_keymap   *keymap,
-                                            GCancellable        *cancellable,
-                                            GAsyncReadyCallback  callback,
-                                            gpointer             user_data);
-
-gboolean meta_seat_impl_set_keyboard_layout_index_finish (MetaSeatImpl  *seat_impl,
-                                                          GAsyncResult  *result,
-                                                          GError       **error);
-
-void meta_seat_impl_set_keyboard_layout_index_async (MetaSeatImpl        *seat_impl,
-                                                     xkb_layout_index_t   idx,
-                                                     GCancellable        *cancellable,
-                                                     GAsyncReadyCallback  callback,
-                                                     gpointer             user_data);
+void meta_seat_impl_set_keymap_async (MetaSeatImpl          *seat_impl,
+                                      MetaKeymapDescription *keymap_description,
+                                      xkb_layout_index_t     layout_index,
+                                      GCancellable          *cancellable,
+                                      GAsyncReadyCallback    callback,
+                                      gpointer               user_data);
 
 void meta_seat_impl_set_keyboard_repeat_in_impl (MetaSeatImpl *seat_impl,
                                                  gboolean      repeat,

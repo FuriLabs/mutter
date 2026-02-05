@@ -584,6 +584,14 @@ meta_monitor_manager_is_headless (MetaMonitorManager *manager)
   return !manager->logical_monitors;
 }
 
+static gboolean
+get_default_scale_for_monitor (MetaMonitor     *monitor,
+                               MetaMonitorMode *monitor_mode,
+                               float           *out_scale)
+{
+  return meta_monitor_get_default_scale (monitor, monitor_mode, out_scale);
+}
+
 float
 meta_monitor_manager_calculate_monitor_mode_scale (MetaMonitorManager           *manager,
                                                    MetaLogicalMonitorLayoutMode  layout_mode,
@@ -592,6 +600,10 @@ meta_monitor_manager_calculate_monitor_mode_scale (MetaMonitorManager           
 {
   MetaMonitorManagerClass *manager_class =
     META_MONITOR_MANAGER_GET_CLASS (manager);
+  float scale;
+
+  if (get_default_scale_for_monitor (monitor, monitor_mode, &scale))
+    return scale;
 
   return manager_class->calculate_monitor_mode_scale (manager,
                                                       layout_mode,
@@ -718,6 +730,23 @@ meta_monitor_manager_ensure_initial_config (MetaMonitorManager *manager)
   META_MONITOR_MANAGER_GET_CLASS (manager)->ensure_initial_config (manager);
 }
 
+static void
+update_current_monitor_mode_scale (MetaMonitor *monitor)
+{
+  MetaMonitorMode *monitor_mode;
+  MetaLogicalMonitor *logical_monitor;
+  float scale;
+
+  monitor_mode = meta_monitor_get_current_mode (monitor);
+  if (!monitor_mode)
+    return;
+
+  logical_monitor = meta_monitor_get_logical_monitor (monitor);
+  scale = meta_logical_monitor_get_scale (logical_monitor);
+
+  meta_monitor_set_default_scale (monitor, monitor_mode, scale);
+}
+
 gboolean
 meta_monitor_manager_apply_monitors_config (MetaMonitorManager      *manager,
                                             MetaMonitorsConfig      *config,
@@ -733,6 +762,12 @@ meta_monitor_manager_apply_monitors_config (MetaMonitorManager      *manager,
   g_list_foreach (manager->monitors,
                   (GFunc) meta_monitor_update_current_mode,
                   NULL);
+  if (!manager->in_init)
+    {
+      g_list_foreach (manager->monitors,
+                      (GFunc) update_current_monitor_mode_scale,
+                      NULL);
+    }
 
   switch (method)
     {
@@ -857,6 +892,10 @@ meta_monitor_manager_ensure_configured (MetaMonitorManager *manager)
   MetaMonitorsConfigMethod method;
   MetaMonitorsConfigMethod fallback_method =
     META_MONITORS_CONFIG_METHOD_TEMPORARY;
+  MetaMonitorsConfig *current_config;
+  MetaMonitorsConfig *previous_config;
+  g_autoptr (GList) existing_configs = NULL;
+  GList *l;
 
   use_stored_config = should_use_stored_config (manager);
   if (use_stored_config)
@@ -900,40 +939,69 @@ meta_monitor_manager_ensure_configured (MetaMonitorManager *manager)
             }
           else
             {
+              meta_topic (META_DEBUG_BACKEND,
+                          "Applied stored monitor configuration");
               g_object_ref (config);
               goto done;
             }
         }
     }
 
-  if (manager->panel_orientation_managed)
-    {
-      MetaMonitorsConfig *current_config =
-        meta_monitor_config_manager_get_current (manager->config_manager);
+  current_config =
+    meta_monitor_config_manager_get_current (manager->config_manager);
+  previous_config =
+    meta_monitor_config_manager_get_previous (manager->config_manager);
 
-      if (current_config)
+  if (current_config)
+    existing_configs = g_list_append (existing_configs, current_config);
+  if (previous_config)
+    existing_configs = g_list_append (existing_configs, previous_config);
+
+  for (l = existing_configs; l; l = l->next)
+    {
+      MetaMonitorsConfig *existing_config = l->data;
+      g_autoptr (MetaMonitorsConfig) potential_config = NULL;
+
+      g_set_object (&potential_config, existing_config);
+
+      if (manager->panel_orientation_managed)
         {
-          config = meta_monitor_config_manager_create_for_builtin_orientation (
-            manager->config_manager, current_config);
+          g_autoptr (MetaMonitorsConfig) oriented_config = NULL;
+
+          oriented_config =
+            meta_monitor_config_manager_create_for_builtin_orientation (
+              manager->config_manager, potential_config);
+
+          if (oriented_config)
+            g_set_object (&potential_config, oriented_config);
         }
-    }
 
-  if (config)
-    {
-      if (meta_monitor_manager_is_config_complete (manager, config))
+      if (meta_monitor_manager_is_config_complete (manager, potential_config))
         {
+          if (is_monitors_config_amend_needed (manager, potential_config))
+            {
+              g_autoptr (MetaMonitorsConfig) amended_config = NULL;
+
+              amended_config = meta_monitors_config_copy (potential_config);
+              amend_monitors_config (manager, amended_config, potential_config);
+              g_set_object (&potential_config, amended_config);
+            }
+
           if (!meta_monitor_manager_apply_monitors_config (manager,
-                                                           config,
+                                                           potential_config,
                                                            method,
                                                            &error))
             {
-              g_clear_object (&config);
-              g_warning ("Failed to use current monitor configuration: %s",
+              g_warning ("Failed to use existing monitor configuration: %s",
                          error->message);
               g_clear_error (&error);
             }
           else
             {
+              meta_topic (META_DEBUG_BACKEND,
+                          "Applied %s based monitor configuration",
+                          existing_config == current_config ? "current" : "previous");
+              g_set_object (&config, potential_config);
               goto done;
             }
         }
@@ -954,54 +1022,9 @@ meta_monitor_manager_ensure_configured (MetaMonitorManager *manager)
         }
       else
         {
+          meta_topic (META_DEBUG_BACKEND,
+                      "Applied suggested monitor configuration");
           goto done;
-        }
-    }
-
-  config = meta_monitor_config_manager_get_previous (manager->config_manager);
-  if (config)
-    {
-      g_autoptr (MetaMonitorsConfig) oriented_config = NULL;
-      g_autoptr (MetaMonitorsConfig) amended_config = NULL;
-
-      if (manager->panel_orientation_managed)
-        {
-          oriented_config =
-            meta_monitor_config_manager_create_for_builtin_orientation (
-              manager->config_manager, config);
-
-          if (oriented_config)
-            config = oriented_config;
-        }
-
-      if (meta_monitor_manager_is_config_complete (manager, config))
-        {
-          if (is_monitors_config_amend_needed (manager, config))
-            {
-              amended_config = meta_monitors_config_copy (config);
-              amend_monitors_config (manager, amended_config, config);
-              config = amended_config;
-            }
-
-          if (!meta_monitor_manager_apply_monitors_config (manager,
-                                                           config,
-                                                           method,
-                                                           &error))
-            {
-              config = NULL;
-              g_warning ("Failed to use suggested monitor configuration: %s",
-                         error->message);
-              g_clear_error (&error);
-            }
-          else
-            {
-              config = g_object_ref (config);
-              goto done;
-            }
-        }
-      else
-        {
-          config = NULL;
         }
     }
 
@@ -1020,6 +1043,8 @@ meta_monitor_manager_ensure_configured (MetaMonitorManager *manager)
         }
       else
         {
+          meta_topic (META_DEBUG_BACKEND,
+                      "Applied linear monitor configuration");
           goto done;
         }
     }
@@ -1039,6 +1064,8 @@ meta_monitor_manager_ensure_configured (MetaMonitorManager *manager)
         }
       else
         {
+          meta_topic (META_DEBUG_BACKEND,
+                      "Applied fallback monitor configuration");
           goto done;
         }
     }
@@ -1179,32 +1206,6 @@ orientation_changed (MetaMonitorManager *manager)
     return;
 
   handle_orientation_change (orientation_manager, manager);
-}
-
-static void
-experimental_features_changed (MetaSettings           *settings,
-                               MetaExperimentalFeature old_experimental_features,
-                               MetaMonitorManager     *manager)
-{
-  gboolean was_stage_views_scaled;
-  gboolean is_stage_views_scaled;
-  gboolean should_reconfigure = FALSE;
-
-  was_stage_views_scaled =
-    !!(old_experimental_features &
-       META_EXPERIMENTAL_FEATURE_SCALE_MONITOR_FRAMEBUFFER);
-  is_stage_views_scaled =
-    meta_settings_is_experimental_feature_enabled (
-      settings,
-      META_EXPERIMENTAL_FEATURE_SCALE_MONITOR_FRAMEBUFFER);
-
-  if (is_stage_views_scaled != was_stage_views_scaled)
-    should_reconfigure = TRUE;
-
-  if (should_reconfigure)
-    meta_monitor_manager_reconfigure (manager);
-
-  meta_settings_update_ui_scaling_factor (settings);
 }
 
 static gboolean
@@ -1555,13 +1556,12 @@ meta_monitor_manager_constructed (GObject *object)
   manager->display_config = meta_dbus_display_config_skeleton_new ();
 
   g_signal_connect_object (settings,
-                           "experimental-features-changed",
-                           G_CALLBACK (experimental_features_changed),
-                           manager, G_CONNECT_DEFAULT);
-
-  g_signal_connect_object (settings,
                            "privacy-screen-changed",
                            G_CALLBACK (apply_privacy_screen_settings),
+                           manager, G_CONNECT_SWAPPED);
+  g_signal_connect_object (settings,
+                           "xwayland-scaling-factor-changed",
+                           G_CALLBACK (meta_monitor_manager_reconfigure),
                            manager, G_CONNECT_SWAPPED);
 
   monitor_manager_setup_dbus_config_handlers (manager);
@@ -3115,14 +3115,14 @@ meta_monitor_manager_handle_apply_monitors_config (MetaDBusDisplayConfig *skelet
   MetaMonitorConfigStore *config_store;
   const MetaMonitorConfigPolicy *policy;
   MetaMonitorManagerCapability capabilities;
-  GVariant *layout_mode_variant = NULL;
+  g_autoptr (GVariant) layout_mode_variant = NULL;
   MetaLogicalMonitorLayoutMode layout_mode;
   GVariantIter logical_monitor_configs_iter;
-  MetaMonitorsConfig *config;
+  g_autoptr (MetaMonitorsConfig) config = NULL;
   GList *logical_monitor_configs = NULL;
   GList *disabled_monitor_specs = NULL;
   GList *for_lease_monitor_specs = NULL;
-  GError *error = NULL;
+  g_autoptr (GError) error = NULL;
 
   if (serial != manager->serial)
     {
@@ -3226,8 +3226,6 @@ meta_monitor_manager_handle_apply_monitors_config (MetaDBusDisplayConfig *skelet
       g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR,
                                              G_DBUS_ERROR_INVALID_ARGS,
                                              "%s", error->message);
-      g_error_free (error);
-      g_object_unref (config);
       return G_DBUS_METHOD_INVOCATION_HANDLED;
     }
 
@@ -3236,8 +3234,6 @@ meta_monitor_manager_handle_apply_monitors_config (MetaDBusDisplayConfig *skelet
       g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR,
                                              G_DBUS_ERROR_INVALID_ARGS,
                                              "%s", error->message);
-      g_error_free (error);
-      g_object_unref (config);
       return G_DBUS_METHOD_INVOCATION_HANDLED;
     }
 
@@ -3255,8 +3251,6 @@ meta_monitor_manager_handle_apply_monitors_config (MetaDBusDisplayConfig *skelet
       g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR,
                                              G_DBUS_ERROR_INVALID_ARGS,
                                              "%s", error->message);
-      g_error_free (error);
-      g_object_unref (config);
       return G_DBUS_METHOD_INVOCATION_HANDLED;
     }
 
@@ -4527,7 +4521,7 @@ switch_config_idle_cb (gpointer user_data)
   MetaMonitorManagerPrivate *priv =
     meta_monitor_manager_get_instance_private (monitor_manager);
   MetaMonitorConfigManager *config_manager = monitor_manager->config_manager;
-  MetaMonitorsConfig *config;
+  g_autoptr (MetaMonitorsConfig) config = NULL;
   g_autoptr (GError) error = NULL;
 
   priv->switch_config_handle_id = 0;

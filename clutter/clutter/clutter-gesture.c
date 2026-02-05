@@ -1569,7 +1569,7 @@ clutter_gesture_get_points (ClutterGesture *self,
                             size_t         *n_points)
 {
   ClutterGesturePrivate *priv;
-  GArray *points = NULL;
+  g_autoptr (GArray) points = NULL;
   unsigned int i;
 
   g_return_val_if_fail (CLUTTER_IS_GESTURE (self), 0);
@@ -1606,7 +1606,7 @@ clutter_gesture_get_point_coords (ClutterGesture   *self,
   ClutterGesturePrivate *priv;
   GestureSequenceData *seq_data;
   ClutterActor *action_actor;
-  
+
   g_return_if_fail (CLUTTER_IS_GESTURE (self));
   g_return_if_fail (coords_out != NULL);
 

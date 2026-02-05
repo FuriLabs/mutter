@@ -36,6 +36,8 @@
 #include "cogl/cogl.h"
 
 #include "clutter/clutter-types.h"
+#include "clutter/clutter-cursor.h"
+#include "clutter/clutter-enums.h"
 #include "clutter/clutter-event.h"
 #include "clutter/clutter-paint-context.h"
 #include "clutter/clutter-pick-context.h"
@@ -214,6 +216,9 @@ struct _ClutterActorClass
   void     (* key_focus_out)        (ClutterActor         *actor);
 
   void     (* queue_relayout)       (ClutterActor         *self);
+
+  ClutterCursor * (* get_cursor_for_sprite) (ClutterActor  *self,
+                                             ClutterSprite *sprite);
 
   /* accessibility support */
   AtkObject * (* get_accessible)    (ClutterActor         *self);
@@ -894,5 +899,12 @@ void clutter_actor_class_set_layout_manager_type (ClutterActorClass *actor_class
                                                   GType              type);
 CLUTTER_EXPORT
 GType clutter_actor_class_get_layout_manager_type (ClutterActorClass *actor_class);
+
+CLUTTER_EXPORT
+void clutter_actor_set_cursor_type (ClutterActor      *actor,
+                                    ClutterCursorType  cursor_type);
+
+CLUTTER_EXPORT
+ClutterCursorType clutter_actor_get_cursor_type (ClutterActor *actor);
 
 G_END_DECLS

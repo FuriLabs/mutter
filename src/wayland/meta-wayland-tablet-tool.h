@@ -25,7 +25,6 @@
 #include <wayland-server.h>
 
 #include "backends/meta-cursor-renderer.h"
-#include "backends/meta-cursor-sprite-xcursor.h"
 #include "wayland/meta-wayland-types.h"
 
 MetaWaylandTabletTool * meta_wayland_tablet_tool_new  (MetaWaylandTabletSeat  *seat,
@@ -66,8 +65,11 @@ void meta_wayland_tablet_tool_focus_surface (MetaWaylandTabletTool *tool,
                                              MetaWaylandSurface    *surface);
 
 void meta_wayland_tablet_tool_set_cursor_shape (MetaWaylandTabletTool *tool,
-                                                MetaCursor             shape);
+                                                ClutterCursorType      shape);
 
 gboolean meta_wayland_tablet_tool_check_focus_serial (MetaWaylandTabletTool *tool,
                                                       struct wl_client      *client,
                                                       uint32_t               serial);
+
+ClutterCursor * meta_wayland_tablet_tool_get_cursor (MetaWaylandTabletTool *tool,
+                                                     ClutterSprite         *sprite);

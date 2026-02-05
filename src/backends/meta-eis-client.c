@@ -242,7 +242,7 @@ configure_keyboard (MetaEisClient     *client,
   eis_device_configure_capability (eis_device, EIS_DEVICE_CAP_KEYBOARD);
 
   xkb_keymap =
-    meta_backend_get_keymap (meta_eis_get_backend (client->eis));
+    meta_backend_get_xkb_keymap (meta_eis_get_backend (client->eis));
   if (!xkb_keymap)
     return;
 
@@ -1124,6 +1124,7 @@ meta_eis_client_disconnect (MetaEisClient *client)
 {
   g_clear_signal_handler (&client->viewports_changed_handler_id, client->eis);
   g_hash_table_foreach_remove (client->eis_devices, drop_device, client);
+  g_clear_pointer (&client->eis_devices, g_hash_table_unref);
   g_clear_pointer (&client->eis_seat, eis_seat_unref);
   if (client->eis_client)
     eis_client_disconnect (client->eis_client);

@@ -25,7 +25,7 @@
 #include "backends/meta-logical-monitor-private.h"
 #include "cogl/cogl.h"
 #include "core/boxes-private.h"
-#include "wayland/meta-cursor-sprite-wayland.h"
+#include "wayland/meta-cursor-wayland.h"
 #include "wayland/meta-wayland-buffer.h"
 #include "wayland/meta-wayland-presentation-time-private.h"
 #include "wayland/meta-wayland-private.h"
@@ -36,7 +36,7 @@ struct _MetaWaylandCursorSurfacePrivate
 {
   int hot_x;
   int hot_y;
-  MetaCursorSpriteWayland *cursor_sprite;
+  MetaCursorWayland *cursor_sprite;
   MetaCursorRenderer *cursor_renderer;
   MetaWaylandBuffer *buffer;
   struct wl_list frame_callbacks;
@@ -54,7 +54,6 @@ update_cursor_sprite_texture (MetaWaylandCursorSurface *cursor_surface)
     meta_wayland_cursor_surface_get_instance_private (cursor_surface);
   MetaWaylandSurface *surface =
     meta_wayland_surface_role_get_surface (META_WAYLAND_SURFACE_ROLE (cursor_surface));
-  MetaCursorSprite *cursor_sprite = META_CURSOR_SPRITE (priv->cursor_sprite);
   MetaMultiTexture *texture;
 
   if (!priv->cursor_renderer)
@@ -87,14 +86,14 @@ update_cursor_sprite_texture (MetaWaylandCursorSurface *cursor_surface)
           hotspot_scale_y = surface->applied_state.scale;
         }
 
-      meta_cursor_sprite_set_texture (cursor_sprite,
-                                      meta_multi_texture_get_plane (texture, 0),
-                                      (int) roundf (priv->hot_x * hotspot_scale_x),
-                                      (int) roundf (priv->hot_y * hotspot_scale_y));
+      meta_cursor_wayland_set_texture (priv->cursor_sprite,
+                                       meta_multi_texture_get_plane (texture, 0),
+                                       (int) roundf (priv->hot_x * hotspot_scale_x),
+                                       (int) roundf (priv->hot_y * hotspot_scale_y));
     }
   else
     {
-      meta_cursor_sprite_set_texture (cursor_sprite, NULL, 0, 0);
+      meta_cursor_wayland_set_texture (priv->cursor_sprite, NULL, 0, 0);
     }
 
   meta_cursor_renderer_force_update (priv->cursor_renderer);
@@ -315,8 +314,7 @@ meta_wayland_cursor_surface_constructed (GObject *object)
       meta_wayland_buffer_inc_use_count (priv->buffer);
     }
 
-  priv->cursor_sprite = meta_cursor_sprite_wayland_new (surface,
-                                                        cursor_tracker);
+  priv->cursor_sprite = meta_cursor_wayland_new (surface, cursor_tracker);
 }
 
 static void
@@ -348,13 +346,13 @@ meta_wayland_cursor_surface_class_init (MetaWaylandCursorSurfaceClass *klass)
   object_class->dispose = meta_wayland_cursor_surface_dispose;
 }
 
-MetaCursorSprite *
-meta_wayland_cursor_surface_get_sprite (MetaWaylandCursorSurface *cursor_surface)
+ClutterCursor *
+meta_wayland_cursor_surface_get_cursor (MetaWaylandCursorSurface *cursor_surface)
 {
   MetaWaylandCursorSurfacePrivate *priv =
     meta_wayland_cursor_surface_get_instance_private (cursor_surface);
 
-  return META_CURSOR_SPRITE (priv->cursor_sprite);
+  return CLUTTER_CURSOR (priv->cursor_sprite);
 }
 
 void
@@ -390,7 +388,7 @@ meta_wayland_cursor_surface_get_hotspot (MetaWaylandCursorSurface *cursor_surfac
 
 static void
 on_cursor_painted (MetaCursorRenderer       *renderer,
-                   MetaCursorSprite         *displayed_sprite,
+                   ClutterCursor            *displayed_cursor,
                    ClutterStageView         *stage_view,
                    int64_t                   view_frame_counter,
                    MetaWaylandCursorSurface *cursor_surface)
@@ -407,7 +405,7 @@ on_cursor_painted (MetaCursorRenderer       *renderer,
   MetaWaylandCompositor *compositor =
     meta_context_get_wayland_compositor (context);
 
-  if (displayed_sprite != META_CURSOR_SPRITE (priv->cursor_sprite))
+  if (displayed_cursor != CLUTTER_CURSOR (priv->cursor_sprite))
     return;
 
   while (!wl_list_empty (&priv->frame_callbacks))

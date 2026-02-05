@@ -29,6 +29,7 @@
 #include "clutter/clutter-color-state-params.h"
 
 #include "clutter/clutter-color-state-private.h"
+#include "clutter/clutter-context.h"
 
 #define UNIFORM_NAME_GAMMA_EXP "gamma_exp"
 #define UNIFORM_NAME_INV_GAMMA_EXP "inv_gamma_exp"
@@ -710,6 +711,7 @@ static const char bt1886_eotf_source[] =
   "// Returns: tristimulus values ([0,1])\n"
   "vec3 bt1886_eotf (vec3 color)\n"
   "{\n"
+  "  color = clamp (color, vec3 (0.0), vec3 (1.0));\n"
   "  return pow (color, vec3 (2.4));\n"
   "}\n"
   "\n"
@@ -724,6 +726,7 @@ static const char bt1886_inv_eotf_source[] =
   "// Returns: Normalized ([0,1]) electrical signal value\n"
   "vec3 bt1886_inv_eotf (vec3 color)\n"
   "{\n"
+  "  color = clamp (color, vec3 (0.0), vec3 (1.0));\n"
   "  return pow (color, vec3 (1.0 / 2.4));\n"
   "}\n"
   "\n"
@@ -2134,7 +2137,7 @@ clutter_color_state_params_get_blending (ClutterColorState *color_state,
 {
   ClutterColorStateParams *color_state_params =
     CLUTTER_COLOR_STATE_PARAMS (color_state);
-  ClutterContext *context;
+  g_autoptr (ClutterContext) context = NULL;
   ClutterColorimetry blending_colorimetry;
   ClutterEOTF blending_eotf;
   ClutterLuminance luminance, blending_luminance;

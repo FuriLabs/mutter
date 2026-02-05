@@ -27,8 +27,9 @@
 #include "clutter/clutter.h"
 #include "meta/meta-dnd.h"
 #include "meta/meta-idle-monitor.h"
-#include "meta/meta-monitor-manager.h"
+#include "meta/meta-keymap-description.h"
 #include "meta/meta-logical-monitor.h"
+#include "meta/meta-monitor-manager.h"
 #include "meta/meta-orientation-manager.h"
 #include "meta/meta-remote-access-controller.h"
 
@@ -48,14 +49,15 @@ gboolean meta_backend_set_keymap_finish (MetaBackend   *backend,
                                          GError       **error);
 
 META_EXPORT
-void meta_backend_set_keymap_async (MetaBackend         *backend,
-                                    const char          *layouts,
-                                    const char          *variants,
-                                    const char          *options,
-                                    const char          *model,
-                                    GCancellable        *cancellable,
-                                    GAsyncReadyCallback  callback,
-                                    gpointer             user_data);
+void meta_backend_set_keymap_async (MetaBackend           *backend,
+                                    MetaKeymapDescription *description,
+                                    uint32_t               layout_index,
+                                    GCancellable          *cancellable,
+                                    GAsyncReadyCallback    callback,
+                                    gpointer               user_data);
+
+META_EXPORT
+MetaKeymapDescription * meta_backend_get_keymap_description (MetaBackend *backend);
 
 META_EXPORT
 gboolean meta_backend_set_keymap_layout_group_finish (MetaBackend   *backend,
@@ -98,18 +100,6 @@ gboolean meta_backend_is_rendering_hardware_accelerated (MetaBackend *backend);
 
 META_EXPORT
 gboolean meta_backend_is_headless (MetaBackend *backend);
-
-META_EXPORT
-void meta_backend_freeze_keyboard (MetaBackend *backend,
-                                   uint32_t     timestamp);
-
-META_EXPORT
-void meta_backend_ungrab_keyboard (MetaBackend *backend,
-                                   uint32_t     timestamp);
-
-META_EXPORT
-void meta_backend_unfreeze_keyboard (MetaBackend *backend,
-                                     uint32_t     timestamp);
 
 META_EXPORT
 MetaBackendCapabilities meta_backend_get_capabilities (MetaBackend *backend);

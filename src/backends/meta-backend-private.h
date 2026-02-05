@@ -34,6 +34,7 @@
 #include "backends/meta-egl.h"
 #include "backends/meta-input-mapper-private.h"
 #include "backends/meta-input-settings-private.h"
+#include "backends/meta-keymap-description-private.h"
 #include "backends/meta-monitor-manager-private.h"
 #include "backends/meta-pointer-constraint.h"
 #include "backends/meta-renderer.h"
@@ -43,21 +44,6 @@
 
 #define DEFAULT_XKB_RULES_FILE "evdev"
 #define DEFAULT_XKB_MODEL "pc105+inet"
-
-typedef enum
-{
-  META_SEQUENCE_NONE,
-  META_SEQUENCE_ACCEPTED,
-  META_SEQUENCE_REJECTED,
-  META_SEQUENCE_PENDING_END
-} MetaSequenceState;
-
-typedef enum _MetaEventMode
-{
-  META_EVENT_MODE_KEEP_FROZEN,
-  META_EVENT_MODE_THAW,
-  META_EVENT_MODE_REPLAY,
-} MetaEventMode;
 
 struct _MetaBackendClass
 {
@@ -103,45 +89,18 @@ struct _MetaBackendClass
 
   gboolean (* is_lid_closed) (MetaBackend *backend);
 
-  gboolean (* grab_device) (MetaBackend *backend,
-                            int          device_id,
-                            uint32_t     timestamp);
+  void (* set_keymap_async) (MetaBackend           *backend,
+                             MetaKeymapDescription *description,
+                             xkb_layout_index_t     layout_index,
+                             GTask                 *task);
 
-  gboolean (* ungrab_device) (MetaBackend *backend,
-                              int          device_id,
-                              uint32_t     timestamp);
+  struct xkb_keymap * (* get_xkb_keymap) (MetaBackend *backend);
 
-  void (* freeze_keyboard) (MetaBackend *backend,
-                            uint32_t     timestamp);
-
-  void (* unfreeze_keyboard) (MetaBackend *backend,
-                              uint32_t     timestamp);
-
-  void (* ungrab_keyboard) (MetaBackend *backend,
-                            uint32_t     timestamp);
-
-  void (* finish_touch_sequence) (MetaBackend          *backend,
-                                  ClutterEventSequence *sequence,
-                                  MetaSequenceState     state);
-
-  void (* set_keymap_async) (MetaBackend *backend,
-                             const char  *layouts,
-                             const char  *variants,
-                             const char  *options,
-                             const char  *model,
-                             GTask       *task);
-
-  struct xkb_keymap * (* get_keymap) (MetaBackend *backend);
+  MetaKeymapDescription * (* get_keymap_description) (MetaBackend *backend);
 
   xkb_layout_index_t (* get_keymap_layout_group) (MetaBackend *backend);
 
-  void (* set_keymap_layout_group_async) (MetaBackend        *backend,
-                                          xkb_layout_index_t  idx,
-                                          GTask              *task);
-
   void (* update_stage) (MetaBackend *backend);
-
-  void (* select_stage_events) (MetaBackend *backend);
 
   void (* set_pointer_constraint) (MetaBackend           *backend,
                                    MetaPointerConstraint *constraint);
@@ -200,22 +159,23 @@ MetaInputCapture * meta_backend_get_input_capture (MetaBackend *backend);
 
 MetaA11yManager * meta_backend_get_a11y_manager (MetaBackend *backend);
 
-gboolean meta_backend_grab_device (MetaBackend *backend,
-                                   int          device_id,
-                                   uint32_t     timestamp);
-gboolean meta_backend_ungrab_device (MetaBackend *backend,
-                                     int          device_id,
-                                     uint32_t     timestamp);
-
-void meta_backend_finish_touch_sequence (MetaBackend          *backend,
-                                         ClutterEventSequence *sequence,
-                                         MetaSequenceState     state);
-
 META_EXPORT_TEST
-struct xkb_keymap * meta_backend_get_keymap (MetaBackend *backend);
+struct xkb_keymap * meta_backend_get_xkb_keymap (MetaBackend *backend);
 
 META_EXPORT_TEST
 xkb_layout_index_t meta_backend_get_keymap_layout_group (MetaBackend *backend);
+
+META_EXPORT_TEST
+gboolean meta_backend_reset_keymap_finish (MetaBackend   *backend,
+                                           GAsyncResult  *result,
+                                           GError       **error);
+
+META_EXPORT_TEST
+void meta_backend_reset_keymap_async (MetaBackend                *backend,
+                                      MetaKeymapDescriptionOwner *owner,
+                                      GCancellable               *cancellable,
+                                      GAsyncReadyCallback         callback,
+                                      gpointer                    user_data);
 
 gboolean meta_backend_is_lid_closed (MetaBackend *backend);
 
@@ -283,3 +243,6 @@ uint32_t meta_evdev_button_to_clutter (uint32_t evdev_button);
 
 META_EXPORT_TEST
 uint32_t meta_evdev_tool_button_to_clutter (uint32_t evdev_button);
+
+ClutterCursor * meta_backend_get_cursor (MetaBackend       *backend,
+                                         ClutterCursorType  cursor_type);

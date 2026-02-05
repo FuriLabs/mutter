@@ -39,6 +39,10 @@ typedef struct _CoglDriverGLPrivate
   GArray *texture_units;
   int active_texture_unit;
 
+  /* Cached values for GL_MAX_TEXTURE_[IMAGE_]UNITS to avoid calling
+     glGetInteger too often */
+  GLint max_activateable_texture_units;
+
   /* This is used for generated fake unique sampler object numbers
    when the sampler object extension is not supported */
   GLuint next_fake_sampler_object_number;
@@ -77,14 +81,12 @@ struct _CoglDriverGLClass
   CoglDriverClass parent_class;
 
   CoglPixelFormat (* pixel_format_to_gl) (CoglDriverGL    *driver,
-                                          CoglContext     *context,
                                           CoglPixelFormat  format,
                                           GLenum          *out_glintformat,
                                           GLenum          *out_glformat,
                                           GLenum          *out_gltype);
 
   CoglPixelFormat (* get_read_pixels_format) (CoglDriverGL    *driver,
-                                              CoglContext     *context,
                                               CoglPixelFormat  from,
                                               CoglPixelFormat  to,
                                               GLenum          *gl_format_out,
@@ -97,7 +99,6 @@ struct _CoglDriverGLClass
    * destination buffer, the GL driver has a more flexible version of
    * this function that it uses internally. */
   void (* prep_gl_for_pixels_download) (CoglDriverGL *driver,
-                                        CoglContext  *ctx,
                                         int           image_width,
                                         int           pixels_rowstride,
                                         int           pixels_bpp);
@@ -105,13 +106,16 @@ struct _CoglDriverGLClass
    * It may depend on the driver as to what texture sizes are supported...
    */
   gboolean (* texture_size_supported) (CoglDriverGL *driver,
-                                       CoglContext  *ctx,
                                        GLenum        gl_target,
                                        GLenum        gl_intformat,
                                        GLenum        gl_format,
                                        GLenum        gl_type,
                                        int           width,
                                        int           height);
+
+  void (* query_max_texture_units) (CoglDriverGL *driver,
+                                    GLint        *values,
+                                    int          *n_values);
 };
 
 #define COGL_TYPE_DRIVER_GL (cogl_driver_gl_get_type ())
@@ -148,6 +152,7 @@ const char * cogl_driver_gl_get_gl_version (CoglDriverGL *driver);
 
 GLenum cogl_driver_gl_get_gl_error (CoglDriverGL *driver);
 
+GLint cogl_driver_gl_get_max_activateable_texture_units (CoglDriverGL *driver);
 
 gboolean cogl_parse_gl_version (const char *version_string,
                                 int        *major_out,

@@ -24,7 +24,6 @@
 
 #include "backends/meta-backend-private.h"
 #include "backends/meta-cursor-renderer.h"
-#include "backends/meta-cursor.h"
 #include "backends/meta-renderer.h"
 #include "clutter/clutter.h"
 #include "cogl/cogl.h"
@@ -51,6 +50,12 @@ typedef enum _MetaScreenCastPaintPhase
   META_SCREEN_CAST_PAINT_PHASE_PRE_PAINT,
   META_SCREEN_CAST_PAINT_PHASE_PRE_SWAP_BUFFER,
 } MetaScreenCastPaintPhase;
+
+typedef struct _MetaTagEntry
+{
+  char *key;
+  char *value;
+} MetaTagEntry;
 
 /* Declare some SPA types to avoid including the headers in too many places. */
 struct spa_meta_cursor;
@@ -97,6 +102,12 @@ struct _MetaScreenCastStreamSrcClass
   CoglPixelFormat (* get_preferred_format) (MetaScreenCastStreamSrc *src);
 
   void (* dispatch) (MetaScreenCastStreamSrc *src);
+
+  void (* append_tags) (MetaScreenCastStreamSrc *src,
+                        GArray                  *tags);
+  void (* tag_changed) (MetaScreenCastStreamSrc *src,
+                        const char              *key,
+                        const char              *value);
 };
 
 void meta_screen_cast_stream_src_close (MetaScreenCastStreamSrc *src);
@@ -160,7 +171,7 @@ void meta_screen_cast_stream_src_set_empty_cursor_sprite_metadata (MetaScreenCas
 
 void meta_screen_cast_stream_src_set_cursor_sprite_metadata (MetaScreenCastStreamSrc *src,
                                                              struct spa_meta_cursor  *spa_meta_cursor,
-                                                             MetaCursorSprite        *cursor_sprite,
+                                                             ClutterCursor           *cursor,
                                                              int                      x,
                                                              int                      y,
                                                              float                    view_scale);
@@ -171,3 +182,5 @@ CoglPixelFormat
 meta_screen_cast_stream_src_get_preferred_format (MetaScreenCastStreamSrc *src);
 
 void meta_screen_cast_stream_src_queue_empty_buffer (MetaScreenCastStreamSrc *src);
+
+void meta_screen_cast_stream_src_renegotiate (MetaScreenCastStreamSrc *src);

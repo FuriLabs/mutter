@@ -125,18 +125,18 @@ is_cursor_in_stream (MetaScreenCastAreaStreamSrc *area_src)
     meta_backend_get_cursor_renderer (backend);
   MtkRectangle *area;
   graphene_rect_t area_rect;
-  MetaCursorSprite *cursor_sprite;
+  ClutterCursor *cursor;
 
   area = meta_screen_cast_area_stream_get_area (area_stream);
   area_rect = mtk_rectangle_to_graphene_rect (area);
 
-  cursor_sprite = meta_cursor_renderer_get_cursor (cursor_renderer);
-  if (cursor_sprite)
+  cursor = meta_cursor_renderer_get_cursor (cursor_renderer);
+  if (cursor)
     {
       graphene_rect_t cursor_rect;
 
       cursor_rect = meta_cursor_renderer_calculate_rect (cursor_renderer,
-                                                         cursor_sprite);
+                                                         cursor);
       return graphene_rect_intersection (&cursor_rect, &area_rect, NULL);
     }
   else
@@ -402,14 +402,12 @@ meta_screen_cast_area_stream_src_enable (MetaScreenCastStreamSrc *src)
         g_signal_connect_after (stage, "prepare-frame",
                                 G_CALLBACK (on_prepare_frame),
                                 area_src);
-      meta_cursor_tracker_track_position (cursor_tracker);
       G_GNUC_FALLTHROUGH;
     case META_SCREEN_CAST_CURSOR_MODE_HIDDEN:
       add_view_painted_watches (area_src);
       break;
     case META_SCREEN_CAST_CURSOR_MODE_EMBEDDED:
       inhibit_hw_cursor (area_src);
-      meta_cursor_tracker_track_position (cursor_tracker);
       add_view_painted_watches (area_src);
       break;
     }
@@ -426,7 +424,6 @@ meta_screen_cast_area_stream_src_disable (MetaScreenCastStreamSrc *src)
 {
   MetaScreenCastAreaStreamSrc *area_src =
     META_SCREEN_CAST_AREA_STREAM_SRC (src);
-  MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
   MetaBackend *backend = get_backend (area_src);
   MetaCursorTracker *cursor_tracker = meta_backend_get_cursor_tracker (backend);
   ClutterStage *stage;
@@ -455,16 +452,6 @@ meta_screen_cast_area_stream_src_disable (MetaScreenCastStreamSrc *src)
                           stage);
 
   g_clear_handle_id (&area_src->maybe_record_idle_id, g_source_remove);
-
-  switch (meta_screen_cast_stream_get_cursor_mode (stream))
-    {
-    case META_SCREEN_CAST_CURSOR_MODE_METADATA:
-    case META_SCREEN_CAST_CURSOR_MODE_EMBEDDED:
-      meta_cursor_tracker_untrack_position (cursor_tracker);
-      break;
-    case META_SCREEN_CAST_CURSOR_MODE_HIDDEN:
-      break;
-    }
 }
 
 static gboolean
@@ -642,10 +629,10 @@ meta_screen_cast_area_stream_src_set_cursor_metadata (MetaScreenCastStreamSrc *s
   MetaBackend *backend = get_backend (area_src);
   MetaCursorRenderer *cursor_renderer =
     meta_backend_get_cursor_renderer (backend);
-  MetaCursorSprite *cursor_sprite;
+  ClutterCursor *cursor;
   int x, y;
 
-  cursor_sprite = meta_cursor_renderer_get_cursor (cursor_renderer);
+  cursor = meta_cursor_renderer_get_cursor (cursor_renderer);
 
   if (!should_cursor_metadata_be_set (area_src))
     {
@@ -663,7 +650,7 @@ meta_screen_cast_area_stream_src_set_cursor_metadata (MetaScreenCastStreamSrc *s
 
   if (area_src->cursor_bitmap_invalid)
     {
-      if (cursor_sprite)
+      if (cursor)
         {
           float view_scale;
 
@@ -671,7 +658,7 @@ meta_screen_cast_area_stream_src_set_cursor_metadata (MetaScreenCastStreamSrc *s
 
           meta_screen_cast_stream_src_set_cursor_sprite_metadata (src,
                                                                   spa_meta_cursor,
-                                                                  cursor_sprite,
+                                                                  cursor,
                                                                   x, y,
                                                                   view_scale);
         }

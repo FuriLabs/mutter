@@ -913,10 +913,11 @@ meta_create_test_monitor (MetaContext *context,
   MetaVirtualMonitor *virtual_monitor;
 
   serial = g_strdup_printf ("0x%x", serial_count++);
-  monitor_info = meta_virtual_monitor_info_new (width, height, refresh_rate,
-                                                "MetaTestVendor",
-                                                "MetaVirtualMonitor",
-                                                serial);
+  monitor_info = meta_virtual_monitor_info_new_simple (width, height,
+                                                       refresh_rate,
+                                                       "MetaTestVendor",
+                                                       "MetaVirtualMonitor",
+                                                       serial);
   virtual_monitor = meta_monitor_manager_create_virtual_monitor (monitor_manager,
                                                                  monitor_info,
                                                                  &error);
@@ -980,7 +981,7 @@ meta_launch_test_executable (GSubprocessFlags  subprocess_flags,
   const char *arg;
   va_list ap;
   g_autofree char *test_client_path = NULL;
-  GSubprocessLauncher *launcher;
+  g_autoptr (GSubprocessLauncher) launcher = NULL;
   GSubprocess *subprocess;
   GError *error = NULL;
 
@@ -1150,7 +1151,7 @@ test_client_exited (GObject      *source_object,
 void
 meta_wait_test_process (GSubprocess *subprocess)
 {
-  GMainLoop *loop;
+  g_autoptr (GMainLoop) loop = NULL;
 
   loop = g_main_loop_new (NULL, FALSE);
   g_subprocess_wait_check_async (subprocess,
@@ -1161,14 +1162,24 @@ meta_wait_test_process (GSubprocess *subprocess)
   g_assert_true (g_subprocess_get_successful (subprocess));
 }
 
-void
-meta_wait_for_window_cursor (MetaContext *context)
+ClutterCursor *
+meta_get_current_cursor (MetaContext *context)
 {
   MetaBackend *backend = meta_context_get_backend (context);
-  MetaCursorTracker *cursor_tracker = meta_backend_get_cursor_tracker (backend);
+  ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
+  ClutterStage *stage = CLUTTER_STAGE (meta_backend_get_stage (backend));
+  ClutterSprite *sprite =
+    clutter_backend_get_pointer_sprite (clutter_backend, stage);
 
-  while (!meta_cursor_tracker_has_window_cursor (cursor_tracker))
-    g_main_context_iteration (NULL, TRUE);
+  return clutter_sprite_get_cursor (sprite);
+}
+
+void
+meta_wait_for_cursor_change (MetaContext   *context,
+                             ClutterCursor *current_cursor)
+{
+  while (current_cursor == meta_get_current_cursor (context))
+    g_main_context_iteration (NULL, FALSE);
 }
 
 void
