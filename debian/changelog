@@ -1,6 +1,16 @@
+mutter (50~beta-0ubuntu1) UNRELEASED; urgency=medium
+
+  * New upstream release 50.beta
+  * Refreshed patches and fixed conflicts:
+    - workarounds/Mark-several-additional-tests-as-flaky.patch
+    - workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
+    - workarounds/tests-Mark-view-verification-tests-as-incomplete-in-big-e.patch
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 05 Feb 2026 15:57:48 +0800
+
 mutter (50~alpha-0ubuntu1) resolute; urgency=medium
 
-  * New upstream release 50.alpha
+  * New upstream release 50.alpha (LP: #2131889, LP: #2130619)
   * Refreshed patches and fixed conflicts:
     - workarounds/Mark-several-additional-tests-as-flaky.patch
     - workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
@@ -9,7 +19,7 @@ mutter (50~alpha-0ubuntu1) resolute; urgency=medium
     - workarounds/tests-test-client-Sync-display-before-closing-it.patch
       to avoid spurious test failures with 50.alpha.
     - ubuntu/Unblock-Nvidia-performance.patch to improve Nvidia driver
-      desktop performance.
+      desktop performance. (LP: #2081140)
     - ubuntu/core-Remove-warning-that-a-key-combo-has-been-overridden.patch
       (LP: #1857392)
     - ubuntu/onscreen-native-Reduce-the-log-level-of-buffer-age-warnin.patch
