@@ -295,8 +295,10 @@ clutter_seat_class_init (ClutterSeatClass *klass)
   signals[IS_UNFOCUS_INHIBITED_CHANGED] =
     g_signal_new (I_("is-unfocus-inhibited-changed"),
                   G_TYPE_FROM_CLASS (klass),
-                  G_SIGNAL_RUN_LAST,
-                  0, NULL, NULL, NULL,
+                  G_SIGNAL_RUN_FIRST,
+                  G_STRUCT_OFFSET (ClutterSeatClass,
+                                   is_unfocus_inhibited_changed),
+                  NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
   /**
@@ -719,30 +721,6 @@ clutter_seat_destroy (ClutterSeat *seat)
 {
   g_object_run_dispose (G_OBJECT (seat));
   g_object_unref (seat);
-}
-
-ClutterGrabState
-clutter_seat_grab (ClutterSeat *seat,
-                   uint32_t     time)
-{
-  ClutterSeatClass *seat_class;
-
-  seat_class = CLUTTER_SEAT_GET_CLASS (seat);
-  if (seat_class->grab)
-    return seat_class->grab (seat, time);
-  else
-    return CLUTTER_GRAB_STATE_ALL;
-}
-
-void
-clutter_seat_ungrab (ClutterSeat *seat,
-                     uint32_t     time)
-{
-  ClutterSeatClass *seat_class;
-
-  seat_class = CLUTTER_SEAT_GET_CLASS (seat);
-  if (seat_class->ungrab)
-    return seat_class->ungrab (seat, time);
 }
 
 const char *

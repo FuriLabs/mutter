@@ -29,11 +29,8 @@
 typedef enum _MetaExperimentalFeature
 {
   META_EXPERIMENTAL_FEATURE_NONE = 0,
-  META_EXPERIMENTAL_FEATURE_SCALE_MONITOR_FRAMEBUFFER = (1 << 0),
-  META_EXPERIMENTAL_FEATURE_KMS_MODIFIERS  = (1 << 1),
-  META_EXPERIMENTAL_FEATURE_AUTOCLOSE_XWAYLAND  = (1 << 2),
-  META_EXPERIMENTAL_FEATURE_VARIABLE_REFRESH_RATE = (1 << 3),
-  META_EXPERIMENTAL_FEATURE_XWAYLAND_NATIVE_SCALING  = (1 << 4),
+  META_EXPERIMENTAL_FEATURE_KMS_MODIFIERS  = (1 << 0),
+  META_EXPERIMENTAL_FEATURE_AUTOCLOSE_XWAYLAND  = (1 << 1),
 } MetaExperimentalFeature;
 
 typedef enum _MetaXwaylandExtension
@@ -75,6 +72,9 @@ gboolean meta_settings_are_xwayland_grabs_allowed (MetaSettings *settings);
 int meta_settings_get_xwayland_disable_extensions (MetaSettings *settings);
 
 gboolean meta_settings_are_xwayland_byte_swapped_clients_allowed (MetaSettings *settings);
+
+gboolean meta_settings_get_xwayland_scaling_factor (MetaSettings *settings,
+                                                    float        *scaling_factor);
 
 gboolean meta_settings_is_privacy_screen_enabled (MetaSettings *settings);
 

@@ -60,8 +60,8 @@ struct _MetaCursorRendererPrivate
   float current_y;
 
   ClutterSprite *sprite;
-  MetaCursorSprite *displayed_cursor;
-  MetaCursorSprite *overlay_cursor;
+  ClutterCursor *displayed_cursor;
+  ClutterCursor *overlay_cursor;
 
   MetaOverlay *stage_overlay;
   gboolean needs_overlay;
@@ -96,11 +96,11 @@ meta_hw_cursor_inhibitor_default_init (MetaHwCursorInhibitorInterface *iface)
 
 void
 meta_cursor_renderer_emit_painted (MetaCursorRenderer *renderer,
-                                   MetaCursorSprite   *cursor_sprite,
+                                   ClutterCursor      *cursor,
                                    ClutterStageView   *stage_view,
                                    int64_t             view_frame_counter)
 {
-  g_signal_emit (renderer, signals[CURSOR_PAINTED], 0, cursor_sprite,
+  g_signal_emit (renderer, signals[CURSOR_PAINTED], 0, cursor,
                  stage_view, view_frame_counter);
 }
 
@@ -132,7 +132,7 @@ align_cursor_position (MetaCursorRenderer *renderer,
 
 void
 meta_cursor_renderer_update_stage_overlay (MetaCursorRenderer *renderer,
-                                           MetaCursorSprite   *cursor_sprite)
+                                           ClutterCursor      *cursor)
 {
   MetaCursorRendererPrivate *priv = meta_cursor_renderer_get_instance_private (renderer);
   ClutterActor *stage = meta_backend_get_stage (priv->backend);
@@ -140,18 +140,18 @@ meta_cursor_renderer_update_stage_overlay (MetaCursorRenderer *renderer,
   graphene_rect_t dst_rect = GRAPHENE_RECT_INIT_ZERO;
   graphene_matrix_t matrix;
 
-  g_set_object (&priv->overlay_cursor, cursor_sprite);
+  g_set_object (&priv->overlay_cursor, cursor);
 
   if (!priv->stage_overlay)
     priv->stage_overlay = meta_stage_create_cursor_overlay (META_STAGE (stage));
 
   graphene_matrix_init_identity (&matrix);
-  if (cursor_sprite)
+  if (cursor)
     {
-      dst_rect = meta_cursor_renderer_calculate_rect (renderer, cursor_sprite);
+      dst_rect = meta_cursor_renderer_calculate_rect (renderer, cursor);
       align_cursor_position (renderer, &dst_rect);
 
-      texture = meta_cursor_sprite_get_cogl_texture (cursor_sprite);
+      texture = clutter_cursor_get_texture (cursor, NULL, NULL);
       if (texture)
         {
           int cursor_width, cursor_height;
@@ -161,10 +161,10 @@ meta_cursor_renderer_update_stage_overlay (MetaCursorRenderer *renderer,
 
           cursor_width = cogl_texture_get_width (texture);
           cursor_height = cogl_texture_get_height (texture);
-          cursor_scale = meta_cursor_sprite_get_texture_scale (cursor_sprite);
+          cursor_scale = clutter_cursor_get_texture_scale (cursor);
           cursor_transform =
-            meta_cursor_sprite_get_texture_transform (cursor_sprite);
-          src_rect = meta_cursor_sprite_get_viewport_src_rect (cursor_sprite);
+            clutter_cursor_get_texture_transform (cursor);
+          src_rect = clutter_cursor_get_viewport_src_rect (cursor);
           mtk_compute_viewport_matrix (&matrix,
                                        cursor_width,
                                        cursor_height,
@@ -213,10 +213,10 @@ meta_cursor_renderer_after_paint (ClutterStage       *stage,
 
 static gboolean
 meta_cursor_renderer_real_update_cursor (MetaCursorRenderer *renderer,
-                                         MetaCursorSprite   *cursor_sprite)
+                                         ClutterCursor      *cursor)
 {
-  if (cursor_sprite)
-    meta_cursor_sprite_realize_texture (cursor_sprite);
+  if (cursor)
+    clutter_cursor_realize_texture (cursor);
 
   return TRUE;
 }
@@ -325,7 +325,6 @@ meta_cursor_renderer_class_init (MetaCursorRendererClass *klass)
     g_param_spec_object ("sprite", NULL, NULL,
                          CLUTTER_TYPE_SPRITE,
                          G_PARAM_READWRITE |
-                         G_PARAM_CONSTRUCT_ONLY |
                          G_PARAM_STATIC_STRINGS);
   g_object_class_install_properties (object_class, N_PROPS, obj_props);
 
@@ -347,7 +346,7 @@ meta_cursor_renderer_init (MetaCursorRenderer *renderer)
 
 static gboolean
 calculate_sprite_geometry (MetaCursorRenderer *renderer,
-                           MetaCursorSprite   *cursor_sprite,
+                           ClutterCursor      *cursor,
                            graphene_size_t    *size,
                            graphene_point_t   *hotspot)
 {
@@ -358,20 +357,19 @@ calculate_sprite_geometry (MetaCursorRenderer *renderer,
   int tex_width, tex_height;
   int dst_width, dst_height;
 
-  meta_cursor_sprite_realize_texture (cursor_sprite);
-  texture = meta_cursor_sprite_get_cogl_texture (cursor_sprite);
+  clutter_cursor_realize_texture (cursor);
+  texture = clutter_cursor_get_texture (cursor, &hot_x, &hot_y);
   if (!texture)
     return FALSE;
 
-  meta_cursor_sprite_get_hotspot (cursor_sprite, &hot_x, &hot_y);
-  cursor_transform = meta_cursor_sprite_get_texture_transform (cursor_sprite);
-  src_rect = meta_cursor_sprite_get_viewport_src_rect (cursor_sprite);
+  cursor_transform = clutter_cursor_get_texture_transform (cursor);
+  src_rect = clutter_cursor_get_viewport_src_rect (cursor);
   tex_width = cogl_texture_get_width (texture);
   tex_height = cogl_texture_get_height (texture);
 
-  if (meta_cursor_sprite_get_viewport_dst_size (cursor_sprite,
-                                                &dst_width,
-                                                &dst_height))
+  if (clutter_cursor_get_viewport_dst_size (cursor,
+                                            &dst_width,
+                                            &dst_height))
     {
       float scale_x;
       float scale_y;
@@ -390,7 +388,7 @@ calculate_sprite_geometry (MetaCursorRenderer *renderer,
     }
   else if (src_rect)
     {
-      float cursor_scale = meta_cursor_sprite_get_texture_scale (cursor_sprite);
+      float cursor_scale = clutter_cursor_get_texture_scale (cursor);
 
       *size = (graphene_size_t) {
         .width = src_rect->size.width * cursor_scale,
@@ -403,7 +401,7 @@ calculate_sprite_geometry (MetaCursorRenderer *renderer,
     }
   else
     {
-      float cursor_scale = meta_cursor_sprite_get_texture_scale (cursor_sprite);
+      float cursor_scale = clutter_cursor_get_texture_scale (cursor);
 
       if (mtk_monitor_transform_is_rotated (cursor_transform))
         {
@@ -430,7 +428,7 @@ calculate_sprite_geometry (MetaCursorRenderer *renderer,
 
 graphene_rect_t
 meta_cursor_renderer_calculate_rect (MetaCursorRenderer *renderer,
-                                     MetaCursorSprite   *cursor_sprite)
+                                     ClutterCursor      *cursor)
 {
   MetaCursorRendererPrivate *priv =
     meta_cursor_renderer_get_instance_private (renderer);
@@ -438,7 +436,7 @@ meta_cursor_renderer_calculate_rect (MetaCursorRenderer *renderer,
   graphene_point_t hotspot;
 
   if (!calculate_sprite_geometry (renderer,
-                                  cursor_sprite,
+                                  cursor,
                                   &rect.size,
                                   &hotspot))
     return GRAPHENE_RECT_INIT_ZERO;
@@ -450,7 +448,7 @@ meta_cursor_renderer_calculate_rect (MetaCursorRenderer *renderer,
 
 static float
 find_highest_logical_monitor_scale (MetaCursorRenderer *renderer,
-                                    MetaCursorSprite   *cursor_sprite)
+                                    ClutterCursor      *cursor)
 {
   MetaCursorRendererPrivate *priv =
     meta_cursor_renderer_get_instance_private (renderer);
@@ -461,8 +459,7 @@ find_highest_logical_monitor_scale (MetaCursorRenderer *renderer,
   GList *l;
   float highest_scale = 0.0f;
 
-  cursor_rect = meta_cursor_renderer_calculate_rect (renderer,
-                                                     cursor_sprite);
+  cursor_rect = meta_cursor_renderer_calculate_rect (renderer, cursor);
 
   logical_monitors =
     meta_monitor_manager_get_logical_monitors (monitor_manager);
@@ -485,49 +482,45 @@ find_highest_logical_monitor_scale (MetaCursorRenderer *renderer,
 
 static void
 meta_cursor_renderer_update_cursor (MetaCursorRenderer *renderer,
-                                    MetaCursorSprite   *cursor_sprite)
+                                    ClutterCursor      *cursor)
 {
   MetaCursorRendererPrivate *priv =
     meta_cursor_renderer_get_instance_private (renderer);
 
-  if (cursor_sprite)
+  if (cursor)
     {
-      float scale = find_highest_logical_monitor_scale (renderer,
-                                                        cursor_sprite);
-      meta_cursor_sprite_prepare_at (cursor_sprite,
-                                     MAX (1, scale),
-                                     (int) priv->current_x,
-                                     (int) priv->current_y);
+      float scale = find_highest_logical_monitor_scale (renderer, cursor);
+      clutter_cursor_prepare_at (cursor,
+                                 MAX (1, scale),
+                                 (int) priv->current_x,
+                                 (int) priv->current_y);
     }
 
   priv->needs_overlay =
-    META_CURSOR_RENDERER_GET_CLASS (renderer)->update_cursor (renderer,
-                                                              cursor_sprite);
+    META_CURSOR_RENDERER_GET_CLASS (renderer)->update_cursor (renderer, cursor);
 
-  meta_cursor_renderer_update_stage_overlay (renderer, cursor_sprite);
+  meta_cursor_renderer_update_stage_overlay (renderer, cursor);
 }
 
 MetaCursorRenderer *
-meta_cursor_renderer_new (MetaBackend   *backend,
-                          ClutterSprite *sprite)
+meta_cursor_renderer_new (MetaBackend *backend)
 {
   return g_object_new (META_TYPE_CURSOR_RENDERER,
                        "backend", backend,
-                       "sprite", sprite,
                        NULL);
 }
 
 void
 meta_cursor_renderer_set_cursor (MetaCursorRenderer *renderer,
-                                 MetaCursorSprite   *cursor_sprite)
+                                 ClutterCursor      *cursor)
 {
   MetaCursorRendererPrivate *priv = meta_cursor_renderer_get_instance_private (renderer);
 
-  if (priv->displayed_cursor == cursor_sprite)
+  if (priv->displayed_cursor == cursor)
     return;
-  g_set_object (&priv->displayed_cursor, cursor_sprite);
+  g_set_object (&priv->displayed_cursor, cursor);
 
-  meta_cursor_renderer_update_cursor (renderer, cursor_sprite);
+  meta_cursor_renderer_update_cursor (renderer, cursor);
 }
 
 void
@@ -556,7 +549,7 @@ meta_cursor_renderer_update_position (MetaCursorRenderer *renderer)
   meta_cursor_renderer_update_cursor (renderer, priv->displayed_cursor);
 }
 
-MetaCursorSprite *
+ClutterCursor *
 meta_cursor_renderer_get_cursor (MetaCursorRenderer *renderer)
 {
   MetaCursorRendererPrivate *priv = meta_cursor_renderer_get_instance_private (renderer);
@@ -571,6 +564,30 @@ meta_cursor_renderer_get_sprite (MetaCursorRenderer *renderer)
     meta_cursor_renderer_get_instance_private (renderer);
 
   return priv->sprite;
+}
+
+void
+meta_cursor_renderer_set_sprite (MetaCursorRenderer *renderer,
+                                 ClutterSprite      *sprite)
+{
+  MetaCursorRendererPrivate *priv =
+    meta_cursor_renderer_get_instance_private (renderer);
+  ClutterCursor *cursor;
+
+  g_set_object (&priv->sprite, sprite);
+
+  if (META_CURSOR_RENDERER_GET_CLASS (renderer)->update_sprite)
+    META_CURSOR_RENDERER_GET_CLASS (renderer)->update_sprite (renderer, sprite);
+
+  if (priv->sprite)
+    {
+      cursor = clutter_sprite_get_cursor (sprite);
+      meta_cursor_renderer_update_cursor (renderer, cursor);
+    }
+  else
+    {
+      meta_cursor_renderer_update_cursor (renderer, NULL);
+    }
 }
 
 MetaBackend *

@@ -1036,10 +1036,11 @@ get_secondary_gpu_buffer_age (MetaOnscreenNativeSecondaryGpuState *secondary_gpu
 
   if (buffer_age > MAX_SECONDARY_GPU_BUFFER_AGE)
     {
-      g_warning ("Secondary GPU provides buffers of age %i, which is "
-                 "older than supported; ignoring damage rectangles and fully "
-                 "redrawing which may cause increased GPU power consumption",
-                 buffer_age);
+      meta_topic (META_DEBUG_KMS,
+                  "Secondary GPU provides buffers of age %i, which is "
+                  "older than supported; ignoring damage rectangles and fully "
+                  "redrawing which may cause increased GPU power consumption",
+                  buffer_age);
 
       return 0;
     }
@@ -1899,6 +1900,12 @@ maybe_post_next_frame (CoglOnscreen *onscreen)
   sync_fd = meta_frame_native_steal_sync_fd (frame_native);
   if (sync_fd >= 0)
     meta_kms_update_set_sync_fd (kms_update, g_steal_fd (&sync_fd));
+
+  if (frame->is_target_presentation_time)
+    {
+      meta_kms_update_set_target_presentation_time (kms_update,
+                                                    frame->expected_presentation_time_us);
+    }
 
   meta_kms_device_post_update (kms_device, kms_update,
                                META_KMS_UPDATE_FLAG_NONE);

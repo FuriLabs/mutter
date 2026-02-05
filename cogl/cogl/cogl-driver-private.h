@@ -32,6 +32,7 @@
 
 #include "cogl/cogl-buffer-impl-private.h"
 #include "cogl/cogl-context.h"
+#include "cogl/cogl-driver.h"
 #include "cogl/cogl-offscreen-private.h"
 #include "cogl/cogl-framebuffer-private.h"
 #include "cogl/cogl-attribute-private.h"
@@ -39,11 +40,6 @@
 #include "cogl/cogl-texture-driver.h"
 #include "cogl/cogl-texture-private.h"
 
-G_DECLARE_DERIVABLE_TYPE (CoglDriver,
-                          cogl_driver,
-                          COGL,
-                          DRIVER,
-                          GObject)
 
 struct _CoglDriverClass
 {
@@ -52,25 +48,20 @@ struct _CoglDriverClass
   gboolean (* context_init) (CoglDriver  *driver,
                              CoglContext *context);
 
-  const char * (* get_vendor) (CoglDriver  *driver,
-                               CoglContext *context);
+  const char * (* get_vendor) (CoglDriver *driver);
 
-  gboolean (* is_hardware_accelerated) (CoglDriver  *driver,
-                                        CoglContext *context);
+  gboolean (* is_hardware_accelerated) (CoglDriver *driver);
 
-  CoglGraphicsResetStatus (* get_graphics_reset_status) (CoglDriver  *driver,
-                                                         CoglContext *context);
+  CoglGraphicsResetStatus (* get_graphics_reset_status) (CoglDriver *driver);
 
   gboolean (* update_features) (CoglDriver   *driver,
-                                CoglContext  *context,
+                                CoglRenderer *renderer,
                                 GError      **error);
 
   gboolean (* format_supports_upload) (CoglDriver      *driver,
-                                       CoglContext     *ctx,
                                        CoglPixelFormat  format);
 
   CoglFramebufferDriver * (* create_framebuffer_driver) (CoglDriver                         *driver,
-                                                         CoglContext                        *context,
                                                          CoglFramebuffer                    *framebuffer,
                                                          const CoglFramebufferDriverConfig  *driver_config,
                                                          GError                            **error);
@@ -105,24 +96,30 @@ struct _CoglDriverClass
   CoglTextureDriver * (* create_texture_driver) (CoglDriver *driver);
 
   void (*sampler_init) (CoglDriver            *driver,
-                        CoglContext           *context,
                         CoglSamplerCacheEntry *entry);
 
   void (*sampler_free) (CoglDriver            *driver,
-                        CoglContext           *context,
                         CoglSamplerCacheEntry *entry);
 
   void (* set_uniform) (CoglDriver           *driver,
-                        CoglContext          *ctx,
                         GLint                 location,
                         const CoglBoxedValue *value);
 };
 
-#define COGL_TYPE_DRIVER (cogl_driver_get_type ())
 
 CoglBufferImpl * cogl_driver_create_buffer_impl (CoglDriver *driver);
 
 CoglTextureDriver * cogl_driver_create_texture_driver (CoglDriver *driver);
+
+/* Query the GL extensions and lookup the corresponding function
+ * pointers. Theoretically the list of extensions can change for
+ * different GL contexts so it is the winsys backend's responsibility
+ * to know when to re-query the GL extensions. The backend should also
+ * check whether the GL context is supported by Cogl. If not it should
+ * return FALSE and set @error */
+gboolean cogl_driver_update_features (CoglDriver   *driver,
+                                      CoglRenderer *renderer,
+                                      GError      **error);
 
 #define COGL_DRIVER_ERROR (_cogl_driver_error_quark ())
 

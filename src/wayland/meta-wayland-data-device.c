@@ -34,6 +34,7 @@
 
 #include "backends/meta-dnd-private.h"
 #include "backends/meta-cursor-tracker-private.h"
+#include "backends/meta-cursor-xcursor.h"
 #include "compositor/meta-dnd-actor-private.h"
 #include "compositor/meta-surface-actor.h"
 #include "compositor/meta-window-drag.h"
@@ -222,16 +223,14 @@ on_drag_focus_destroyed (MetaWaylandSurface  *surface,
 
 static void
 meta_wayland_drag_grab_set_cursor (MetaWaylandDragGrab *drag_grab,
-                                   MetaCursor           cursor)
+                                   ClutterCursorType    cursor_type)
 {
   MetaWaylandCompositor *compositor =
     meta_wayland_seat_get_compositor (drag_grab->seat);
   MetaContext *context = meta_wayland_compositor_get_context (compositor);
   MetaBackend *backend = meta_context_get_backend (context);
-  MetaCursorTracker *cursor_tracker =
-    meta_backend_get_cursor_tracker (backend);
-  g_autoptr (MetaCursorSprite) cursor_sprite = NULL;
-  MetaCursorRenderer *cursor_renderer;
+  ClutterStage *stage = CLUTTER_STAGE (meta_backend_get_stage (backend));
+  ClutterActor *grab_actor;
 
 #ifdef HAVE_XWAYLAND
   /* X11 DnD lets the drag source client drive pointer cursor updates */
@@ -239,19 +238,8 @@ meta_wayland_drag_grab_set_cursor (MetaWaylandDragGrab *drag_grab,
     return;
 #endif
 
-  cursor_sprite =
-    META_CURSOR_SPRITE (meta_cursor_sprite_xcursor_new (cursor, cursor_tracker));
-
-  cursor_renderer =
-    meta_backend_get_cursor_renderer_for_sprite (backend, drag_grab->sprite);
-
-  if (cursor_renderer && cursor_sprite)
-    {
-      if (cursor_renderer == meta_backend_get_cursor_renderer (backend))
-        meta_cursor_tracker_set_window_cursor (cursor_tracker, cursor_sprite);
-      else
-        meta_cursor_renderer_set_cursor (cursor_renderer, cursor_sprite);
-    }
+  grab_actor = clutter_stage_get_grab_actor (stage);
+  clutter_actor_set_cursor_type (grab_actor, cursor_type);
 }
 
 static void
@@ -259,21 +247,21 @@ meta_wayland_drag_grab_update_cursor (MetaWaylandDragGrab *drag_grab)
 {
   enum wl_data_device_manager_dnd_action action =
     meta_wayland_data_source_get_current_action (drag_grab->drag_data_source);
-  MetaCursor cursor = META_CURSOR_DEFAULT;
+  ClutterCursorType cursor = CLUTTER_CURSOR_DEFAULT;
 
   switch (action)
     {
     case WL_DATA_DEVICE_MANAGER_DND_ACTION_NONE:
-      cursor = META_CURSOR_NO_DROP;
+      cursor = CLUTTER_CURSOR_NO_DROP;
       break;
     case WL_DATA_DEVICE_MANAGER_DND_ACTION_MOVE:
-      cursor = META_CURSOR_MOVE;
+      cursor = CLUTTER_CURSOR_MOVE;
       break;
     case WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY:
-      cursor = META_CURSOR_COPY;
+      cursor = CLUTTER_CURSOR_COPY;
       break;
     case WL_DATA_DEVICE_MANAGER_DND_ACTION_ASK:
-      cursor = META_CURSOR_DND_ASK;
+      cursor = CLUTTER_CURSOR_DND_ASK;
       break;
     default:
       break;
@@ -456,7 +444,7 @@ data_device_end_drag_grab (MetaWaylandDragGrab *drag_grab)
   MetaDisplay *display = display_from_data_device (data_device);
   MetaCompositor *compositor = meta_display_get_compositor (display);
 
-  meta_wayland_drag_grab_set_cursor (drag_grab, META_CURSOR_DEFAULT);
+  meta_wayland_drag_grab_set_cursor (drag_grab, CLUTTER_CURSOR_DEFAULT);
 
   meta_wayland_drag_grab_set_source (drag_grab, NULL);
   meta_wayland_drag_grab_set_focus (drag_grab, NULL);

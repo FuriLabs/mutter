@@ -145,7 +145,7 @@ maybe_record_frame_on_idle (gpointer user_data)
   MetaScreenCastPaintPhase paint_phase;
   MetaScreenCastRecordFlag flags;
   MtkRectangle empty_rect;
-  MtkRegion *empty_region;
+  g_autoptr (MtkRegion) empty_region = NULL;
 
   monitor_src->maybe_record_idle_id = 0;
 
@@ -176,7 +176,8 @@ stage_painted (MetaStage        *stage,
   if (monitor_src->maybe_record_idle_id)
     return;
 
-  if (!clutter_frame_get_target_presentation_time (frame, &presentation_time_us))
+  if (!clutter_frame_get_expected_presentation_time (frame,
+                                                     &presentation_time_us))
     presentation_time_us = g_get_monotonic_time ();
 
   if (meta_screen_cast_stream_src_uses_dma_bufs (src))
@@ -227,7 +228,8 @@ before_stage_painted (MetaStage        *stage,
   if (!clutter_stage_view_peek_scanout (view))
     return;
 
-  if (!clutter_frame_get_target_presentation_time (frame, &presentation_time_us))
+  if (!clutter_frame_get_expected_presentation_time (frame,
+                                                     &presentation_time_us))
     presentation_time_us = g_get_monotonic_time ();
 
   flags = META_SCREEN_CAST_RECORD_FLAG_NONE;
@@ -249,7 +251,7 @@ is_cursor_in_stream (MetaScreenCastMonitorStreamSrc *monitor_src)
   MetaLogicalMonitor *logical_monitor;
   MtkRectangle logical_monitor_layout;
   graphene_rect_t logical_monitor_rect;
-  MetaCursorSprite *cursor_sprite;
+  ClutterCursor *cursor;
 
   monitor = get_monitor (monitor_src);
   logical_monitor = meta_monitor_get_logical_monitor (monitor);
@@ -257,13 +259,13 @@ is_cursor_in_stream (MetaScreenCastMonitorStreamSrc *monitor_src)
   logical_monitor_rect =
     mtk_rectangle_to_graphene_rect (&logical_monitor_layout);
 
-  cursor_sprite = meta_cursor_renderer_get_cursor (cursor_renderer);
-  if (cursor_sprite)
+  cursor = meta_cursor_renderer_get_cursor (cursor_renderer);
+  if (cursor)
     {
       graphene_rect_t cursor_rect;
 
       cursor_rect = meta_cursor_renderer_calculate_rect (cursor_renderer,
-                                                         cursor_sprite);
+                                                         cursor);
       return graphene_rect_intersection (&cursor_rect,
                                          &logical_monitor_rect,
                                          NULL);
@@ -501,13 +503,11 @@ meta_screen_cast_monitor_stream_src_enable (MetaScreenCastStreamSrc *src)
         g_signal_connect_after (stage, "prepare-frame",
                                 G_CALLBACK (on_prepare_frame),
                                 monitor_src);
-      meta_cursor_tracker_track_position (cursor_tracker);
       break;
     case META_SCREEN_CAST_CURSOR_MODE_HIDDEN:
       break;
     case META_SCREEN_CAST_CURSOR_MODE_EMBEDDED:
       inhibit_hw_cursor (monitor_src);
-      meta_cursor_tracker_track_position (cursor_tracker);
       break;
     }
 
@@ -524,7 +524,6 @@ meta_screen_cast_monitor_stream_src_disable (MetaScreenCastStreamSrc *src)
 {
   MetaScreenCastMonitorStreamSrc *monitor_src =
     META_SCREEN_CAST_MONITOR_STREAM_SRC (src);
-  MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
   MetaBackend *backend = get_backend (monitor_src);
   MetaCursorTracker *cursor_tracker = meta_backend_get_cursor_tracker (backend);
   ClutterStage *stage;
@@ -553,16 +552,6 @@ meta_screen_cast_monitor_stream_src_disable (MetaScreenCastStreamSrc *src)
                           stage);
 
   g_clear_handle_id (&monitor_src->maybe_record_idle_id, g_source_remove);
-
-  switch (meta_screen_cast_stream_get_cursor_mode (stream))
-    {
-    case META_SCREEN_CAST_CURSOR_MODE_METADATA:
-    case META_SCREEN_CAST_CURSOR_MODE_EMBEDDED:
-      meta_cursor_tracker_untrack_position (cursor_tracker);
-      break;
-    case META_SCREEN_CAST_CURSOR_MODE_HIDDEN:
-      break;
-    }
 }
 
 static gboolean
@@ -694,8 +683,10 @@ meta_screen_cast_monitor_stream_src_record_to_framebuffer (MetaScreenCastStreamS
           clutter_stage_view_get_framebuffer (view);
         CoglContext *cogl_context =
           cogl_framebuffer_get_context (view_framebuffer);
+        CoglDriver *cogl_driver =
+          cogl_context_get_driver (cogl_context);
 
-        if (cogl_context_has_feature (cogl_context, COGL_FEATURE_ID_BLIT_FRAMEBUFFER))
+        if (cogl_driver_has_feature (cogl_driver, COGL_FEATURE_ID_BLIT_FRAMEBUFFER))
           {
             g_autoptr (GError) local_error = NULL;
 
@@ -859,10 +850,10 @@ meta_screen_cast_monitor_stream_src_set_cursor_metadata (MetaScreenCastStreamSrc
   MetaBackend *backend = get_backend (monitor_src);
   MetaCursorRenderer *cursor_renderer =
     meta_backend_get_cursor_renderer (backend);
-  MetaCursorSprite *cursor_sprite;
+  ClutterCursor *cursor;
   int x, y;
 
-  cursor_sprite = meta_cursor_renderer_get_cursor (cursor_renderer);
+  cursor = meta_cursor_renderer_get_cursor (cursor_renderer);
 
   if (!should_cursor_metadata_be_set (monitor_src))
     {
@@ -880,7 +871,7 @@ meta_screen_cast_monitor_stream_src_set_cursor_metadata (MetaScreenCastStreamSrc
 
   if (monitor_src->cursor_bitmap_invalid)
     {
-      if (cursor_sprite)
+      if (cursor)
         {
           float view_scale;
 
@@ -888,7 +879,7 @@ meta_screen_cast_monitor_stream_src_set_cursor_metadata (MetaScreenCastStreamSrc
 
           meta_screen_cast_stream_src_set_cursor_sprite_metadata (src,
                                                                   spa_meta_cursor,
-                                                                  cursor_sprite,
+                                                                  cursor,
                                                                   x, y,
                                                                   view_scale);
         }

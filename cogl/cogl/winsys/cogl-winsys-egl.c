@@ -469,6 +469,7 @@ _cogl_winsys_context_init (CoglWinsys  *winsys,
   CoglRenderer *renderer = context->display->renderer;
   CoglDisplayEGL *egl_display = context->display->winsys;
   CoglRendererEGL *egl_renderer = cogl_renderer_get_winsys_data (renderer);
+  CoglDriver *driver = cogl_context_get_driver (context);
 
   g_return_val_if_fail (egl_display->egl_context, FALSE);
 
@@ -476,30 +477,27 @@ _cogl_winsys_context_init (CoglWinsys  *winsys,
 
   check_egl_extensions (renderer);
 
-  if (!_cogl_context_update_features (context, error))
+  if (!cogl_driver_update_features (driver, renderer, error))
     return FALSE;
 
   if (egl_renderer->private_features & COGL_EGL_WINSYS_FEATURE_SWAP_REGION)
     {
       COGL_FLAGS_SET (context->winsys_features,
                       COGL_WINSYS_FEATURE_SWAP_REGION, TRUE);
-      COGL_FLAGS_SET (context->winsys_features,
-                      COGL_WINSYS_FEATURE_SWAP_REGION_THROTTLE, TRUE);
     }
 
   if ((egl_renderer->private_features & COGL_EGL_WINSYS_FEATURE_FENCE_SYNC) &&
-      _cogl_has_private_feature (context, COGL_PRIVATE_FEATURE_OES_EGL_SYNC))
-    COGL_FLAGS_SET (context->features, COGL_FEATURE_ID_FENCE, TRUE);
+      cogl_driver_has_feature (driver, COGL_FEATURE_ID_OES_EGL_SYNC))
+    cogl_driver_set_feature (driver, COGL_FEATURE_ID_FENCE, TRUE);
 
   if (egl_renderer->private_features & COGL_EGL_WINSYS_FEATURE_NATIVE_FENCE_SYNC)
-    COGL_FLAGS_SET (context->features, COGL_FEATURE_ID_SYNC_FD, TRUE);
+    COGL_FLAGS_SET (context->winsys_features, COGL_WINSYS_FEATURE_SYNC_FD, TRUE);
 
   if (egl_renderer->private_features & COGL_EGL_WINSYS_FEATURE_BUFFER_AGE)
     {
       COGL_FLAGS_SET (context->winsys_features,
                       COGL_WINSYS_FEATURE_BUFFER_AGE,
                       TRUE);
-      COGL_FLAGS_SET (context->features, COGL_FEATURE_ID_BUFFER_AGE, TRUE);
     }
 
   return TRUE;

@@ -411,8 +411,8 @@ test_case_check_xserver_stacking (TestCase *test,
                                   GError  **error)
 {
   MetaDisplay *display = meta_context_get_display (test->context);
-  GString *local_string = g_string_new (NULL);
-  GString *x11_string = g_string_new (NULL);
+  g_autoptr (GString) local_string = NULL;
+  g_autoptr (GString) x11_string = NULL;
   int i;
 
   if (!display->x11_display)
@@ -421,6 +421,9 @@ test_case_check_xserver_stacking (TestCase *test,
   guint64 *windows;
   int n_windows;
   meta_stack_tracker_get_stack (display->stack_tracker, &windows, &n_windows);
+
+  local_string = g_string_new (NULL);
+  x11_string = g_string_new (NULL);
 
   for (i = 0; i < n_windows; i++)
     {
@@ -457,9 +460,6 @@ test_case_check_xserver_stacking (TestCase *test,
                  x11_string->str, local_string->str);
 
   XFree (children);
-
-  g_string_free (local_string, TRUE);
-  g_string_free (x11_string, TRUE);
 
   return *error == NULL;
 }
@@ -776,7 +776,7 @@ test_case_clear_struts (TestCase  *test,
 
               if (strut->side == side)
                 {
-                  struts = g_slist_remove_link (struts, old);
+                  struts = g_slist_delete_link (struts, old);
                   g_clear_pointer (&strut, g_free);
                 }
             }
@@ -2288,6 +2288,7 @@ test_case_do (TestCase    *test,
         meta_backend_get_monitor_manager (backend);
       MetaCrtcMode *crtc_mode;
       const MetaCrtcModeInfo *crtc_mode_info;
+      g_autolist (MetaVirtualModeInfo) mode_infos = NULL;
       MetaVirtualMonitor *monitor;
 
       if (argc != 4)
@@ -2299,10 +2300,14 @@ test_case_do (TestCase    *test,
 
       crtc_mode = meta_virtual_monitor_get_crtc_mode (monitor);
       crtc_mode_info = meta_crtc_mode_get_info (crtc_mode);
-      meta_virtual_monitor_set_mode (monitor,
-                                     atoi (argv[2]),
-                                     atoi (argv[3]),
-                                     crtc_mode_info->refresh_rate);
+
+      mode_infos =
+        g_list_append (mode_infos,
+                       meta_virtual_mode_info_new (atoi (argv[2]),
+                                                   atoi (argv[3]),
+                                                   crtc_mode_info->refresh_rate));
+
+      meta_virtual_monitor_set_modes (monitor, mode_infos);
       meta_monitor_manager_reload (monitor_manager);
     }
   else if (strcmp (argv[0], "add_monitor") == 0)
@@ -3056,6 +3061,9 @@ test_case_do (TestCase    *test,
         return FALSE;
 
       g_hash_table_remove (test->popups, argv[1]);
+
+      if (!test_case_wait (test, error))
+        return FALSE;
     }
   else
     {
@@ -3116,6 +3124,7 @@ test_case_destroy (TestCase *test,
   g_object_unref (test->pointer);
   g_object_unref (test->keyboard);
   g_clear_pointer (&test->popups, g_hash_table_unref);
+  g_main_loop_unref (test->loop);
   g_free (test);
 
   return TRUE;

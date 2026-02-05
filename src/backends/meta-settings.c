@@ -39,16 +39,14 @@ enum
   FONT_DPI_CHANGED,
   EXPERIMENTAL_FEATURES_CHANGED,
   PRIVACY_SCREEN_CHANGED,
+  XWAYLAND_SCALING_FACTOR_CHANGED,
 
   N_SIGNALS
 };
 
 static GDebugKey experimental_feature_keys[] = {
-  { "scale-monitor-framebuffer", META_EXPERIMENTAL_FEATURE_SCALE_MONITOR_FRAMEBUFFER },
   { "kms-modifiers", META_EXPERIMENTAL_FEATURE_KMS_MODIFIERS },
   { "autoclose-xwayland", META_EXPERIMENTAL_FEATURE_AUTOCLOSE_XWAYLAND },
-  { "variable-refresh-rate", META_EXPERIMENTAL_FEATURE_VARIABLE_REFRESH_RATE },
-  { "xwayland-native-scaling", META_EXPERIMENTAL_FEATURE_XWAYLAND_NATIVE_SCALING },
 };
 
 static guint signals[N_SIGNALS];
@@ -83,6 +81,8 @@ struct _MetaSettings
 
   /* Whether Xwayland should allow X11 clients from different endianness */
   gboolean xwayland_allow_byte_swapped_clients;
+
+  float xwayland_scaling_factor;
 };
 
 G_DEFINE_TYPE (MetaSettings, meta_settings, G_TYPE_OBJECT)
@@ -300,16 +300,10 @@ experimental_features_handler (GVariant *features_variant,
     {
       MetaExperimentalFeature feature = META_EXPERIMENTAL_FEATURE_NONE;
 
-      if (g_str_equal (feature_str, "scale-monitor-framebuffer"))
-        feature = META_EXPERIMENTAL_FEATURE_SCALE_MONITOR_FRAMEBUFFER;
-      else if (g_str_equal (feature_str, "kms-modifiers"))
+      if (g_str_equal (feature_str, "kms-modifiers"))
         feature = META_EXPERIMENTAL_FEATURE_KMS_MODIFIERS;
       else if (g_str_equal (feature_str, "autoclose-xwayland"))
         feature = META_EXPERIMENTAL_FEATURE_AUTOCLOSE_XWAYLAND;
-      else if (g_str_equal (feature_str, "variable-refresh-rate"))
-        feature = META_EXPERIMENTAL_FEATURE_VARIABLE_REFRESH_RATE;
-      else if (g_str_equal (feature_str, "xwayland-native-scaling"))
-        feature = META_EXPERIMENTAL_FEATURE_XWAYLAND_NATIVE_SCALING;
 
       if (feature)
         g_message ("Enabling experimental feature '%s'", feature_str);
@@ -452,6 +446,14 @@ update_xwayland_allow_byte_swapped_clients (MetaSettings *settings)
 }
 
 static void
+update_xwayland_scaling_factor (MetaSettings *settings)
+{
+  settings->xwayland_scaling_factor =
+    (float) g_settings_get_double (settings->wayland_settings,
+                                   "xwayland-scaling-factor");
+}
+
+static void
 wayland_settings_changed (GSettings    *wayland_settings,
                           gchar        *key,
                           MetaSettings *settings)
@@ -472,6 +474,11 @@ wayland_settings_changed (GSettings    *wayland_settings,
   else if (g_str_equal (key, "xwayland-allow-byte-swapped-clients"))
     {
       update_xwayland_allow_byte_swapped_clients (settings);
+    }
+  else if (g_str_equal (key, "xwayland-scaling-factor"))
+    {
+      update_xwayland_scaling_factor (settings);
+      g_signal_emit (settings, signals[XWAYLAND_SCALING_FACTOR_CHANGED], 0);
     }
 }
 
@@ -500,6 +507,21 @@ gboolean
 meta_settings_are_xwayland_byte_swapped_clients_allowed (MetaSettings *settings)
 {
   return settings->xwayland_allow_byte_swapped_clients;
+}
+
+gboolean
+meta_settings_get_xwayland_scaling_factor (MetaSettings *settings,
+                                           float        *scaling_factor)
+{
+  if (G_APPROX_VALUE (settings->xwayland_scaling_factor, 0.0f, FLT_EPSILON))
+    {
+      return FALSE;
+    }
+  else
+    {
+      *scaling_factor = settings->xwayland_scaling_factor;
+      return TRUE;
+    }
 }
 
 gboolean
@@ -598,6 +620,7 @@ meta_settings_init (MetaSettings *settings)
   update_xwayland_disable_extensions (settings);
   update_privacy_settings (settings);
   update_xwayland_allow_byte_swapped_clients (settings);
+  update_xwayland_scaling_factor (settings);
 }
 
 static void
@@ -662,6 +685,14 @@ meta_settings_class_init (MetaSettingsClass *klass)
 
   signals[PRIVACY_SCREEN_CHANGED] =
     g_signal_new ("privacy-screen-changed",
+                  G_TYPE_FROM_CLASS (object_class),
+                  G_SIGNAL_RUN_LAST,
+                  0,
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE, 0);
+
+  signals[XWAYLAND_SCALING_FACTOR_CHANGED] =
+    g_signal_new ("xwayland-scaling-factor-changed",
                   G_TYPE_FROM_CLASS (object_class),
                   G_SIGNAL_RUN_LAST,
                   0,
