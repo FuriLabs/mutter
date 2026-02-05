@@ -8,6 +8,7 @@ mutter (50~beta-1) UNRELEASED; urgency=medium
   * Refreshed patches and fixed conflicts:
     - workarounds/Mark-several-additional-tests-as-flaky.patch
     - workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
+    - workarounds/tests-Mark-view-verification-tests-as-incomplete-in-big-e.patch
   * Removed tests that relied strictly on the X11 backend which itself
     has been removed in this release.
 
