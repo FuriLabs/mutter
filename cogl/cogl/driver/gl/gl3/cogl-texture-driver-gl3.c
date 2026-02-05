@@ -108,7 +108,7 @@ cogl_texture_driver_gl3_gen (CoglTextureDriverGL *tex_driver,
   /* As the driver doesn't support alpha textures directly then we'll
    * fake them by setting the swizzle parameters */
   if (internal_format == COGL_PIXEL_FORMAT_A_8 &&
-      _cogl_has_private_feature (ctx, COGL_PRIVATE_FEATURE_TEXTURE_SWIZZLE))
+      cogl_driver_has_feature (driver, COGL_FEATURE_ID_TEXTURE_SWIZZLE))
     {
       static const GLint red_swizzle[] = { GL_ZERO, GL_ZERO, GL_ZERO, GL_RED };
 
@@ -355,7 +355,6 @@ cogl_texture_driver_gl3_find_best_gl_get_data_format (CoglTextureDriverGL *tex_d
   CoglDriverGLClass *driver_klass = COGL_DRIVER_GL_GET_CLASS (driver_gl);
 
   return driver_klass->pixel_format_to_gl (driver_gl,
-                                           context,
                                            format,
                                            NULL, /* don't need */
                                            closest_gl_format,
@@ -395,14 +394,12 @@ cogl_texture_driver_gl3_texture_2d_gl_get_data (CoglTextureDriver *tex_driver,
   bpp = cogl_pixel_format_get_bytes_per_pixel (format, 0);
 
   driver_klass->pixel_format_to_gl (driver_gl,
-                                    ctx,
                                     format,
                                     NULL, /* internal format */
                                     &gl_format,
                                     &gl_type);
 
   driver_klass->prep_gl_for_pixels_download (driver_gl,
-                                             ctx,
                                              width,
                                              rowstride,
                                              bpp);

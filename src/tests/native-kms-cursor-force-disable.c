@@ -31,7 +31,7 @@
 #include "tests/meta-test-utils.h"
 #include "tests/meta-wayland-test-driver.h"
 #include "tests/meta-wayland-test-utils.h"
-#include "wayland/meta-cursor-sprite-wayland.h"
+#include "wayland/meta-cursor-wayland.h"
 #include "wayland/meta-wayland-private.h"
 #include "wayland/meta-wayland-seat.h"
 
@@ -47,7 +47,7 @@ meta_test_cursor_force_disable (void)
   MetaWaylandCompositor *wayland_compositor =
     meta_context_get_wayland_compositor (test_context);
   g_autoptr (MetaWaylandTestDriver) test_driver = NULL;
-  MetaCursorSprite *cursor_sprite;
+  ClutterCursor *cursor;
   g_autoptr (MetaVirtualMonitorInfo) monitor_info = NULL;
   MetaVirtualMonitor *virtual_monitor;
   ClutterSeat *seat;
@@ -60,10 +60,10 @@ meta_test_cursor_force_disable (void)
   virtual_pointer = clutter_seat_create_virtual_device (seat,
                                                         CLUTTER_POINTER_DEVICE);
 
-  monitor_info = meta_virtual_monitor_info_new (100, 100, 60.0,
-                                                "MetaTestVendor",
-                                                "MetaVirtualMonitor",
-                                                "0x1234");
+  monitor_info = meta_virtual_monitor_info_new_simple (100, 100, 60.0,
+                                                       "MetaTestVendor",
+                                                       "MetaVirtualMonitor",
+                                                       "0x1234");
   virtual_monitor = meta_monitor_manager_create_virtual_monitor (monitor_manager,
                                                                  monitor_info,
                                                                  &error);
@@ -79,12 +79,12 @@ meta_test_cursor_force_disable (void)
 
   while (TRUE)
     {
-      cursor_sprite = meta_cursor_renderer_get_cursor (cursor_renderer);
-      if (cursor_sprite)
+      cursor = meta_cursor_renderer_get_cursor (cursor_renderer);
+      if (cursor)
         break;
       g_main_context_iteration (NULL, TRUE);
     }
-  g_assert_nonnull (cursor_sprite);
+  g_assert_nonnull (cursor);
 }
 
 static void

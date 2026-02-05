@@ -102,7 +102,6 @@ typedef struct _ClutterStagePrivate
   float viewport[4];
 
   ClutterGrab *topmost_grab;
-  ClutterGrabState grab_state;
 
   GQueue *event_queue;
 
@@ -793,7 +792,7 @@ _clutter_stage_process_queued_events (ClutterStage *stage)
     {
       ClutterEvent *event;
       ClutterEvent *next_event;
-      ClutterSprite *sprite;
+      ClutterSprite *sprite = NULL;
       ClutterSprite *next_sprite = NULL;
       gboolean check_sprite = FALSE;
 
@@ -804,10 +803,15 @@ _clutter_stage_process_queued_events (ClutterStage *stage)
                                "Clutter::Stage::process_queued_events#event()");
       COGL_TRACE_DESCRIBE (ProcessEvent, clutter_event_get_name (event));
 
-      sprite = clutter_backend_get_sprite (backend, stage, event);
+      if (clutter_event_type (event) == CLUTTER_MOTION ||
+          clutter_event_type (event) == CLUTTER_TOUCH_UPDATE)
+        {
+          sprite = clutter_backend_get_sprite (backend, stage, event);
 
-      if (next_event != NULL)
-        next_sprite = clutter_backend_get_sprite (backend, stage, next_event);
+          if (next_event != NULL &&
+              (clutter_event_type (event) == clutter_event_type (next_event)))
+            next_sprite = clutter_backend_get_sprite (backend, stage, next_event);
+        }
 
       if (sprite != NULL && next_sprite != NULL)
         check_sprite = TRUE;
@@ -1175,15 +1179,22 @@ on_seat_unfocus_inhibited_changed (ClutterStage *stage,
   ClutterContext *context =
     clutter_actor_get_context (CLUTTER_ACTOR (stage));
   ClutterBackend *backend = clutter_context_get_backend (context);
-  ClutterSprite *sprite;
+  ClutterSprite *sprite = clutter_backend_get_pointer_sprite (backend, stage);
   graphene_point_t point = GRAPHENE_POINT_INIT_ZERO;
 
-  sprite = clutter_backend_get_pointer_sprite (backend, stage);
-  clutter_sprite_get_coords (sprite, &point);
-  clutter_stage_pick_and_update_sprite (stage, sprite, NULL,
-                                        CLUTTER_DEVICE_UPDATE_IGNORE_CACHE,
-                                        point,
-                                        CLUTTER_CURRENT_TIME);
+  if (clutter_seat_is_unfocus_inhibited (seat))
+    {
+      clutter_sprite_get_coords (sprite, &point);
+      clutter_stage_pick_and_update_sprite (stage, sprite, NULL,
+                                            CLUTTER_DEVICE_UPDATE_IGNORE_CACHE,
+                                            point,
+                                            CLUTTER_CURRENT_TIME);
+    }
+  else
+    {
+      clutter_focus_set_current_actor (CLUTTER_FOCUS (sprite), NULL,
+                                       NULL, CLUTTER_CURRENT_TIME);
+    }
 }
 
 static void
@@ -2085,6 +2096,8 @@ clutter_stage_get_key_focus (ClutterStage *stage)
   context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
   backend = clutter_context_get_backend (context);
   key_focus = clutter_backend_get_key_focus (backend, stage);
+  if (!key_focus)
+    return NULL;
 
   return clutter_focus_get_current_actor (CLUTTER_FOCUS (key_focus));
 }
@@ -3069,18 +3082,6 @@ clutter_grab_activate (ClutterGrab *grab)
   if (grab->prev || grab->next || priv->topmost_grab == grab)
     return;
 
-  if (!priv->topmost_grab)
-    {
-      ClutterContext *context;
-      ClutterSeat *seat;
-
-      /* First grab in the chain, trigger a backend grab too */
-      context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
-      seat = clutter_backend_get_default_seat (context->backend);
-      priv->grab_state =
-        clutter_seat_grab (seat, clutter_get_current_event_time ());
-    }
-
   grab->prev = NULL;
   grab->next = priv->topmost_grab;
 
@@ -3205,18 +3206,6 @@ clutter_stage_unlink_grab (ClutterStage *stage,
 
   clutter_actor_detach_grab (grab->actor, grab);
 
-  if (!priv->topmost_grab)
-    {
-      ClutterContext *context;
-      ClutterSeat *seat;
-
-      /* This was the last remaining grab, trigger a backend ungrab */
-      context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
-      seat = clutter_backend_get_default_seat (context->backend);
-      clutter_seat_ungrab (seat, clutter_get_current_event_time ());
-      priv->grab_state = CLUTTER_GRAB_STATE_NONE;
-    }
-
   if (was_grabbed != !!priv->topmost_grab)
     g_object_notify_by_pspec (G_OBJECT (stage), obj_props[PROP_IS_GRABBED]);
 
@@ -3256,27 +3245,6 @@ clutter_grab_dismiss (ClutterGrab *grab)
   g_return_if_fail (grab != NULL);
 
   clutter_stage_unlink_grab (grab->stage, grab);
-}
-
-/**
- * clutter_grab_get_seat_state:
- * @grab: a Grab handle
- *
- * Returns the windowing-level state of the
- * grab, the devices that are guaranteed to be
- * grabbed.
- *
- * Returns: The state of the grab.
- **/
-ClutterGrabState
-clutter_grab_get_seat_state (ClutterGrab *grab)
-{
-  ClutterStagePrivate *priv;
-
-  g_return_val_if_fail (grab != NULL, CLUTTER_GRAB_STATE_NONE);
-
-  priv = clutter_stage_get_instance_private (grab->stage);
-  return priv->grab_state;
 }
 
 /**
@@ -3450,6 +3418,13 @@ clutter_stage_emit_event (ClutterStage       *self,
     focus = CLUTTER_FOCUS (clutter_backend_get_key_focus (backend, self));
 
   clutter_focus_propagate_event (focus, event);
+
+  if (clutter_event_type (event) == CLUTTER_PROXIMITY_OUT)
+    {
+      clutter_focus_set_current_actor (focus, NULL,
+                                       clutter_event_get_source_device (event),
+                                       clutter_event_get_time (event));
+    }
 }
 
 static gboolean

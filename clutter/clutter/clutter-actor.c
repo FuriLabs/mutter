@@ -578,6 +578,8 @@ struct _ClutterActorPrivate
   /* clip, in actor coordinates */
   graphene_rect_t clip;
 
+  ClutterCursorType cursor_type;
+
   /* the cached transformation matrix; see apply_transform() */
   graphene_matrix_t transform;
 
@@ -865,6 +867,7 @@ enum
   PROP_CONTENT_REPEAT,
 
   PROP_COLOR_STATE,
+  PROP_CURSOR_TYPE,
 
   /* Accessible */
   PROP_ACCESSIBLE_ROLE,
@@ -4882,6 +4885,10 @@ clutter_actor_set_property (GObject      *object,
       clutter_actor_set_color_state_internal (actor, g_value_get_object (value));
       break;
 
+    case PROP_CURSOR_TYPE:
+      clutter_actor_set_cursor_type (actor, g_value_get_enum (value));
+      break;
+
     case PROP_ACCESSIBLE_ROLE:
       clutter_actor_set_accessible_role (actor, g_value_get_enum (value));
       break;
@@ -5347,6 +5354,10 @@ clutter_actor_get_property (GObject    *object,
       g_value_set_object (value, priv->color_state);
       break;
 
+    case PROP_CURSOR_TYPE:
+      g_value_set_enum (value, priv->cursor_type);
+      break;
+
     case PROP_ACCESSIBLE_ROLE:
       g_value_set_enum (value, clutter_actor_get_accessible_role (actor));
       break;
@@ -5648,6 +5659,28 @@ clutter_actor_real_destroy (ClutterActor *actor)
   clutter_actor_destroy_all_children (actor);
 }
 
+static ClutterCursor *
+clutter_actor_real_get_cursor_for_sprite (ClutterActor  *self,
+                                          ClutterSprite *sprite)
+{
+  ClutterActorPrivate *priv = clutter_actor_get_instance_private (self);
+  ClutterContext *context = clutter_actor_get_context (self);
+  ClutterBackend *backend = clutter_context_get_backend (context);
+
+  if (clutter_sprite_get_role (sprite) == CLUTTER_SPRITE_ROLE_TOUCHPOINT)
+    return NULL;
+
+  if (priv->cursor_type == CLUTTER_CURSOR_INHERIT)
+    {
+      if (priv->parent)
+        return clutter_actor_get_cursor_for_sprite (priv->parent, sprite);
+      else
+        return clutter_backend_get_cursor (backend, CLUTTER_CURSOR_DEFAULT);
+    }
+
+  return clutter_backend_get_cursor (backend, priv->cursor_type);
+}
+
 static GObject *
 clutter_actor_constructor (GType gtype,
                            guint n_props,
@@ -5734,6 +5767,7 @@ clutter_actor_class_init (ClutterActorClass *klass)
   klass->calculate_resource_scale = clutter_actor_real_calculate_resource_scale;
   klass->paint = clutter_actor_real_paint;
   klass->destroy = clutter_actor_real_destroy;
+  klass->get_cursor_for_sprite = clutter_actor_real_get_cursor_for_sprite;
 
   klass->layout_manager_type = G_TYPE_INVALID;
 
@@ -6902,6 +6936,14 @@ clutter_actor_class_init (ClutterActorClass *klass)
                          G_PARAM_CONSTRUCT |
                          G_PARAM_STATIC_STRINGS |
                          G_PARAM_EXPLICIT_NOTIFY);
+
+  obj_props[PROP_CURSOR_TYPE] =
+    g_param_spec_enum ("cursor-type", NULL, NULL,
+                       CLUTTER_TYPE_CURSOR_TYPE,
+                       CLUTTER_CURSOR_INHERIT,
+                       G_PARAM_READWRITE |
+                       G_PARAM_STATIC_STRINGS |
+                       G_PARAM_EXPLICIT_NOTIFY);
 
   /**
    * ClutterActor:accessible-role:
@@ -13789,7 +13831,8 @@ clutter_actor_add_action_full (ClutterActor      *self,
   g_return_if_fail (name != NULL);
   g_return_if_fail (CLUTTER_IS_ACTION (action));
   g_return_if_fail (phase == CLUTTER_PHASE_BUBBLE ||
-                    phase == CLUTTER_PHASE_CAPTURE);
+                    phase == CLUTTER_PHASE_CAPTURE ||
+                    phase == CLUTTER_PHASE_TARGET);
 
   clutter_actor_meta_set_name (CLUTTER_ACTOR_META (action), name);
   clutter_actor_add_action_internal (self, action, phase);
@@ -18989,4 +19032,53 @@ clutter_actor_remove_accessible_state (ClutterActor *actor,
 
   if (atk_state_set_remove_state (priv->accessible_state, state) && accessible)
     atk_object_notify_state_change (accessible, state, FALSE);
+}
+
+void
+clutter_actor_set_cursor_type (ClutterActor      *actor,
+                               ClutterCursorType  cursor)
+{
+  ClutterActorPrivate *priv;
+
+  g_return_if_fail (CLUTTER_IS_ACTOR (actor));
+
+  priv = clutter_actor_get_instance_private (actor);
+  priv->cursor_type = cursor;
+  g_object_notify (G_OBJECT (actor), "cursor-type");
+}
+
+ClutterCursorType
+clutter_actor_get_cursor_type (ClutterActor *actor)
+{
+  ClutterActorPrivate *priv;
+
+  g_return_val_if_fail (CLUTTER_IS_ACTOR (actor), CLUTTER_CURSOR_INHERIT);
+
+  priv = clutter_actor_get_instance_private (actor);
+
+  return priv->cursor_type;
+}
+
+ClutterCursor *
+clutter_actor_get_cursor_for_sprite (ClutterActor  *actor,
+                                     ClutterSprite *sprite)
+{
+  return CLUTTER_ACTOR_GET_CLASS (actor)->get_cursor_for_sprite (actor, sprite);
+}
+
+void
+clutter_actor_invalidate_sprite_cursor (ClutterActor  *actor,
+                                        ClutterSprite *sprite)
+{
+  ClutterActor *sprite_focus;
+
+  if (!clutter_actor_has_pointer (actor))
+    return;
+
+  sprite_focus = clutter_focus_get_current_actor (CLUTTER_FOCUS (sprite));
+  if (!sprite_focus)
+    return;
+
+  if (sprite_focus == actor || clutter_actor_contains (actor, sprite_focus))
+    clutter_sprite_invalidate_cursor (sprite);
 }

@@ -30,8 +30,8 @@
 
 #include "clutter/clutter.h"
 #include "core/keybindings-private.h"
-#include "core/meta-gesture-tracker-private.h"
 #include "core/meta-pad-action-mapper.h"
+#include "core/meta-private-enums.h"
 #include "core/meta-tool-action-mapper.h"
 #include "core/stack-tracker.h"
 #include "core/startup-notification-private.h"
@@ -129,16 +129,13 @@ struct _MetaDisplay
   /* Managed by compositor.c */
   MetaCompositor *compositor;
 
-  MetaGestureTracker *gesture_tracker;
-  ClutterEventSequence *pointer_emulating_sequence;
-
   ClutterActor *current_pad_osd;
   MetaPadActionMapper *pad_action_mapper;
   MetaToolActionMapper *tool_action_mapper;
 
   MetaStartupNotification *startup_notification;
 
-  MetaCursor current_cursor;
+  ClutterCursorType current_cursor;
 
   MetaStack *stack;
   MetaStackTracker *stack_tracker;
@@ -248,7 +245,7 @@ void meta_display_accelerator_activate (MetaDisplay           *display,
 void meta_display_accelerator_deactivate (MetaDisplay           *display,
                                           guint                  action,
                                           const ClutterEvent    *event);
-gboolean meta_display_modifiers_accelerator_activate (MetaDisplay *display);
+void meta_display_modifiers_accelerator_activate (MetaDisplay *display);
 
 void meta_display_update_focus_window (MetaDisplay *display,
                                        MetaWindow  *window);
@@ -258,8 +255,6 @@ void meta_display_sanity_check_timestamps (MetaDisplay *display,
 
 void meta_display_remove_pending_pings_for_window (MetaDisplay *display,
                                                    MetaWindow  *window);
-
-MetaGestureTracker * meta_display_get_gesture_tracker (MetaDisplay *display);
 
 gboolean meta_display_show_resize_popup (MetaDisplay  *display,
                                          gboolean      show,

@@ -901,7 +901,6 @@ cogl_framebuffer_init_driver (CoglFramebuffer  *framebuffer,
   CoglFramebufferDriver *fb_driver;
 
   fb_driver = driver_klass->create_framebuffer_driver (driver,
-                                                       priv->context,
                                                        framebuffer,
                                                        &priv->driver_config,
                                                        error);
@@ -1413,14 +1412,33 @@ gboolean
 cogl_can_blit_between_formats (CoglPixelFormat src_format,
                                CoglPixelFormat dst_format)
 {
+  gboolean dst_has_alpha, src_is_premult, dst_is_premult;
 
-  /* The buffers must use the same premult convention */
-  if (((src_format & COGL_PREMULT_BIT) !=
-       (dst_format & COGL_PREMULT_BIT)) &&
-      dst_format & COGL_A_BIT)
-    return FALSE;
-  else
+  /* If the source format has no alpha, the resulting alpha is always 1.0, in
+   * which case the RGB values are the same regardless of premultiplication.
+   */
+  if (!(src_format & COGL_A_BIT))
     return TRUE;
+
+  src_is_premult = !!(src_format & COGL_PREMULT_BIT);
+  dst_has_alpha = !!(dst_format & COGL_A_BIT);
+
+  /* If the destination format has no alpha, the information from a
+   * non-premultiplied source alpha channel would be lost.
+   */
+  if (!dst_has_alpha &&
+      !src_is_premult)
+    return FALSE;
+
+  dst_is_premult = dst_has_alpha &&
+                   !!(dst_format & COGL_PREMULT_BIT);
+
+  /* If both formats have alpha, their premultiplication status must match */
+  if (dst_has_alpha &&
+      src_is_premult != dst_is_premult)
+    return FALSE;
+
+  return TRUE;
 }
 
 gboolean
@@ -1443,7 +1461,7 @@ cogl_framebuffer_blit (CoglFramebuffer *framebuffer,
   int src_x1, src_y1, src_x2, src_y2;
   int dst_x1, dst_y1, dst_x2, dst_y2;
 
-  if (!cogl_context_has_feature (ctx, COGL_FEATURE_ID_BLIT_FRAMEBUFFER))
+  if (!cogl_driver_has_feature (driver, COGL_FEATURE_ID_BLIT_FRAMEBUFFER))
     {
       g_set_error_literal (error, COGL_SYSTEM_ERROR,
                            COGL_SYSTEM_ERROR_UNSUPPORTED,

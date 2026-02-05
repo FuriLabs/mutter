@@ -2140,10 +2140,10 @@ read_config_file (MetaMonitorConfigStore  *config_store,
                   gboolean                *should_update_file,
                   GError                 **error)
 {
-  char *buffer;
+  g_autofree char *buffer = NULL;
   gsize size;
   ConfigParser parser;
-  GMarkupParseContext *parse_context;
+  g_autoptr (GMarkupParseContext) parse_context = NULL;
 
   if (!g_file_load_contents (file, NULL, &buffer, &size, NULL, error))
     return FALSE;
@@ -2184,9 +2184,6 @@ read_config_file (MetaMonitorConfigStore  *config_store,
 
   *out_configs = g_steal_pointer (&parser.pending_configs);
   *should_update_file = parser.should_update_file;
-
-  g_markup_parse_context_free (parse_context);
-  g_free (buffer);
 
   return TRUE;
 }
@@ -2819,6 +2816,7 @@ meta_monitor_config_store_reset (MetaMonitorConfigStore *config_store)
   g_clear_object (&config_store->custom_write_file);
   g_hash_table_remove_all (config_store->configs);
 
+  g_clear_pointer (&config_store->stores_policy, g_list_free);
   config_store->has_stores_policy = FALSE;
   config_store->policy.enable_dbus = TRUE;
   config_store->has_dbus_policy = FALSE;

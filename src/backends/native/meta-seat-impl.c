@@ -35,6 +35,7 @@
 
 #include "backends/meta-cursor-tracker-private.h"
 #include "backends/meta-fd-source.h"
+#include "backends/meta-keymap-description-private.h"
 #include "backends/native/meta-backend-native-private.h"
 #include "backends/native/meta-barrier-native.h"
 #include "backends/native/meta-device-pool.h"
@@ -129,6 +130,8 @@ typedef struct _MetaSeatImplPrivate
     uint32_t last_keysym_time;
     gboolean saw_first_release;
   } a11y;
+
+  MetaKeymapDescription *keymap_description;
 } MetaSeatImplPrivate;
 
 static void meta_seat_impl_initable_iface_init (GInitableIface *iface);
@@ -3010,7 +3013,7 @@ meta_seat_impl_set_keyboard_numlock_in_impl (MetaSeatImpl *seat_impl,
   MetaKeymapNative *keymap;
 
   keymap = seat_impl->keymap;
-  xkb_keymap = meta_keymap_native_get_keyboard_map_in_impl (keymap);
+  xkb_keymap = meta_keymap_native_get_xkb_keymap_in_impl (keymap);
 
   numlock = (1 << xkb_keymap_mod_get_index (xkb_keymap, "Mod2"));
 
@@ -3150,7 +3153,7 @@ update_keyboard_leds (MetaSeatImpl *seat_impl)
 
   G_STATIC_ASSERT (G_N_ELEMENTS (led_map) == N_KEYBOARD_LEDS);
 
-  xkb_keymap = meta_keymap_native_get_keyboard_map_in_impl (seat_impl->keymap);
+  xkb_keymap = meta_keymap_native_get_xkb_keymap_in_impl (seat_impl->keymap);
   if (!xkb_keymap)
     return;
 
@@ -3193,7 +3196,7 @@ input_thread (MetaSeatImpl *seat_impl)
 
   seat_impl->keymap = meta_keymap_native_new (seat_impl);
 
-  xkb_keymap = meta_keymap_native_get_keyboard_map_in_impl (seat_impl->keymap);
+  xkb_keymap = meta_keymap_native_get_xkb_keymap_in_impl (seat_impl->keymap);
 
   if (xkb_keymap)
     {
@@ -3316,7 +3319,7 @@ meta_seat_impl_get_property (GObject    *object,
 }
 
 static gboolean
-destroy_in_impl (GTask *task)
+prepare_shutdown_in_impl (GTask *task)
 {
   MetaSeatImpl *seat_impl = g_task_get_source_object (task);
   MetaSeatImplPrivate *priv = meta_seat_impl_get_instance_private (seat_impl);
@@ -3359,7 +3362,7 @@ destroy_in_impl (GTask *task)
 }
 
 void
-meta_seat_impl_destroy (MetaSeatImpl *seat_impl)
+meta_seat_impl_prepare_shutdown (MetaSeatImpl *seat_impl)
 {
   if (seat_impl->input_thread)
     {
@@ -3367,27 +3370,29 @@ meta_seat_impl_destroy (MetaSeatImpl *seat_impl)
 
       task = g_task_new (seat_impl, NULL, NULL, NULL);
       meta_seat_impl_run_input_task (seat_impl, task,
-                                     (GSourceFunc) destroy_in_impl);
+                                     (GSourceFunc) prepare_shutdown_in_impl);
       g_object_unref (task);
 
       g_thread_join (seat_impl->input_thread);
       seat_impl->input_thread = NULL;
       g_assert (!seat_impl->libinput);
     }
-
-  g_object_unref (seat_impl);
 }
 
 static void
 meta_seat_impl_finalize (GObject *object)
 {
   MetaSeatImpl *seat_impl = META_SEAT_IMPL (object);
+  MetaSeatImplPrivate *priv = meta_seat_impl_get_instance_private (seat_impl);
 
   g_assert (!seat_impl->libinput);
   g_assert (!seat_impl->tools);
   g_assert (!seat_impl->libinput_source);
 
   g_free (seat_impl->seat_id);
+
+  g_clear_pointer (&priv->keymap_description,
+                   meta_keymap_description_unref);
 
   g_rw_lock_clear (&seat_impl->state_lock);
 
@@ -3639,16 +3644,13 @@ meta_seat_impl_init (MetaSeatImpl *seat_impl)
   seat_impl->barrier_manager = meta_barrier_manager_native_new ();
 }
 
-void
-meta_seat_impl_update_xkb_state_in_impl (MetaSeatImpl *seat_impl)
+static void
+meta_seat_impl_update_xkb_state_in_impl_unlocked (MetaSeatImpl       *seat_impl,
+                                                  struct xkb_keymap  *xkb_keymap,
+                                                  xkb_layout_index_t  layout_index)
 {
   xkb_mod_mask_t latched_mods = 0;
   xkb_mod_mask_t locked_mods = 0;
-  struct xkb_keymap *xkb_keymap;
-
-  g_rw_lock_writer_lock (&seat_impl->state_lock);
-
-  xkb_keymap = meta_keymap_native_get_keyboard_map_in_impl (seat_impl->keymap);
 
   if (seat_impl->xkb)
     {
@@ -3665,14 +3667,28 @@ meta_seat_impl_update_xkb_state_in_impl (MetaSeatImpl *seat_impl)
                          0, /* depressed */
                          latched_mods,
                          locked_mods,
-                         0, 0, seat_impl->layout_idx);
+                         0, 0, layout_index);
+
+  seat_impl->layout_idx = layout_index;
 
   update_keyboard_leds (seat_impl);
 
   meta_seat_impl_sync_leds_in_impl (seat_impl);
+}
+
+void
+meta_seat_impl_update_xkb_state_in_impl (MetaSeatImpl *seat_impl)
+{
+  struct xkb_keymap *xkb_keymap;
+
+  g_rw_lock_writer_lock (&seat_impl->state_lock);
+
+  xkb_keymap = meta_keymap_native_get_xkb_keymap_in_impl (seat_impl->keymap);
+  meta_seat_impl_update_xkb_state_in_impl_unlocked (seat_impl,
+                                                    xkb_keymap,
+                                                    seat_impl->layout_idx);
   meta_keymap_native_update_in_impl (seat_impl->keymap,
                                      seat_impl->xkb);
-
   g_rw_lock_writer_unlock (&seat_impl->state_lock);
 }
 
@@ -3771,39 +3787,144 @@ meta_seat_impl_reclaim_devices (MetaSeatImpl *seat_impl)
 }
 
 gboolean
-meta_seat_impl_set_keyboard_map_finish (MetaSeatImpl  *seat_impl,
-                                        GAsyncResult  *result,
-                                        GError       **error)
+meta_seat_impl_set_keymap_finish (MetaSeatImpl  *seat_impl,
+                                  GAsyncResult  *result,
+                                  GError       **error)
 {
   GTask *task = G_TASK (result);
 
   g_return_val_if_fail (g_task_is_valid (result, seat_impl), FALSE);
   g_return_val_if_fail (g_task_get_source_tag (G_TASK (result)) ==
-                        meta_seat_impl_set_keyboard_map_async, FALSE);
+                        meta_seat_impl_set_keymap_async, FALSE);
 
   return g_task_propagate_boolean (task, error);
 }
 
+typedef struct
+{
+  MetaKeymapDescription *keymap_description;
+  xkb_layout_index_t layout_index;
+} SetKeymapData;
+
+static void
+set_keymap_data_free (gpointer user_data)
+{
+  SetKeymapData *data = user_data;
+
+  meta_keymap_description_unref (data->keymap_description);
+  g_free (data);
+}
+
+static void
+update_layout_index_unlocked (MetaSeatImpl       *seat_impl,
+                              xkb_layout_index_t  layout_index)
+{
+  xkb_mod_mask_t depressed_mods;
+  xkb_mod_mask_t latched_mods;
+  xkb_mod_mask_t locked_mods;
+  struct xkb_state *state;
+
+  state = seat_impl->xkb;
+
+  depressed_mods = xkb_state_serialize_mods (state, XKB_STATE_MODS_DEPRESSED);
+  latched_mods = xkb_state_serialize_mods (state, XKB_STATE_MODS_LATCHED);
+  locked_mods = xkb_state_serialize_mods (state, XKB_STATE_MODS_LOCKED);
+
+  xkb_state_update_mask (state,
+                         depressed_mods,
+                         latched_mods,
+                         locked_mods,
+                         0, 0, layout_index);
+
+  seat_impl->layout_idx = layout_index;
+
+  meta_seat_impl_sync_leds_in_impl (seat_impl);
+  meta_keymap_native_update_in_impl (seat_impl->keymap,
+                                     seat_impl->xkb);
+}
+
 static gboolean
-set_keyboard_map (GTask *task)
+set_keymap (GTask *task)
 {
   MetaSeatImpl *seat_impl = g_task_get_source_object (task);
-  struct xkb_keymap *xkb_keymap = g_task_get_task_data (task);
+  MetaSeatImplPrivate *priv =
+    meta_seat_impl_get_instance_private (seat_impl);
+  SetKeymapData *data = g_task_get_task_data (task);
+  MetaKeymapDescription *keymap_description = data->keymap_description;
   MetaKeymapNative *keymap;
 
-  keymap = seat_impl->keymap;
-  meta_keymap_native_set_keyboard_map_in_impl (keymap, xkb_keymap);
-
   g_task_set_priority (task, G_PRIORITY_HIGH);
-  g_task_return_boolean (task, TRUE);
 
-  meta_seat_impl_update_xkb_state_in_impl (seat_impl);
+  g_rw_lock_writer_lock (&seat_impl->state_lock);
+
+  if (priv->keymap_description != keymap_description)
+    {
+      g_autoptr (GError) error = NULL;
+      g_auto (GStrv) display_names = NULL;
+      g_auto (GStrv) short_names = NULL;
+      struct xkb_keymap *xkb_keymap = NULL;
+
+      if (priv->keymap_description)
+        {
+          if (meta_keymap_description_is_locked (priv->keymap_description) &&
+              meta_keymap_description_get_owner (keymap_description) !=
+              meta_keymap_description_get_owner (priv->keymap_description) &&
+              meta_keymap_description_resets_owner (keymap_description) !=
+              meta_keymap_description_get_owner (priv->keymap_description))
+            {
+              g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED,
+                                       "Keymap locked by other owner");
+              g_rw_lock_writer_unlock (&seat_impl->state_lock);
+              return G_SOURCE_REMOVE;
+            }
+        }
+
+      g_clear_pointer (&priv->keymap_description,
+                       meta_keymap_description_unref);
+      priv->keymap_description =
+        meta_keymap_description_ref (keymap_description);
+
+      xkb_keymap =
+        meta_keymap_description_create_xkb_keymap (keymap_description,
+                                                   &display_names,
+                                                   &short_names,
+                                                   &error);
+      if (!xkb_keymap)
+        {
+          g_prefix_error (&error, "Unable to load configured keymap: ");
+          g_task_return_error (task, g_steal_pointer (&error));
+          g_rw_lock_writer_unlock (&seat_impl->state_lock);
+          return G_SOURCE_REMOVE;
+        }
+
+      meta_seat_impl_update_xkb_state_in_impl_unlocked (seat_impl,
+                                                        xkb_keymap,
+                                                        data->layout_index);
+
+      keymap = seat_impl->keymap;
+      meta_keymap_native_set_keymap_in_impl (keymap,
+                                             seat_impl,
+                                             keymap_description,
+                                             xkb_keymap,
+                                             seat_impl->xkb,
+                                             g_steal_pointer (&display_names),
+                                             g_steal_pointer (&short_names));
+      xkb_keymap_unref (xkb_keymap);
+    }
+  else
+    {
+      update_layout_index_unlocked (seat_impl, data->layout_index);
+    }
+
+  g_rw_lock_writer_unlock (&seat_impl->state_lock);
+
+  g_task_return_boolean (task, TRUE);
 
   return G_SOURCE_REMOVE;
 }
 
 /**
- * meta_seat_impl_set_keyboard_map_async: (skip)
+ * meta_seat_impl_set_keymap_async: (skip)
  * @seat_impl: the #ClutterSeat created by the evdev backend
  * @keymap: the new keymap
  * @cancellable: a #GCancellable
@@ -3816,100 +3937,27 @@ set_keyboard_map (GTask *task)
  * is pressed when calling this function.
  */
 void
-meta_seat_impl_set_keyboard_map_async (MetaSeatImpl        *seat_impl,
-                                       struct xkb_keymap   *xkb_keymap,
-                                       GCancellable        *cancellable,
-                                       GAsyncReadyCallback  callback,
-                                       gpointer             user_data)
+meta_seat_impl_set_keymap_async (MetaSeatImpl          *seat_impl,
+                                 MetaKeymapDescription *keymap_description,
+                                 xkb_layout_index_t     layout_index,
+                                 GCancellable          *cancellable,
+                                 GAsyncReadyCallback    callback,
+                                 gpointer               user_data)
 {
   GTask *task;
+  SetKeymapData *data;
 
   g_return_if_fail (META_IS_SEAT_IMPL (seat_impl));
-  g_return_if_fail (xkb_keymap != NULL);
+  g_return_if_fail (keymap_description);
 
   task = g_task_new (seat_impl, cancellable, callback, user_data);
-  g_task_set_source_tag (task, meta_seat_impl_set_keyboard_map_async);
-  g_task_set_task_data (task,
-                        xkb_keymap_ref (xkb_keymap),
-                        (GDestroyNotify) xkb_keymap_unref);
-  meta_seat_impl_run_input_task (seat_impl, task, (GSourceFunc) set_keyboard_map);
-  g_object_unref (task);
-}
+  g_task_set_source_tag (task, meta_seat_impl_set_keymap_async);
 
-gboolean
-meta_seat_impl_set_keyboard_layout_index_finish (MetaSeatImpl  *seat_impl,
-                                                 GAsyncResult  *result,
-                                                 GError       **error)
-{
-  GTask *task = G_TASK (result);
-
-  g_return_val_if_fail (g_task_is_valid (result, seat_impl), FALSE);
-  g_return_val_if_fail (g_task_get_source_tag (G_TASK (result)) ==
-                        meta_seat_impl_set_keyboard_layout_index_async,
-                        FALSE);
-
-  return g_task_propagate_boolean (task, error);
-}
-
-static gboolean
-set_keyboard_layout_index (GTask *task)
-{
-  MetaSeatImpl *seat_impl = g_task_get_source_object (task);
-  xkb_layout_index_t idx = GPOINTER_TO_UINT (g_task_get_task_data (task));
-  xkb_mod_mask_t depressed_mods;
-  xkb_mod_mask_t latched_mods;
-  xkb_mod_mask_t locked_mods;
-  struct xkb_state *state;
-
-  g_rw_lock_writer_lock (&seat_impl->state_lock);
-
-  state = seat_impl->xkb;
-
-  depressed_mods = xkb_state_serialize_mods (state, XKB_STATE_MODS_DEPRESSED);
-  latched_mods = xkb_state_serialize_mods (state, XKB_STATE_MODS_LATCHED);
-  locked_mods = xkb_state_serialize_mods (state, XKB_STATE_MODS_LOCKED);
-
-  xkb_state_update_mask (state, depressed_mods, latched_mods, locked_mods, 0, 0, idx);
-
-  seat_impl->layout_idx = idx;
-
-  g_task_return_boolean (task, TRUE);
-
-  meta_seat_impl_sync_leds_in_impl (seat_impl);
-  meta_keymap_native_update_in_impl (seat_impl->keymap,
-                                     seat_impl->xkb);
-
-  g_rw_lock_writer_unlock (&seat_impl->state_lock);
-
-  return G_SOURCE_REMOVE;
-}
-
-/**
- * meta_seat_impl_set_keyboard_layout_index_async: (skip)
- * @seat_impl: the #ClutterSeat created by the evdev backend
- * @idx: the xkb layout index to set
- * @cancellable: a #GCancellable
- * @callback: callback to call when index has changed
- * @user_data: user data to pass to the callback
- *
- * Sets the xkb layout index on the backend's #xkb_state .
- */
-void
-meta_seat_impl_set_keyboard_layout_index_async (MetaSeatImpl        *seat_impl,
-                                                xkb_layout_index_t   idx,
-                                                GCancellable        *cancellable,
-                                                GAsyncReadyCallback  callback,
-                                                gpointer             user_data)
-{
-  GTask *task;
-
-  g_return_if_fail (META_IS_SEAT_IMPL (seat_impl));
-
-  task = g_task_new (seat_impl, cancellable, callback, user_data);
-  g_task_set_source_tag (task, meta_seat_impl_set_keyboard_layout_index_async);
-  g_task_set_task_data (task, GUINT_TO_POINTER (idx), NULL);
-  meta_seat_impl_run_input_task (seat_impl, task,
-                                 (GSourceFunc) set_keyboard_layout_index);
+  data = g_new0 (SetKeymapData, 1);
+  data->keymap_description = meta_keymap_description_ref (keymap_description);
+  data->layout_index = layout_index;
+  g_task_set_task_data (task, data, set_keymap_data_free);
+  meta_seat_impl_run_input_task (seat_impl, task, (GSourceFunc) set_keymap);
   g_object_unref (task);
 }
 

@@ -90,8 +90,7 @@ cogl_driver_gl_context_init (CoglDriver  *driver,
 }
 
 static const char *
-cogl_driver_gl_get_gl_vendor (CoglDriver  *driver,
-                              CoglContext *context)
+cogl_driver_gl_get_gl_vendor (CoglDriver *driver)
 {
   return cogl_driver_gl_get_gl_string (COGL_DRIVER_GL (driver),
                                        GL_VENDOR);
@@ -108,8 +107,7 @@ cogl_driver_gl_get_gl_vendor (CoglDriver  *driver,
  * So instead just check a list of known software renderer strings.
  */
 static gboolean
-cogl_driver_gl_is_hardware_accelerated (CoglDriver  *driver,
-                                        CoglContext *ctx)
+cogl_driver_gl_is_hardware_accelerated (CoglDriver *driver)
 {
   const char *renderer = cogl_driver_gl_get_gl_string (COGL_DRIVER_GL (driver),
                                                        GL_RENDERER);
@@ -132,8 +130,7 @@ cogl_driver_gl_is_hardware_accelerated (CoglDriver  *driver,
 }
 
 static CoglGraphicsResetStatus
-cogl_driver_gl_get_graphics_reset_status (CoglDriver  *driver,
-                                          CoglContext *context)
+cogl_driver_gl_get_graphics_reset_status (CoglDriver *driver)
 {
   int status;
 
@@ -162,7 +159,6 @@ cogl_driver_gl_get_graphics_reset_status (CoglDriver  *driver,
 
 static CoglFramebufferDriver *
 cogl_driver_gl_create_framebuffer_driver (CoglDriver                         *driver,
-                                          CoglContext                        *context,
                                           CoglFramebuffer                    *framebuffer,
                                           const CoglFramebufferDriverConfig  *driver_config,
                                           GError                            **error)
@@ -283,8 +279,8 @@ cogl_driver_gl_flush_framebuffer_state (CoglDriver           *driver,
         {
           /* NB: Currently we only take advantage of binding separate
            * read/write buffers for framebuffer blit purposes. */
-          g_return_if_fail (cogl_context_has_feature
-                            (ctx, COGL_FEATURE_ID_BLIT_FRAMEBUFFER));
+          g_return_if_fail (cogl_driver_has_feature
+                            (driver, COGL_FEATURE_ID_BLIT_FRAMEBUFFER));
 
           cogl_gl_framebuffer_bind (draw_gl_framebuffer, GL_DRAW_FRAMEBUFFER);
           cogl_gl_framebuffer_bind (read_gl_framebuffer, GL_READ_FRAMEBUFFER);
@@ -308,11 +304,10 @@ cogl_driver_gl_create_buffer_impl (CoglDriver *driver)
 
 static void
 cogl_driver_gl_sampler_init_init (CoglDriver            *driver,
-                                  CoglContext           *context,
                                   CoglSamplerCacheEntry *entry)
 {
-  if (_cogl_has_private_feature (context,
-                                 COGL_PRIVATE_FEATURE_SAMPLER_OBJECTS))
+  if (cogl_driver_has_feature (driver,
+                               COGL_FEATURE_ID_SAMPLER_OBJECTS))
     {
       GE (driver, glGenSamplers (1, &entry->sampler_object));
 
@@ -330,12 +325,12 @@ cogl_driver_gl_sampler_init_init (CoglDriver            *driver,
                                        GL_TEXTURE_WRAP_T,
                                        entry->wrap_mode_t));
 
-      /* While COGL_PRIVATE_FEATURE_SAMPLER_OBJECTS implies support for
+      /* While COGL_FEATURE_ID_SAMPLER_OBJECTS implies support for
        * GL_TEXTURE_LOD_BIAS in GL, the same is not true in GLES. So check,
        * and also only apply GL_TEXTURE_LOD_BIAS in mipmap modes:
        */
-      if (_cogl_has_private_feature (context,
-                                     COGL_PRIVATE_FEATURE_TEXTURE_LOD_BIAS) &&
+      if (cogl_driver_has_feature (driver,
+                                   COGL_FEATURE_ID_TEXTURE_LOD_BIAS) &&
           entry->min_filter != GL_NEAREST &&
           entry->min_filter != GL_LINEAR)
         {
@@ -361,17 +356,15 @@ cogl_driver_gl_sampler_init_init (CoglDriver            *driver,
 
 static void
 cogl_driver_gl_sampler_free (CoglDriver            *driver,
-                             CoglContext           *context,
                              CoglSamplerCacheEntry *entry)
 {
-  if (_cogl_has_private_feature (context,
-                                 COGL_PRIVATE_FEATURE_SAMPLER_OBJECTS))
+  if (cogl_driver_has_feature (driver,
+                               COGL_FEATURE_ID_SAMPLER_OBJECTS))
     GE (driver, glDeleteSamplers (1, &entry->sampler_object));
 }
 
 static void
 cogl_driver_gl_set_uniform (CoglDriver           *driver,
-                            CoglContext          *ctx,
                             GLint                 location,
                             const CoglBoxedValue *value)
 {
@@ -491,6 +484,7 @@ cogl_driver_gl_init (CoglDriverGL *driver)
   CoglDriverGLPrivate *priv =
     cogl_driver_gl_get_instance_private (driver);
 
+  priv->max_activateable_texture_units = -1;
   priv->next_fake_sampler_object_number = 1;
   priv->texture_units =
     g_array_new (FALSE, FALSE, sizeof (CoglTextureUnit));
@@ -689,6 +683,33 @@ cogl_driver_gl_get_gl_error (CoglDriverGL *driver)
     return gl_error;
   else
     return GL_NO_ERROR;
+}
+
+GLint
+cogl_driver_gl_get_max_activateable_texture_units (CoglDriverGL *driver)
+{
+  CoglDriverGLPrivate *priv = cogl_driver_gl_get_instance_private (driver);
+
+  if (G_UNLIKELY (priv->max_activateable_texture_units == -1))
+    {
+      CoglDriverGLClass *klass = COGL_DRIVER_GL_GET_CLASS (driver);
+      GLint values[3];
+      int n_values = 0;
+      int i;
+
+      klass->query_max_texture_units (driver, values, &n_values);
+
+      g_assert (n_values <= G_N_ELEMENTS (values) &&
+                n_values > 0);
+
+      /* Use the maximum value */
+      priv->max_activateable_texture_units = values[0];
+      for (i = 1; i < n_values; i++)
+        priv->max_activateable_texture_units =
+          MAX (values[i], priv->max_activateable_texture_units);
+    }
+
+  return priv->max_activateable_texture_units;
 }
 
 /* Parses a GL version number stored in a string. @version_string must

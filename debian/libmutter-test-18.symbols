@@ -26,6 +26,7 @@ libmutter-test-18.so libmutter-test-18 #MINVER#
  meta_crtc_test_get_type@Base 41.0
  meta_find_window_from_title@Base 42~beta
  meta_flush_input@Base 44~beta
+ meta_get_current_cursor@Base 50~
  meta_init_monitor_test_setup@Base 42~beta
  meta_launch_test_executable@Base 47.4
  meta_monitor_manager_test_emulate_hotplug@Base 41.0
@@ -67,13 +68,13 @@ libmutter-test-18.so libmutter-test-18 #MINVER#
  meta_test_shell_disable_animations@Base 47.4
  meta_test_shell_get_type@Base 44.3-4~
  meta_test_shell_set_background_color@Base 47.4
+ meta_wait_for_cursor_change@Base 50~
  meta_wait_for_effects@Base 49~rc
  meta_wait_for_monitors_changed@Base 46~beta
  meta_wait_for_paint@Base 42~beta
  meta_wait_for_possible_orientation_change@Base 42~beta
  meta_wait_for_uinput_device@Base 48.1
  meta_wait_for_update@Base 48.1
- meta_wait_for_window_cursor@Base 47.4
  meta_wait_for_window_shown@Base 47.4
  meta_wait_test_process@Base 47.4
  meta_wait_wayland_window_reconfigure@Base 49~rc

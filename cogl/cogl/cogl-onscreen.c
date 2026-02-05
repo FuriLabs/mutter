@@ -79,14 +79,12 @@ cogl_onscreen_allocate (CoglFramebuffer  *framebuffer,
                         GError          **error)
 {
   CoglOnscreen *onscreen = COGL_ONSCREEN (framebuffer);
-  CoglContext *ctx = cogl_framebuffer_get_context (framebuffer);
 
   /* If the winsys doesn't support dirty events then we'll report
    * one on allocation so that if the application only paints in
    * response to dirty events then it will at least paint once to
    * start */
-  if (!_cogl_has_private_feature (ctx, COGL_PRIVATE_FEATURE_DIRTY_EVENTS))
-    _cogl_onscreen_queue_full_dirty (onscreen);
+  _cogl_onscreen_queue_full_dirty (onscreen);
 
   return TRUE;
 }
@@ -175,18 +173,7 @@ _cogl_dispatch_onscreen_cb (CoglContext *context)
       g_free (event);
     }
 
-  while (!_cogl_list_empty (&context->onscreen_dirty_queue))
-    {
-      CoglOnscreenQueuedDirty *qe =
-        _cogl_container_of (context->onscreen_dirty_queue.next,
-                            CoglOnscreenQueuedDirty,
-                            link);
-
-      _cogl_list_remove (&qe->link);
-      g_object_unref (qe->onscreen);
-
-      g_free (qe);
-    }
+  cogl_context_clear_onscreen_dirty_queue (context);
 }
 
 static void
@@ -204,14 +191,15 @@ _cogl_onscreen_queue_dispatch_idle (CoglOnscreen *onscreen)
     }
 }
 
-void
+static void
 _cogl_onscreen_queue_dirty (CoglOnscreen       *onscreen,
                             const MtkRectangle *info)
 {
   CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
   CoglContext *ctx = cogl_framebuffer_get_context (framebuffer);
-  CoglOnscreenQueuedDirty *qe = g_new0 (CoglOnscreenQueuedDirty, 1);
+  CoglOnscreenQueuedDirty *qe;
 
+  qe = g_new0 (CoglOnscreenQueuedDirty, 1);
   qe->onscreen = g_object_ref (onscreen);
   qe->info = *info;
   _cogl_list_insert (ctx->onscreen_dirty_queue.prev, &qe->link);
@@ -439,14 +427,6 @@ cogl_onscreen_peek_head_frame_info (CoglOnscreen *onscreen)
 }
 
 CoglFrameInfo *
-cogl_onscreen_peek_tail_frame_info (CoglOnscreen *onscreen)
-{
-  CoglOnscreenPrivate *priv = cogl_onscreen_get_instance_private (onscreen);
-
-  return g_queue_peek_tail (&priv->pending_frame_infos);
-}
-
-CoglFrameInfo *
 cogl_onscreen_pop_head_frame_info (CoglOnscreen *onscreen)
 {
   CoglOnscreenPrivate *priv = cogl_onscreen_get_instance_private (onscreen);
@@ -487,21 +467,6 @@ void
 _cogl_onscreen_notify_complete (CoglOnscreen *onscreen, CoglFrameInfo *info)
 {
   notify_event (onscreen, COGL_FRAME_EVENT_COMPLETE, info);
-}
-
-void
-_cogl_framebuffer_winsys_update_size (CoglFramebuffer *framebuffer,
-                                      int width, int height)
-{
-  if (cogl_framebuffer_get_width (framebuffer) == width &&
-      cogl_framebuffer_get_height (framebuffer) == height)
-    return;
-
-  cogl_framebuffer_update_size (framebuffer, width, height);
-
-  if (!_cogl_has_private_feature (cogl_framebuffer_get_context (framebuffer),
-                                  COGL_PRIVATE_FEATURE_DIRTY_EVENTS))
-    _cogl_onscreen_queue_full_dirty (COGL_ONSCREEN (framebuffer));
 }
 
 int64_t

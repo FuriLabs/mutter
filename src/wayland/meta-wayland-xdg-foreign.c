@@ -133,7 +133,7 @@ meta_wayland_xdg_foreign_is_valid_surface (MetaWaylandSurface *surface,
                                            struct wl_resource *exporter)
 {
   if (!surface->role ||
-      !meta_wayland_surface_get_window (surface) || 
+      !meta_wayland_surface_get_window (surface) ||
       !META_IS_WAYLAND_XDG_SURFACE (surface->role))
     {
       wl_resource_post_error (exporter,
@@ -517,4 +517,18 @@ meta_wayland_xdg_foreign_init (MetaWaylandCompositor *compositor)
     return FALSE;
 
   return TRUE;
+}
+
+static void
+meta_wayland_xdg_foreign_free (MetaWaylandXdgForeign *foreign)
+{
+  g_rand_free (foreign->rand);
+  g_hash_table_unref (foreign->exported_surfaces);
+  g_free (foreign);
+}
+
+void
+meta_wayland_xdg_foreign_finalize (MetaWaylandCompositor *compositor)
+{
+  g_clear_pointer (&compositor->foreign, meta_wayland_xdg_foreign_free);
 }

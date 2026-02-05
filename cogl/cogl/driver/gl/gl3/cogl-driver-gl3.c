@@ -66,7 +66,6 @@ cogl_driver_gl3_context_init (CoglDriver  *driver,
 
 static CoglPixelFormat
 cogl_driver_gl3_pixel_format_to_gl (CoglDriverGL    *driver,
-                                    CoglContext     *context,
                                     CoglPixelFormat  format,
                                     GLenum          *out_glintformat,
                                     GLenum          *out_glformat,
@@ -285,7 +284,6 @@ cogl_driver_gl3_pixel_format_to_gl (CoglDriverGL    *driver,
     case COGL_PIXEL_FORMAT_ABGR_FP_16161616_PRE:
       required_format =
         cogl_driver_gl3_pixel_format_to_gl (driver,
-                                            context,
                                             COGL_PIXEL_FORMAT_RGBA_FP_16161616 |
                                             (format & COGL_PREMULT_BIT),
                                             &glintformat,
@@ -296,7 +294,6 @@ cogl_driver_gl3_pixel_format_to_gl (CoglDriverGL    *driver,
     case COGL_PIXEL_FORMAT_XBGR_FP_16161616:
       required_format =
         cogl_driver_gl3_pixel_format_to_gl (driver,
-                                            context,
                                             COGL_PIXEL_FORMAT_RGBX_FP_16161616,
                                             &glintformat,
                                             &glformat,
@@ -367,34 +364,31 @@ cogl_driver_gl3_pixel_format_to_gl (CoglDriverGL    *driver,
 /* OpenGL - unlike GLES - can download pixel data into a sub region of
  * a larger destination buffer */
 static void
-prep_gl_for_pixels_download_full (CoglContext *ctx,
-                                  int image_width,
-                                  int pixels_rowstride,
-                                  int image_height,
-                                  int pixels_src_x,
-                                  int pixels_src_y,
-                                  int pixels_bpp)
+prep_gl_for_pixels_download_full (CoglDriver *driver,
+                                  int         image_width,
+                                  int         pixels_rowstride,
+                                  int         image_height,
+                                  int         pixels_src_x,
+                                  int         pixels_src_y,
+                                  int         pixels_bpp)
 {
-  CoglDriver *driver = cogl_context_get_driver (ctx);
-
   GE (driver, glPixelStorei (GL_PACK_ROW_LENGTH, pixels_rowstride / pixels_bpp));
 
   GE (driver, glPixelStorei (GL_PACK_SKIP_PIXELS, pixels_src_x));
   GE (driver, glPixelStorei (GL_PACK_SKIP_ROWS, pixels_src_y));
 
-  _cogl_texture_gl_prep_alignment_for_pixels_download (ctx,
+  _cogl_texture_gl_prep_alignment_for_pixels_download (driver,
                                                        pixels_bpp,
                                                        image_width,
                                                        pixels_rowstride);
 }
 static void
 cogl_driver_gl3_prep_gl_for_pixels_download (CoglDriverGL *driver,
-                                             CoglContext  *ctx,
                                              int           image_width,
                                              int           pixels_rowstride,
                                              int           pixels_bpp)
 {
-  prep_gl_for_pixels_download_full (ctx,
+  prep_gl_for_pixels_download_full (COGL_DRIVER (driver),
                                     image_width,
                                     pixels_rowstride,
                                     0 /* image height */,
@@ -404,7 +398,6 @@ cogl_driver_gl3_prep_gl_for_pixels_download (CoglDriverGL *driver,
 
 static gboolean
 cogl_driver_gl3_texture_size_supported (CoglDriverGL *driver,
-                                        CoglContext  *ctx,
                                         GLenum        gl_target,
                                         GLenum        gl_intformat,
                                         GLenum        gl_format,
@@ -434,16 +427,28 @@ cogl_driver_gl3_texture_size_supported (CoglDriverGL *driver,
   return new_width != 0;
 }
 
+static void
+cogl_driver_gl3_query_max_texture_units (CoglDriverGL *driver,
+                                         GLint        *values,
+                                         int          *n_values)
+{
+  /* GL_MAX_TEXTURE_COORDS defines the number of texture coordinates
+   * that can be uploaded (but doesn't necessarily relate to how many
+   * texture images can be sampled) */
+  GE (driver, glGetIntegerv (GL_MAX_TEXTURE_COORDS, values + (*n_values)++));
+
+  GE (driver, glGetIntegerv (GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS,
+                             values + (*n_values)++));
+}
+
 static CoglPixelFormat
 cogl_driver_gl3_get_read_pixels_format (CoglDriverGL    *driver,
-                                        CoglContext     *context,
                                         CoglPixelFormat  from,
                                         CoglPixelFormat  to,
                                         GLenum          *gl_format_out,
                                         GLenum          *gl_type_out)
 {
   return cogl_driver_gl3_pixel_format_to_gl (driver,
-                                             context,
                                              to,
                                              NULL,
                                              gl_format_out,
@@ -534,22 +539,19 @@ check_glsl_version (CoglDriverGL  *driver,
 
 static gboolean
 cogl_driver_gl3_update_features (CoglDriver   *driver,
-                                 CoglContext  *ctx,
+                                 CoglRenderer *renderer,
                                  GError      **error)
 {
   CoglDriverGLPrivate *priv_gl =
     cogl_driver_gl_get_private (COGL_DRIVER_GL (driver));
-  unsigned long private_features
-    [COGL_FLAGS_N_LONGS_FOR_SIZE (COGL_N_PRIVATE_FEATURES)] = { 0 };
   g_auto (GStrv) gl_extensions = 0;
   int gl_major = 0, gl_minor = 0;
-  int i;
 
   /* We have to special case getting the pointer to the glGetString*
      functions because we need to use them to determine what functions
      we can expect */
   priv_gl->glGetString =
-    (void *) cogl_renderer_get_proc_address (ctx->display->renderer,
+    (void *) cogl_renderer_get_proc_address (renderer,
                                              "glGetString");
 
   if (!check_gl_version (COGL_DRIVER_GL (driver), error))
@@ -562,17 +564,17 @@ cogl_driver_gl3_update_features (CoglDriver   *driver,
    * so don't look them up before check_gl_version()
    */
   priv_gl->glGetStringi =
-    (void *) cogl_renderer_get_proc_address (ctx->display->renderer,
+    (void *) cogl_renderer_get_proc_address (renderer,
                                              "glGetStringi");
   priv_gl->glGetIntegerv =
-    (void *) cogl_renderer_get_proc_address (ctx->display->renderer,
+    (void *) cogl_renderer_get_proc_address (renderer,
                                              "glGetIntegerv");
   priv_gl->glGetError =
-    (void *) cogl_renderer_get_proc_address (ctx->display->renderer,
+    (void *) cogl_renderer_get_proc_address (renderer,
                                              "glGetError");
 
   gl_extensions = cogl_driver_gl_get_gl_extensions (COGL_DRIVER_GL (driver),
-                                                    ctx->display->renderer);
+                                                    renderer);
 
   if (G_UNLIKELY (COGL_DEBUG_ENABLED (COGL_DEBUG_WINSYS)))
     {
@@ -592,75 +594,73 @@ cogl_driver_gl3_update_features (CoglDriver   *driver,
 
   _cogl_get_gl_version (COGL_DRIVER_GL (driver), &gl_major, &gl_minor);
 
-  COGL_FLAGS_SET (ctx->features,
-                  COGL_FEATURE_ID_UNSIGNED_INT_INDICES, TRUE);
+  cogl_driver_set_feature (driver,
+                           COGL_FEATURE_ID_UNSIGNED_INT_INDICES,
+                           TRUE);
 
-  _cogl_feature_check_ext_functions (ctx,
+  _cogl_feature_check_ext_functions (driver,
+                                     renderer,
                                      gl_major,
                                      gl_minor,
                                      gl_extensions);
 
   if (_cogl_check_extension ("GL_MESA_pack_invert", gl_extensions))
-    COGL_FLAGS_SET (private_features,
-                    COGL_PRIVATE_FEATURE_MESA_PACK_INVERT, TRUE);
+    cogl_driver_set_feature (driver,
+                             COGL_FEATURE_ID_MESA_PACK_INVERT,
+                             TRUE);
 
-  COGL_FLAGS_SET (private_features,
-                  COGL_PRIVATE_FEATURE_QUERY_FRAMEBUFFER_BITS,
-                  TRUE);
+  cogl_driver_set_feature (driver,
+                           COGL_FEATURE_ID_QUERY_FRAMEBUFFER_BITS,
+                           TRUE);
 
-  COGL_FLAGS_SET (ctx->features, COGL_FEATURE_ID_BLIT_FRAMEBUFFER, TRUE);
+  cogl_driver_set_feature (driver, COGL_FEATURE_ID_BLIT_FRAMEBUFFER, TRUE);
 
-  COGL_FLAGS_SET (private_features, COGL_PRIVATE_FEATURE_PBOS, TRUE);
+  cogl_driver_set_feature (driver, COGL_FEATURE_ID_PBOS, TRUE);
 
-  COGL_FLAGS_SET (ctx->features, COGL_FEATURE_ID_MAP_BUFFER_FOR_READ, TRUE);
-  COGL_FLAGS_SET (ctx->features, COGL_FEATURE_ID_MAP_BUFFER_FOR_WRITE, TRUE);
+  cogl_driver_set_feature (driver, COGL_FEATURE_ID_MAP_BUFFER_FOR_READ, TRUE);
+  cogl_driver_set_feature (driver, COGL_FEATURE_ID_MAP_BUFFER_FOR_WRITE, TRUE);
 
   if (GE_HAS (driver, glEGLImageTargetTexture2D))
-    COGL_FLAGS_SET (private_features,
-                    COGL_PRIVATE_FEATURE_TEXTURE_2D_FROM_EGL_IMAGE, TRUE);
+    cogl_driver_set_feature (driver,
+                             COGL_FEATURE_ID_TEXTURE_2D_FROM_EGL_IMAGE,
+                             TRUE);
 
-  COGL_FLAGS_SET (private_features,
-                  COGL_PRIVATE_FEATURE_EXT_PACKED_DEPTH_STENCIL, TRUE);
+  cogl_driver_set_feature (driver,
+                           COGL_FEATURE_ID_EXT_PACKED_DEPTH_STENCIL, TRUE);
 
   if (GE_HAS (driver, glGenSamplers))
-    COGL_FLAGS_SET (private_features,
-                    COGL_PRIVATE_FEATURE_SAMPLER_OBJECTS, TRUE);
+    cogl_driver_set_feature (driver,
+                             COGL_FEATURE_ID_SAMPLER_OBJECTS,
+                             TRUE);
 
   if (COGL_CHECK_GL_VERSION (gl_major, gl_minor, 3, 3) ||
       _cogl_check_extension ("GL_ARB_texture_swizzle", gl_extensions) ||
       _cogl_check_extension ("GL_EXT_texture_swizzle", gl_extensions))
-    COGL_FLAGS_SET (private_features,
-                    COGL_PRIVATE_FEATURE_TEXTURE_SWIZZLE, TRUE);
+    cogl_driver_set_feature (driver,
+                             COGL_FEATURE_ID_TEXTURE_SWIZZLE, TRUE);
 
-  COGL_FLAGS_SET (private_features,
-                  COGL_PRIVATE_FEATURE_READ_PIXELS_ANY_STRIDE, TRUE);
-  COGL_FLAGS_SET (private_features, COGL_PRIVATE_FEATURE_ANY_GL, TRUE);
-  COGL_FLAGS_SET (private_features,
-                  COGL_PRIVATE_FEATURE_FORMAT_CONVERSION, TRUE);
-  COGL_FLAGS_SET (private_features,
-                  COGL_PRIVATE_FEATURE_QUERY_TEXTURE_PARAMETERS, TRUE);
-  COGL_FLAGS_SET (private_features,
-                  COGL_PRIVATE_FEATURE_TEXTURE_MAX_LEVEL, TRUE);
+  cogl_driver_set_feature (driver,
+                           COGL_FEATURE_ID_READ_PIXELS_ANY_STRIDE, TRUE);
+  cogl_driver_set_feature (driver,
+                           COGL_FEATURE_ID_FORMAT_CONVERSION, TRUE);
+  cogl_driver_set_feature (driver,
+                           COGL_FEATURE_ID_TEXTURE_MAX_LEVEL, TRUE);
 
-  COGL_FLAGS_SET (private_features,
-                  COGL_PRIVATE_FEATURE_TEXTURE_LOD_BIAS, TRUE);
+  cogl_driver_set_feature (driver,
+                           COGL_FEATURE_ID_TEXTURE_LOD_BIAS, TRUE);
 
   if (GE_HAS (driver, glFenceSync))
-    COGL_FLAGS_SET (ctx->features, COGL_FEATURE_ID_FENCE, TRUE);
+    cogl_driver_set_feature (driver, COGL_FEATURE_ID_FENCE, TRUE);
 
-  COGL_FLAGS_SET (ctx->features, COGL_FEATURE_ID_TEXTURE_RG, TRUE);
+  cogl_driver_set_feature (driver, COGL_FEATURE_ID_TEXTURE_RG, TRUE);
 
-  COGL_FLAGS_SET (ctx->features, COGL_FEATURE_ID_TEXTURE_RGBA1010102, TRUE);
+  cogl_driver_set_feature (driver, COGL_FEATURE_ID_TEXTURE_RGBA1010102, TRUE);
 
-  COGL_FLAGS_SET (ctx->features, COGL_FEATURE_ID_TEXTURE_HALF_FLOAT, TRUE);
+  cogl_driver_set_feature (driver, COGL_FEATURE_ID_TEXTURE_HALF_FLOAT, TRUE);
 
-  COGL_FLAGS_SET (ctx->features, COGL_FEATURE_ID_TEXTURE_NORM16, TRUE);
+  cogl_driver_set_feature (driver, COGL_FEATURE_ID_TEXTURE_NORM16, TRUE);
 
-  /* Cache features */
-  for (i = 0; i < G_N_ELEMENTS (private_features); i++)
-    ctx->private_features[i] |= private_features[i];
-
-  if (!COGL_FLAGS_GET (private_features, COGL_PRIVATE_FEATURE_TEXTURE_SWIZZLE))
+  if (!cogl_driver_has_feature (driver, COGL_FEATURE_ID_TEXTURE_SWIZZLE))
     {
       g_set_error (error,
                    COGL_DRIVER_ERROR,
@@ -675,7 +675,6 @@ cogl_driver_gl3_update_features (CoglDriver   *driver,
 
 static gboolean
 cogl_driver_gl3_format_supports_upload (CoglDriver      *driver,
-                                        CoglContext     *ctx,
                                         CoglPixelFormat  format)
 {
   switch (format)
@@ -767,6 +766,7 @@ cogl_driver_gl3_class_init (CoglDriverGL3Class *klass)
   driver_gl_klass->pixel_format_to_gl = cogl_driver_gl3_pixel_format_to_gl;
   driver_gl_klass->prep_gl_for_pixels_download = cogl_driver_gl3_prep_gl_for_pixels_download;
   driver_gl_klass->texture_size_supported = cogl_driver_gl3_texture_size_supported;
+  driver_gl_klass->query_max_texture_units = cogl_driver_gl3_query_max_texture_units;
 }
 
 static void

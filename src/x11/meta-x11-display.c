@@ -48,7 +48,7 @@
 
 #include "backends/meta-backend-private.h"
 #include "backends/meta-dnd-private.h"
-#include "backends/meta-cursor-sprite-xcursor.h"
+#include "backends/meta-cursor-xcursor.h"
 #include "backends/meta-logical-monitor-private.h"
 #include "backends/meta-settings-private.h"
 #include "core/meta-workspace-manager-private.h"
@@ -217,8 +217,13 @@ meta_x11_display_dispose (GObject *object)
   MetaX11Display *x11_display = META_X11_DISPLAY (object);
   MetaX11DisplayPrivate *priv =
     meta_x11_display_get_instance_private (x11_display);
+  MetaContext *context = meta_display_get_context (x11_display->display);
+  MetaBackend *backend = meta_context_get_backend (context);
+  MetaSettings *settings = meta_backend_get_settings (backend);
 
   x11_display->closing = TRUE;
+
+  g_signal_handlers_disconnect_by_data (settings, x11_display);
 
   g_clear_handle_id (&priv->dbus_name_id, g_bus_unown_name);
   g_clear_object (&priv->dbus_api);
@@ -1213,38 +1218,9 @@ initialize_dbus_interface (MetaX11Display *x11_display)
 }
 
 static void
-experimental_features_changed (MetaSettings           *settings,
-                               MetaExperimentalFeature old_experimental_features,
-                               MetaX11Display         *x11_display)
+ui_scaling_factor_changed (MetaX11Display *x11_display)
 {
-  gboolean was_xwayland_native_scaling;
-  gboolean was_stage_views_scaled;
-  gboolean is_xwayland_native_scaling;
-  gboolean is_stage_views_scaled;
-
-  was_xwayland_native_scaling =
-    !!(old_experimental_features &
-       META_EXPERIMENTAL_FEATURE_XWAYLAND_NATIVE_SCALING);
-  was_stage_views_scaled =
-    !!(old_experimental_features &
-       META_EXPERIMENTAL_FEATURE_SCALE_MONITOR_FRAMEBUFFER);
-
-  is_xwayland_native_scaling =
-    meta_settings_is_experimental_feature_enabled (
-      settings,
-      META_EXPERIMENTAL_FEATURE_XWAYLAND_NATIVE_SCALING);
-  is_stage_views_scaled =
-    meta_settings_is_experimental_feature_enabled (
-      settings,
-      META_EXPERIMENTAL_FEATURE_SCALE_MONITOR_FRAMEBUFFER);
-
-  if (is_xwayland_native_scaling != was_xwayland_native_scaling ||
-      is_stage_views_scaled != was_stage_views_scaled)
-    {
-      update_ui_scaling_factor (x11_display);
-      set_desktop_geometry_hint (x11_display);
-      set_work_area_hint (x11_display->display, x11_display);
-    }
+  update_cursor_theme (x11_display);
 }
 
 /**
@@ -1350,12 +1326,6 @@ meta_x11_display_new (MetaDisplay  *display,
   query_xdamage_extension (x11_display);
   query_xfixes_extension (x11_display);
   query_xi_extension (x11_display);
-
-  g_signal_connect_object (display,
-                           "cursor-updated",
-                           G_CALLBACK (update_cursor_theme),
-                           x11_display,
-                           G_CONNECT_SWAPPED);
 
   g_signal_connect_object (display,
                            "x11-display-opened",
@@ -1479,10 +1449,10 @@ meta_x11_display_new (MetaDisplay  *display,
 
   meta_prefs_add_listener (prefs_changed_callback, x11_display);
 
-  g_signal_connect_object (settings,
-                           "experimental-features-changed",
-                           G_CALLBACK (experimental_features_changed),
-                           x11_display, 0);
+  g_signal_connect_swapped (settings,
+                            "ui-scaling-factor-changed",
+                            G_CALLBACK (ui_scaling_factor_changed),
+                            x11_display);
 
   set_work_area_hint (display, x11_display);
 
@@ -1494,6 +1464,21 @@ meta_x11_display_new (MetaDisplay  *display,
 
   meta_x11_startup_notification_init (x11_display);
   meta_x11_selection_init (x11_display);
+
+  g_snprintf (buf, sizeof (buf), "_NET_WM_CM_S%d", number);
+  wm_cm_atom = XInternAtom (x11_display->xdisplay, buf, False);
+
+  x11_display->wm_cm_selection_window =
+    take_manager_selection (x11_display, xroot, wm_cm_atom, timestamp);
+
+  if (x11_display->wm_cm_selection_window == None)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Failed to acquire compositor ownership");
+
+      g_object_run_dispose (G_OBJECT (x11_display));
+      return NULL;
+    }
 
   sprintf (buf, "WM_S%d", number);
 
@@ -1514,21 +1499,6 @@ meta_x11_display_new (MetaDisplay  *display,
   x11_display->wm_sn_selection_window = new_wm_sn_owner;
   x11_display->wm_sn_atom = wm_sn_atom;
   x11_display->wm_sn_timestamp = timestamp;
-
-  g_snprintf (buf, sizeof (buf), "_NET_WM_CM_S%d", number);
-  wm_cm_atom = XInternAtom (x11_display->xdisplay, buf, False);
-
-  x11_display->wm_cm_selection_window =
-    take_manager_selection (x11_display, xroot, wm_cm_atom, timestamp);
-
-  if (x11_display->wm_cm_selection_window == None)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Failed to acquire compositor ownership");
-
-      g_object_run_dispose (G_OBJECT (x11_display));
-      return NULL;
-    }
 
   init_event_masks (x11_display);
 
@@ -1675,11 +1645,11 @@ meta_x11_display_reload_cursor (MetaX11Display *x11_display)
   Cursor xcursor;
   /* Set a cursor for X11 applications that don't specify their own */
   xcursor = XcursorLibraryLoadCursor (x11_display->xdisplay,
-                                      meta_cursor_get_name (META_CURSOR_DEFAULT));
+                                      meta_cursor_get_name (CLUTTER_CURSOR_DEFAULT));
   if (!xcursor)
     {
       xcursor = XcursorLibraryLoadCursor (x11_display->xdisplay,
-                                          meta_cursor_get_legacy_name (META_CURSOR_DEFAULT));
+                                          meta_cursor_get_legacy_name (CLUTTER_CURSOR_DEFAULT));
     }
 
   XDefineCursor (x11_display->xdisplay, x11_display->xroot, xcursor);
@@ -2389,9 +2359,17 @@ prefs_changed_callback (MetaPreference pref,
 {
   MetaX11Display *x11_display = data;
 
-  if (pref == META_PREF_WORKSPACE_NAMES)
+  switch (pref)
     {
+    case META_PREF_WORKSPACE_NAMES:
       set_workspace_names (x11_display);
+      break;
+    case META_PREF_CURSOR_THEME:
+    case META_PREF_CURSOR_SIZE:
+      update_cursor_theme (x11_display);
+      break;
+    default:
+      break;
     }
 }
 

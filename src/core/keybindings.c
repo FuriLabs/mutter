@@ -30,7 +30,7 @@
 #include "config.h"
 
 #include "backends/meta-backend-private.h"
-#include "backends/meta-keymap-utils.h"
+#include "backends/meta-keymap-description-private.h"
 #include "backends/meta-logical-monitor-private.h"
 #include "backends/meta-monitor-manager-private.h"
 #include "compositor/compositor-private.h"
@@ -239,7 +239,7 @@ key_combo_key (MetaResolvedKeyCombo *resolved_combo,
 static void
 reload_modmap (MetaKeyBindingManager *keys)
 {
-  struct xkb_keymap *keymap = meta_backend_get_keymap (keys->backend);
+  struct xkb_keymap *keymap = meta_backend_get_xkb_keymap (keys->backend);
   struct xkb_state *scratch_state;
   xkb_mod_mask_t scroll_lock_mask;
   xkb_mod_mask_t dummy_mask;
@@ -766,19 +766,24 @@ clear_active_keyboard_layouts (MetaKeyBindingManager *keys)
 static MetaKeyBindingKeyboardLayout
 create_us_layout (void)
 {
-  struct xkb_rule_names names;
+  g_autoptr (MetaKeymapDescription) keymap_description = NULL;
+  g_autoptr (GError) error = NULL;
   struct xkb_keymap *keymap;
-  struct xkb_context *context;
 
-  names.rules = DEFAULT_XKB_RULES_FILE;
-  names.model = DEFAULT_XKB_MODEL;
-  names.layout = "us";
-  names.variant = "";
-  names.options = "";
-
-  context = meta_create_xkb_context ();
-  keymap = xkb_keymap_new_from_names (context, &names, XKB_KEYMAP_COMPILE_NO_FLAGS);
-  xkb_context_unref (context);
+  keymap_description = meta_keymap_description_new_from_rules (NULL,
+                                                               "us",
+                                                               NULL,
+                                                               NULL,
+                                                               NULL,
+                                                               NULL);
+  keymap = meta_keymap_description_create_xkb_keymap (keymap_description,
+                                                      NULL, NULL,
+                                                      &error);
+  if (!keymap)
+    {
+      g_warning ("Failed to create us keybinding layout: %s", error->message);
+      return (MetaKeyBindingKeyboardLayout) {};
+    }
 
   return (MetaKeyBindingKeyboardLayout) {
     .keymap = keymap,
@@ -795,7 +800,7 @@ reload_active_keyboard_layouts (MetaKeyBindingManager *keys)
 
   clear_active_keyboard_layouts (keys);
 
-  keymap = meta_backend_get_keymap (keys->backend);
+  keymap = meta_backend_get_xkb_keymap (keys->backend);
   layout_index = meta_backend_get_keymap_layout_group (keys->backend);
   primary_layout = (MetaKeyBindingKeyboardLayout) {
     .keymap = xkb_keymap_ref (keymap),
@@ -1520,7 +1525,6 @@ process_special_modifier_key (MetaDisplay          *display,
                               GFunc                 trigger_callback)
 {
   MetaKeyBindingManager *keys = &display->key_binding_manager;
-  MetaCompositor *compositor = display->compositor;
   ClutterModifierType modifiers;
   uint32_t hardware_keycode;
 
@@ -1557,8 +1561,6 @@ process_special_modifier_key (MetaDisplay          *display,
             trigger_callback (display, NULL);
         }
 
-      meta_compositor_handle_event (compositor, event, window,
-                                    META_EVENT_MODE_THAW);
       return CLUTTER_EVENT_STOP;
     }
   else if (clutter_event_type (event) == CLUTTER_KEY_PRESS &&
@@ -1566,15 +1568,12 @@ process_special_modifier_key (MetaDisplay          *display,
            resolved_key_combo_has_keycode (resolved_key_combo, hardware_keycode))
     {
       *modifier_press_only = TRUE;
-      /* We keep the keyboard frozen - this allows us to use ReplayKeyboard
-       * on the next event if it's not the release of the modifier key */
-      meta_compositor_handle_event (compositor, event, window,
-                                    META_EVENT_MODE_KEEP_FROZEN);
-
       return CLUTTER_EVENT_PROPAGATE;
     }
   else
-    return CLUTTER_EVENT_PROPAGATE;
+    {
+      return CLUTTER_EVENT_PROPAGATE;
+    }
 }
 
 
@@ -1627,8 +1626,6 @@ static gboolean
 process_iso_next_group (MetaDisplay  *display,
                         ClutterEvent *event)
 {
-  MetaContext *context = meta_display_get_context (display);
-  MetaBackend *backend = meta_context_get_backend (context);
   MetaKeyBindingManager *keys = &display->key_binding_manager;
   uint32_t keyval = clutter_event_get_key_symbol (event);
   ClutterModifierType modifiers;
@@ -1648,12 +1645,7 @@ process_iso_next_group (MetaDisplay  *display,
     {
       if (mask == keys->iso_next_group_combos[i].mask)
         {
-          /* If the signal handler returns TRUE the keyboard will
-             remain frozen. It's the signal handler's responsibility
-             to unfreeze it. */
-          if (!meta_display_modifiers_accelerator_activate (display))
-            meta_backend_unfreeze_keyboard (backend,
-                                            clutter_event_get_time (event));
+          meta_display_modifiers_accelerator_activate (display);
           return TRUE;
         }
     }
@@ -1666,8 +1658,6 @@ process_key_event (MetaDisplay     *display,
                    MetaWindow      *window,
                    ClutterEvent    *event)
 {
-  MetaCompositor *compositor = display->compositor;
-
   if (process_overlay_key (display, event, window))
     return TRUE;
 
@@ -1678,20 +1668,7 @@ process_key_event (MetaDisplay     *display,
     return TRUE;
 
   /* Do the normal keybindings */
-  if (process_event (display, window, event))
-    {
-      meta_compositor_handle_event (compositor, event, window,
-                                    META_EVENT_MODE_THAW);
-      return TRUE;
-    }
-  else
-    {
-      /* Replay the event so it gets delivered to our
-       * per-window key bindings or to the application */
-      meta_compositor_handle_event (compositor, event, window,
-                                    META_EVENT_MODE_REPLAY);
-      return FALSE;
-    }
+  return process_event (display, window, event);
 }
 
 /* Handle a key event. May be called recursively: some key events cause
@@ -2370,7 +2347,9 @@ handle_move_to_monitor (MetaDisplay           *display,
   if (new == NULL)
     return;
 
-  meta_window_move_to_monitor (window, new->number);
+  meta_window_move_to_monitor_internal (window,
+                                        META_MOVE_RESIZE_USER_ACTION,
+                                        new->number);
 }
 
 static void
