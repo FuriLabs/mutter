@@ -709,6 +709,8 @@ mutter_sources += [
   'wayland/meta-wayland-xdg-toplevel-tag.h',
   'wayland/meta-window-wayland.c',
   'wayland/meta-window-wayland.h',
+  'wayland/meta-wayland-virtual-keyboard.c',
+  'wayland/meta-wayland-virtual-keyboard.h',
 ]
 
 if have_wayland_nested
@@ -1164,6 +1166,7 @@ wayland_protocols = [
   ['xdg-system-bell', 'staging', 1, ],
   ['xdg-toplevel-drag', 'staging', 1, ],
   ['xdg-toplevel-tag', 'staging', 1, ],
+  ['virtual-keyboard-unstable-v1', 'private', ],
 ]
 
 if have_xwayland
