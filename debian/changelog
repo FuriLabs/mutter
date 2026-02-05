@@ -5,6 +5,8 @@ mutter (50~beta-0ubuntu1) UNRELEASED; urgency=medium
     - workarounds/Mark-several-additional-tests-as-flaky.patch
     - workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
     - workarounds/tests-Mark-view-verification-tests-as-incomplete-in-big-e.patch
+    - ubuntu/core-Remove-warning-that-a-key-combo-has-been-overridden.patch
+    - ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
 
  -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 05 Feb 2026 15:57:48 +0800
 
