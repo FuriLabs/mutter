@@ -7,6 +7,13 @@ mutter (50~beta-0ubuntu1) UNRELEASED; urgency=medium
     - workarounds/tests-Mark-view-verification-tests-as-incomplete-in-big-e.patch
     - ubuntu/core-Remove-warning-that-a-key-combo-has-been-overridden.patch
     - ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
+  * Rewrote patches:
+    - ubuntu/Unblock-Nvidia-performance.patch
+      because it's likely only part of it will land upstream in 50.0 and
+      the commits had to be reordered. Also fixed a memory leak on DisplayLink.
+  * Added patches:
+    - ubuntu/Revert-clutter-frame-clock-Remove-min_render_time_allowed.patch
+      to avoid a performance regression introduced upstream in 50.beta.
 
  -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 05 Feb 2026 15:57:48 +0800
 

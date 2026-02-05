@@ -5,3 +5,5 @@ workarounds/Mark-several-additional-tests-as-flaky.patch
 workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
 ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
 ubuntu/core-Remove-warning-that-a-key-combo-has-been-overridden.patch
+ubuntu/Revert-clutter-frame-clock-Remove-min_render_time_allowed.patch
+ubuntu/Unblock-Nvidia-performance.patch
