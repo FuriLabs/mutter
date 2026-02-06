@@ -1,7 +1,4 @@
-mutter (50~beta-1) UNRELEASED; urgency=medium
-
-  [ Simon McVittie ]
-  * Revert "d/gbp.conf, d/control, d/watch: Branch for 49.x"
+mutter (50~beta-1) experimental; urgency=medium
 
   [ Daniel van Vugt ]
   * New upstream release 50.beta
@@ -11,8 +8,17 @@ mutter (50~beta-1) UNRELEASED; urgency=medium
     - workarounds/tests-Mark-view-verification-tests-as-incomplete-in-big-e.patch
   * Removed tests that relied strictly on the X11 backend which itself
     has been removed in this release.
+  * debian/control: Add new Build-Depends: libxkbregistry-dev
+  * Update debian/*.symbols for 50.beta
+  * debian/control: libmutter now requires mutter-common >= 50~beta
 
- -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 05 Feb 2026 13:22:47 +0800
+  [ Simon McVittie ]
+  * Revert "d/gbp.conf, d/control, d/watch: Branch for 49.x"
+
+  [ Jeremy Bícha ]
+  * Bump Standards Version to 4.7.3
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Fri, 06 Feb 2026 12:17:46 -0500
 
 mutter (49.3-1) unstable; urgency=medium
 
