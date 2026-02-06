@@ -196,7 +196,7 @@ Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: adwaita-icon-theme,
          gsettings-desktop-schemas (>= 40~alpha),
-         mutter-common (>= 49.0),
+         mutter-common (>= 50~beta),
          mutter-common-bin (>= 49.0),
          ${misc:Depends},
          ${shlibs:Depends}
