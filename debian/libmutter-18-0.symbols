@@ -2639,16 +2639,16 @@ libmutter-cogl-18.so.0 libmutter-18-0 #MINVER#
  cogl_texture_set_premultiplied@Base 43.0
  cogl_texture_set_region@Base 43.0
  cogl_texture_set_region_from_bitmap@Base 43.0
- (arch=amd64 arm64 armhf ppc64el riscv64 s390x)cogl_trace_context@Base 43.0
- (arch=amd64 arm64 armhf ppc64el riscv64 s390x)cogl_trace_define_counter_double@Base 47.0
- (arch=amd64 arm64 armhf ppc64el riscv64 s390x)cogl_trace_define_counter_int@Base 47.0
- (arch=amd64 arm64 armhf ppc64el riscv64 s390x)cogl_trace_describe@Base 43.0
- (arch=amd64 arm64 armhf ppc64el riscv64 s390x)cogl_trace_end@Base 43.0
- (arch=amd64 arm64 armhf ppc64el riscv64 s390x)cogl_trace_mark@Base 46.0
- (arch=amd64 arm64 armhf ppc64el riscv64 s390x)cogl_trace_mutex@Base 43.0
- (arch=amd64 arm64 armhf ppc64el riscv64 s390x)cogl_trace_set_counter_double@Base 47.0
- (arch=amd64 arm64 armhf ppc64el riscv64 s390x)cogl_trace_set_counter_int@Base 47.0
- (arch=amd64 arm64 armhf ppc64el riscv64 s390x)cogl_trace_thread_data@Base 43.0
+ (arch=amd64 arm64 armhf loong64 ppc64el riscv64 s390x)cogl_trace_context@Base 43.0
+ (arch=amd64 arm64 armhf loong64 ppc64el riscv64 s390x)cogl_trace_define_counter_double@Base 47.0
+ (arch=amd64 arm64 armhf loong64 ppc64el riscv64 s390x)cogl_trace_define_counter_int@Base 47.0
+ (arch=amd64 arm64 armhf loong64 ppc64el riscv64 s390x)cogl_trace_describe@Base 43.0
+ (arch=amd64 arm64 armhf loong64 ppc64el riscv64 s390x)cogl_trace_end@Base 43.0
+ (arch=amd64 arm64 armhf loong64 ppc64el riscv64 s390x)cogl_trace_mark@Base 46.0
+ (arch=amd64 arm64 armhf loong64 ppc64el riscv64 s390x)cogl_trace_mutex@Base 43.0
+ (arch=amd64 arm64 armhf loong64 ppc64el riscv64 s390x)cogl_trace_set_counter_double@Base 47.0
+ (arch=amd64 arm64 armhf loong64 ppc64el riscv64 s390x)cogl_trace_set_counter_int@Base 47.0
+ (arch=amd64 arm64 armhf loong64 ppc64el riscv64 s390x)cogl_trace_thread_data@Base 43.0
  cogl_uint16_div_64k_to_half@Base 46.0
  cogl_value_get_color@Base 47.0
  cogl_value_set_color@Base 47.0
