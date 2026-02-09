@@ -1,10 +1,10 @@
-mutter (50~beta-2ubuntu1) UNRELEASED; urgency=medium
+mutter (50~beta-2ubuntu1) resolute; urgency=medium
 
   * Merge with Debian experimental, mostly to get the new dependency of
     libmutter-18 on mutter-common. This prevents a new crash in 50~beta
     that would occur when libmutter-18 is used with older mutter-common.
 
- -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Mon, 09 Feb 2026 16:23:25 +0800
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Mon, 09 Feb 2026 16:36:37 +0800
 
 mutter (50~beta-2) experimental; urgency=medium
 
