@@ -1,3 +1,40 @@
+mutter (50~beta-2ubuntu1) UNRELEASED; urgency=medium
+
+  * Merge with Debian experimental, mostly to get the new dependency of
+    libmutter-18 on mutter-common. This prevents a new crash in 50~beta
+    that would occur when libmutter-18 is used with older mutter-common.
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Mon, 09 Feb 2026 16:23:25 +0800
+
+mutter (50~beta-2) experimental; urgency=medium
+
+  * Add loong64 to the list of architectures where sysprof is available
+  * Fix i386 build
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Sun, 08 Feb 2026 05:12:10 -0500
+
+mutter (50~beta-1) experimental; urgency=medium
+
+  [ Daniel van Vugt ]
+  * New upstream release 50.beta
+  * Refreshed patches and fixed conflicts:
+    - workarounds/Mark-several-additional-tests-as-flaky.patch
+    - workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
+    - workarounds/tests-Mark-view-verification-tests-as-incomplete-in-big-e.patch
+  * Removed tests that relied strictly on the X11 backend which itself
+    has been removed in this release.
+  * debian/control: Add new Build-Depends: libxkbregistry-dev
+  * Update debian/*.symbols for 50.beta
+  * debian/control: libmutter now requires mutter-common >= 50~beta
+
+  [ Simon McVittie ]
+  * Revert "d/gbp.conf, d/control, d/watch: Branch for 49.x"
+
+  [ Jeremy Bícha ]
+  * Bump Standards Version to 4.7.3
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Fri, 06 Feb 2026 12:17:46 -0500
+
 mutter (50~beta-0ubuntu1) resolute; urgency=medium
 
   * New upstream release 50.beta
