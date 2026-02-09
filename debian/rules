@@ -27,7 +27,7 @@ CONFFLAGS = \
 export deb_udevdir = $(shell pkg-config --variable=udevdir udev | sed s,^/,,)
 
 # Update the cogl_trace architectures in the symbols file to match this list:
-ifeq (,$(filter amd64 arm64 armhf i386 ppc64el riscv64 s390x,$(DEB_HOST_ARCH)))
+ifeq (,$(filter amd64 arm64 armhf loong64 ppc64el riscv64 s390x,$(DEB_HOST_ARCH)))
 CONFFLAGS +=-Dprofiler=false
 endif
 
