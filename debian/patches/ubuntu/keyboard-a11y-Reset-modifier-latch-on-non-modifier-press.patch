@@ -1,0 +1,94 @@
+From: Alessandro Astone <alessandro.astone@canonical.com>
+Date: Thu, 4 Dec 2025 11:05:57 +0100
+Subject: keyboard-a11y: Reset modifier latch on non-modifier press
+
+We were waiting for the release event to reset the latches. That's wrong
+because pressing two non-modifier keys together would get both affected.
+We should instead reset the latches on the first key press, so that only one
+key can be affected by the latches.
+
+This also means that we don't have to rewrite the release events, because
+the xkb state will already be correct.
+
+Bug-Ubuntu: https://launchpad.net/bugs/2133743
+Forwarded: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4791
+---
+ src/backends/native/meta-keyboard-a11y.c | 50 +++++++++++++++-----------------
+ 1 file changed, 23 insertions(+), 27 deletions(-)
+
+diff --git a/src/backends/native/meta-keyboard-a11y.c b/src/backends/native/meta-keyboard-a11y.c
+index b68a690..f7fa214 100644
+--- a/src/backends/native/meta-keyboard-a11y.c
++++ b/src/backends/native/meta-keyboard-a11y.c
+@@ -472,7 +472,11 @@ handle_stickykeys_press (ClutterEvent     *event,
+   struct xkb_state *xkb_state;
+ 
+   if (!key_event_is_modifier (event))
+-    return NULL;
++    {
++      update_internal_xkb_state (keyboard_a11y, 0, keyboard_a11y->stickykeys_locked_mask);
++      keyboard_a11y->stickykeys_latched_mask = 0;
++      return NULL;
++    }
+ 
+   if (keyboard_a11y->stickykeys_depressed_mask &&
+       (keyboard_a11y->a11y_flags & META_A11Y_STICKY_KEYS_TWO_KEY_OFF))
+@@ -508,40 +512,32 @@ handle_stickykeys_release (ClutterEvent     *event,
+    */
+   keyboard_a11y->stickykeys_depressed_mask = 0;
+ 
+-  if (key_event_is_modifier (event))
+-    {
+-      if (!depressed_mods)
+-        return NULL;
++  if (!key_event_is_modifier (event))
++    return NULL;
+ 
+-      new_latched_mask = keyboard_a11y->stickykeys_latched_mask;
+-      new_locked_mask = keyboard_a11y->stickykeys_locked_mask;
++  if (!depressed_mods)
++    return NULL;
+ 
+-      if (new_locked_mask & depressed_mods)
+-        {
+-          new_locked_mask &= ~depressed_mods;
+-        }
+-      else if (new_latched_mask & depressed_mods)
+-        {
+-          new_locked_mask |= depressed_mods;
+-          new_latched_mask &= ~depressed_mods;
+-        }
+-      else
+-        {
+-          new_latched_mask |= depressed_mods;
+-        }
++  new_latched_mask = keyboard_a11y->stickykeys_latched_mask;
++  new_locked_mask = keyboard_a11y->stickykeys_locked_mask;
+ 
+-      if (keyboard_a11y->a11y_flags & META_A11Y_STICKY_KEYS_BEEP)
+-        meta_keyboard_a11y_bell_notify (keyboard_a11y);
++  if (new_locked_mask & depressed_mods)
++    {
++      new_locked_mask &= ~depressed_mods;
++    }
++  else if (new_latched_mask & depressed_mods)
++    {
++      new_locked_mask |= depressed_mods;
++      new_latched_mask &= ~depressed_mods;
+     }
+   else
+     {
+-      if (!keyboard_a11y->stickykeys_latched_mask)
+-        return NULL;
+-
+-      new_latched_mask = 0;
+-      new_locked_mask = keyboard_a11y->stickykeys_locked_mask;
++      new_latched_mask |= depressed_mods;
+     }
+ 
++  if (keyboard_a11y->a11y_flags & META_A11Y_STICKY_KEYS_BEEP)
++    meta_keyboard_a11y_bell_notify (keyboard_a11y);
++
+   return rewrite_stickykeys_event (event, keyboard_a11y,
+                                    new_latched_mask, new_locked_mask);
+ }

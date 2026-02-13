@@ -7,3 +7,4 @@ ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
 ubuntu/core-Remove-warning-that-a-key-combo-has-been-overridden.patch
 ubuntu/Revert-clutter-frame-clock-Remove-min_render_time_allowed.patch
 ubuntu/Unblock-Nvidia-performance.patch
+ubuntu/keyboard-a11y-Reset-modifier-latch-on-non-modifier-press.patch
