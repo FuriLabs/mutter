@@ -1,3 +1,10 @@
+mutter (50~beta-2ubuntu2) UNRELEASED; urgency=medium
+
+  * d/p/u: Add proposed patch for sticky-keys:
+    Ensure that a latched modifier will only affect one key press (LP: #2133743)
+
+ -- Alessandro Astone <alessandro.astone@canonical.com>  Fri, 13 Feb 2026 19:05:06 +0100
+
 mutter (50~beta-2ubuntu1) resolute; urgency=medium
 
   * Merge with Debian experimental, mostly to get the new dependency of
