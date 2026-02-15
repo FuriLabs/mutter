@@ -563,6 +563,10 @@ needs_tone_mapping (const ClutterLuminance *lum,
       target_lum->ref <= target_lum->max)
     return FALSE;
 
+  /* No tone mapping with HDR enabled for now */
+  if (target_lum->max > target_lum->ref)
+    return FALSE;
+
   ratio = (float) lum->max / lum->ref;
   target_ratio = (float) target_lum->max / target_lum->ref;
 
@@ -715,6 +719,7 @@ static const char bt1886_eotf_source[] =
   "// Returns: tristimulus values ([0,1])\n"
   "vec3 bt1886_eotf (vec3 color)\n"
   "{\n"
+  "  color = clamp (color, vec3 (0.0), vec3 (1.0));\n"
   "  return pow (color, vec3 (2.4));\n"
   "}\n"
   "\n"
@@ -729,6 +734,7 @@ static const char bt1886_inv_eotf_source[] =
   "// Returns: Normalized ([0,1]) electrical signal value\n"
   "vec3 bt1886_inv_eotf (vec3 color)\n"
   "{\n"
+  "  color = clamp (color, vec3 (0.0), vec3 (1.0));\n"
   "  return pow (color, vec3 (1.0 / 2.4));\n"
   "}\n"
   "\n"

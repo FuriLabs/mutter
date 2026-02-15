@@ -97,6 +97,13 @@ enum
 
 static guint signals[N_SIGNALS];
 
+typedef struct _MetaSpaFractionRange
+{
+  struct spa_fraction def;
+  struct spa_fraction min;
+  struct spa_fraction max;
+} MetaSpaFractionRange;
+
 typedef struct _MetaPipeWireSource
 {
   GSource source;
@@ -233,10 +240,11 @@ cogl_pixel_format_from_spa_video_format (enum spa_video_format  spa_format,
 }
 
 static struct spa_pod *
-push_format_object (enum spa_video_format  format,
-                    uint64_t              *modifiers,
-                    int                    n_modifiers,
-                    gboolean               fixate_modifier,
+push_format_object (enum spa_video_format       format,
+                    uint64_t                   *modifiers,
+                    int                         n_modifiers,
+                    gboolean                    fixate_modifier,
+                    const MetaSpaFractionRange *max_framerate,
                     ...)
 {
   struct spa_pod_dynamic_builder pod_builder;
@@ -290,7 +298,21 @@ push_format_object (enum spa_video_format  format,
         }
     }
 
-  va_start (args, fixate_modifier);
+  spa_pod_builder_add (&pod_builder.b,
+                       SPA_FORMAT_VIDEO_framerate,
+                       SPA_POD_Fraction (&SPA_FRACTION (0, 1)),
+                       0);
+  if (max_framerate)
+    {
+      spa_pod_builder_add (&pod_builder.b,
+                           SPA_FORMAT_VIDEO_maxFramerate,
+                           SPA_POD_CHOICE_RANGE_Fraction (&max_framerate->def,
+                                                          &max_framerate->min,
+                                                          &max_framerate->max),
+                           0);
+    }
+
+  va_start (args, max_framerate);
   spa_pod_builder_addv (&pod_builder.b, args);
   va_end (args);
   return spa_pod_builder_pop (&pod_builder.b, &pod_frame);
@@ -1420,9 +1442,12 @@ build_format_params (MetaScreenCastStreamSrc *src,
   struct spa_rectangle default_size = DEFAULT_SIZE;
   struct spa_rectangle min_size = MIN_SIZE;
   struct spa_rectangle max_size = MAX_SIZE;
-  struct spa_fraction default_framerate = DEFAULT_FRAME_RATE;
-  struct spa_fraction min_framerate = MIN_FRAME_RATE;
-  struct spa_fraction max_framerate = MAX_FRAME_RATE;
+  MetaSpaFractionRange max_framerate_values = {
+    .def = DEFAULT_FRAME_RATE,
+    .min = MIN_FRAME_RATE,
+    .max = MAX_FRAME_RATE,
+  };
+  MetaSpaFractionRange *max_framerate = &max_framerate_values;
   struct spa_pod *pod;
   int width;
   int height;
@@ -1431,14 +1456,21 @@ build_format_params (MetaScreenCastStreamSrc *src,
 
   if (meta_screen_cast_stream_src_get_specs (src, &width, &height, &frame_rate))
     {
-      MetaFraction frame_rate_fraction;
+      if (G_APPROX_VALUE (frame_rate, 0.0f, FLT_EPSILON))
+        {
+          max_framerate = NULL;
+        }
+      else
+        {
+          MetaFraction frame_rate_fraction;
 
-      frame_rate_fraction = meta_fraction_from_double (frame_rate);
+          frame_rate_fraction = meta_fraction_from_double (frame_rate);
+          max_framerate_values.min = SPA_FRACTION (1, 1);
+          max_framerate_values.max = SPA_FRACTION (frame_rate_fraction.num,
+                                                   frame_rate_fraction.denom);
+          max_framerate_values.def = max_framerate_values.max;
+        }
 
-      min_framerate = SPA_FRACTION (1, 1);
-      max_framerate = SPA_FRACTION (frame_rate_fraction.num,
-                                    frame_rate_fraction.denom);
-      default_framerate = max_framerate;
       min_size = max_size = default_size = SPA_RECTANGLE (width, height);
     }
 
@@ -1476,14 +1508,10 @@ build_format_params (MetaScreenCastStreamSrc *src,
 
       pod = push_format_object (
         spa_video_formats[i], (uint64_t *) modifiers->data, modifiers->len, FALSE,
+        max_framerate,
         SPA_FORMAT_VIDEO_size, SPA_POD_CHOICE_RANGE_Rectangle (&default_size,
                                                                &min_size,
                                                                &max_size),
-        SPA_FORMAT_VIDEO_framerate, SPA_POD_Fraction (&SPA_FRACTION (0, 1)),
-        SPA_FORMAT_VIDEO_maxFramerate,
-        SPA_POD_CHOICE_RANGE_Fraction (&default_framerate,
-                                       &min_framerate,
-                                       &max_framerate),
         0);
       g_ptr_array_add (params, g_steal_pointer (&pod));
     }
@@ -1491,14 +1519,10 @@ build_format_params (MetaScreenCastStreamSrc *src,
     {
       pod = push_format_object (
         spa_video_formats[i], NULL, 0, FALSE,
+        max_framerate,
         SPA_FORMAT_VIDEO_size, SPA_POD_CHOICE_RANGE_Rectangle (&default_size,
                                                                &min_size,
                                                                &max_size),
-        SPA_FORMAT_VIDEO_framerate, SPA_POD_Fraction (&SPA_FRACTION (0, 1)),
-        SPA_FORMAT_VIDEO_maxFramerate,
-        SPA_POD_CHOICE_RANGE_Fraction (&default_framerate,
-                                       &min_framerate,
-                                       &max_framerate),
         0);
       g_ptr_array_add (params, g_steal_pointer (&pod));
     }
@@ -1639,6 +1663,21 @@ explicit_sync_supported (MetaScreenCastStreamSrc *src)
   return supported != 0;
 }
 
+static gboolean
+did_video_format_changed_for_log (MetaScreenCastStreamSrc   *src,
+                                  struct spa_video_info_raw *video_format)
+{
+  MetaScreenCastStreamSrcPrivate *priv =
+    meta_screen_cast_stream_src_get_instance_private (src);
+
+  return (video_format->size.width != priv->video_format.size.width ||
+          video_format->size.height != priv->video_format.size.height ||
+          video_format->framerate.num != priv->video_format.framerate.num ||
+          video_format->framerate.denom != priv->video_format.framerate.denom ||
+          video_format->max_framerate.num != priv->video_format.max_framerate.num ||
+          video_format->max_framerate.denom != priv->video_format.max_framerate.denom);
+}
+
 static void
 on_stream_param_changed (void                 *data,
                          uint32_t              id,
@@ -1649,6 +1688,7 @@ on_stream_param_changed (void                 *data,
     meta_screen_cast_stream_src_get_instance_private (src);
   MetaScreenCastStreamSrcClass *klass =
     META_SCREEN_CAST_STREAM_SRC_GET_CLASS (src);
+  struct spa_video_info_raw video_format = {};
   struct spa_pod_dynamic_builder pod_builder;
   struct spa_pod *pod;
   struct spa_pod_frame pod_frame;
@@ -1662,8 +1702,22 @@ on_stream_param_changed (void                 *data,
 
   params = g_ptr_array_new_full (16, (GDestroyNotify) free);
 
-  spa_format_video_raw_parse (format,
-                              &priv->video_format);
+  spa_format_video_raw_parse (format, &video_format);
+
+  if (meta_is_topic_enabled (META_DEBUG_SCREEN_CAST) &&
+      did_video_format_changed_for_log (src, &video_format))
+    {
+      meta_topic (META_DEBUG_SCREEN_CAST,
+                  "Video format changed to %dx%d (framerate: %d/%d (max: %d/%d))",
+                  video_format.size.width,
+                  video_format.size.height,
+                  video_format.framerate.num,
+                  video_format.framerate.denom,
+                  video_format.max_framerate.num,
+                  video_format.max_framerate.denom);
+    }
+
+  priv->video_format = video_format;
 
   prop_modifier = spa_pod_find_prop (format, NULL, SPA_FORMAT_VIDEO_modifier);
 
@@ -1724,14 +1778,16 @@ on_stream_param_changed (void                 *data,
                                                    priv->video_format.size.height,
                                                    &preferred_modifier))
         {
+          MetaSpaFractionRange max_framerate = {
+            .def = priv->video_format.max_framerate,
+            .min = MIN_FRAME_RATE,
+            .max = priv->video_format.max_framerate,
+          };
           pod = push_format_object (
             priv->video_format.format, &preferred_modifier, 1, TRUE,
+            &max_framerate,
             SPA_FORMAT_VIDEO_size, SPA_POD_Rectangle (&priv->video_format.size),
             SPA_FORMAT_VIDEO_framerate, SPA_POD_Fraction (&SPA_FRACTION (0, 1)),
-            SPA_FORMAT_VIDEO_maxFramerate,
-            SPA_POD_CHOICE_RANGE_Fraction (&priv->video_format.max_framerate,
-                                           &MIN_FRAME_RATE,
-                                           &priv->video_format.max_framerate),
             0);
           g_ptr_array_add (params, g_steal_pointer (&pod));
         }
