@@ -1,8 +1,9 @@
 mutter (49.4-1) UNRELEASED; urgency=medium
 
   * New upstream release
+  * d/libmutter-17-0.symbols: Update
 
- -- Simon McVittie <smcv@debian.org>  Sun, 15 Feb 2026 17:12:16 +0000
+ -- Simon McVittie <smcv@debian.org>  Sun, 15 Feb 2026 17:20:45 +0000
 
 mutter (49.3-1) unstable; urgency=medium
 
