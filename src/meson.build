@@ -12,6 +12,10 @@ mutter_lib_deps = [
   m_dep,
 ]
 
+hybris_common_dep = cc.find_library('hybris-common', required: false)
+gralloc_dep = cc.find_library('gralloc', required: false)
+have_furios_native_buffer = hybris_common_dep.found() and gralloc_dep.found()
+
 mutter_pkg_deps = [
   cairo_dep,
   gio_unix_dep,
@@ -61,6 +65,17 @@ endif
 if have_egl
   mutter_pkg_deps += [
     egl_dep,
+  ]
+endif
+
+if have_furios_native_buffer
+  mutter_pkg_private_deps += [
+    hybris_common_dep,
+    gralloc_dep,
+  ]
+
+  mutter_includes += [
+    include_directories('/usr/include/android')
   ]
 endif
 
@@ -156,6 +171,10 @@ if get_option('verbose')
   mutter_c_args += [
     '-DWITH_VERBOSE_MODE'
   ]
+endif
+
+if have_furios_native_buffer
+  mutter_c_args += [ '-DHAVE_FURIOS_NATIVE_BUFFER=1' ]
 endif
 
 mutter_sources = [
@@ -520,6 +539,13 @@ if have_remote_desktop
     'backends/meta-furios-screen-cast-stream-src-memfd.h',
     'backends/meta-furios-screen-cast-memfd-protocol.h',
   ]
+
+  if have_furios_native_buffer
+    mutter_sources += [
+      'backends/meta-furios-screen-cast-stream-src-native-buffer.c',
+      'backends/meta-furios-screen-cast-stream-src-native-buffer.h',
+    ]
+  endif
 endif
 
 mutter_sources += [
