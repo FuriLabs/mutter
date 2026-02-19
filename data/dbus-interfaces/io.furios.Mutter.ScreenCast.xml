@@ -35,6 +35,10 @@
       <arg name="info" type="a{sv}" direction="out"/>
     </method>
 
+    <method name="GetNativeBufferHandle">
+      <arg name="info" type="a{sv}" direction="out"/>
+    </method>
+
     <method name="RequestFrame"/>
 
     <signal name="FrameReady">
