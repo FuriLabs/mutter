@@ -22,10 +22,10 @@ in fact be reduced but we accept a longer time just in case
  config.h.meson             |   3 +
  meson.build                |  11 ++
  src/core/display-private.h |   9 ++
- src/core/display.c         |  17 +++
+ src/core/display.c         |  16 +++
  src/core/window.c          | 258 ++++++++++++++++++++++++++++++++++++++++++++-
  src/meson.build            |   1 +
- 6 files changed, 298 insertions(+), 1 deletion(-)
+ 6 files changed, 297 insertions(+), 1 deletion(-)
 
 diff --git a/config.h.meson b/config.h.meson
 index 4d72f9e..65794f2 100644
@@ -105,10 +105,10 @@ index 003bbfc..27366a1 100644
  
  struct _MetaDisplayClass
 diff --git a/src/core/display.c b/src/core/display.c
-index 273a583..2f0689c 100644
+index 273a583..dd75585 100644
 --- a/src/core/display.c
 +++ b/src/core/display.c
-@@ -34,6 +34,13 @@
+@@ -34,6 +34,12 @@
  #include <string.h>
  #include <unistd.h>
  
@@ -116,13 +116,12 @@ index 273a583..2f0689c 100644
 +#include <libsoup/soup.h>
 +
 +#define SNAPD_SOCKET_PATH "/var/run/snapd.socket"
-+#define SNAPD_SOCKET_PATH "/var/run/acpid.socket"
 +#endif
 +
  #include "backends/meta-backend-private.h"
  #include "backends/meta-cursor-xcursor.h"
  #include "backends/meta-cursor-tracker-private.h"
-@@ -901,6 +908,15 @@ meta_display_new (MetaContext  *context,
+@@ -901,6 +907,15 @@ meta_display_new (MetaContext  *context,
  
    display->sound_player = g_object_new (META_TYPE_SOUND_PLAYER, NULL);
  
@@ -138,7 +137,7 @@ index 273a583..2f0689c 100644
    /* Done opening new display */
    display->display_opening = FALSE;
  
-@@ -1075,6 +1091,7 @@ meta_display_close (MetaDisplay *display,
+@@ -1075,6 +1090,7 @@ meta_display_close (MetaDisplay *display,
    g_clear_object (&display->startup_notification);
    g_clear_object (&display->workspace_manager);
    g_clear_object (&display->sound_player);
