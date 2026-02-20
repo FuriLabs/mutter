@@ -1,4 +1,4 @@
-mutter (50~beta-2ubuntu2) UNRELEASED; urgency=medium
+mutter (50~beta-2ubuntu2) resolute; urgency=medium
 
   [ Alessandro Astone ]
   * d/p/u: Add proposed patch for sticky-keys:
@@ -15,7 +15,7 @@ mutter (50~beta-2ubuntu2) UNRELEASED; urgency=medium
     already loads in memory libsoup, so this makes just it being loaded by
     the linker instead.
 
- -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Fri, 20 Feb 2026 04:20:44 +0100
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Fri, 20 Feb 2026 04:21:18 +0100
 
 mutter (50~beta-2ubuntu1) resolute; urgency=medium
 
