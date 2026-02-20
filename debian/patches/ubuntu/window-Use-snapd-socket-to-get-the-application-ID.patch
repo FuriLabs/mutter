@@ -1,0 +1,449 @@
+From: =?utf-8?b?Ik1hcmNvIFRyZXZpc2FuIChUcmV2acOxbyki?= <mail@3v1n0.net>
+Date: Mon, 25 Nov 2024 14:20:28 +0100
+Subject: window: Use snapd socket to get the application ID
+
+Snap applications app ID in mutter was computed using the security label
+information, however such information is also exposed by the snapd REST
+API that we can access through a unix socket.
+
+So rely on snapd results to get the real desktop ID.
+
+The ID in fact may not always match the security confinement label
+
+This is a bit sub-optimal since it implies doing a request, over
+a socket waiting on the main loop, but we were doing sync IO anyways.
+
+So until we don't switch to having async-initiated windows, this is
+still the best way and the overhead is minimal.
+
+In fact such request rarely takes a measurable time, the timeout could
+in fact be reduced but we accept a longer time just in case
+---
+ config.h.meson             |   3 +
+ meson.build                |  11 ++
+ src/core/display-private.h |   9 ++
+ src/core/display.c         |  17 +++
+ src/core/window.c          | 258 ++++++++++++++++++++++++++++++++++++++++++++-
+ src/meson.build            |   1 +
+ 6 files changed, 298 insertions(+), 1 deletion(-)
+
+diff --git a/config.h.meson b/config.h.meson
+index 4d72f9e..65794f2 100644
+--- a/config.h.meson
++++ b/config.h.meson
+@@ -64,6 +64,9 @@
+ /* Defined if gnome-desktop is enabled */
+ #mesondefine HAVE_GNOME_DESKTOP
+ 
++/* Whether have snapd support */
++#mesondefine HAVE_SNAPD_SUPPORT
++
+ /* Defined if sound player is enabled */
+ #mesondefine HAVE_SOUND_PLAYER
+ 
+diff --git a/meson.build b/meson.build
+index 87ef9af..d0e7851 100644
+--- a/meson.build
++++ b/meson.build
+@@ -279,6 +279,15 @@ if have_native_backend
+   endif
+ endif
+ 
++is_ubuntu = run_command(
++  'grep', '-F', 'NAME="Ubuntu"', '/etc/os-release', check: false).returncode() == 0
++snapd_support_dep = declare_dependency(
++  dependencies: [
++    dependency('json-glib-1.0', required: is_ubuntu),
++    dependency('libsoup-3.0', required: is_ubuntu),
++  ],
++)
++
+ have_drm_plane_size_hint = cc.has_type('struct drm_plane_size_hint',
+                                         dependencies: libdrm_dep,
+                                         prefix: '#include <drm_mode.h>')
+@@ -574,6 +583,7 @@ cdata.set('HAVE_XKBCOMMON_KANA_COMPOSE_LEDS',
+   xkbcommon_dep.version().version_compare('>= 1.8.0'))
+ cdata.set('HAVE_EIS_EVENT_REF',
+   libeis_dep.version().version_compare('>= 1.5.0'))
++cdata.set('HAVE_SNAPD_SUPPORT', snapd_support_dep.found())
+ 
+ if have_xwayland
+   xkb_base = xkeyboard_config_dep.get_variable('xkb_base')
+@@ -755,6 +765,7 @@ summary('Startup notification', have_startup_notification, section: 'Options')
+ summary('Introspection', have_introspection, section: 'Options')
+ summary('Documentation', have_documentation, section: 'Options')
+ summary('Profiler', have_profiler, section: 'Options')
++summary('Snapd support', snapd_support_dep.found(), section: 'Options')
+ summary('Xwayland initfd', have_xwayland_initfd, section: 'Options')
+ summary('Xwayland listenfd', have_xwayland_listenfd, section: 'Options')
+ summary('Xwayland terminate delay', have_xwayland_terminate_delay, section: 'Options')
+diff --git a/src/core/display-private.h b/src/core/display-private.h
+index 003bbfc..27366a1 100644
+--- a/src/core/display-private.h
++++ b/src/core/display-private.h
+@@ -24,6 +24,11 @@
+ 
+ #pragma once
+ 
++#include "config.h"
++#ifdef HAVE_SNAPD_SUPPORT
++#include <libsoup/soup.h>
++#endif
++
+ #include "meta/display.h"
+ 
+ #include <glib.h>
+@@ -156,6 +161,10 @@ struct _MetaDisplay
+   gchar *saved_clipboard_mimetype;
+   MetaSelection *selection;
+   GCancellable *saved_clipboard_cancellable;
++
++#ifdef HAVE_SNAPD_SUPPORT
++  SoupSession *snapd_session;
++#endif
+ };
+ 
+ struct _MetaDisplayClass
+diff --git a/src/core/display.c b/src/core/display.c
+index 273a583..2f0689c 100644
+--- a/src/core/display.c
++++ b/src/core/display.c
+@@ -34,6 +34,13 @@
+ #include <string.h>
+ #include <unistd.h>
+ 
++#ifdef HAVE_SNAPD_SUPPORT
++#include <libsoup/soup.h>
++
++#define SNAPD_SOCKET_PATH "/var/run/snapd.socket"
++#define SNAPD_SOCKET_PATH "/var/run/acpid.socket"
++#endif
++
+ #include "backends/meta-backend-private.h"
+ #include "backends/meta-cursor-xcursor.h"
+ #include "backends/meta-cursor-tracker-private.h"
+@@ -901,6 +908,15 @@ meta_display_new (MetaContext  *context,
+ 
+   display->sound_player = g_object_new (META_TYPE_SOUND_PLAYER, NULL);
+ 
++#ifdef HAVE_SNAPD_SUPPORT
++  g_autoptr(GSocketAddress) address = NULL;
++
++  address = g_unix_socket_address_new (SNAPD_SOCKET_PATH);
++  display->snapd_session = soup_session_new_with_options (
++    "remote-connectable", address, NULL);
++  soup_session_set_timeout (display->snapd_session, 1);
++#endif
++
+   /* Done opening new display */
+   display->display_opening = FALSE;
+ 
+@@ -1075,6 +1091,7 @@ meta_display_close (MetaDisplay *display,
+   g_clear_object (&display->startup_notification);
+   g_clear_object (&display->workspace_manager);
+   g_clear_object (&display->sound_player);
++  g_clear_object (&display->snapd_session);
+ 
+   meta_clipboard_manager_shutdown (display);
+   g_clear_object (&display->selection);
+diff --git a/src/core/window.c b/src/core/window.c
+index d94972e..79a4aeb 100644
+--- a/src/core/window.c
++++ b/src/core/window.c
+@@ -65,6 +65,11 @@
+ #include <stdlib.h>
+ #include <string.h>
+ 
++#ifdef HAVE_SNAPD_SUPPORT
++#include <libsoup/soup.h>
++#include <json-glib/json-glib.h>
++#endif
++
+ #include "backends/meta-backend-private.h"
+ #include "backends/meta-logical-monitor-private.h"
+ #include "cogl/cogl.h"
+@@ -967,12 +972,229 @@ meta_window_update_flatpak_id (MetaWindow *window,
+   return TRUE;
+ }
+ 
++#ifdef HAVE_SNAPD_SUPPORT
++static SoupMessage *
++make_snapd_message (const gchar *method, const gchar *path)
++{
++  g_autofree gchar *uri = NULL;
++  SoupMessage *msg;
++  SoupMessageHeaders *request_headers;
++
++  uri = g_strconcat ("http://localhost", path, NULL);
++  msg = soup_message_new (method, uri);
++  request_headers = soup_message_get_request_headers (msg);
++
++  /* Disallow authentication via polkit. */
++  soup_message_headers_append (request_headers, "X-Allow-Interaction", "false");
++
++  return msg;
++}
++
++static JsonObject *
++process_snapd_response_body (SoupMessage   *msg,
++                             GBytes        *body,
++                             GError      **error)
++{
++  const gchar *content_type;
++  g_autoptr(JsonParser) parser = NULL;
++  const gchar *body_data;
++  size_t body_length;
++  JsonNode *root;
++  JsonObject *response;
++  gint64 status_code;
++  g_autoptr(GError) internal_error = NULL;
++
++  content_type = soup_message_headers_get_one (
++    soup_message_get_response_headers (msg), "Content-Type");
++  if (g_strcmp0 (content_type, "application/json") != 0)
++    {
++      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
++                   "Invalid content type %s returned", content_type);
++      return NULL;
++    }
++
++  parser = json_parser_new ();
++  body_data = g_bytes_get_data (body, &body_length);
++  if (!json_parser_load_from_data (parser, body_data, body_length, &internal_error))
++    {
++      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
++                   "Failed to decode JSON content: %s", internal_error->message);
++      return NULL;
++    }
++
++  root = json_parser_get_root (parser);
++  if (!JSON_NODE_HOLDS_OBJECT (root))
++    {
++      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "Returned JSON not an object");
++      return NULL;
++    }
++
++  response = json_node_get_object (root);
++  status_code = json_object_get_int_member (response, "status-code");
++  if (status_code != SOUP_STATUS_OK && status_code != SOUP_STATUS_ACCEPTED)
++    {
++      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "Invalid status code %"
++                   G_GINT64_FORMAT, status_code);
++      return NULL;
++    }
++
++  return json_object_ref (response);
++}
++
++typedef struct {
++  GMainLoop *loop;
++  GBytes *response_body;
++  GError **error;
++} SendMessageData;
++
++static void
++on_send_message_finished (GObject *source_object,
++                          GAsyncResult *res,
++                          gpointer user_data)
++{
++  SendMessageData *data = user_data;
++  SoupSession *session = SOUP_SESSION (source_object);
++
++  data->response_body = soup_session_send_and_read_finish (session, res,
++                                                           data->error);
++  g_main_loop_quit (data->loop);
++}
++
++static JsonObject *
++call_snapd_sync (SoupSession  *session,
++                 const char   *method,
++                 const char   *path,
++                 GError      **error)
++{
++  g_autoptr(GMainLoop) loop = g_main_loop_new (NULL, FALSE);
++  g_autoptr(GCancellable) cancellable = g_cancellable_new ();
++  g_autoptr(GBytes) response_body = NULL;
++  g_autoptr(SoupMessage) msg = NULL;
++  SendMessageData send_message_data = { .loop = loop, .error = error };
++  guint timeout_id;
++
++  msg = make_snapd_message (method, path);
++
++  /* We really do not want to block here and we should but if we do, let's
++   * not hang fully.
++   */
++  timeout_id =
++    g_timeout_add_once (25, (GSourceOnceFunc) g_cancellable_cancel, cancellable);
++
++  soup_session_send_and_read_async (session, msg, G_PRIORITY_HIGH,
++                                    cancellable, on_send_message_finished,
++                                    &send_message_data);
++  g_main_loop_run (loop);
++
++  if (!g_cancellable_is_cancelled (cancellable))
++    g_clear_handle_id (&timeout_id, g_source_remove);
++
++  if (!(response_body = g_steal_pointer (&send_message_data.response_body)))
++    return NULL;
++
++  return process_snapd_response_body (msg, response_body, error);
++}
++
++static JsonObject *
++snapd_client_get_snap_sync (SoupSession  *session,
++                            const char   *name,
++                            GError      **error)
++{
++  g_autofree gchar *path = NULL;
++  g_autoptr(JsonObject) response = NULL;
++  JsonObject *result;
++
++  path = g_strconcat ("/v2/snaps/", name, NULL);
++  response = call_snapd_sync (session, "GET", path, error);
++  if (response == NULL)
++    return NULL;
++  result = json_object_get_object_member (response, "result");
++
++  if (result == NULL)
++    {
++      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "Invalid response to %s", path);
++      return NULL;
++    }
++
++  return json_object_ref (result);
++}
++
++static char *
++snapd_get_application_app_id_sync (MetaDisplay  *display,
++                                   const gchar  *snap_name,
++                                   const gchar  *app_name,
++                                   GError      **error)
++{
++  g_autoptr (JsonObject) snap = NULL;
++  JsonNode *apps_node;
++
++  if (!(snap = snapd_client_get_snap_sync (display->snapd_session,
++                                           snap_name, error)))
++      return NULL;
++
++  apps_node = json_object_get_member (snap, "apps");
++  if (!apps_node || !JSON_NODE_HOLDS_ARRAY (apps_node))
++    {
++      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
++                           "Failed parsing returned JSON");
++      return NULL;
++    }
++
++  JsonArray *apps_array = json_node_get_array (apps_node);
++  guint n_apps = json_array_get_length (apps_array);
++
++  for (guint i = 0; i < n_apps; ++i)
++    {
++      g_autofree char *app_id = NULL;
++      JsonNode *app_node;
++      JsonObject *app;
++      const char *name;
++      const char *desktop_file;
++      char *dot;
++
++      app_node = json_array_get_element (apps_array, i);
++      if (!JSON_NODE_HOLDS_OBJECT (app_node))
++        {
++          g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
++                               "Failed parsing returned JSON");
++          return NULL;
++        }
++
++      app = json_node_get_object (app_node);
++      name = json_object_get_string_member (app, "name");
++      desktop_file = json_object_get_string_member (app, "desktop-file");
++
++      if (!name || !desktop_file)
++        continue;
++
++      if (g_strcmp0 (name, app_name) != 0)
++        continue;
++
++      app_id = g_path_get_basename (desktop_file);
++
++      dot = strrchr (app_id, '.');
++      if (dot)
++        *dot = '\0';
++
++      return g_steal_pointer (&app_id);
++    }
++
++  return NULL;
++}
++
++#endif
++
+ static gboolean
+ meta_window_update_snap_id (MetaWindow *window,
+                             uint32_t    pid)
+ {
++  g_autoptr (GError) error = NULL;
++  g_autoptr (GKeyFile) portal_info_key_file = NULL;
+   g_autofree char *security_label_filename = NULL;
+   g_autofree char *security_label_contents = NULL;
++  g_autofree char *desktop_file = NULL;
++  g_autofree char *portal_info = NULL;
++  g_autofree char *pid_str = NULL;
+   gsize i, security_label_contents_size = 0;
+   char *contents_start;
+   char *contents_end;
+@@ -1012,7 +1234,41 @@ meta_window_update_snap_id (MetaWindow *window,
+   sandboxed_app_id = g_malloc0 (security_label_contents_size + 1);
+   memcpy (sandboxed_app_id, contents_start, security_label_contents_size);
+ 
+-  window->sandboxed_app_id = sandboxed_app_id;
++  window->sandboxed_app_id = g_steal_pointer (&sandboxed_app_id);
++
++#ifdef HAVE_SNAPD_SUPPORT
++  g_autofree char *app_id = NULL;
++  g_autofree char *snap_name = NULL;
++  char *snap_app;
++
++  snap_name = g_strdup (window->sandboxed_app_id);
++  snap_app = strchr (snap_name, '_');
++
++  if (!snap_name || !snap_app)
++    return TRUE;
++
++  /* Ideally we could avoid to contact snapd, if a desktop file,
++   * with such but it may still be required to go through it because
++   * a snap may provide a desktop file with a different name even if
++   * the old fallback name (${SNAP}_${APP}) is still generated by snapd.
++   */
++
++  *snap_app = '\0';
++  snap_app++;
++
++  app_id = snapd_get_application_app_id_sync (meta_window_get_display (window),
++                                              snap_name, snap_app, &error);
++
++  if (app_id)
++    {
++      window->sandboxed_app_id = g_steal_pointer (&app_id);
++    }
++  else if (error)
++    {
++      g_warning ("Failed to get app ID for snap '%s' app '%s': %s at pid %u",
++                 snap_name, snap_app, error->message, pid);
++    }
++#endif
+ 
+   return TRUE;
+ }
+diff --git a/src/meson.build b/src/meson.build
+index e087d19..5a97162 100644
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -25,6 +25,7 @@ mutter_pkg_private_deps = [
+   lcms2_dep,
+   gmodule_no_export_dep,
+   gnome_settings_daemon_dep,
++  snapd_support_dep,
+   xkbcommon_dep,
+   xkbregistry_dep,
+   glycin_dep,
