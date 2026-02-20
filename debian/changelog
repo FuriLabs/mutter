@@ -1,8 +1,8 @@
-mutter (50~beta-2ubuntu3) UNRELEASED; urgency=medium
+mutter (50~beta-2ubuntu3) resolute; urgency=medium
 
   * d/p/ubuntu/snapd-support: Drop debug code leaked in the patch
 
- -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Fri, 20 Feb 2026 04:35:32 +0100
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Fri, 20 Feb 2026 04:35:46 +0100
 
 mutter (50~beta-2ubuntu2) resolute; urgency=medium
 
