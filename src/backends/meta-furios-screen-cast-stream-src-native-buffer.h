@@ -53,4 +53,7 @@ meta_furios_screen_cast_stream_src_native_buffer_add_info (MetaFuriosScreenCastS
 void
 meta_furios_screen_cast_stream_src_native_buffer_request_frame_async (MetaFuriosScreenCastStreamSrcNativeBuffer *self);
 
+int
+meta_furios_screen_cast_stream_src_native_buffer_dup_fence_fd (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
+                                                               guint                                      slot);
 G_END_DECLS

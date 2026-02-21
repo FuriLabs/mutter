@@ -39,6 +39,11 @@
       <arg name="info" type="a{sv}" direction="out"/>
     </method>
 
+    <method name="GetFence">
+      <arg name="slot" type="u" direction="in"/>
+      <arg name="fd" type="h" direction="out"/>
+    </method>
+
     <method name="RequestFrame"/>
 
     <signal name="FrameReady">

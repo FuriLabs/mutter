@@ -201,6 +201,65 @@ handle_get_native_buffer_handle (MetaDBusMutterScreenCastStream *skeleton,
 #endif
 }
 
+#ifdef HAVE_FURIOS_NATIVE_BUFFER
+static gboolean
+handle_get_fence (MetaDBusMutterScreenCastStream *skeleton,
+                  GDBusMethodInvocation          *invocation,
+                  guint                           slot)
+{
+  MetaFuriosScreenCastStream *self = META_FURIOS_SCREEN_CAST_STREAM (skeleton);
+
+  if (!check_permission (self, invocation)) {
+    g_dbus_method_invocation_return_error (invocation,
+                                           G_DBUS_ERROR,
+                                           G_DBUS_ERROR_ACCESS_DENIED,
+                                           "Permission denied");
+    return TRUE;
+  }
+
+  if (self->backend_type != META_FURIOS_SCREEN_CAST_STREAM_BACKEND_NATIVE_BUFFER ||
+      !self->src_native_buffer) {
+    g_dbus_method_invocation_return_error (invocation,
+                                           G_DBUS_ERROR,
+                                           G_DBUS_ERROR_FAILED,
+                                           "GetFence not available for this stream type");
+    return TRUE;
+  }
+
+  int fence_fd = meta_furios_screen_cast_stream_src_native_buffer_dup_fence_fd (self->src_native_buffer,
+                                                                                (guint) slot);
+  if (fence_fd < 0) {
+    g_dbus_method_invocation_return_error (invocation,
+                                           G_DBUS_ERROR,
+                                           G_DBUS_ERROR_FAILED,
+                                           "No fence for slot %u",
+                                           slot);
+    return TRUE;
+  }
+
+  g_autoptr (GUnixFDList) fd_list = g_unix_fd_list_new ();
+  g_autoptr (GError) error = NULL;
+
+  int idx = g_unix_fd_list_append (fd_list, fence_fd, &error);
+  close (fence_fd);
+
+  if (idx < 0) {
+    g_dbus_method_invocation_return_error (invocation,
+                                           G_DBUS_ERROR,
+                                           G_DBUS_ERROR_FAILED,
+                                           "%s", error ? error->message : "Failed to append fence fd");
+    return TRUE;
+  }
+
+  GVariant *out = g_variant_new ("(h)", idx);
+
+  g_dbus_method_invocation_return_value_with_unix_fd_list (invocation,
+                                                           out,
+                                                           fd_list);
+  return TRUE;
+}
+#endif
+
 static gboolean
 handle_get_eis_fd (MetaDBusMutterScreenCastStream *skeleton,
                    GDBusMethodInvocation          *invocation)
@@ -271,10 +330,10 @@ on_native_buffer_frame_published (MetaFuriosScreenCastStreamSrcNativeBuffer *src
     return;
 
   /* avoid duplicates */
-  if (seq == self->last_emitted_seq)
+  if ((guint32) seq == self->last_emitted_seq)
     return;
 
-  self->last_emitted_seq = seq;
+  self->last_emitted_seq = (guint32) seq;
 
   meta_dbus_mutter_screen_cast_stream_emit_frame_ready (META_DBUS_MUTTER_SCREEN_CAST_STREAM (self),
                                                         (guint32) seq,
@@ -440,6 +499,10 @@ meta_furios_screen_cast_stream_init_iface (MetaDBusMutterScreenCastStreamIface *
   iface->handle_stop = handle_stop;
   iface->handle_get_eis_fd = handle_get_eis_fd;
   iface->handle_get_native_buffer_handle = handle_get_native_buffer_handle;
+
+#ifdef HAVE_FURIOS_NATIVE_BUFFER
+  iface->handle_get_fence = handle_get_fence;
+#endif
 }
 
 static void
