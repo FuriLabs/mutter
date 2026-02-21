@@ -101,6 +101,8 @@ Build-Depends: debhelper-compat (= 13),
                xvfb,
                xwayland (>= 2:23.1.0),
                zenity,
+               libhybris-dev,
+               android-headers,
 Standards-Version: 4.7.2
 Homepage: https://mutter.gnome.org/
 Vcs-Git: https://salsa.debian.org/gnome-team/mutter.git
