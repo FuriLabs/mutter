@@ -39,11 +39,6 @@
       <arg name="info" type="a{sv}" direction="out"/>
     </method>
 
-    <method name="GetFence">
-      <arg name="slot" type="u" direction="in"/>
-      <arg name="fd" type="h" direction="out"/>
-    </method>
-
     <method name="RequestFrame"/>
 
     <signal name="FrameReady">
@@ -55,6 +50,12 @@
       <arg name="seq" type="u" direction="out"/>
       <arg name="slot" type="u" direction="out"/>
       <arg name="damage" type="a(iiii)" direction="out"/>
+    </signal>
+
+    <signal name="FrameReadyWithFence">
+      <arg name="seq" type="u" direction="out"/>
+      <arg name="slot" type="u" direction="out"/>
+      <arg name="fd" type="h" direction="out"/>
     </signal>
 
     <method name="Stop"/>
