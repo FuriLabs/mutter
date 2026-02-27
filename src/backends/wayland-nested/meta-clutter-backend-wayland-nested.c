@@ -73,7 +73,7 @@ meta_clutter_backend_wayland_nested_get_default_seat (ClutterBackend *clutter_ba
 static gboolean
 meta_clutter_backend_wayland_nested_is_display_server (ClutterBackend *clutter_backend)
 {
-  return TRUE;
+  return FALSE;
 }
 
 static void
