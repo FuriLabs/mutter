@@ -1,3 +1,10 @@
+mutter (50~beta-2ubuntu4) resolute; urgency=medium
+
+  * Update Unblock-Nvidia-performance.patch to prevent a busy wait while
+    the monitor is turned off (LP: #2142820)
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Fri, 27 Feb 2026 15:58:48 +0800
+
 mutter (50~beta-2ubuntu3) resolute; urgency=medium
 
   * d/p/ubuntu/snapd-support: Drop debug code leaked in the patch

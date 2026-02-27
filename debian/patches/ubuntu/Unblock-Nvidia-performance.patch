@@ -20,10 +20,10 @@ Related: https://gitlab.gnome.org/GNOME/mutter/-/issues/3461
 ---
  src/backends/native/meta-frame-native.c            |  47 +-
  src/backends/native/meta-frame-native.h            |  11 +
- src/backends/native/meta-onscreen-native.c         | 579 ++++++++++++++++-----
+ src/backends/native/meta-onscreen-native.c         | 588 ++++++++++++++++-----
  src/backends/native/meta-renderer-native-private.h |   2 +-
  src/backends/native/meta-renderer-native.c         |   2 +-
- 5 files changed, 505 insertions(+), 136 deletions(-)
+ 5 files changed, 512 insertions(+), 138 deletions(-)
 
 diff --git a/src/backends/native/meta-frame-native.c b/src/backends/native/meta-frame-native.c
 index 98cd917..7699863 100644
@@ -127,7 +127,7 @@ index 38547eb..cf736da 100644
 +gboolean
 +meta_frame_native_is_ready (MetaFrameNative *frame_native);
 diff --git a/src/backends/native/meta-onscreen-native.c b/src/backends/native/meta-onscreen-native.c
-index 0748e62..140fae0 100644
+index 0748e62..5ec0d0e 100644
 --- a/src/backends/native/meta-onscreen-native.c
 +++ b/src/backends/native/meta-onscreen-native.c
 @@ -104,8 +104,16 @@ typedef struct _MetaOnscreenNativeSecondaryGpuState
@@ -484,13 +484,13 @@ index 0748e62..140fae0 100644
 -                           "copy_shared_framebuffer_gpu()");
 +  COGL_TRACE_BEGIN_SCOPED (StartCopySharedFramebufferSecondaryGpu,
 +                           "start_copy_shared_framebuffer_gpu()");
- 
--  if (renderer_gpu_data->secondary.needs_explicit_sync)
--    sync_fd = meta_frame_native_steal_sync_fd (frame_native);
++
 +  primary_gpu_fb = acquire_primary_front_buffer (onscreen, error);
 +  if (!primary_gpu_fb)
 +    return;
-+
+ 
+-  if (renderer_gpu_data->secondary.needs_explicit_sync)
+-    sync_fd = meta_frame_native_steal_sync_fd (frame_native);
 +  if (!renderer_gpu_data->secondary.is_nvidia)
 +    g_clear_fd (sync_fd, NULL);
  
@@ -826,7 +826,7 @@ index 0748e62..140fae0 100644
    return;
  
  swap_failed:
-@@ -1772,8 +2021,10 @@ maybe_post_next_frame (CoglOnscreen *onscreen)
+@@ -1772,13 +2021,20 @@ maybe_post_next_frame (CoglOnscreen *onscreen)
    const MetaKmsResultListenerVtable *listener;
    MetaKmsAssignPlaneFlag flip_flags;
    gboolean is_direct_scanout;
@@ -837,7 +837,19 @@ index 0748e62..140fae0 100644
  
    COGL_TRACE_SCOPED_ANCHOR (MetaRendererNativePostKmsUpdate);
  
-@@ -1791,6 +2042,8 @@ maybe_post_next_frame (CoglOnscreen *onscreen)
+-  if (onscreen_native->next_frame == NULL ||
+-      onscreen_native->posted_frame != NULL ||
++  if (onscreen_native->next_frame == NULL)
++    return;
++
++  render_source_remove_frame (onscreen_native->render_source,
++                              onscreen_native->next_frame);
++
++  if (onscreen_native->posted_frame != NULL ||
+       onscreen_native->view == NULL ||
+       meta_kms_is_shutting_down (kms))
+     return;
+@@ -1791,6 +2047,8 @@ maybe_post_next_frame (CoglOnscreen *onscreen)
        return;
      }
  
@@ -846,7 +858,7 @@ index 0748e62..140fae0 100644
    frame = g_steal_pointer (&onscreen_native->next_frame);
    frame_native = meta_frame_native_from_frame (frame);
    region = meta_frame_native_get_damage (frame_native);
-@@ -1803,12 +2056,64 @@ maybe_post_next_frame (CoglOnscreen *onscreen)
+@@ -1803,12 +2061,64 @@ maybe_post_next_frame (CoglOnscreen *onscreen)
                                                      kms_device);
  
    is_direct_scanout = meta_frame_native_get_scanout (frame_native) != NULL;
@@ -912,7 +924,7 @@ index 0748e62..140fae0 100644
      {
        listener = &swap_buffer_result_listener_vtable;
        flip_flags = META_KMS_ASSIGN_PLANE_FLAG_NONE;
-@@ -1909,6 +2214,13 @@ maybe_post_next_frame (CoglOnscreen *onscreen)
+@@ -1909,6 +2219,13 @@ maybe_post_next_frame (CoglOnscreen *onscreen)
  
    meta_kms_device_post_update (kms_device, kms_update,
                                 META_KMS_UPDATE_FLAG_NONE);
@@ -926,7 +938,7 @@ index 0748e62..140fae0 100644
  }
  
  gboolean
-@@ -2363,8 +2675,16 @@ void
+@@ -2363,8 +2680,16 @@ void
  meta_onscreen_native_discard_pending_swaps (CoglOnscreen *onscreen)
  {
    MetaOnscreenNative *onscreen_native = META_ONSCREEN_NATIVE (onscreen);
@@ -943,7 +955,7 @@ index 0748e62..140fae0 100644
    discard_pending_swap (&onscreen_native->next_frame);
  }
  
-@@ -2789,6 +3109,8 @@ meta_onscreen_native_allocate (CoglFramebuffer  *framebuffer,
+@@ -2789,6 +3114,8 @@ meta_onscreen_native_allocate (CoglFramebuffer  *framebuffer,
          return FALSE;
      }
  
@@ -952,7 +964,7 @@ index 0748e62..140fae0 100644
    width = cogl_framebuffer_get_width (framebuffer);
    height = cogl_framebuffer_get_height (framebuffer);
  
-@@ -3198,6 +3520,7 @@ meta_onscreen_native_dispose (GObject *object)
+@@ -3198,6 +3525,7 @@ meta_onscreen_native_dispose (GObject *object)
    MetaRendererNative *renderer_native = onscreen_native->renderer_native;
    MetaRendererNativeGpuData *renderer_gpu_data;
  
