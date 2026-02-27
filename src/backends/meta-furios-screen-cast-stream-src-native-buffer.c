@@ -539,14 +539,7 @@ copy_stage_view_into_slot (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
     return FALSE;
   }
 
-  /* match destination premult bit to the source framebuffer internal format */
-  CoglPixelFormat src_internal = cogl_framebuffer_get_internal_format (src_fb);
-  gboolean src_premult = (src_internal & COGL_PREMULT_BIT) != 0;
-
-  /* choose a destination format that matches src premult */
-  CoglPixelFormat dst_format = src_premult ? COGL_PIXEL_FORMAT_RGBA_8888_PRE : COGL_PIXEL_FORMAT_RGBA_8888;
-
-  if (!ensure_slot_cogl_framebuffer (self, slot, dst_format, error))
+  if (!ensure_slot_cogl_framebuffer (self, slot, COGL_PIXEL_FORMAT_RGBX_8888, error))
     return FALSE;
 
   CoglFramebuffer *dst_fb = self->slot_cogl_fbs[slot];
@@ -554,8 +547,6 @@ copy_stage_view_into_slot (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
     g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "No destination framebuffer");
     return FALSE;
   }
-
-  cogl_framebuffer_flush (src_fb);
 
   g_autoptr (GError) local_error = NULL;
   if (!cogl_framebuffer_blit (src_fb,
@@ -570,7 +561,6 @@ copy_stage_view_into_slot (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
     return FALSE;
   }
 
-  cogl_framebuffer_flush (dst_fb);
   glFinish ();
 
   return TRUE;
@@ -810,10 +800,9 @@ meta_furios_screen_cast_stream_src_native_buffer_init (MetaFuriosScreenCastStrea
 
   self->usage = GRALLOC_USAGE_HW_TEXTURE |
                 GRALLOC_USAGE_HW_RENDER  |
-                GRALLOC_USAGE_HW_COMPOSER |
                 GRALLOC_USAGE_HW_FB;
 
-  self->hal_format = HAL_PIXEL_FORMAT_RGBA_8888;
+  self->hal_format = HAL_PIXEL_FORMAT_RGBX_8888;
   self->stride_pixels = 0;
 
   self->buffers = NULL;
