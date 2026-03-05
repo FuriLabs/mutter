@@ -7,6 +7,9 @@ mutter (50~rc-1) UNRELEASED; urgency=medium
   * New upstream release 50.rc
   * Refresh patches:
     - workarounds/tests-Skip-thread-priority-test.patch
+  * Bump dependencies:
+    - wayland-protocols >= 1.47
+    - pipewire >= 1.6.0
 
  -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 05 Mar 2026 15:31:41 +0800
 
