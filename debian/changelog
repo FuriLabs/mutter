@@ -17,7 +17,7 @@ mutter (50~rc-0ubuntu1) UNRELEASED; urgency=medium
     to resolve the same bug, but compatible with 50.rc.
   * Bump dependencies:
     - wayland-protocols >= 1.47
-    - pipewire >= 1.6.0
+    - pipewire >= 1.5.84
 
  -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 05 Mar 2026 15:31:41 +0800
 
