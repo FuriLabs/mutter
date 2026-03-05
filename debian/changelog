@@ -7,6 +7,9 @@ mutter (50~rc-0ubuntu1) UNRELEASED; urgency=medium
   * New upstream release 50.rc
   * Refresh patches:
     - workarounds/tests-Skip-thread-priority-test.patch
+    - ubuntu/core-Remove-warning-that-a-key-combo-has-been-overridden.patch
+    - ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
+    - ubuntu/window-Use-snapd-socket-to-get-the-application-ID.patch
   * Drop upstreamed patches:
     - Unblock-Nvidia-performance.patch
   * Bump dependencies:

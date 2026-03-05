@@ -59,10 +59,10 @@ index 0000000..ee5b2f4
 +                                  MetaWindowConstraint  right,
 +                                  MetaWindowConstraint  bottom);
 diff --git a/src/core/window-private.h b/src/core/window-private.h
-index a76fe1e..a69167f 100644
+index 75b8807..0621cb0 100644
 --- a/src/core/window-private.h
 +++ b/src/core/window-private.h
-@@ -284,6 +284,13 @@ struct _MetaWindow
+@@ -286,6 +286,13 @@ struct _MetaWindow
      MetaEdgeConstraint left;
    } edge_constraints;
  
@@ -77,7 +77,7 @@ index a76fe1e..a69167f 100644
  
    /* Area to cover when in fullscreen mode.  If _NET_WM_FULLSCREEN_MONITORS has
 diff --git a/src/core/window.c b/src/core/window.c
-index 169a7df..d94972e 100644
+index 3a37450..044fca0 100644
 --- a/src/core/window.c
 +++ b/src/core/window.c
 @@ -72,6 +72,7 @@
@@ -88,7 +88,7 @@ index 169a7df..d94972e 100644
  #include "core/meta-window-config-private.h"
  #include "core/meta-workspace-manager-private.h"
  #include "core/place.h"
-@@ -3155,6 +3156,38 @@ meta_window_update_tile_fraction (MetaWindow *window,
+@@ -3179,6 +3180,38 @@ meta_window_update_tile_fraction (MetaWindow *window,
      }
  }
  
@@ -127,7 +127,7 @@ index 169a7df..d94972e 100644
  static void
  update_edge_constraints (MetaWindow *window)
  {
-@@ -3210,6 +3243,18 @@ update_edge_constraints (MetaWindow *window)
+@@ -3234,6 +3267,18 @@ update_edge_constraints (MetaWindow *window)
        window->edge_constraints.right = META_EDGE_CONSTRAINT_MONITOR;
        window->edge_constraints.left = META_EDGE_CONSTRAINT_MONITOR;
      }

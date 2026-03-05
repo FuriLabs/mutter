@@ -42,7 +42,7 @@ index 4d72f9e..65794f2 100644
  #mesondefine HAVE_SOUND_PLAYER
  
 diff --git a/meson.build b/meson.build
-index 87ef9af..d0e7851 100644
+index 3bc3424..87cacb4 100644
 --- a/meson.build
 +++ b/meson.build
 @@ -279,6 +279,15 @@ if have_native_backend
@@ -61,7 +61,7 @@ index 87ef9af..d0e7851 100644
  have_drm_plane_size_hint = cc.has_type('struct drm_plane_size_hint',
                                          dependencies: libdrm_dep,
                                          prefix: '#include <drm_mode.h>')
-@@ -574,6 +583,7 @@ cdata.set('HAVE_XKBCOMMON_KANA_COMPOSE_LEDS',
+@@ -580,6 +589,7 @@ cdata.set('HAVE_XKBCOMMON_KANA_COMPOSE_LEDS',
    xkbcommon_dep.version().version_compare('>= 1.8.0'))
  cdata.set('HAVE_EIS_EVENT_REF',
    libeis_dep.version().version_compare('>= 1.5.0'))
@@ -69,7 +69,7 @@ index 87ef9af..d0e7851 100644
  
  if have_xwayland
    xkb_base = xkeyboard_config_dep.get_variable('xkb_base')
-@@ -755,6 +765,7 @@ summary('Startup notification', have_startup_notification, section: 'Options')
+@@ -761,6 +771,7 @@ summary('Startup notification', have_startup_notification, section: 'Options')
  summary('Introspection', have_introspection, section: 'Options')
  summary('Documentation', have_documentation, section: 'Options')
  summary('Profiler', have_profiler, section: 'Options')
@@ -146,7 +146,7 @@ index 273a583..dd75585 100644
    meta_clipboard_manager_shutdown (display);
    g_clear_object (&display->selection);
 diff --git a/src/core/window.c b/src/core/window.c
-index d94972e..79a4aeb 100644
+index 044fca0..a70ba6d 100644
 --- a/src/core/window.c
 +++ b/src/core/window.c
 @@ -65,6 +65,11 @@
@@ -161,7 +161,7 @@ index d94972e..79a4aeb 100644
  #include "backends/meta-backend-private.h"
  #include "backends/meta-logical-monitor-private.h"
  #include "cogl/cogl.h"
-@@ -967,12 +972,229 @@ meta_window_update_flatpak_id (MetaWindow *window,
+@@ -989,12 +994,229 @@ meta_window_update_flatpak_id (MetaWindow *window,
    return TRUE;
  }
  
@@ -391,7 +391,7 @@ index d94972e..79a4aeb 100644
    gsize i, security_label_contents_size = 0;
    char *contents_start;
    char *contents_end;
-@@ -1012,7 +1234,41 @@ meta_window_update_snap_id (MetaWindow *window,
+@@ -1034,7 +1256,41 @@ meta_window_update_snap_id (MetaWindow *window,
    sandboxed_app_id = g_malloc0 (security_label_contents_size + 1);
    memcpy (sandboxed_app_id, contents_start, security_label_contents_size);
  
