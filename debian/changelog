@@ -1,8 +1,12 @@
-mutter (50~beta-3) UNRELEASED; urgency=medium
+mutter (50~rc-1) UNRELEASED; urgency=medium
 
+  [ Simon McVittie ]
   * Merge packaging from unstable
 
- -- Simon McVittie <smcv@debian.org>  Mon, 16 Feb 2026 21:56:40 +0000
+  [ Daniel van Vugt ]
+  * New upstream release 50.rc
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 05 Mar 2026 15:31:41 +0800
 
 mutter (50~beta-2) experimental; urgency=medium
 
