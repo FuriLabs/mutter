@@ -1,0 +1,42 @@
+From: Daniel van Vugt <daniel.van.vugt@canonical.com>
+Date: Fri, 30 Jan 2026 16:48:59 +0800
+Subject: clutter/frame-clock: Don't skip the next frame
+
+Under heavy load and with triple buffering enabled,
+`min_update_time_estimate_us` stays near two frames. So the loop
+was iterating slightly too many times and choosing a
+`next_presentation_time_us` too far in the future causing some frames
+to be skipped which were actually achievable.
+
+Origin: https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4872
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/4581
+Bug: https://gitlab.gnome.org/GNOME/mutter/-/issues/4603
+Fixes: a5b62cffbd ("clutter/frame-clock: Remove min_render_time_allowed_us")
+Fixes: e8a2c1ad4a ("clutter/frame-clock: Allow optimistic late start...")
+---
+ clutter/clutter/clutter-frame-clock.c | 12 +-----------
+ 1 file changed, 1 insertion(+), 11 deletions(-)
+
+diff --git a/clutter/clutter/clutter-frame-clock.c b/clutter/clutter/clutter-frame-clock.c
+index c41bb73..8b88be4 100644
+--- a/clutter/clutter/clutter-frame-clock.c
++++ b/clutter/clutter/clutter-frame-clock.c
+@@ -998,17 +998,7 @@ calculate_next_update_time_us (ClutterFrameClock *frame_clock,
+     {
+       if (next_presentation_time_us - max_update_time_estimate_us < now_us)
+         {
+-          int64_t min_update_time_estimate_us =
+-            (int64_t) (refresh_interval_us * SYNC_DELAY_FALLBACK_FRACTION);
+-
+-          if (maybe_want_triple_buffering (frame_clock))
+-            min_update_time_estimate_us += refresh_interval_us;
+-
+-          if (min_update_time_estimate_us > max_update_time_estimate_us)
+-            min_update_time_estimate_us = max_update_time_estimate_us;
+-
+-          while (next_presentation_time_us - min_update_time_estimate_us <
+-                 now_us)
++          while (next_presentation_time_us < now_us)
+             next_presentation_time_us += refresh_interval_us;
+         }
+ 

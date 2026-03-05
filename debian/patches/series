@@ -7,3 +7,4 @@ ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
 ubuntu/core-Remove-warning-that-a-key-combo-has-been-overridden.patch
 ubuntu/keyboard-a11y-Reset-modifier-latch-on-non-modifier-press.patch
 ubuntu/window-Use-snapd-socket-to-get-the-application-ID.patch
+ubuntu/clutter-frame-clock-Don-t-skip-the-next-frame.patch

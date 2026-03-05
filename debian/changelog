@@ -12,6 +12,9 @@ mutter (50~rc-0ubuntu1) UNRELEASED; urgency=medium
     - ubuntu/window-Use-snapd-socket-to-get-the-application-ID.patch
   * Drop upstreamed patches:
     - Unblock-Nvidia-performance.patch
+  * Replace Revert-clutter-frame-clock-Remove-min_render_time_allowed.patch
+    with clutter-frame-clock-Don-t-skip-the-next-frame.patch
+    to resolve the same bug, but compatible with 50.rc.
   * Bump dependencies:
     - wayland-protocols >= 1.47
     - pipewire >= 1.6.0
