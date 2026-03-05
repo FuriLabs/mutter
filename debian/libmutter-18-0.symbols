@@ -1585,10 +1585,11 @@ libmutter-clutter-18.so.0 libmutter-18-0 #MINVER#
  clutter_frame_clock_new@Base 43.0
  clutter_frame_clock_notify_presented@Base 43.0
  clutter_frame_clock_notify_ready@Base 43.0
+ clutter_frame_clock_schedule_flush_update@Base 50~
  clutter_frame_clock_schedule_update@Base 43.0
  clutter_frame_clock_schedule_update_now@Base 43.0
  clutter_frame_clock_set_deadline_evasion@Base 47.0
- clutter_frame_clock_set_frame_sync_update_time@Base 49.0
+ clutter_frame_clock_set_fullscreen_update_time@Base 50~
  clutter_frame_clock_set_mode@Base 46.0
  clutter_frame_clock_set_passive@Base 49.0
  clutter_frame_clock_uninhibit@Base 43.0
@@ -2451,9 +2452,11 @@ libmutter-cogl-18.so.0 libmutter-18-0 #MINVER#
  cogl_matrix_stack_translate@Base 43.0
  cogl_offscreen_get_texture@Base 43.0
  cogl_offscreen_get_type@Base 43.0
+ cogl_offscreen_new_from_formats@Base 50~
  cogl_offscreen_new_with_texture@Base 43.0
  cogl_onscreen_add_frame_callback@Base 43.0
  cogl_onscreen_add_frame_info@Base 43.0
+ cogl_onscreen_bind@Base 50~
  cogl_onscreen_direct_scanout@Base 43.0
  cogl_onscreen_egl_get_egl_surface@Base 43.0
  cogl_onscreen_egl_get_type@Base 43.0
