@@ -289,11 +289,13 @@ display_from_session (MetaRemoteDesktopSession *session)
   return meta_context_get_display (context);
 }
 
+#ifndef G_DISABLE_ASSERT
 static gboolean
 meta_remote_desktop_session_is_running (MetaRemoteDesktopSession *session)
 {
   return !!session->started;
 }
+#endif
 
 static void
 init_remote_access_handle (MetaRemoteDesktopSession *session)
@@ -1293,22 +1295,20 @@ emit_owner_changed (MetaRemoteDesktopSession *session,
                     MetaSelectionSource      *owner)
 {
   char log_buf[255];
-  g_autofree char **mime_types_array = NULL;
-  GList *l;
-  int i;
+  g_auto (GStrv) mime_types_array = NULL;
   GVariant *options_variant;
   const char *object_path;
 
   if (owner)
     {
-      GList *mime_types;
+      g_autoptr (GList) mime_types = NULL;
+      GList *l;
+      int i;
 
       mime_types = meta_selection_source_get_mimetypes (owner);
       mime_types_array = g_new0 (char *, g_list_length (mime_types) + 1);
-      for (l = meta_selection_source_get_mimetypes (owner), i = 0;
-           l;
-           l = l->next, i++)
-        mime_types_array[i] = l->data;
+      for (l = mime_types, i = 0; l; l = l->next, i++)
+        mime_types_array[i] = g_steal_pointer (&l->data);
     }
 
   meta_topic (META_DEBUG_REMOTE_DESKTOP,

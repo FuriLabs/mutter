@@ -16,10 +16,6 @@
  *
  */
 
-/* Till https://gitlab.freedesktop.org/pipewire/pipewire/-/issues/4065 is fixed */
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wfloat-conversion"
-
 #include "config.h"
 
 #include "backends/meta-screen-cast-area-stream-src.h"
@@ -491,6 +487,7 @@ meta_screen_cast_area_stream_src_record_to_buffer (MetaScreenCastStreamSrc   *sr
                                       data,
                                       stride,
                                       COGL_PIXEL_FORMAT_CAIRO_ARGB32_COMPAT,
+                                      NULL,
                                       paint_flags,
                                       error))
     return FALSE;
@@ -530,26 +527,48 @@ meta_screen_cast_area_stream_src_record_to_framebuffer (MetaScreenCastStreamSrc 
     }
   clutter_stage_paint_to_framebuffer (stage, framebuffer,
                                       area, scale,
+                                      NULL,
                                       paint_flags);
 
   return TRUE;
 }
 
 static void
-meta_screen_cast_area_stream_record_follow_up (MetaScreenCastStreamSrc *src)
+meta_screen_cast_area_stream_queue_follow_up (MetaScreenCastStreamSrc  *src,
+                                              MetaScreenCastRecordFlag  flags)
 {
   MetaScreenCastAreaStreamSrc *area_src =
     META_SCREEN_CAST_AREA_STREAM_SRC (src);
-  MetaScreenCastPaintPhase paint_phase;
-  MetaScreenCastRecordFlag flags;
+  MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
+  MetaScreenCastAreaStream *area_stream = META_SCREEN_CAST_AREA_STREAM (stream);
+  ClutterStage *stage = get_stage (area_src);
+  MtkRectangle *area;
+  GList *l;
 
-  g_clear_handle_id (&area_src->maybe_record_idle_id, g_source_remove);
+  if (flags & META_SCREEN_CAST_RECORD_FLAG_CURSOR_ONLY)
+    {
+      clutter_stage_schedule_update (stage);
+      return;
+    }
 
-  flags = META_SCREEN_CAST_RECORD_FLAG_NONE;
-  paint_phase = META_SCREEN_CAST_PAINT_PHASE_DETACHED;
-  meta_screen_cast_stream_src_maybe_record_frame (src, flags,
-                                                  paint_phase,
-                                                  NULL);
+  area = meta_screen_cast_area_stream_get_area (area_stream);
+
+  for (l = clutter_stage_peek_stage_views (stage); l; l = l->next)
+    {
+      MetaRendererView *view = l->data;
+      MtkRectangle view_layout;
+      MtkRectangle damage;
+
+      clutter_stage_view_get_layout (CLUTTER_STAGE_VIEW (view), &view_layout);
+      if (!mtk_rectangle_overlap (area, &view_layout))
+        if (!mtk_rectangle_intersect (&view_layout, area, &damage))
+          continue;
+
+      damage.width = 1;
+      damage.height = 1;
+
+      clutter_actor_queue_redraw_with_clip (CLUTTER_ACTOR (stage), &damage);
+    }
 }
 
 static gboolean
@@ -726,12 +745,10 @@ meta_screen_cast_area_stream_src_class_init (MetaScreenCastAreaStreamSrcClass *k
     meta_screen_cast_area_stream_src_record_to_buffer;
   src_class->record_to_framebuffer =
     meta_screen_cast_area_stream_src_record_to_framebuffer;
-  src_class->record_follow_up =
-    meta_screen_cast_area_stream_record_follow_up;
+  src_class->queue_follow_up =
+    meta_screen_cast_area_stream_queue_follow_up;
   src_class->is_cursor_metadata_valid =
     meta_screen_cast_area_stream_src_is_cursor_metadata_valid;
   src_class->set_cursor_metadata =
     meta_screen_cast_area_stream_src_set_cursor_metadata;
 }
-
-#pragma GCC diagnostic pop

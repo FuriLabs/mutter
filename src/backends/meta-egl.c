@@ -57,7 +57,6 @@ struct _MetaEgl
   PFNEGLQUERYDEVICESTRINGEXTPROC eglQueryDeviceStringEXT;
 
   PFNEGLGETOUTPUTLAYERSEXTPROC eglGetOutputLayersEXT;
-  PFNEGLQUERYOUTPUTLAYERATTRIBEXTPROC eglQueryOutputLayerAttribEXT;
 
   PFNEGLCREATESTREAMKHRPROC eglCreateStreamKHR;
   PFNEGLDESTROYSTREAMKHRPROC eglDestroyStreamKHR;
@@ -78,8 +77,6 @@ struct _MetaEgl
   PFNEGLQUERYDMABUFMODIFIERSEXTPROC eglQueryDmaBufModifiersEXT;
 
   PFNEGLQUERYDISPLAYATTRIBEXTPROC eglQueryDisplayAttribEXT;
-
-  PFNEGLQUERYSURFACEPROC eglQuerySurface;
 };
 
 G_DEFINE_TYPE (MetaEgl, meta_egl, G_TYPE_OBJECT)
@@ -743,21 +740,6 @@ meta_egl_make_current (MetaEgl   *egl,
 }
 
 gboolean
-meta_egl_swap_buffers (MetaEgl   *egl,
-                       EGLDisplay display,
-                       EGLSurface surface,
-                       GError   **error)
-{
-  if (!eglSwapBuffers (display, surface))
-    {
-      set_egl_error (error);
-      return FALSE;
-    }
-
-  return TRUE;
-}
-
-gboolean
 meta_egl_bind_wayland_display (MetaEgl            *egl,
                                EGLDisplay          display,
                                struct wl_display  *wayland_display,
@@ -897,27 +879,6 @@ meta_egl_get_output_layers (MetaEgl           *egl,
                                    layers,
                                    max_layers,
                                    num_layers))
-    {
-      set_egl_error (error);
-      return FALSE;
-    }
-
-  return TRUE;
-}
-
-gboolean
-meta_egl_query_output_layer_attrib (MetaEgl          *egl,
-                                    EGLDisplay        display,
-                                    EGLOutputLayerEXT layer,
-                                    EGLint            attribute,
-                                    EGLAttrib        *value,
-                                    GError          **error)
-{
-  if (!is_egl_proc_valid (egl->eglQueryOutputLayerAttribEXT, error))
-    return FALSE;
-
-  if (!egl->eglQueryOutputLayerAttribEXT (display, layer,
-                                          attribute, value))
     {
       set_egl_error (error);
       return FALSE;
@@ -1152,26 +1113,6 @@ meta_egl_query_dma_buf_modifiers (MetaEgl      *egl,
 }
 
 gboolean
-meta_egl_query_surface (MetaEgl     *egl,
-                        EGLDisplay   display,
-                        EGLSurface   surface,
-                        EGLint       attribute,
-                        EGLint      *value,
-                        GError     **error)
-{
-  if (!is_egl_proc_valid (egl->eglQuerySurface, error))
-    return FALSE;
-
-  if (!egl->eglQuerySurface (display, surface, attribute, value))
-    {
-      set_egl_error (error);
-      return FALSE;
-    }
-
-  return TRUE;
-}
-
-gboolean
 meta_egl_query_display_attrib (MetaEgl     *egl,
                                EGLDisplay   display,
                                EGLint       attribute,
@@ -1303,7 +1244,6 @@ meta_egl_constructed (GObject *object)
   GET_EGL_PROC_ADDR (eglQueryDeviceStringEXT);
 
   GET_EGL_PROC_ADDR (eglGetOutputLayersEXT);
-  GET_EGL_PROC_ADDR (eglQueryOutputLayerAttribEXT);
 
   GET_EGL_PROC_ADDR (eglCreateStreamKHR);
   GET_EGL_PROC_ADDR (eglDestroyStreamKHR);
@@ -1324,8 +1264,6 @@ meta_egl_constructed (GObject *object)
   GET_EGL_PROC_ADDR (eglQueryDmaBufModifiersEXT);
 
   GET_EGL_PROC_ADDR (eglQueryDisplayAttribEXT);
-
-  GET_EGL_PROC_ADDR (eglQuerySurface);
 }
 
 #undef GET_EGL_PROC_ADDR
