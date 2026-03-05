@@ -1,4 +1,4 @@
-mutter (50~rc-0ubuntu1) UNRELEASED; urgency=medium
+mutter (50~rc-0ubuntu1) resolute; urgency=medium
 
   [ Simon McVittie ]
   * Merge packaging from unstable
@@ -19,7 +19,7 @@ mutter (50~rc-0ubuntu1) UNRELEASED; urgency=medium
     - wayland-protocols >= 1.47
     - pipewire >= 1.5.84
 
- -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 05 Mar 2026 15:31:41 +0800
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 05 Mar 2026 16:59:13 +0800
 
 mutter (50~beta-2ubuntu4) resolute; urgency=medium
 
