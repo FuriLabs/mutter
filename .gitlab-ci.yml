@@ -111,7 +111,7 @@ variables:
     - .skip-git-clone
   variables:
     FDO_DISTRIBUTION_VERSION: 43
-    BASE_TAG: '2026-01-29.0'
+    BASE_TAG: '2026-02-25.0'
     MUTTER_USER: 'meta-user'
     FDO_DISTRIBUTION_PACKAGES:
       accountsservice-devel
@@ -446,6 +446,17 @@ build-mutter@x86_64:
   needs:
     - job: build-fedora-container@x86_64
       artifacts: false
+
+build-release@x86_64:
+  extends:
+    - build-mutter@x86_64
+  variables:
+    EXTRA_MESON_OPTIONS:
+      -Dbuildtype=release
+      -Db_ndebug=true
+  artifacts:
+    paths:
+      - build/meson-logs
 
 build-mutter@aarch64:
   extends:

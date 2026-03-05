@@ -1206,9 +1206,11 @@ static void
 clutter_actor_update_map_state (ClutterActor  *self,
                                 MapStateChange change)
 {
+#ifndef G_DISABLE_ASSERT
   gboolean was_mapped;
 
   was_mapped = clutter_actor_is_mapped (self);
+#endif
 
   if (CLUTTER_ACTOR_IS_TOPLEVEL (self))
     {
@@ -11573,7 +11575,9 @@ clutter_actor_destroy_all_children (ClutterActor *self)
 
   while (self->priv->first_child != NULL)
     {
+#ifndef G_DISABLE_ASSERT
       gint prev_n_children = self->priv->n_children;
+#endif
 
       clutter_actor_destroy (self->priv->first_child);
 
@@ -19064,21 +19068,4 @@ clutter_actor_get_cursor_for_sprite (ClutterActor  *actor,
                                      ClutterSprite *sprite)
 {
   return CLUTTER_ACTOR_GET_CLASS (actor)->get_cursor_for_sprite (actor, sprite);
-}
-
-void
-clutter_actor_invalidate_sprite_cursor (ClutterActor  *actor,
-                                        ClutterSprite *sprite)
-{
-  ClutterActor *sprite_focus;
-
-  if (!clutter_actor_has_pointer (actor))
-    return;
-
-  sprite_focus = clutter_focus_get_current_actor (CLUTTER_FOCUS (sprite));
-  if (!sprite_focus)
-    return;
-
-  if (sprite_focus == actor || clutter_actor_contains (actor, sprite_focus))
-    clutter_sprite_invalidate_cursor (sprite);
 }

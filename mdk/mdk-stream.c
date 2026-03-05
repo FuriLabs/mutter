@@ -88,6 +88,8 @@ struct _MdkStream
   GdkPaintable *paintable;
   GArray *formats;
 
+  char *mapping_id;
+
   uint32_t node_id;
   struct pw_stream *pipewire_stream;
   struct spa_hook pipewire_stream_listener;
@@ -578,14 +580,10 @@ on_tag_changed (MdkStream  *stream,
                 const char *key,
                 const char *value)
 {
-  if (g_strcmp0 (key, "org.gnome.scale") == 0)
+  if (g_strcmp0 (key, "org.gnome.mapping-id") == 0)
     {
-      double scale = g_ascii_strtod (value, NULL);
-      if (scale != stream->scale)
-        {
-          stream->scale = (float) scale;
-          gdk_paintable_invalidate_size (GDK_PAINTABLE (stream));
-        }
+      if (!stream->mapping_id)
+        stream->mapping_id = g_strdup (value);
     }
 }
 
@@ -1464,6 +1462,7 @@ mdk_stream_finalize (GObject *object)
   g_clear_object (&stream->proxy);
   g_clear_pointer (&stream->formats, g_array_unref);
   g_clear_object (&stream->paintable);
+  g_clear_pointer (&stream->mapping_id, g_free);
   g_clear_pointer (&stream->main_context, g_main_context_unref);
 
   G_OBJECT_CLASS (mdk_stream_parent_class)->finalize (object);
@@ -1555,6 +1554,27 @@ const char *
 mdk_stream_get_path (MdkStream *stream)
 {
   return g_dbus_proxy_get_object_path (G_DBUS_PROXY (stream->proxy));
+}
+
+const char *
+mdk_stream_get_mapping_id (MdkStream *stream)
+{
+  return stream->mapping_id;
+}
+
+double
+mdk_stream_get_scale (MdkStream *stream)
+{
+  return stream->scale;
+}
+
+void
+mdk_stream_set_scale (MdkStream *stream,
+                      double     scale)
+{
+  stream->scale = scale;
+  gdk_paintable_invalidate_size (GDK_PAINTABLE (stream));
+  mdk_stream_renegotiate (stream);
 }
 
 void

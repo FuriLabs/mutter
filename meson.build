@@ -1,5 +1,5 @@
 project('mutter', 'c',
-  version: '50.beta',
+  version: '50.rc',
   meson_version: '>= 1.5.0',
   license: 'GPL-2.0-or-later',
 )
@@ -48,7 +48,7 @@ umockdev_req = '>= 0.3.0'
 
 # wayland version requirements
 wayland_server_req = '>= 1.24'
-wayland_protocols_req = '>= 1.45'
+wayland_protocols_req = '>= 1.47'
 
 # native backend version requirements
 libinput_req = '>= 1.30.0'
@@ -56,7 +56,7 @@ gbm_req = '>= 21.3'
 libdrm_req = '>= 2.4.118'
 
 # screen cast version requirements
-libpipewire_req = '>= 1.2.7'
+libpipewire_req = '>= 1.6.0'
 
 # profiler requirements
 sysprof_req = '>= 3.37.2'
@@ -529,8 +529,14 @@ if buildtype != 'plain'
     ]
   else
     mutter_c_args += [
-      '-DG_DISABLE_ASSERT',
       '-DG_DISABLE_CAST_CHECKS',
+    ]
+  endif
+
+  if get_option('b_ndebug') == 'true' or \
+     (get_option('buildtype') == 'release' and get_option('b_ndebug') == 'if-release')
+    mutter_c_args += [
+      '-DG_DISABLE_ASSERT',
     ]
   endif
 

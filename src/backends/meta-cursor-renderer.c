@@ -261,7 +261,7 @@ meta_cursor_renderer_set_property (GObject      *object,
       priv->backend = g_value_get_object (value);
       break;
     case PROP_SPRITE:
-      priv->sprite = g_value_get_object (value);
+      meta_cursor_renderer_set_sprite (renderer, g_value_get_object (value));
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -283,6 +283,7 @@ meta_cursor_renderer_finalize (GObject *object)
 
   g_clear_object (&priv->displayed_cursor);
   g_clear_object (&priv->overlay_cursor);
+  g_clear_object (&priv->sprite);
 
   G_OBJECT_CLASS (meta_cursor_renderer_parent_class)->finalize (object);
 }
@@ -597,4 +598,13 @@ meta_cursor_renderer_get_backend (MetaCursorRenderer *renderer)
     meta_cursor_renderer_get_instance_private (renderer);
 
   return priv->backend;
+}
+
+gboolean
+meta_cursor_renderer_needs_overlay (MetaCursorRenderer *renderer)
+{
+  MetaCursorRendererPrivate *priv =
+    meta_cursor_renderer_get_instance_private (renderer);
+
+  return priv->needs_overlay;
 }

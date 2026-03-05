@@ -84,19 +84,46 @@ activate_edit_launchers (GSimpleAction *action,
 }
 
 static void
+focus_monitor_widget (MdkApplication *app)
+{
+  GtkWindow *window;
+
+  window = gtk_application_get_active_window (GTK_APPLICATION (app));
+  gtk_window_set_focus (window, gtk_window_get_child (window));
+}
+
+static void
 activate_launch (GSimpleAction *action,
                  GVariant      *parameter,
                  gpointer       user_data)
 {
   MdkApplication *app = MDK_APPLICATION (user_data);
   int id;
-  GtkWindow *window;
 
   id = g_variant_get_int32 (parameter);
   mdk_context_activate_launcher (app->context, id);
 
-  window = gtk_application_get_active_window (GTK_APPLICATION (app));
-  gtk_window_set_focus (window, gtk_window_get_child (window));
+  focus_monitor_widget (app);
+}
+
+static void
+add_monitor (GSimpleAction *action,
+             GVariant      *parameter,
+             gpointer       user_data)
+{
+  MdkApplication *app = MDK_APPLICATION (user_data);
+  MdkWindow *window;
+  MdkMonitor *monitor;
+
+  window = g_object_new (MDK_TYPE_WINDOW,
+                         "context", app->context,
+                         NULL);
+
+  monitor = mdk_monitor_new (app->context);
+  mdk_window_set_monitor (window, monitor);
+  gtk_widget_set_visible (GTK_WIDGET (window), TRUE);
+
+  gtk_application_add_window (GTK_APPLICATION (app), GTK_WINDOW (window));
 }
 
 static void
@@ -149,6 +176,8 @@ activate (MdkApplication *app)
                          "context", app->context,
                          NULL);
   gtk_application_add_window (GTK_APPLICATION (app), GTK_WINDOW (window));
+  g_signal_connect_swapped (window, "destroy",
+                            G_CALLBACK (g_application_quit), app);
 
   g_signal_connect (app->context, "ready", G_CALLBACK (on_context_ready), app);
   g_signal_connect (app->context, "error", G_CALLBACK (on_context_error), app);
@@ -176,10 +205,10 @@ transform_action_state_to (GBinding     *binding,
 }
 
 static void
-bind_action_to_property (MdkApplication *app,
-                         const char     *action_name,
-                         gpointer        object,
-                         const char     *property)
+bind_menu_action_to_property (MdkApplication *app,
+                              const char     *action_name,
+                              gpointer        object,
+                              const char     *property)
 {
   GAction *action;
   GParamSpec *pspec;
@@ -195,6 +224,10 @@ bind_action_to_property (MdkApplication *app,
                                NULL,
                                g_param_spec_ref (pspec),
                                (GDestroyNotify) g_param_spec_unref);
+  g_signal_connect_data (action, "notify::state",
+                         G_CALLBACK (focus_monitor_widget),
+                         app, NULL,
+                         G_CONNECT_SWAPPED | G_CONNECT_AFTER);
 }
 
 static void
@@ -240,6 +273,7 @@ main (int    argc,
     { "toggle_emulate_monitor_modes", .state = "false", },
     { "launch", activate_launch, .parameter_type = "i", },
     { "edit_launchers", activate_edit_launchers, },
+    { "add_monitor", add_monitor, },
   };
 
   app = g_object_new (MDK_TYPE_APPLICATION,
@@ -254,14 +288,14 @@ main (int    argc,
 
   g_application_set_version (G_APPLICATION (app), VERSION);
 
-  bind_action_to_property (app, "toggle_emulate_touch",
-                           app->context, "emulate-touch");
-  bind_action_to_property (app, "toggle_inhibit_system_shortcuts",
-                           app->context, "inhibit-system-shortcuts");
-  bind_action_to_property (app, "toggle_host_keymap",
-                           app->context, "use-host-keymap");
-  bind_action_to_property (app, "toggle_emulate_monitor_modes",
-                           app->context, "emulate-monitor-modes");
+  bind_menu_action_to_property (app, "toggle_emulate_touch",
+                                app->context, "emulate-touch");
+  bind_menu_action_to_property (app, "toggle_inhibit_system_shortcuts",
+                                app->context, "inhibit-system-shortcuts");
+  bind_menu_action_to_property (app, "toggle_host_keymap",
+                                app->context, "use-host-keymap");
+  bind_menu_action_to_property (app, "toggle_emulate_monitor_modes",
+                                app->context, "emulate-monitor-modes");
 
   g_signal_connect (app, "startup", G_CALLBACK (startup), NULL);
   g_signal_connect (app, "activate", G_CALLBACK (activate), NULL);

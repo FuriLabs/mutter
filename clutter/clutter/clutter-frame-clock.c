@@ -160,7 +160,7 @@ struct _ClutterFrameClock
   int64_t missed_frame_report_time_us;
 
   int64_t deadline_evasion_us;
-  int64_t frame_sync_update_time_us;
+  int64_t fullscreen_update_time_us;
 
   char *output_name;
 
@@ -434,7 +434,8 @@ maybe_update_longterm_max_duration_us (ClutterFrameClock *frame_clock,
          frame_clock->shortterm_max_update_duration_us) / 2;
 
       CLUTTER_NOTE (FRAME_TIMINGS,
-                    "Maximum update duration estimate updated: %ldµs → %ldµs",
+                    "%s maximum update duration updated: %ldµs → %ldµs",
+                    frame_clock->output_name,
                     old_duration_us,
                     frame_clock->longterm_max_update_duration_us);
     }
@@ -460,9 +461,11 @@ clutter_frame_clock_notify_presented (ClutterFrameClock *frame_clock,
                                       ClutterFrameInfo  *frame_info)
 {
   Frame *presented_frame;
-  const char *debug_state =
+  const char *frr_or_vrr =
+    frame_clock->mode == CLUTTER_FRAME_CLOCK_MODE_VARIABLE ? "VRR" : "FRR";
+  const char *double_or_triple =
     frame_clock->state == CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_TWO ?
-    "Triple buffering" : "Double buffering";
+    "triple" : "double";
   int64_t dispatch_time_us;
 
   COGL_TRACE_BEGIN_SCOPED (ClutterFrameClockNotifyPresented,
@@ -577,8 +580,11 @@ clutter_frame_clock_notify_presented (ClutterFrameClock *frame_clock,
         }
 
       CLUTTER_NOTE (FRAME_TIMINGS,
-                    "%s: Dispatch %ld%+04ld µs, %3ld µs to flip / %4ld µs %s",
-                    debug_state,
+                    "%s %s %s buffering: Frame %ld dispatch %ld%+04ld µs, "
+                    "%3ld µs to flip / %4ld µs %s",
+                    frame_clock->output_name,
+                    frr_or_vrr, double_or_triple,
+                    frame_info->view_frame_counter,
                     dispatch_time_us - presented_frame->dispatch_lateness_us,
                     presented_frame->dispatch_lateness_us,
                     to_flip_us, to_kms_ready_us, ready_name);
@@ -590,12 +596,13 @@ clutter_frame_clock_notify_presented (ClutterFrameClock *frame_clock,
                MAX (to_kms_ready_us, to_flip_us) +
                frame_clock->deadline_evasion_us,
                frame_clock->shortterm_max_update_duration_us,
-               2 * frame_clock->refresh_interval_us);
+               3 * frame_clock->refresh_interval_us);
 
       if (frame_clock->shortterm_max_update_duration_us > max_duration_us)
         {
           CLUTTER_NOTE (FRAME_TIMINGS,
-                        "Maximum update duration estimate updated: %ldµs → %ldµs",
+                        "%s maximum update duration updated: %ldµs → %ldµs",
+                        frame_clock->output_name,
                         max_duration_us,
                         frame_clock->shortterm_max_update_duration_us);
         }
@@ -607,33 +614,64 @@ clutter_frame_clock_notify_presented (ClutterFrameClock *frame_clock,
     }
   else
     {
-      CLUTTER_NOTE (FRAME_TIMINGS, "%s: Dispatch %ld%+04ld µs",
-                    debug_state,
+      CLUTTER_NOTE (FRAME_TIMINGS,
+                    "%s %s %s buffering: Frame %ld dispatch %ld%+04ld µs",
+                    frame_clock->output_name,
+                    frr_or_vrr, double_or_triple,
+                    frame_info->view_frame_counter,
                     dispatch_time_us - presented_frame->dispatch_lateness_us,
                     presented_frame->dispatch_lateness_us);
     }
 
   if (G_UNLIKELY (CLUTTER_HAS_DEBUG (FRAME_TIMINGS)) &&
       presented_frame->target_presentation_time_us > 0 &&
-      frame_info->presentation_time > 0)
+      frame_info->presentation_time > 0 &&
+      presented_frame->target_presentation_time_us !=
+      frame_info->presentation_time)
     {
       int64_t diff_us;
-      int n_missed_cycles;
 
       diff_us = frame_info->presentation_time -
                 presented_frame->target_presentation_time_us;
-      n_missed_cycles = (int) roundf ((float) llabs (diff_us) /
-                                      (float) frame_clock->refresh_interval_us);
 
-      if (n_missed_cycles)
+      if (frame_clock->mode == CLUTTER_FRAME_CLOCK_MODE_VARIABLE)
         {
           CLUTTER_NOTE (FRAME_TIMINGS,
-                        "Frame presented %5" G_GINT64_FORMAT "µs "
-                        "(%d refresh cycle%s) %s",
-                        (int64_t)llabs (diff_us), n_missed_cycles,
-                        n_missed_cycles > 1 ? "s" : "",
+                        "%s frame %ld presented at %ld, %4" G_GINT64_FORMAT "µs %s",
+                        frame_clock->output_name,
+                        frame_info->view_frame_counter,
+                        frame_info->presentation_time,
+                        (int64_t)llabs (diff_us),
                         diff_us > 0 ? "late" : "early");
         }
+      else
+        {
+          int n_missed_cycles;
+
+          n_missed_cycles = (int) roundf ((float) llabs (diff_us) /
+                                          (float) frame_clock->refresh_interval_us);
+
+          if (n_missed_cycles)
+            {
+              CLUTTER_NOTE (FRAME_TIMINGS,
+                            "%s frame %ld presented at %ld, %5" G_GINT64_FORMAT "µs "
+                            "(%d refresh cycle%s) %s",
+                            frame_clock->output_name,
+                            frame_info->view_frame_counter,
+                            frame_info->presentation_time,
+                            (int64_t)llabs (diff_us), n_missed_cycles,
+                            n_missed_cycles > 1 ? "s" : "",
+                            diff_us > 0 ? "late" : "early");
+            }
+        }
+    }
+  else if (frame_info->presentation_time > 0)
+    {
+      CLUTTER_NOTE (FRAME_TIMINGS,
+                    "%s frame %ld presented at %ld",
+                    frame_clock->output_name,
+                    frame_info->view_frame_counter,
+                    frame_info->presentation_time);
     }
 
   if (frame_info->refresh_rate > 1.0)
@@ -761,9 +799,9 @@ clutter_frame_clock_estimate_max_update_time_us (ClutterFrameClock *frame_clock,
   int64_t maximum_us;
 
   if (maybe_want_triple_buffering (frame_clock))
-    maximum_us = 2 * frame_clock->refresh_interval_us;
+    maximum_us = 3 * frame_clock->refresh_interval_us;
   else
-    maximum_us = frame_clock->refresh_interval_us;
+    maximum_us = 2 * frame_clock->refresh_interval_us;
 
   if (!frame_clock->ever_got_measurements ||
       G_UNLIKELY (clutter_paint_debug_flags &
@@ -940,8 +978,10 @@ calculate_next_update_time_us (ClutterFrameClock *frame_clock,
    * next presentation = last presentation + N * refresh interval.
    */
   next_presentation_time_us =
-    mtk_extrapolate_next_interval_boundary (next_smooth_presentation_time_us,
-                                            now_us,
+    mtk_extrapolate_next_interval_boundary (last_presentation_time_us,
+                                            MAX (next_smooth_presentation_time_us -
+                                                 refresh_interval_us / 2,
+                                                 now_us),
                                             refresh_interval_us);
 
   if (should_update_now (frame_clock,
@@ -956,8 +996,21 @@ calculate_next_update_time_us (ClutterFrameClock *frame_clock,
     }
   else
     {
-      while (next_presentation_time_us - max_update_time_estimate_us < now_us)
-        next_presentation_time_us += refresh_interval_us;
+      if (next_presentation_time_us - max_update_time_estimate_us < now_us)
+        {
+          int64_t min_update_time_estimate_us =
+            (int64_t) (refresh_interval_us * SYNC_DELAY_FALLBACK_FRACTION);
+
+          if (maybe_want_triple_buffering (frame_clock))
+            min_update_time_estimate_us += refresh_interval_us;
+
+          if (min_update_time_estimate_us > max_update_time_estimate_us)
+            min_update_time_estimate_us = max_update_time_estimate_us;
+
+          while (next_presentation_time_us - min_update_time_estimate_us <
+                 now_us)
+            next_presentation_time_us += refresh_interval_us;
+        }
 
       next_update_time_us = next_presentation_time_us - max_update_time_estimate_us;
       if (next_update_time_us < now_us)
@@ -1014,10 +1067,10 @@ calculate_next_variable_update_time_us (ClutterFrameClock *frame_clock,
 
   next_update_time_us = next_presentation_time_us - max_update_time_estimate_us;
   if (next_update_time_us < now_us)
-    next_update_time_us = now_us;
-
-  if (next_presentation_time_us < next_update_time_us)
-    next_presentation_time_us = 0;
+    {
+      next_presentation_time_us = now_us + max_update_time_estimate_us;
+      next_update_time_us = now_us;
+    }
 
   next_frame_deadline_us = next_update_time_us;
   if (next_frame_deadline_us == now_us)
@@ -1026,44 +1079,6 @@ calculate_next_variable_update_time_us (ClutterFrameClock *frame_clock,
   *out_next_update_time_us = next_update_time_us;
   *out_next_presentation_time_us = next_presentation_time_us;
   *out_next_frame_deadline_us = next_frame_deadline_us;
-}
-
-static void
-calculate_next_variable_update_timeout_us (ClutterFrameClock *frame_clock,
-                                           int64_t           *out_next_update_time_us)
-{
-  const Frame *last_presentation = frame_clock->prev_presentation;
-  int64_t now_us;
-  int64_t next_presentation_time_us;
-  int64_t timeout_interval_us;
-
-  now_us = g_get_monotonic_time ();
-
-  if (now_us - frame_clock->frame_sync_update_time_us >=
-      frame_clock->maximum_refresh_interval_us)
-    timeout_interval_us = frame_clock->refresh_interval_us;
-  else
-    timeout_interval_us = frame_clock->maximum_refresh_interval_us;
-
-  if (!last_presentation || last_presentation->presentation_time_us == 0)
-    {
-      const Frame *last_dispatch = frame_clock->prev_dispatch;
-
-      *out_next_update_time_us =
-        last_dispatch && last_dispatch->dispatch_time_us ?
-        ((last_dispatch->dispatch_time_us -
-          last_dispatch->dispatch_lateness_us) + timeout_interval_us) :
-        now_us;
-      return;
-    }
-
-  next_presentation_time_us = last_presentation->presentation_time_us +
-                              timeout_interval_us;
-
-  while (next_presentation_time_us < now_us)
-    next_presentation_time_us += timeout_interval_us;
-
-  *out_next_update_time_us = next_presentation_time_us;
 }
 
 void
@@ -1284,11 +1299,15 @@ clutter_frame_clock_schedule_update (ClutterFrameClock *frame_clock)
         (frame_clock->next_frame_deadline_us != 0);
       break;
     case CLUTTER_FRAME_CLOCK_MODE_VARIABLE:
-      calculate_next_variable_update_timeout_us (frame_clock,
-                                                 &next_update_time_us);
-      frame_clock->is_next_presentation_time_valid = FALSE;
+      calculate_next_variable_update_time_us (frame_clock,
+                                              &next_update_time_us,
+                                              &frame_clock->next_presentation_time_us,
+                                              &frame_clock->next_frame_deadline_us);
+      frame_clock->is_next_presentation_time_valid =
+        (frame_clock->next_presentation_time_us != 0);
       frame_clock->is_target_presentation_time = FALSE;
-      frame_clock->has_next_frame_deadline = FALSE;
+      frame_clock->has_next_frame_deadline =
+        (frame_clock->next_frame_deadline_us != 0);
       break;
     case CLUTTER_FRAME_CLOCK_MODE_PASSIVE:
       g_assert_not_reached ();
@@ -1365,29 +1384,15 @@ clutter_frame_clock_schedule_update_later (ClutterFrameClock *frame_clock,
                                      &next_presentation_time_us,
                                      NULL,
                                      &next_frame_deadline_us);
-      break;
-    case CLUTTER_FRAME_CLOCK_MODE_VARIABLE:
-      calculate_next_variable_update_time_us (frame_clock,
-                                              &next_update_time_us,
-                                              &next_presentation_time_us,
-                                              &next_frame_deadline_us);
-      break;
-    case CLUTTER_FRAME_CLOCK_MODE_PASSIVE:
-      g_assert_not_reached ();
-      break;
-    }
 
-  g_warn_if_fail (next_presentation_time_us != -1);
+      g_warn_if_fail (next_presentation_time_us != -1);
 
-  if (next_presentation_time_us >= target_us)
-    {
-      clutter_frame_clock_schedule_update (frame_clock);
-      return;
-    }
+      if (next_presentation_time_us >= target_us)
+        {
+          clutter_frame_clock_schedule_update (frame_clock);
+          return;
+        }
 
-  switch (frame_clock->mode)
-    {
-    case CLUTTER_FRAME_CLOCK_MODE_FIXED:
       cycles =
         (target_us - next_presentation_time_us +
          frame_clock->refresh_interval_us - 1) /
@@ -1405,6 +1410,9 @@ clutter_frame_clock_schedule_update_later (ClutterFrameClock *frame_clock,
                                                    SYNC_DELAY_FALLBACK_FRACTION);
         }
       ready_time_us = target_us - max_update_time_estimate_us;
+      frame_clock->is_target_presentation_time = TRUE;
+      frame_clock->is_next_presentation_time_valid = TRUE;
+      frame_clock->next_presentation_time_us = target_us;
       break;
     case CLUTTER_FRAME_CLOCK_MODE_PASSIVE:
       g_assert_not_reached ();
@@ -1417,10 +1425,56 @@ clutter_frame_clock_schedule_update_later (ClutterFrameClock *frame_clock,
 }
 
 void
-clutter_frame_clock_set_frame_sync_update_time (ClutterFrameClock *frame_clock,
+clutter_frame_clock_schedule_flush_update (ClutterFrameClock *frame_clock)
+{
+  const Frame *last_presentation = frame_clock->prev_presentation;
+  int64_t now_us, timeout_interval_us, target_time_us;
+
+  if (frame_clock->mode != CLUTTER_FRAME_CLOCK_MODE_VARIABLE)
+    {
+      clutter_frame_clock_schedule_update (frame_clock);
+      return;
+    }
+
+  if (frame_clock->inhibit_count > 0)
+    {
+      frame_clock->pending_reschedule = TRUE;
+      return;
+    }
+
+  now_us = g_get_monotonic_time ();
+  if (now_us - frame_clock->fullscreen_update_time_us >=
+      frame_clock->maximum_refresh_interval_us)
+    timeout_interval_us = frame_clock->refresh_interval_us;
+  else
+    timeout_interval_us = frame_clock->maximum_refresh_interval_us;
+
+  if (!last_presentation || last_presentation->presentation_time_us == 0)
+    {
+      const Frame *last_dispatch = frame_clock->prev_dispatch;
+
+      target_time_us =
+        last_dispatch && last_dispatch->dispatch_time_us ?
+        ((last_dispatch->dispatch_time_us -
+          last_dispatch->dispatch_lateness_us) + timeout_interval_us) :
+        now_us;
+    }
+  else
+    {
+      target_time_us =
+        mtk_extrapolate_next_interval_boundary (last_presentation->presentation_time_us,
+                                                now_us,
+                                                timeout_interval_us);
+    }
+
+  clutter_frame_clock_schedule_update_later (frame_clock, target_time_us);
+}
+
+void
+clutter_frame_clock_set_fullscreen_update_time (ClutterFrameClock *frame_clock,
                                                 int64_t            update_time_us)
 {
-  frame_clock->frame_sync_update_time_us = update_time_us;
+  frame_clock->fullscreen_update_time_us = update_time_us;
 }
 
 static int

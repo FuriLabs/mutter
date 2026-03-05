@@ -450,6 +450,7 @@ meta_screen_cast_virtual_stream_src_record_to_buffer (MetaScreenCastStreamSrc   
                                       data,
                                       stride,
                                       COGL_PIXEL_FORMAT_CAIRO_ARGB32_COMPAT,
+                                      NULL,
                                       paint_flags,
                                       error))
     return FALSE;
@@ -482,16 +483,24 @@ meta_screen_cast_virtual_stream_src_record_to_framebuffer (MetaScreenCastStreamS
 }
 
 static void
-meta_screen_cast_virtual_stream_record_follow_up (MetaScreenCastStreamSrc *src)
+meta_screen_cast_virtual_stream_queue_follow_up (MetaScreenCastStreamSrc  *src,
+                                                 MetaScreenCastRecordFlag  flags)
 {
-  MtkRectangle damage;
+  if (flags & META_SCREEN_CAST_RECORD_FLAG_CURSOR_ONLY)
+    {
+      clutter_stage_view_schedule_update (view_from_src (src));
+    }
+  else
+    {
+      MtkRectangle damage;
 
-  clutter_stage_view_get_layout (view_from_src (src), &damage);
-  damage.width = 1;
-  damage.height = 1;
+      clutter_stage_view_get_layout (view_from_src (src), &damage);
+      damage.width = 1;
+      damage.height = 1;
 
-  clutter_actor_queue_redraw_with_clip (CLUTTER_ACTOR (stage_from_src (src)),
-                                        &damage);
+      clutter_actor_queue_redraw_with_clip (CLUTTER_ACTOR (stage_from_src (src)),
+                                            &damage);
+    }
 }
 
 static gboolean
@@ -986,8 +995,8 @@ meta_screen_cast_virtual_stream_src_class_init (MetaScreenCastVirtualStreamSrcCl
     meta_screen_cast_virtual_stream_src_record_to_buffer;
   src_class->record_to_framebuffer =
     meta_screen_cast_virtual_stream_src_record_to_framebuffer;
-  src_class->record_follow_up =
-    meta_screen_cast_virtual_stream_record_follow_up;
+  src_class->queue_follow_up =
+    meta_screen_cast_virtual_stream_queue_follow_up;
   src_class->is_cursor_metadata_valid =
     meta_screen_cast_virtual_stream_src_is_cursor_metadata_valid;
   src_class->set_cursor_metadata =
