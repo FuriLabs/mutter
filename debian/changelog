@@ -5,6 +5,8 @@ mutter (50~rc-1) UNRELEASED; urgency=medium
 
   [ Daniel van Vugt ]
   * New upstream release 50.rc
+  * Refresh patches:
+    - workarounds/tests-Skip-thread-priority-test.patch
 
  -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 05 Mar 2026 15:31:41 +0800
 
