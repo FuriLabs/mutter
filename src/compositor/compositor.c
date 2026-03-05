@@ -690,6 +690,8 @@ update_top_window_actor (MetaCompositor *compositor)
                           G_CALLBACK (on_top_window_actor_destroyed),
                           compositor);
     }
+
+  meta_display_queue_check_fullscreen (priv->display);
 }
 
 static void
@@ -1682,4 +1684,90 @@ meta_compositor_notify_mapping_change (MetaCompositor   *compositor,
     return;
 
   return klass->notify_mapping_change (compositor, type, state);
+}
+
+gboolean
+meta_compositor_query_pointer_a11y (MetaCompositor    *compositor,
+                                    GVariant         **data_out,
+                                    graphene_point_t  *rel_coords_out)
+{
+  MetaCompositorPrivate *priv =
+    meta_compositor_get_instance_private (compositor);
+  MetaContext *context = meta_backend_get_context (priv->backend);
+  MetaWaylandCompositor *wayland_compositor =
+    meta_context_get_wayland_compositor (context);
+  ClutterStage *stage = CLUTTER_STAGE (meta_backend_get_stage (priv->backend));
+  ClutterBackend *clutter_backend =
+    meta_backend_get_clutter_backend (priv->backend);
+  ClutterSprite *sprite;
+  g_autoptr (GSList) windows = NULL;
+  GVariantBuilder app_data_builder;
+  graphene_point_t rel_coords;
+  MetaWindow *window;
+
+  sprite = clutter_backend_get_pointer_sprite (clutter_backend, stage);
+
+  window = meta_wayland_compositor_get_current_window (wayland_compositor,
+                                                       sprite, &rel_coords);
+
+  g_variant_builder_init (&app_data_builder, G_VARIANT_TYPE ("a{sv}"));
+
+  if (window)
+    {
+      const char *dbus_name = NULL, *object_path = NULL;
+      int rel_x, rel_y;
+      pid_t pid;
+
+      meta_window_stage_to_protocol_point (window,
+                                           (int) rel_coords.x,
+                                           (int) rel_coords.y,
+                                           &rel_x, &rel_y);
+
+      pid = meta_window_get_pid (window);
+
+      if (meta_window_get_a11y_properties (window,
+                                           &dbus_name,
+                                           &object_path))
+        {
+          if (dbus_name)
+            {
+              g_variant_builder_add (&app_data_builder, "{sv}",
+                                     "app-dbus-name",
+                                     g_variant_new_string (dbus_name));
+            }
+
+          if (object_path)
+            {
+              g_variant_builder_add (&app_data_builder, "{sv}",
+                                     "toplevel-object-path",
+                                     g_variant_new_object_path (object_path));
+            }
+
+          *data_out = g_variant_builder_end (&app_data_builder);
+          *rel_coords_out = GRAPHENE_POINT_INIT (rel_x, rel_y);
+          return TRUE;
+        }
+      else if (pid != 0)
+        {
+          g_variant_builder_add (&app_data_builder, "{sv}",
+                                 "pid",
+                                 g_variant_new_int32 (pid));
+
+          *data_out = g_variant_builder_end (&app_data_builder);
+          *rel_coords_out = GRAPHENE_POINT_INIT (rel_x, rel_y);
+
+          return pid != 0;
+        }
+      else
+        {
+          g_variant_builder_clear (&app_data_builder);
+          *data_out = NULL;
+          return FALSE;
+        }
+    }
+
+  /* Respond for our own chrome */
+  *data_out = g_variant_builder_end (&app_data_builder);
+  clutter_sprite_get_coords (sprite, rel_coords_out);
+  return TRUE;
 }

@@ -17,7 +17,7 @@ https://wiki.debian.org/ArchitectureSpecificsMemo
  1 file changed, 5 insertions(+)
 
 diff --git a/src/tests/native-thread.c b/src/tests/native-thread.c
-index 9dfe57c..fc8d0c5 100644
+index 78fa0b8..4ca9c2f 100644
 --- a/src/tests/native-thread.c
 +++ b/src/tests/native-thread.c
 @@ -1150,6 +1150,11 @@ assert_thread_levels (uint32_t expected_priority,

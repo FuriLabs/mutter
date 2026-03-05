@@ -37,6 +37,8 @@
 
 #include "color-management-v1-server-protocol.h"
 
+static GQuark image_desc_id_quark = 0;
+
 struct _MetaWaylandColorManager
 {
   GObject parent;
@@ -44,6 +46,12 @@ struct _MetaWaylandColorManager
   MetaWaylandCompositor *compositor;
 
   gulong color_state_changed_handler_id;
+
+  struct
+  {
+    GQueue *to_reuse;
+    uint32_t next_id;
+  } ids;
 
   /* struct wl_resource */
   GList *resources;
@@ -206,22 +214,26 @@ float_to_scaled_uint32 (float value)
 }
 
 static gboolean
-wayland_tf_to_clutter (enum wp_color_manager_v1_transfer_function  tf,
+wayland_tf_to_clutter (struct wl_resource                         *resource,
+                       enum wp_color_manager_v1_transfer_function  tf,
                        ClutterEOTF                                *eotf)
 {
   switch (tf)
     {
     case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_GAMMA22:
-      eotf->type = CLUTTER_EOTF_TYPE_GAMMA;
-      eotf->gamma_exp = 2.2f;
+      eotf->type = CLUTTER_EOTF_TYPE_NAMED;
+      eotf->tf_name = CLUTTER_TRANSFER_FUNCTION_GAMMA22;
       return TRUE;
     case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_GAMMA28:
       eotf->type = CLUTTER_EOTF_TYPE_GAMMA;
       eotf->gamma_exp = 2.8f;
       return TRUE;
     case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_SRGB:
+      /* Deprecated in v2 */
+      if (wl_resource_get_version (resource) >= 2)
+        return FALSE;
       eotf->type = CLUTTER_EOTF_TYPE_NAMED;
-      eotf->tf_name = CLUTTER_TRANSFER_FUNCTION_SRGB;
+      eotf->tf_name = CLUTTER_TRANSFER_FUNCTION_GAMMA22;
       return TRUE;
     case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ:
       eotf->type = CLUTTER_EOTF_TYPE_NAMED;
@@ -235,18 +247,33 @@ wayland_tf_to_clutter (enum wp_color_manager_v1_transfer_function  tf,
       eotf->type = CLUTTER_EOTF_TYPE_NAMED;
       eotf->tf_name = CLUTTER_TRANSFER_FUNCTION_LINEAR;
       return TRUE;
+    case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_COMPOUND_POWER_2_4:
+      if (wl_resource_get_version (resource) < 2)
+        return FALSE;
+      eotf->type = CLUTTER_EOTF_TYPE_NAMED;
+      eotf->tf_name = CLUTTER_TRANSFER_FUNCTION_SRGB_PIECEWISE;
+      return TRUE;
     default:
       return FALSE;
     }
 }
 
 static enum wp_color_manager_v1_transfer_function
-clutter_tf_to_wayland (ClutterTransferFunction tf)
+clutter_tf_to_wayland (struct wl_resource      *resource,
+                       ClutterTransferFunction  tf)
 {
   switch (tf)
     {
-    case CLUTTER_TRANSFER_FUNCTION_SRGB:
-      return WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_SRGB;
+    case CLUTTER_TRANSFER_FUNCTION_GAMMA22:
+      return WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_GAMMA22;
+    case CLUTTER_TRANSFER_FUNCTION_SRGB_PIECEWISE:
+      /* We defined the wl sRGB TF as the piece-wise (which arguably is wrong),
+       * which is defined in the v2 by the less ambiguous compound power 2.4
+       */
+      if (wl_resource_get_version (resource) >= 2)
+        return WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_COMPOUND_POWER_2_4;
+      else
+        return WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_SRGB;
     case CLUTTER_TRANSFER_FUNCTION_PQ:
       return WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ;
     case CLUTTER_TRANSFER_FUNCTION_BT1886:
@@ -363,6 +390,70 @@ meta_wayland_image_description_new_failed (MetaWaylandColorManager            *c
   return image_desc;
 }
 
+static gint
+compare_ids (gconstpointer id_a,
+             gconstpointer id_b,
+             gpointer      user_data)
+{
+  return GPOINTER_TO_INT (id_a) - GPOINTER_TO_INT (id_b);
+}
+
+static void
+on_color_state_destroyed (ClutterColorState       *color_state,
+                          MetaWaylandColorManager *color_manager)
+{
+  uint32_t id = GPOINTER_TO_UINT (g_object_get_qdata (G_OBJECT (color_state),
+                                                      image_desc_id_quark));
+
+  g_queue_insert_sorted (color_manager->ids.to_reuse,
+                         GUINT_TO_POINTER (id),
+                         compare_ids, NULL);
+}
+
+static uint32_t
+get_image_description_id (ClutterColorState       *color_state,
+                          MetaWaylandColorManager *color_manager)
+{
+  uint32_t id = GPOINTER_TO_UINT (g_object_get_qdata (G_OBJECT (color_state),
+                                                      image_desc_id_quark));
+  if (id != 0)
+    return id;
+
+  if (!g_queue_is_empty (color_manager->ids.to_reuse))
+    id = GPOINTER_TO_UINT (g_queue_pop_head (color_manager->ids.to_reuse));
+  else
+    id = ++color_manager->ids.next_id;
+
+  g_object_set_qdata (G_OBJECT (color_state),
+                      image_desc_id_quark,
+                      GUINT_TO_POINTER (id));
+
+  g_signal_connect_object (G_OBJECT (color_state),
+                           "destroyed",
+                           G_CALLBACK (on_color_state_destroyed),
+                           color_manager, G_CONNECT_DEFAULT);
+
+  return id;
+}
+
+static void
+meta_wayland_image_description_send_ready (MetaWaylandImageDescription *image_desc)
+{
+  if (wl_resource_get_version (image_desc->resource) >= 2)
+    {
+      uint64_t id = clutter_color_state_get_id (image_desc->color_state);
+      wp_image_description_v1_send_ready2 (image_desc->resource,
+                                           (uint32_t) (id >> 32),
+                                           (uint32_t) (id));
+    }
+  else
+    {
+      uint32_t id = get_image_description_id (image_desc->color_state,
+                                              image_desc->color_manager);
+      wp_image_description_v1_send_ready (image_desc->resource, id);
+    }
+}
+
 static MetaWaylandImageDescription *
 meta_wayland_image_description_new_color_state (MetaWaylandColorManager          *color_manager,
                                                 struct wl_resource               *resource,
@@ -375,8 +466,7 @@ meta_wayland_image_description_new_color_state (MetaWaylandColorManager         
   image_desc->state = META_WAYLAND_IMAGE_DESCRIPTION_STATE_READY;
   image_desc->has_info = !!(flags & META_WAYLAND_IMAGE_DESCRIPTION_FLAGS_ALLOW_INFO);
   image_desc->color_state = g_object_ref (color_state);
-  wp_image_description_v1_send_ready (resource,
-                                      clutter_color_state_get_id (color_state));
+  meta_wayland_image_description_send_ready (image_desc);
 
   return image_desc;
 }
@@ -495,14 +585,11 @@ send_information_from_params (struct wl_resource *info_resource,
   switch (eotf->type)
     {
     case CLUTTER_EOTF_TYPE_NAMED:
-      tf = clutter_tf_to_wayland (eotf->tf_name);
+      tf = clutter_tf_to_wayland (info_resource, eotf->tf_name);
       wp_image_description_info_v1_send_tf_named (info_resource, tf);
       break;
     case CLUTTER_EOTF_TYPE_GAMMA:
-      if (G_APPROX_VALUE (eotf->gamma_exp, 2.2f, 0.0001f))
-        wp_image_description_info_v1_send_tf_named (info_resource,
-                                                    WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_GAMMA22);
-      else if (G_APPROX_VALUE (eotf->gamma_exp, 2.8f, 0.0001f))
+      if (G_APPROX_VALUE (eotf->gamma_exp, 2.8f, 0.0001f))
         wp_image_description_info_v1_send_tf_named (info_resource,
                                                     WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_GAMMA28);
       else
@@ -624,8 +711,18 @@ update_preferred_color_state (MetaWaylandColorManagementSurface *cm_surface)
     {
       struct wl_resource *resource = l->data;
 
-      wp_color_management_surface_feedback_v1_send_preferred_changed (resource,
-                                                                      clutter_color_state_get_id (color_state));
+      if (wl_resource_get_version (resource) >= 2)
+        {
+          int64_t id = clutter_color_state_get_id (color_state);
+          wp_color_management_surface_feedback_v1_send_preferred_changed2 (resource,
+                                                                           (uint32_t) (id >> 32),
+                                                                           (uint32_t) (id));
+        }
+      else
+        {
+          uint32_t id = get_image_description_id (color_state, color_manager);
+          wp_color_management_surface_feedback_v1_send_preferred_changed (resource, id);
+        }
     }
 }
 
@@ -1249,7 +1346,7 @@ creator_params_set_tf_named (struct wl_client   *client,
       return;
     }
 
-  if (!wayland_tf_to_clutter (tf, &eotf))
+  if (!wayland_tf_to_clutter (resource, tf, &eotf))
     {
       wl_resource_post_error (resource,
                               WP_IMAGE_DESCRIPTION_CREATOR_PARAMS_V1_ERROR_INVALID_TF,
@@ -1285,8 +1382,19 @@ creator_params_set_tf_power (struct wl_client   *client,
       return;
     }
 
-  creator_params->eotf.type = CLUTTER_EOTF_TYPE_GAMMA;
   creator_params->eotf.gamma_exp = scaled_uint32_to_float (eexp);
+
+  if (G_APPROX_VALUE (creator_params->eotf.gamma_exp, 2.2f, 0.0001f))
+    {
+      wayland_tf_to_clutter (resource,
+                             WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_GAMMA22,
+                             &creator_params->eotf);
+    }
+  else
+    {
+      creator_params->eotf.type = CLUTTER_EOTF_TYPE_GAMMA;
+    }
+
   creator_params->is_eotf_set = TRUE;
 }
 
@@ -1738,6 +1846,17 @@ color_manager_create_windows_scrgb (struct wl_client   *client,
 }
 
 static void
+color_manager_get_image_description (struct wl_client   *client,
+                                     struct wl_resource *resource,
+                                     uint32_t            image_description,
+                                     struct wl_resource *reference)
+{
+  /* We do not support any other protocol which creates objects of the
+   * wp_image_description_reference_v1 interface, so this won't be reached */
+  g_assert_not_reached ();
+}
+
+static void
 color_manager_send_supported_events (struct wl_resource *resource)
 {
   wp_color_manager_v1_send_supported_intent (resource,
@@ -1757,8 +1876,6 @@ color_manager_send_supported_events (struct wl_resource *resource)
   wp_color_manager_v1_send_supported_tf_named (resource,
                                                WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_GAMMA28);
   wp_color_manager_v1_send_supported_tf_named (resource,
-                                               WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_SRGB);
-  wp_color_manager_v1_send_supported_tf_named (resource,
                                                WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ);
   wp_color_manager_v1_send_supported_tf_named (resource,
                                                WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_BT1886);
@@ -1774,6 +1891,20 @@ color_manager_send_supported_events (struct wl_resource *resource)
                                                       WP_COLOR_MANAGER_V1_PRIMARIES_PAL);
   wp_color_manager_v1_send_supported_primaries_named (resource,
                                                       WP_COLOR_MANAGER_V1_PRIMARIES_DISPLAY_P3);
+
+  if (wl_resource_get_version (resource) < 2)
+    {
+      /* Deprecated in the protocol v2, supported by us in v1 */
+      wp_color_manager_v1_send_supported_tf_named (resource,
+                                                   WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_SRGB);
+    }
+  else
+    {
+      /* This replaces what we used to call sRGB in v1 */
+      wp_color_manager_v1_send_supported_tf_named (resource,
+                                                   WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_COMPOUND_POWER_2_4);
+    }
+
   wp_color_manager_v1_send_done (resource);
 }
 
@@ -1787,6 +1918,7 @@ static const struct wp_color_manager_v1_interface
   color_manager_create_icc_creator,
   color_manager_create_parametric_creator,
   color_manager_create_windows_scrgb,
+  color_manager_get_image_description,
 };
 
 static void
@@ -1871,6 +2003,8 @@ meta_wayland_color_manager_dispose (GObject *object)
 
   g_clear_pointer (&color_manager->outputs, g_hash_table_destroy);
   g_clear_pointer (&color_manager->surfaces, g_hash_table_destroy);
+
+  g_clear_pointer (&color_manager->ids.to_reuse, g_queue_free);
 }
 
 static void
@@ -1878,6 +2012,8 @@ meta_wayland_color_manager_init (MetaWaylandColorManager *color_manager)
 {
   color_manager->outputs = g_hash_table_new (NULL, NULL);
   color_manager->surfaces = g_hash_table_new (NULL, NULL);
+
+  color_manager->ids.to_reuse = g_queue_new ();
 }
 
 static void
@@ -1886,6 +2022,8 @@ meta_wayland_color_manager_class_init (MetaWaylandColorManagerClass *klass)
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
   object_class->dispose = meta_wayland_color_manager_dispose;
+
+  image_desc_id_quark = g_quark_from_static_string ("-image-desc-id");
 }
 
 static MetaWaylandColorManager *

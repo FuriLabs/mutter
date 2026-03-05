@@ -34,6 +34,7 @@
 
 #include "backends/meta-backend-private.h"
 #include "backends/meta-cursor-xcursor.h"
+#include "backends/meta-sprite.h"
 #include "cogl/cogl.h"
 #include "core/display-private.h"
 #include "clutter/clutter-mutter.h"
@@ -132,6 +133,8 @@ set_pointer_visible (MetaCursorTracker *tracker,
   ClutterBackend *clutter_backend =
     meta_backend_get_clutter_backend (backend);
   ClutterSeat *seat = clutter_backend_get_default_seat (clutter_backend);
+  ClutterStage *stage = NULL;
+  ClutterSprite *sprite = NULL;
 
   if (visible)
     clutter_seat_inhibit_unfocus (seat);
@@ -139,26 +142,33 @@ set_pointer_visible (MetaCursorTracker *tracker,
     clutter_seat_uninhibit_unfocus (seat);
 
   g_signal_emit (tracker, signals[VISIBILITY_CHANGED], 0);
+
+  stage = CLUTTER_STAGE (meta_backend_get_stage (backend));
+
+  if (stage)
+    sprite = clutter_backend_get_pointer_sprite (clutter_backend, stage);
+
+  if (sprite)
+    {
+      g_assert (META_IS_SPRITE (sprite));
+      meta_sprite_sync_cursor (META_SPRITE (sprite));
+    }
 }
 
 static ClutterCursor *
 meta_cursor_tracker_real_get_sprite (MetaCursorTracker *tracker)
 {
+  MetaCursorTrackerPrivate *priv =
+    meta_cursor_tracker_get_instance_private (tracker);
   MetaBackend *backend = meta_cursor_tracker_get_backend (tracker);
   ClutterBackend *clutter_backend =
     meta_backend_get_clutter_backend (backend);
   ClutterSeat *seat = clutter_backend_get_default_seat (clutter_backend);
-  MetaCursorRenderer *cursor_renderer;
 
-  if (clutter_seat_is_unfocus_inhibited (seat))
+  if (!clutter_seat_is_unfocus_inhibited (seat))
     return NULL;
 
-  cursor_renderer = meta_backend_get_cursor_renderer (backend);
-
-  if (!cursor_renderer)
-    return NULL;
-
-  return meta_cursor_renderer_get_cursor (cursor_renderer);
+  return priv->current_cursor;
 }
 
 static void

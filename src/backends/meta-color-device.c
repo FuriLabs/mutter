@@ -181,7 +181,7 @@ update_assigned_profile (MetaColorDevice *color_device)
   MetaColorManager *color_manager = color_device->color_manager;
   MetaColorStore *color_store =
     meta_color_manager_get_color_store (color_manager);
-  CdProfile *default_profile;
+  g_autoptr (CdProfile) default_profile = NULL;
   GCancellable *cancellable;
 
   default_profile = cd_device_get_default_profile (color_device->cd_device);
@@ -636,18 +636,52 @@ get_color_metadata_from_monitor (MetaMonitor        *monitor,
                                  ClutterColorimetry *colorimetry,
                                  ClutterEOTF        *eotf)
 {
-  colorimetry->type = CLUTTER_COLORIMETRY_TYPE_COLORSPACE;
-  eotf->type = CLUTTER_EOTF_TYPE_NAMED;
+  MetaOutput *output;
+  const MetaOutputInfo *output_info;
+  MetaEdidInfo *edid_info;
+  const struct di_color_primaries *primaries;
 
   switch (meta_monitor_get_color_mode (monitor))
     {
     case META_COLOR_MODE_DEFAULT:
+      colorimetry->type = CLUTTER_COLORIMETRY_TYPE_COLORSPACE;
       colorimetry->colorspace = CLUTTER_COLORSPACE_SRGB;
-      eotf->tf_name = CLUTTER_TRANSFER_FUNCTION_SRGB;
+      eotf->type = CLUTTER_EOTF_TYPE_NAMED;
+      eotf->tf_name = CLUTTER_TRANSFER_FUNCTION_GAMMA22;
       return;
     case META_COLOR_MODE_BT2100:
+      colorimetry->type = CLUTTER_COLORIMETRY_TYPE_COLORSPACE;
       colorimetry->colorspace = CLUTTER_COLORSPACE_BT2020;
+      eotf->type = CLUTTER_EOTF_TYPE_NAMED;
       eotf->tf_name = CLUTTER_TRANSFER_FUNCTION_PQ;
+      return;
+    case META_COLOR_MODE_SDR_NATIVE:
+      output = meta_monitor_get_main_output (monitor);
+      output_info = meta_output_get_info (output);
+      edid_info = output_info->edid_info;
+      primaries = &edid_info->default_color_primaries;
+      colorimetry->type = CLUTTER_COLORIMETRY_TYPE_PRIMARIES;
+      colorimetry->primaries = g_new (ClutterPrimaries, 1);
+      colorimetry->primaries->r_x = primaries->primary[0].x;
+      colorimetry->primaries->r_y = primaries->primary[0].y;
+      colorimetry->primaries->g_x = primaries->primary[1].x;
+      colorimetry->primaries->g_y = primaries->primary[1].y;
+      colorimetry->primaries->b_x = primaries->primary[2].x;
+      colorimetry->primaries->b_y = primaries->primary[2].y;
+      colorimetry->primaries->w_x = primaries->default_white.x;
+      colorimetry->primaries->w_y = primaries->default_white.y;
+
+      if (G_APPROX_VALUE (edid_info->default_gamma, 2.2f, 0.0001f))
+        {
+          eotf->type = CLUTTER_EOTF_TYPE_NAMED;
+          eotf->tf_name = CLUTTER_TRANSFER_FUNCTION_GAMMA22;
+        }
+      else
+        {
+          eotf->type = CLUTTER_EOTF_TYPE_GAMMA;
+          eotf->gamma_exp = (float) edid_info->default_gamma;
+        }
+
       return;
     }
 
