@@ -1482,6 +1482,7 @@ libmutter-clutter-14.so.0 libmutter-14-0 #MINVER#
  clutter_frame_clock_notify_ready@Base 43.0
  clutter_frame_clock_schedule_update@Base 43.0
  clutter_frame_clock_schedule_update_now@Base 43.0
+ clutter_frame_clock_set_deadline_evasion@Base 46.2-1ubuntu0.24.04.16~
  clutter_frame_clock_set_mode@Base 46~rc
  clutter_frame_clock_uninhibit@Base 43.0
  clutter_frame_get_count@Base 44~beta
@@ -1542,7 +1543,7 @@ libmutter-clutter-14.so.0 libmutter-14-0 #MINVER#
  clutter_get_default_text_direction@Base 43.0
  clutter_get_font_map@Base 43.0
  clutter_get_text_direction@Base 44~beta
- clutter_grab_activate@Base 46.2-1ubuntu0.24.04.6
+ clutter_grab_activate@Base 46.2-1ubuntu0.24.04.6~
  clutter_grab_dismiss@Base 43.0
  clutter_grab_get_seat_state@Base 43.0
  clutter_grab_get_type@Base 43.0
@@ -1878,7 +1879,7 @@ libmutter-clutter-14.so.0 libmutter-14-0 #MINVER#
  clutter_stage_get_type@Base 43.0
  clutter_stage_get_view_at@Base 43.0
  clutter_stage_grab@Base 43.0
- clutter_stage_grab_inactive@Base 46.2-1ubuntu0.24.04.6
+ clutter_stage_grab_inactive@Base 46.2-1ubuntu0.24.04.6~
  clutter_stage_grab_input_only@Base 45~beta.1
  clutter_stage_handle_event@Base 45~beta.1
  clutter_stage_is_redraw_queued_on_view@Base 43.0

@@ -1,0 +1,342 @@
+From: Cyrus Lien <cyrus.lien@canonical.com>
+Date: Fri, 6 Mar 2026 14:27:49 +0800
+Subject: Backport mutter merge request 3184 for fixing glxgears fps drops
+
+mutter includes merge requests 3999[1] and 3958[2], after 46.2-1ubuntu0.24.04.9.
+Additional merge request 3184[3] is required for fixing the issue.
+[1] https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3999
+[2] https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3958
+[3] https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3184
+
+Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/mutter/+bug/2143384
+Origin: backport, https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/3184
+---
+ clutter/clutter/clutter-frame-clock.c           | 12 +++++++-
+ clutter/clutter/clutter-frame-clock.h           |  4 +++
+ clutter/clutter/clutter-stage-view.c            |  4 +++
+ clutter/clutter/clutter-stage-view.h            |  2 ++
+ src/backends/native/meta-crtc-kms.c             | 10 ++++++
+ src/backends/native/meta-crtc-native.c          |  9 ++++++
+ src/backends/native/meta-crtc-native.h          |  3 ++
+ src/backends/native/meta-crtc-virtual.c         |  8 +++++
+ src/backends/native/meta-kms-crtc.c             | 14 ++++++---
+ src/backends/native/meta-kms-crtc.h             |  2 ++
+ src/backends/native/meta-onscreen-native.c      |  8 +++++
+ src/backends/native/meta-renderer-view-native.c | 41 +++++++++++++++++++++++++
+ src/meta/util.h                                 |  3 ++
+ 13 files changed, 115 insertions(+), 5 deletions(-)
+
+diff --git a/clutter/clutter/clutter-frame-clock.c b/clutter/clutter/clutter-frame-clock.c
+index 6bd8310..6b1280e 100644
+--- a/clutter/clutter/clutter-frame-clock.c
++++ b/clutter/clutter/clutter-frame-clock.c
+@@ -150,6 +150,8 @@ struct _ClutterFrameClock
+ 
+   int64_t last_dispatch_interval_us;
+ 
++  int64_t deadline_evasion_us;
++
+   char *output_name;
+ };
+ 
+@@ -431,7 +433,8 @@ clutter_frame_clock_notify_presented (ClutterFrameClock *frame_clock,
+ 
+       frame_clock->shortterm_max_update_duration_us =
+         CLAMP (frame_clock->last_dispatch_lateness_us + dispatch_to_swap_us +
+-               MAX (swap_to_rendering_done_us, swap_to_flip_us),
++               MAX (swap_to_rendering_done_us,
++                    swap_to_flip_us + frame_clock->deadline_evasion_us),
+                frame_clock->shortterm_max_update_duration_us,
+                2 * frame_clock->refresh_interval_us);
+ 
+@@ -1478,3 +1481,10 @@ clutter_frame_clock_class_init (ClutterFrameClockClass *klass)
+                   G_TYPE_NONE,
+                   0);
+ }
++
++void
++clutter_frame_clock_set_deadline_evasion (ClutterFrameClock *frame_clock,
++                                          int64_t            deadline_evasion_us)
++{
++  frame_clock->deadline_evasion_us = deadline_evasion_us;
++}
+diff --git a/clutter/clutter/clutter-frame-clock.h b/clutter/clutter/clutter-frame-clock.h
+index bfc89bd..0d9d9cd 100644
+--- a/clutter/clutter/clutter-frame-clock.h
++++ b/clutter/clutter/clutter-frame-clock.h
+@@ -105,6 +105,10 @@ void clutter_frame_clock_add_timeline (ClutterFrameClock *frame_clock,
+ void clutter_frame_clock_remove_timeline (ClutterFrameClock *frame_clock,
+                                           ClutterTimeline   *timeline);
+ 
++CLUTTER_EXPORT
++void clutter_frame_clock_set_deadline_evasion (ClutterFrameClock *frame_clock,
++                                               int64_t            deadline_evasion_us);
++
+ CLUTTER_EXPORT
+ float clutter_frame_clock_get_refresh_rate (ClutterFrameClock *frame_clock);
+ 
+diff --git a/clutter/clutter/clutter-stage-view.c b/clutter/clutter/clutter-stage-view.c
+index d53e377..a89a520 100644
+--- a/clutter/clutter/clutter-stage-view.c
++++ b/clutter/clutter/clutter-stage-view.c
+@@ -740,6 +740,10 @@ clutter_stage_view_schedule_update (ClutterStageView *view)
+ {
+   ClutterStageViewPrivate *priv =
+     clutter_stage_view_get_instance_private (view);
++  ClutterStageViewClass *view_class = CLUTTER_STAGE_VIEW_GET_CLASS (view);
++
++  if (view_class->schedule_update)
++    view_class->schedule_update (view);
+ 
+   clutter_frame_clock_schedule_update (priv->frame_clock);
+ }
+diff --git a/clutter/clutter/clutter-stage-view.h b/clutter/clutter/clutter-stage-view.h
+index c0888f7..bdaa065 100644
+--- a/clutter/clutter/clutter-stage-view.h
++++ b/clutter/clutter/clutter-stage-view.h
+@@ -54,6 +54,8 @@ struct _ClutterStageViewClass
+   ClutterFrame * (* new_frame) (ClutterStageView *view);
+ 
+   ClutterPaintFlag (* get_default_paint_flags) (ClutterStageView *view);
++
++  void (* schedule_update) (ClutterStageView *view);
+ };
+ 
+ CLUTTER_EXPORT
+diff --git a/src/backends/native/meta-crtc-kms.c b/src/backends/native/meta-crtc-kms.c
+index 3498f92..8cb0e93 100644
+--- a/src/backends/native/meta-crtc-kms.c
++++ b/src/backends/native/meta-crtc-kms.c
+@@ -348,6 +348,15 @@ meta_crtc_kms_is_hw_cursor_supported (MetaCrtcNative *crtc_native)
+   return meta_kms_device_has_cursor_plane_for (kms_device, kms_crtc);
+ }
+ 
++static int64_t
++meta_crtc_kms_get_deadline_evasion (MetaCrtcNative *crtc_native)
++{
++  MetaCrtcKms *crtc_kms = META_CRTC_KMS (crtc_native);
++  MetaKmsCrtc *kms_crtc = meta_crtc_kms_get_kms_crtc (crtc_kms);
++
++  return meta_kms_crtc_get_deadline_evasion (kms_crtc);
++}
++
+ MetaKmsPlane *
+ meta_crtc_kms_get_assigned_cursor_plane (MetaCrtcKms *crtc_kms)
+ {
+@@ -479,6 +488,7 @@ meta_crtc_kms_class_init (MetaCrtcKmsClass *klass)
+ 
+   crtc_native_class->is_transform_handled = meta_crtc_kms_is_transform_handled;
+   crtc_native_class->is_hw_cursor_supported = meta_crtc_kms_is_hw_cursor_supported;
++  crtc_native_class->get_deadline_evasion = meta_crtc_kms_get_deadline_evasion;
+ 
+   signals[GAMMA_LUT_CHANGED] =
+     g_signal_new ("gamma-lut-changed",
+diff --git a/src/backends/native/meta-crtc-native.c b/src/backends/native/meta-crtc-native.c
+index fc280f6..4ac5631 100644
+--- a/src/backends/native/meta-crtc-native.c
++++ b/src/backends/native/meta-crtc-native.c
+@@ -39,6 +39,15 @@ meta_crtc_native_is_hw_cursor_supported (MetaCrtcNative *crtc_native)
+   return klass->is_hw_cursor_supported (crtc_native);
+ }
+ 
++int64_t
++meta_crtc_native_get_deadline_evasion (MetaCrtcNative *crtc_native)
++{
++  MetaCrtcNativeClass *klass = META_CRTC_NATIVE_GET_CLASS (crtc_native);
++
++  return klass->get_deadline_evasion (crtc_native);
++}
++
++
+ static void
+ meta_crtc_native_init (MetaCrtcNative *crtc_native)
+ {
+diff --git a/src/backends/native/meta-crtc-native.h b/src/backends/native/meta-crtc-native.h
+index 3fb4bc7..1f9a2ed 100644
+--- a/src/backends/native/meta-crtc-native.h
++++ b/src/backends/native/meta-crtc-native.h
+@@ -31,9 +31,12 @@ struct _MetaCrtcNativeClass
+   gboolean (* is_transform_handled) (MetaCrtcNative       *crtc_native,
+                                      MetaMonitorTransform  monitor_transform);
+   gboolean (* is_hw_cursor_supported) (MetaCrtcNative *crtc_native);
++  int64_t (* get_deadline_evasion) (MetaCrtcNative *crtc_native);
+ };
+ 
+ gboolean meta_crtc_native_is_transform_handled (MetaCrtcNative       *crtc_native,
+                                                 MetaMonitorTransform  transform);
+ 
+ gboolean meta_crtc_native_is_hw_cursor_supported (MetaCrtcNative *crtc_native);
++
++int64_t meta_crtc_native_get_deadline_evasion (MetaCrtcNative *crtc_native);
+diff --git a/src/backends/native/meta-crtc-virtual.c b/src/backends/native/meta-crtc-virtual.c
+index 76165eb..00b599c 100644
+--- a/src/backends/native/meta-crtc-virtual.c
++++ b/src/backends/native/meta-crtc-virtual.c
+@@ -70,6 +70,12 @@ meta_crtc_virtual_is_hw_cursor_supported (MetaCrtcNative *crtc_native)
+   return TRUE;
+ }
+ 
++static int64_t
++meta_crtc_virtual_get_deadline_evasion (MetaCrtcNative *crtc_native)
++{
++  return 0;
++}
++
+ static void
+ meta_crtc_virtual_init (MetaCrtcVirtual *crtc_virtual)
+ {
+@@ -89,4 +95,6 @@ meta_crtc_virtual_class_init (MetaCrtcVirtualClass *klass)
+     meta_crtc_virtual_is_transform_handled;
+   crtc_native_class->is_hw_cursor_supported =
+     meta_crtc_virtual_is_hw_cursor_supported;
++  crtc_native_class->get_deadline_evasion =
++    meta_crtc_virtual_get_deadline_evasion;
+ }
+diff --git a/src/backends/native/meta-kms-crtc.c b/src/backends/native/meta-kms-crtc.c
+index 7220437..037f3a6 100644
+--- a/src/backends/native/meta-kms-crtc.c
++++ b/src/backends/native/meta-kms-crtc.c
+@@ -610,10 +610,7 @@ meta_kms_crtc_determine_deadline (MetaKmsCrtc  *crtc,
+        *
+        */
+ 
+-      if (meta_is_topic_enabled (META_DEBUG_KMS))
+-        deadline_evasion_us = DEADLINE_EVASION_WITH_KMS_TOPIC_US;
+-      else
+-        deadline_evasion_us = DEADLINE_EVASION_US;
++      deadline_evasion_us = meta_kms_crtc_get_deadline_evasion (crtc);
+ 
+       vblank_duration_us = meta_calculate_drm_mode_vblank_duration_us (drm_mode);
+       next_deadline_us = next_presentation_us - (vblank_duration_us +
+@@ -625,3 +622,12 @@ meta_kms_crtc_determine_deadline (MetaKmsCrtc  *crtc,
+ 
+   return TRUE;
+ }
++
++int64_t
++meta_kms_crtc_get_deadline_evasion (MetaKmsCrtc *crtc)
++{
++  if (meta_is_topic_enabled (META_DEBUG_KMS))
++    return DEADLINE_EVASION_WITH_KMS_TOPIC_US;
++  else
++    return DEADLINE_EVASION_US;
++}
+diff --git a/src/backends/native/meta-kms-crtc.h b/src/backends/native/meta-kms-crtc.h
+index 580ee9a..d9682fc 100644
+--- a/src/backends/native/meta-kms-crtc.h
++++ b/src/backends/native/meta-kms-crtc.h
+@@ -65,3 +65,5 @@ int meta_kms_crtc_get_idx (MetaKmsCrtc *crtc);
+ 
+ META_EXPORT_TEST
+ gboolean meta_kms_crtc_is_active (MetaKmsCrtc *crtc);
++
++int64_t meta_kms_crtc_get_deadline_evasion (MetaKmsCrtc *crtc);
+diff --git a/src/backends/native/meta-onscreen-native.c b/src/backends/native/meta-onscreen-native.c
+index 4a40f36..130207b 100644
+--- a/src/backends/native/meta-onscreen-native.c
++++ b/src/backends/native/meta-onscreen-native.c
+@@ -1936,6 +1936,14 @@ meta_onscreen_native_before_redraw (CoglOnscreen *onscreen,
+ {
+   MetaOnscreenNative *onscreen_native = META_ONSCREEN_NATIVE (onscreen);
+ 
++  if (meta_get_debug_paint_flags () & META_DEBUG_PAINT_SYNC_CURSOR_PRIMARY)
++    {
++      MetaCrtcKms *crtc_kms = META_CRTC_KMS (onscreen_native->crtc);
++      MetaKmsCrtc *kms_crtc = meta_crtc_kms_get_kms_crtc (crtc_kms);
++
++      meta_kms_device_await_flush (meta_kms_crtc_get_device (kms_crtc), kms_crtc);
++    }
++
+   maybe_update_frame_sync (onscreen_native, frame);
+ }
+ 
+diff --git a/src/backends/native/meta-renderer-view-native.c b/src/backends/native/meta-renderer-view-native.c
+index a04e2e3..5699f9a 100644
+--- a/src/backends/native/meta-renderer-view-native.c
++++ b/src/backends/native/meta-renderer-view-native.c
+@@ -24,6 +24,7 @@
+ 
+ #include "backends/native/meta-renderer-view-native.h"
+ 
++#include "backends/native/meta-crtc-native.h"
+ #include "backends/native/meta-frame-native.h"
+ 
+ struct _MetaRendererViewNative
+@@ -34,18 +35,58 @@ struct _MetaRendererViewNative
+ G_DEFINE_TYPE (MetaRendererViewNative, meta_renderer_view_native,
+                META_TYPE_RENDERER_VIEW)
+ 
++static void
++update_frame_clock_deadline_evasion (MetaRendererView *renderer_view)
++{
++  ClutterStageView *stage_view = CLUTTER_STAGE_VIEW (renderer_view);
++  ClutterFrameClock *frame_clock;
++  MetaCrtc *crtc;
++  MetaCrtcNative *crtc_native;
++  int64_t deadline_evasion_us;
++
++  frame_clock = clutter_stage_view_get_frame_clock (stage_view);
++  crtc = meta_renderer_view_get_crtc (renderer_view);
++  crtc_native = META_CRTC_NATIVE (crtc);
++
++  deadline_evasion_us = meta_crtc_native_get_deadline_evasion (crtc_native);
++  clutter_frame_clock_set_deadline_evasion (frame_clock,
++                                            deadline_evasion_us);
++}
++
++static void
++meta_renderer_view_native_constructed (GObject *object)
++{
++  MetaRendererView *renderer_view = META_RENDERER_VIEW (object);
++
++  G_OBJECT_CLASS (meta_renderer_view_native_parent_class)->constructed (object);
++
++  update_frame_clock_deadline_evasion (renderer_view);
++}
++
+ static ClutterFrame *
+ meta_renderer_view_native_new_frame (ClutterStageView *stage_view)
+ {
+   return (ClutterFrame *) meta_frame_native_new ();
+ }
+ 
++static void
++meta_renderer_view_native_schedule_update (ClutterStageView *stage_view)
++{
++  MetaRendererView *renderer_view = META_RENDERER_VIEW (stage_view);
++
++  update_frame_clock_deadline_evasion (renderer_view);
++}
++
+ static void
+ meta_renderer_view_native_class_init (MetaRendererViewNativeClass *klass)
+ {
++  GObjectClass *object_class = G_OBJECT_CLASS (klass);
+   ClutterStageViewClass *stage_view_class = CLUTTER_STAGE_VIEW_CLASS (klass);
+ 
++  object_class->constructed = meta_renderer_view_native_constructed;
++
+   stage_view_class->new_frame = meta_renderer_view_native_new_frame;
++  stage_view_class->schedule_update = meta_renderer_view_native_schedule_update;
+ }
+ 
+ static void
+diff --git a/src/meta/util.h b/src/meta/util.h
+index ca8ca2a..91ca6a8 100644
+--- a/src/meta/util.h
++++ b/src/meta/util.h
+@@ -51,11 +51,14 @@ void meta_fatal      (const char *format,
+  * MetaDebugPaintFlag:
+  * @META_DEBUG_PAINT_NONE: default
+  * @META_DEBUG_PAINT_OPAQUE_REGION: paint opaque regions
++ * @META_DEBUG_PAINT_SYNC_CURSOR_PRIMARY: make cursor updates await compositing
++ *   frames
+  */
+ typedef enum
+ {
+   META_DEBUG_PAINT_NONE          = 0,
+   META_DEBUG_PAINT_OPAQUE_REGION = 1 << 0,
++  META_DEBUG_PAINT_SYNC_CURSOR_PRIMARY = 1 << 1,
+ } MetaDebugPaintFlag;
+ 
+ META_EXPORT

@@ -1,9 +1,18 @@
 mutter (46.2-1ubuntu0.24.04.15) UNRELEASED; urgency=medium
 
+  [ Simon Poirier ]
   * d/p/compositor-Handle-skipped-transition-in-visual-bell.patch
     Fix window darkened on visual bells while screen locked. (LP: #2064716)
 
- -- Simon Poirier <simon.poirier@canonical.com>  Wed, 17 Dec 2025 10:05:03 -0500
+  [ Cyrus Lien ]
+  * Backport merge request 3184 for fixing glxgears fps drops. (LP: #2143384)
+  * debian/libmutter-14-0.symbols:
+    - Update symbols
+    - Postfix tilde to new symbols between Debian revisions to satisfy
+      lintian.
+  * debian/libmutter-14-0.lintian-overrides: remove overrides for new symbols.
+
+ -- Cyrus Lien <cyrus.lien@canonical.com>  Fri, 06 Mar 2026 14:46:20 +0800
 
 mutter (46.2-1ubuntu0.24.04.14) noble; urgency=medium
 
