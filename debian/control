@@ -195,7 +195,7 @@ Depends: adwaita-icon-theme,
          mutter-common-bin (>= 49.0),
          ${misc:Depends},
          ${shlibs:Depends}
-Breaks: gnome-shell (<< 49~rc~),
+Breaks: gnome-shell (<< 50~rc~),
         xwayland (<< 2:23.1.0),
 Description: window manager library from the Mutter window manager
  Mutter is a Wayland display server and X11 window manager and
