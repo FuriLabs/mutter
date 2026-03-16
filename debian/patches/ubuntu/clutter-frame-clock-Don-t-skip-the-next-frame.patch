@@ -18,10 +18,10 @@ Fixes: e8a2c1ad4a ("clutter/frame-clock: Allow optimistic late start...")
  1 file changed, 1 insertion(+), 11 deletions(-)
 
 diff --git a/clutter/clutter/clutter-frame-clock.c b/clutter/clutter/clutter-frame-clock.c
-index c41bb73..8b88be4 100644
+index 3d06ba7..895b46d 100644
 --- a/clutter/clutter/clutter-frame-clock.c
 +++ b/clutter/clutter/clutter-frame-clock.c
-@@ -998,17 +998,7 @@ calculate_next_update_time_us (ClutterFrameClock *frame_clock,
+@@ -997,17 +997,7 @@ calculate_next_update_time_us (ClutterFrameClock *frame_clock,
      {
        if (next_presentation_time_us - max_update_time_estimate_us < now_us)
          {

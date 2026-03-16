@@ -10,7 +10,7 @@ requirement to the version in Resolute which is known to work.
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/meson.build b/meson.build
-index 87cacb4..07b5277 100644
+index 31292fa..e2b61e5 100644
 --- a/meson.build
 +++ b/meson.build
 @@ -56,7 +56,7 @@ gbm_req = '>= 21.3'

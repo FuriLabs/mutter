@@ -77,7 +77,7 @@ index 75b8807..0621cb0 100644
  
    /* Area to cover when in fullscreen mode.  If _NET_WM_FULLSCREEN_MONITORS has
 diff --git a/src/core/window.c b/src/core/window.c
-index 3a37450..044fca0 100644
+index 545b874..e2c85a2 100644
 --- a/src/core/window.c
 +++ b/src/core/window.c
 @@ -72,6 +72,7 @@
@@ -147,10 +147,10 @@ index 3a37450..044fca0 100644
  
  gboolean
 diff --git a/src/meson.build b/src/meson.build
-index 686cf1c..e087d19 100644
+index 22d0188..8d1bc1d 100644
 --- a/src/meson.build
 +++ b/src/meson.build
-@@ -1236,7 +1236,8 @@ if have_introspection
+@@ -1232,7 +1232,8 @@ if have_introspection
      sources: [
        mutter_enum_types[1],
        mutter_introspected_sources,

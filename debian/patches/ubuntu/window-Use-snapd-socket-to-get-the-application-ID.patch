@@ -42,7 +42,7 @@ index 4d72f9e..65794f2 100644
  #mesondefine HAVE_SOUND_PLAYER
  
 diff --git a/meson.build b/meson.build
-index 3bc3424..87cacb4 100644
+index 723d2e7..31292fa 100644
 --- a/meson.build
 +++ b/meson.build
 @@ -279,6 +279,15 @@ if have_native_backend
@@ -146,7 +146,7 @@ index 273a583..dd75585 100644
    meta_clipboard_manager_shutdown (display);
    g_clear_object (&display->selection);
 diff --git a/src/core/window.c b/src/core/window.c
-index 044fca0..a70ba6d 100644
+index e2c85a2..27b71c9 100644
 --- a/src/core/window.c
 +++ b/src/core/window.c
 @@ -65,6 +65,11 @@
@@ -435,7 +435,7 @@ index 044fca0..a70ba6d 100644
    return TRUE;
  }
 diff --git a/src/meson.build b/src/meson.build
-index e087d19..5a97162 100644
+index 8d1bc1d..04aef85 100644
 --- a/src/meson.build
 +++ b/src/meson.build
 @@ -25,6 +25,7 @@ mutter_pkg_private_deps = [

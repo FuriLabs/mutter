@@ -1,6 +1,11 @@
 mutter (50.0-0ubuntu1) UNRELEASED; urgency=medium
 
   * New upstream release 50.0
+  * Refresh patches:
+    - ubuntu/clutter-frame-clock-Don-t-skip-the-next-frame.patch
+    - ubuntu/meson.build-Lower-pipewire-requirement-to-1.5.84.patch
+    - ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
+    - ubuntu/window-Use-snapd-socket-to-get-the-application-ID.patch
 
  -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Mon, 16 Mar 2026 15:54:53 +0800
 
