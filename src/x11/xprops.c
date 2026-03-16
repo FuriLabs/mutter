@@ -687,11 +687,7 @@ wm_hints_from_results (GetPropertyResults *results,
       meta_topic (META_DEBUG_X11,
                   "WM_HINTS property too short: %d should be %d",
                   (int) results->n_items, NumPropWMHintsElements - 1);
-      if (results->prop)
-        {
-          g_free (results->prop);
-          results->prop = NULL;
-        }
+      g_clear_pointer (&results->prop, g_free);
       return FALSE;
     }
 
@@ -712,12 +708,7 @@ wm_hints_from_results (GetPropertyResults *results,
   else
     hints->window_group = 0;
 
-  if (results->prop)
-    {
-      g_free (results->prop);
-      results->prop = NULL;
-    }
-
+  g_clear_pointer (&results->prop, g_free);
   *hints_p = hints;
 
   return TRUE;
@@ -906,11 +897,6 @@ meta_prop_get_values (MetaX11Display *x11_display,
         tasks[i] = async_get_property (xcb_conn, xwindow, values[i].atom, values[i].required_type);
       ++i;
     }
-
-  /* Get replies for all our tasks */
-  meta_topic (META_DEBUG_SYNC, "Syncing to get %d GetProperty replies in %s",
-              n_values, G_STRFUNC);
-  XSync (x11_display->xdisplay, False);
 
   /* Collect results, should arrive in order requested */
   i = 0;
