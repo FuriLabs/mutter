@@ -15,7 +15,7 @@ mutter (50~rc-0ubuntu1) resolute; urgency=medium
   * Merge packaging from unstable
 
   [ Daniel van Vugt ]
-  * New upstream release 50.rc
+  * New upstream release 50.rc (LP: #2143655)
   * Refresh patches:
     - workarounds/tests-Skip-thread-priority-test.patch
     - ubuntu/core-Remove-warning-that-a-key-combo-has-been-overridden.patch
