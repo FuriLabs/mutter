@@ -57,6 +57,7 @@ get_pointer_source (MetaVirtualInputDeviceWaylandNested *self)
 {
   if (!self->seat)
     return NULL;
+
   return clutter_seat_get_pointer (self->seat);
 }
 
@@ -65,6 +66,7 @@ get_keyboard_source (MetaVirtualInputDeviceWaylandNested *self)
 {
   if (!self->seat)
     return NULL;
+
   return clutter_seat_get_keyboard (self->seat);
 }
 
@@ -132,13 +134,16 @@ evdev_button_to_mask (uint32_t button_code)
 }
 
 static inline ClutterModifierType
-button_mask_bits (void)
+keyboard_mask_bits (void)
 {
-  return (CLUTTER_BUTTON1_MASK |
-          CLUTTER_BUTTON2_MASK |
-          CLUTTER_BUTTON3_MASK |
-          CLUTTER_BUTTON4_MASK |
-          CLUTTER_BUTTON5_MASK);
+  return (CLUTTER_SHIFT_MASK |
+          CLUTTER_LOCK_MASK |
+          CLUTTER_CONTROL_MASK |
+          CLUTTER_MOD1_MASK |
+          CLUTTER_MOD2_MASK |
+          CLUTTER_MOD3_MASK |
+          CLUTTER_MOD4_MASK |
+          CLUTTER_MOD5_MASK);
 }
 
 static gboolean
@@ -159,7 +164,7 @@ xkb_named_mod_active (const struct xkb_keymap *keymap,
   return xkb_state_mod_index_is_active (state, idx, comp);
 }
 
-static ClutterModifierType
+ClutterModifierType
 clutter_modifiers_from_xkb_state (struct xkb_state *state)
 {
   const struct xkb_keymap *keymap;
@@ -180,22 +185,30 @@ clutter_modifiers_from_xkb_state (struct xkb_state *state)
   if (xkb_named_mod_active (keymap, state, XKB_MOD_NAME_SHIFT, comp))
     mods |= CLUTTER_SHIFT_MASK;
 
-  if (xkb_named_mod_active (keymap, state, XKB_MOD_NAME_CTRL, comp))
-    mods |= CLUTTER_CONTROL_MASK;
-
-  if (xkb_named_mod_active (keymap, state, XKB_MOD_NAME_ALT, comp) ||
-      xkb_named_mod_active (keymap, state, "Mod1", comp))
-    mods |= CLUTTER_MOD1_MASK;
-
-  if (xkb_named_mod_active (keymap, state, XKB_MOD_NAME_LOGO, comp) ||
-      xkb_named_mod_active (keymap, state, "Mod4", comp))
-    mods |= CLUTTER_SUPER_MASK;
-
   if (xkb_named_mod_active (keymap, state, XKB_MOD_NAME_CAPS, comp))
     mods |= CLUTTER_LOCK_MASK;
 
-  if (xkb_named_mod_active (keymap, state, "Mod2", comp))
+  if (xkb_named_mod_active (keymap, state, XKB_MOD_NAME_CTRL, comp))
+    mods |= CLUTTER_CONTROL_MASK;
+
+  if (xkb_named_mod_active (keymap, state, XKB_VMOD_NAME_ALT, comp) ||
+      xkb_named_mod_active (keymap, state, XKB_MOD_NAME_MOD1, comp))
+    mods |= CLUTTER_MOD1_MASK;
+
+  if (xkb_named_mod_active (keymap, state, XKB_VMOD_NAME_NUM, comp) ||
+      xkb_named_mod_active (keymap, state, XKB_MOD_NAME_MOD2, comp))
     mods |= CLUTTER_MOD2_MASK;
+
+  if (xkb_named_mod_active (keymap, state, XKB_MOD_NAME_MOD3, comp))
+    mods |= CLUTTER_MOD3_MASK;
+
+  if (xkb_named_mod_active (keymap, state, XKB_VMOD_NAME_SUPER, comp) ||
+      xkb_named_mod_active (keymap, state, XKB_MOD_NAME_MOD4, comp))
+    mods |= CLUTTER_MOD4_MASK;
+
+  if (xkb_named_mod_active (keymap, state, XKB_VMOD_NAME_LEVEL5, comp) ||
+      xkb_named_mod_active (keymap, state, XKB_MOD_NAME_MOD5, comp))
+    mods |= CLUTTER_MOD5_MASK;
 
   return mods;
 }
@@ -215,28 +228,6 @@ seat_set_current_modifiers (MetaVirtualInputDeviceWaylandNested *self,
 {
   if (META_IS_SEAT_WAYLAND_NESTED (self->seat))
     meta_seat_wayland_nested_set_modifiers (META_SEAT_WAYLAND_NESTED (self->seat), modifiers);
-}
-
-static void
-seat_update_keyboard_modifiers_from_xkb (MetaVirtualInputDeviceWaylandNested *self)
-{
-  MetaSeatWaylandNested *seat;
-  struct xkb_state *state;
-  ClutterModifierType keymods;
-  ClutterModifierType cur;
-  ClutterModifierType new_mods;
-
-  if (!META_IS_SEAT_WAYLAND_NESTED (self->seat))
-    return;
-
-  seat = META_SEAT_WAYLAND_NESTED (self->seat);
-  state = meta_seat_wayland_nested_peek_xkb_state (seat);
-
-  keymods = clutter_modifiers_from_xkb_state (state);
-  cur = meta_seat_wayland_nested_get_modifiers (seat);
-
-  new_mods = (cur & button_mask_bits ()) | keymods;
-  meta_seat_wayland_nested_set_modifiers (seat, new_mods);
 }
 
 static void
@@ -266,7 +257,7 @@ notify_relative_motion (ClutterVirtualInputDevice *vdev,
   coords = GRAPHENE_POINT_INIT (self->x, self->y);
   delta = GRAPHENE_POINT_INIT ((float) dx, (float) dy);
 
-  mods = seat_get_current_modifiers (self);
+  mods = seat_get_current_modifiers (self) & CLUTTER_MODIFIER_MASK;
 
   event = clutter_event_motion_new (0,
                                     (int64_t) time_us,
@@ -309,7 +300,7 @@ notify_absolute_motion (ClutterVirtualInputDevice *vdev,
   coords = GRAPHENE_POINT_INIT (self->x, self->y);
   delta = GRAPHENE_POINT_INIT (0.f, 0.f);
 
-  mods = seat_get_current_modifiers (self);
+  mods = seat_get_current_modifiers (self) & CLUTTER_MODIFIER_MASK;
 
   event = clutter_event_motion_new (0,
                                     (int64_t) time_us,
@@ -352,7 +343,7 @@ notify_button (ClutterVirtualInputDevice *vdev,
   clutter_button = evdev_to_clutter_button (button);
 
   mask = evdev_button_to_mask (evdev_button);
-  state = seat_get_current_modifiers (self);
+  state = seat_get_current_modifiers (self) & CLUTTER_MODIFIER_MASK;
 
   if (button_state == CLUTTER_BUTTON_STATE_PRESSED)
     state |= mask;
@@ -399,24 +390,20 @@ notify_key (ClutterVirtualInputDevice *vdev,
 
   type = (key_state == CLUTTER_KEY_STATE_PRESSED) ? CLUTTER_KEY_PRESS : CLUTTER_KEY_RELEASE;
 
-  mods = seat_get_current_modifiers (self);
-  raw.pressed = mods;
-  raw.latched = 0;
-  raw.locked = 0;
-
   /* protocol sends evdev keycodes but xkbcommon expects evdev + 8. */
   xkb_code = (xkb_keycode_t) key + 8;
+
+  mods = seat_get_current_modifiers (self) & CLUTTER_MODIFIER_MASK;
+
+  raw.pressed = mods & keyboard_mask_bits ();
+  raw.latched = 0;
+  raw.locked = 0;
 
   if (META_IS_SEAT_WAYLAND_NESTED (self->seat)) {
     MetaSeatWaylandNested *seat = META_SEAT_WAYLAND_NESTED (self->seat);
     struct xkb_state *state = meta_seat_wayland_nested_peek_xkb_state (seat);
 
     if (state) {
-      enum xkb_key_direction dir = (key_state == CLUTTER_KEY_STATE_PRESSED) ? XKB_KEY_DOWN : XKB_KEY_UP;
-
-      xkb_state_update_key (state, xkb_code, dir);
-      seat_update_keyboard_modifiers_from_xkb (self);
-
       sym = xkb_state_key_get_one_sym (state, xkb_code);
       if (sym != XKB_KEY_NoSymbol)
         unicode_value = xkb_keysym_to_utf32 (sym);
@@ -435,6 +422,11 @@ notify_key (ClutterVirtualInputDevice *vdev,
                                  unicode_value);
 
   push_event (event);
+
+  if (META_IS_SEAT_WAYLAND_NESTED (self->seat))
+    meta_seat_wayland_nested_notify_key (META_SEAT_WAYLAND_NESTED (self->seat),
+                                         key,
+                                         key_state);
 }
 
 static void
@@ -459,10 +451,9 @@ notify_keyval (ClutterVirtualInputDevice *vdev,
 
   unicode_value = xkb_keysym_to_utf32 ((xkb_keysym_t) keyval);
 
-  seat_update_keyboard_modifiers_from_xkb (self);
-  mods = seat_get_current_modifiers (self);
+  mods = seat_get_current_modifiers (self) & CLUTTER_MODIFIER_MASK;
 
-  raw.pressed = mods;
+  raw.pressed = mods & keyboard_mask_bits ();
   raw.latched = 0;
   raw.locked = 0;
 
@@ -497,7 +488,7 @@ notify_discrete_scroll (ClutterVirtualInputDevice *vdev,
     return;
 
   coords = GRAPHENE_POINT_INIT (self->x, self->y);
-  mods = seat_get_current_modifiers (self);
+  mods = seat_get_current_modifiers (self) & CLUTTER_MODIFIER_MASK;
 
   event = clutter_event_scroll_discrete_new (0,
                                              (int64_t) time_us,
@@ -533,7 +524,7 @@ notify_scroll_continuous (ClutterVirtualInputDevice *vdev,
 
   coords = GRAPHENE_POINT_INIT (self->x, self->y);
   delta = GRAPHENE_POINT_INIT ((float) dx, (float) dy);
-  mods = seat_get_current_modifiers (self);
+  mods = seat_get_current_modifiers (self) & CLUTTER_MODIFIER_MASK;
 
   event = clutter_event_scroll_smooth_new (0,
                                            (int64_t) time_us,
@@ -572,17 +563,15 @@ static void
 meta_virtual_input_device_wayland_nested_class_init (MetaVirtualInputDeviceWaylandNestedClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
-  object_class->constructed = meta_virtual_input_device_wayland_nested_constructed;
-
   ClutterVirtualInputDeviceClass *vclass = CLUTTER_VIRTUAL_INPUT_DEVICE_CLASS (klass);
+
+  object_class->constructed = meta_virtual_input_device_wayland_nested_constructed;
 
   vclass->notify_relative_motion = notify_relative_motion;
   vclass->notify_absolute_motion = notify_absolute_motion;
   vclass->notify_button = notify_button;
-
   vclass->notify_key = notify_key;
   vclass->notify_keyval = notify_keyval;
-
   vclass->notify_discrete_scroll = notify_discrete_scroll;
   vclass->notify_scroll_continuous = notify_scroll_continuous;
 }
@@ -591,10 +580,12 @@ MetaVirtualInputDeviceWaylandNested *
 meta_virtual_input_device_wayland_nested_new (ClutterSeat            *seat,
                                               ClutterInputDeviceType  device_type)
 {
-  MetaVirtualInputDeviceWaylandNested *vdev = g_object_new (META_TYPE_VIRTUAL_INPUT_DEVICE_WAYLAND_NESTED,
-                                                            "seat", seat,
-                                                            "device-type", device_type,
-                                                            NULL);
+  MetaVirtualInputDeviceWaylandNested *vdev;
+
+  vdev = g_object_new (META_TYPE_VIRTUAL_INPUT_DEVICE_WAYLAND_NESTED,
+                       "seat", seat,
+                       "device-type", device_type,
+                       NULL);
 
   vdev->seat = seat;
 

@@ -33,4 +33,6 @@ G_DECLARE_FINAL_TYPE (MetaVirtualInputDeviceWaylandNested,
 MetaVirtualInputDeviceWaylandNested * meta_virtual_input_device_wayland_nested_new (ClutterSeat            *seat,
                                                                                     ClutterInputDeviceType  device_type);
 
+ClutterModifierType clutter_modifiers_from_xkb_state (struct xkb_state *state);
+
 G_END_DECLS

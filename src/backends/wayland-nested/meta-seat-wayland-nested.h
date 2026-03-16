@@ -49,4 +49,8 @@ ClutterModifierType meta_seat_wayland_nested_get_modifiers (MetaSeatWaylandNeste
 void meta_seat_wayland_nested_set_modifiers (MetaSeatWaylandNested *self,
                                              ClutterModifierType    modifiers);
 
+void meta_seat_wayland_nested_notify_key (MetaSeatWaylandNested *self,
+                                          uint32_t               key,
+                                          ClutterKeyState        key_state);
+
 G_END_DECLS

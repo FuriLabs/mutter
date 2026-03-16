@@ -56,11 +56,58 @@ struct _MetaSeatWaylandNested
 
   struct xkb_keymap *xkb_keymap;
   struct xkb_state *xkb_state;
+
+  GHashTable *pressed_keys;
 };
 
 G_DEFINE_TYPE (MetaSeatWaylandNested,
                meta_seat_wayland_nested,
                CLUTTER_TYPE_SEAT)
+
+static inline ClutterModifierType
+button_mask_bits (void)
+{
+  return (CLUTTER_BUTTON1_MASK |
+          CLUTTER_BUTTON2_MASK |
+          CLUTTER_BUTTON3_MASK |
+          CLUTTER_BUTTON4_MASK |
+          CLUTTER_BUTTON5_MASK);
+}
+
+static void
+sync_modifiers_from_xkb (MetaSeatWaylandNested *self)
+{
+  ClutterModifierType buttons = self->modifiers & button_mask_bits ();
+  ClutterModifierType keymods = 0;
+
+  if (self->xkb_state)
+    keymods = clutter_modifiers_from_xkb_state (self->xkb_state);
+
+  self->modifiers = buttons | keymods;
+}
+
+static void
+recreate_xkb_state (MetaSeatWaylandNested *self)
+{
+  if (self->xkb_state) {
+    xkb_state_unref (self->xkb_state);
+    self->xkb_state = NULL;
+  }
+
+  if (!self->xkb_keymap) {
+    sync_modifiers_from_xkb (self);
+    return;
+  }
+
+  self->xkb_state = xkb_state_new (self->xkb_keymap);
+  if (self->xkb_state)
+    xkb_state_update_mask (self->xkb_state,
+                           0, 0, 0,
+                           0, 0,
+                           self->layout_index);
+
+  sync_modifiers_from_xkb (self);
+}
 
 void
 meta_seat_wayland_nested_start (MetaSeatWaylandNested *self)
@@ -208,6 +255,37 @@ clear_xkb_state (MetaSeatWaylandNested *self)
   }
 }
 
+void
+meta_seat_wayland_nested_notify_key (MetaSeatWaylandNested *self,
+                                     uint32_t               key,
+                                     ClutterKeyState        key_state)
+{
+  gpointer key_ptr;
+  gboolean was_pressed;
+
+  g_return_if_fail (META_IS_SEAT_WAYLAND_NESTED (self));
+
+  if (!self->xkb_state || !self->pressed_keys)
+    return;
+
+  key_ptr = GUINT_TO_POINTER (key);
+  was_pressed = g_hash_table_contains (self->pressed_keys, key_ptr);
+
+  if (key_state == CLUTTER_KEY_STATE_PRESSED) {
+    if (!was_pressed) {
+      g_hash_table_add (self->pressed_keys, key_ptr);
+      xkb_state_update_key (self->xkb_state, (xkb_keycode_t) key + 8, XKB_KEY_DOWN);
+    }
+  } else {
+    if (was_pressed) {
+      g_hash_table_remove (self->pressed_keys, key_ptr);
+      xkb_state_update_key (self->xkb_state, (xkb_keycode_t) key + 8, XKB_KEY_UP);
+    }
+  }
+
+  sync_modifiers_from_xkb (self);
+}
+
 static void
 meta_seat_wayland_nested_dispose (GObject *object)
 {
@@ -220,6 +298,11 @@ meta_seat_wayland_nested_dispose (GObject *object)
   self->devices = NULL;
 
   g_clear_object (&self->keymap);
+
+  if (self->pressed_keys) {
+    g_hash_table_unref (self->pressed_keys);
+    self->pressed_keys = NULL;
+  }
 
   clear_xkb_state (self);
 
@@ -301,6 +384,8 @@ meta_seat_wayland_nested_init (MetaSeatWaylandNested *self)
 
   self->xkb_keymap = NULL;
   self->xkb_state = NULL;
+
+  self->pressed_keys = g_hash_table_new (g_direct_hash, g_direct_equal);
 }
 
 MetaBackend *
@@ -319,22 +404,21 @@ meta_seat_wayland_nested_set_keymap (MetaSeatWaylandNested *self,
 
   self->layout_index = layout_index;
 
-  if (self->keymap)
+  if (self->keymap && keymap)
     meta_keymap_wayland_nested_set_keyboard_map (META_KEYMAP_WAYLAND_NESTED (self->keymap),
                                                  keymap);
 
+  if (self->pressed_keys)
+    g_hash_table_remove_all (self->pressed_keys);
+
   clear_xkb_state (self);
 
-  if (keymap) {
-    self->xkb_keymap = xkb_keymap_ref (keymap);
-    self->xkb_state = xkb_state_new (self->xkb_keymap);
+  self->modifiers &= button_mask_bits ();
 
-    if (self->xkb_state)
-      xkb_state_update_mask (self->xkb_state,
-                             0, 0, 0,
-                             0, 0,
-                             self->layout_index);
-  }
+  if (keymap)
+    self->xkb_keymap = xkb_keymap_ref (keymap);
+
+  recreate_xkb_state (self);
 }
 
 struct xkb_state *

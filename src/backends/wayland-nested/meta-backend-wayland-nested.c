@@ -304,12 +304,15 @@ meta_backend_wayland_nested_set_keymap_layout_group_async (MetaBackend        *b
                                                            GTask              *task)
 {
   MetaBackendWaylandNestedPrivate *priv = meta_backend_wayland_nested_get_instance_private (META_BACKEND_WAYLAND_NESTED (backend));
+  MetaSeatWaylandNested *seat_wl;
 
   priv->xkb_layout_index = idx;
 
-  MetaSeatWaylandNested *seat_wl = get_seat_wayland_nested_or_null (backend);
-  if (seat_wl)
-    meta_seat_wayland_nested_set_keymap (seat_wl, priv->xkb_keymap, priv->xkb_layout_index);
+  seat_wl = get_seat_wayland_nested_or_null (backend);
+  if (seat_wl && priv->xkb_keymap)
+    meta_seat_wayland_nested_set_keymap (seat_wl,
+                                         priv->xkb_keymap,
+                                         priv->xkb_layout_index);
 
   g_task_return_boolean (task, TRUE);
   g_object_unref (task);
