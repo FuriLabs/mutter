@@ -1,10 +1,10 @@
-mutter (50~rc-1) UNRELEASED; urgency=medium
+mutter (50.0-1) UNRELEASED; urgency=medium
 
   [ Simon McVittie ]
   * Merge packaging from unstable
 
   [ Daniel van Vugt ]
-  * New upstream release 50.rc
+  * New upstream release 50.0
   * Refresh patches:
     - workarounds/tests-Skip-thread-priority-test.patch
   * Bump dependencies:
