@@ -1,4 +1,4 @@
-mutter (50.0-0ubuntu1) UNRELEASED; urgency=medium
+mutter (50.0-0ubuntu1) resolute; urgency=medium
 
   * New upstream release 50.0
   * Refresh patches:
@@ -7,7 +7,7 @@ mutter (50.0-0ubuntu1) UNRELEASED; urgency=medium
     - ubuntu/window-Add-ability-to-override-the-edge-constraints.patch
     - ubuntu/window-Use-snapd-socket-to-get-the-application-ID.patch
 
- -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Mon, 16 Mar 2026 15:54:53 +0800
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Mon, 16 Mar 2026 16:01:49 +0800
 
 mutter (50~rc-0ubuntu1) resolute; urgency=medium
 
