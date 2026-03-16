@@ -10,6 +10,7 @@ mutter (50.0-1) UNRELEASED; urgency=medium
   * Bump dependencies:
     - wayland-protocols >= 1.47
     - pipewire >= 1.6.0
+  * Update symbols files for 50.0
 
  -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 05 Mar 2026 15:31:41 +0800
 

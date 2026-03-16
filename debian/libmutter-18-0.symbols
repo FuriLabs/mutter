@@ -495,12 +495,10 @@ libmutter-18.so.0 libmutter-18-0 #MINVER#
  meta_monitor_manager_native_get_type@Base 47.0
  meta_monitor_manager_read_current_state@Base 45.1
  meta_monitor_manager_rebuild@Base 43.0
- meta_monitor_manager_rebuild_derived@Base 43.0
  meta_monitor_manager_reconfigure@Base 43.0
  meta_monitor_manager_reload@Base 43.0
  meta_monitor_manager_switch_config@Base 43.0
  meta_monitor_manager_update_logical_state@Base 43.0
- meta_monitor_manager_update_logical_state_derived@Base 43.0
  meta_monitor_mode_foreach_crtc@Base 43.0
  meta_monitor_mode_foreach_output@Base 43.0
  meta_monitor_mode_get_flags@Base 43.0
@@ -865,7 +863,9 @@ libmutter-18.so.0 libmutter-18-0 #MINVER#
  meta_window_get_id@Base 43.0
  meta_window_get_layer@Base 43.0
  meta_window_get_main_logical_monitor@Base 47.0
+ meta_window_get_max_size@Base 50.0
  meta_window_get_maximize_flags@Base 49.0
+ meta_window_get_min_size@Base 50.0
  meta_window_get_monitor@Base 43.0
  meta_window_get_mutter_hints@Base 43.0
  meta_window_get_pid@Base 43.0
@@ -1057,6 +1057,7 @@ libmutter-clutter-18.so.0 libmutter-18-0 #MINVER#
  clutter_actor_box_set_origin@Base 43.0
  clutter_actor_box_set_size@Base 43.0
  clutter_actor_box_union@Base 43.0
+ clutter_actor_class_get_binding_pool@Base 50.0
  clutter_actor_class_get_layout_manager_type@Base 46.0
  clutter_actor_class_set_layout_manager_type@Base 46.0
  clutter_actor_clear_actions@Base 43.0
@@ -1727,6 +1728,12 @@ libmutter-clutter-18.so.0 libmutter-18-0 #MINVER#
  clutter_interval_set_initial_value@Base 43.0
  clutter_interval_set_interval@Base 43.0
  clutter_interval_validate@Base 43.0
+ clutter_key_controller_get_key@Base 50.0
+ clutter_key_controller_get_state@Base 50.0
+ clutter_key_controller_get_trigger_keybindings@Base 50.0
+ clutter_key_controller_get_type@Base 50.0
+ clutter_key_controller_new@Base 50.0
+ clutter_key_controller_set_trigger_keybindings@Base 50.0
  clutter_key_focus_get_type@Base 49.0
  clutter_key_state_get_type@Base 43.0
  clutter_keyframe_transition_clear@Base 43.0
@@ -1779,6 +1786,8 @@ libmutter-clutter-18.so.0 libmutter-18-0 #MINVER#
  clutter_margin_get_type@Base 43.0
  clutter_margin_new@Base 43.0
  clutter_modifier_type_get_type@Base 43.0
+ clutter_motion_controller_get_type@Base 50.0
+ clutter_motion_controller_new@Base 50.0
  clutter_offscreen_effect_create_texture@Base 43.0
  clutter_offscreen_effect_get_pipeline@Base 43.0
  clutter_offscreen_effect_get_target_size@Base 43.0
@@ -1921,6 +1930,9 @@ libmutter-clutter-18.so.0 libmutter-18-0 #MINVER#
  clutter_root_node_new@Base 43.0
  clutter_rotate_axis_get_type@Base 43.0
  clutter_scaling_filter_get_type@Base 43.0
+ clutter_scroll_controller_flags_get_type@Base 50.0
+ clutter_scroll_controller_get_type@Base 50.0
+ clutter_scroll_controller_new@Base 50.0
  clutter_scroll_direction_get_type@Base 43.0
  clutter_scroll_finish_flags_get_type@Base 43.0
  clutter_scroll_flags_get_type@Base 49.0
