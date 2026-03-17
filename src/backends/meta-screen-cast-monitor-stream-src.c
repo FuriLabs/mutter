@@ -312,9 +312,6 @@ sync_cursor_state (MetaScreenCastMonitorStreamSrc *monitor_src)
   if (is_redraw_queued (monitor_src))
     return;
 
-  if (meta_screen_cast_stream_src_pending_follow_up_frame (src))
-    return;
-
   flags = META_SCREEN_CAST_RECORD_FLAG_CURSOR_ONLY;
   paint_phase = META_SCREEN_CAST_PAINT_PHASE_DETACHED;
   meta_screen_cast_stream_src_maybe_record_frame (src, flags,
@@ -420,12 +417,15 @@ add_view_watches (MetaScreenCastMonitorStreamSrc *monitor_src,
 }
 
 static void
-reattach_watches (MetaScreenCastMonitorStreamSrc *monitor_src)
+maybe_reattach_watches (MetaScreenCastMonitorStreamSrc *monitor_src)
 {
   MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (monitor_src);
   MetaScreenCastStream *stream;
   ClutterStage *stage;
   GList *l;
+
+  if (!meta_screen_cast_stream_src_is_enabled (src))
+    return;
 
   stream = meta_screen_cast_stream_src_get_stream (src);
   stage = get_stage (monitor_src);
@@ -469,7 +469,7 @@ on_monitors_changed (MetaMonitorManager             *monitor_manager,
   MtkRectangle layout = meta_logical_monitor_get_layout (logical_monitor);
 
   g_object_set (G_OBJECT (src), "layout", &layout, NULL);
-  reattach_watches (monitor_src);
+  maybe_reattach_watches (monitor_src);
 }
 
 static void
@@ -511,7 +511,7 @@ meta_screen_cast_monitor_stream_src_enable (MetaScreenCastStreamSrc *src)
       break;
     }
 
-  reattach_watches (monitor_src);
+  maybe_reattach_watches (monitor_src);
   g_signal_connect_object (monitor_manager, "monitors-changed-internal",
                            G_CALLBACK (on_monitors_changed),
                            monitor_src, 0);
@@ -751,7 +751,8 @@ stage_paint:
 }
 
 static void
-meta_screen_cast_monitor_stream_record_follow_up (MetaScreenCastStreamSrc *src)
+meta_screen_cast_monitor_stream_queue_follow_up (MetaScreenCastStreamSrc  *src,
+                                                 MetaScreenCastRecordFlag  flags)
 {
   MetaScreenCastMonitorStreamSrc *monitor_src =
     META_SCREEN_CAST_MONITOR_STREAM_SRC (src);
@@ -762,6 +763,13 @@ meta_screen_cast_monitor_stream_record_follow_up (MetaScreenCastStreamSrc *src)
   MetaLogicalMonitor *logical_monitor;
   MtkRectangle logical_monitor_layout;
   GList *l;
+
+  if (flags & META_SCREEN_CAST_RECORD_FLAG_CURSOR_ONLY &&
+      !monitor_src->maybe_record_idle_id)
+    {
+      clutter_stage_schedule_update (stage);
+      return;
+    }
 
   g_clear_handle_id (&monitor_src->maybe_record_idle_id, g_source_remove);
 
@@ -960,8 +968,8 @@ meta_screen_cast_monitor_stream_src_class_init (MetaScreenCastMonitorStreamSrcCl
     meta_screen_cast_monitor_stream_src_record_to_buffer;
   src_class->record_to_framebuffer =
     meta_screen_cast_monitor_stream_src_record_to_framebuffer;
-  src_class->record_follow_up =
-    meta_screen_cast_monitor_stream_record_follow_up;
+  src_class->queue_follow_up =
+    meta_screen_cast_monitor_stream_queue_follow_up;
   src_class->set_cursor_metadata =
     meta_screen_cast_monitor_stream_src_set_cursor_metadata;
 }

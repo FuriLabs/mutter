@@ -83,7 +83,8 @@ struct _MetaScreenCastStreamSrcClass
                                       MetaScreenCastPaintPhase   paint_phase,
                                       CoglFramebuffer           *framebuffer,
                                       GError                   **error);
-  void (* record_follow_up) (MetaScreenCastStreamSrc *src);
+  void (* queue_follow_up) (MetaScreenCastStreamSrc  *src,
+                            MetaScreenCastRecordFlag  flags);
 
   gboolean (* get_videocrop) (MetaScreenCastStreamSrc *src,
                               MtkRectangle            *crop_rect);
@@ -132,8 +133,6 @@ MetaScreenCastRecordResult meta_screen_cast_stream_src_record_frame_with_timesta
 gboolean meta_screen_cast_stream_src_is_driving (MetaScreenCastStreamSrc *src);
 
 void meta_screen_cast_stream_src_request_process (MetaScreenCastStreamSrc *src);
-
-gboolean meta_screen_cast_stream_src_pending_follow_up_frame (MetaScreenCastStreamSrc *src);
 
 MetaScreenCastStream * meta_screen_cast_stream_src_get_stream (MetaScreenCastStreamSrc *src);
 
