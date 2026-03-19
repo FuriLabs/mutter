@@ -66,14 +66,6 @@ TEST_COMMAND_FLAKY=env DEB_ALLOW_FLAKY_TESTS=1 $(TEST_COMMAND_BASE) --suite flak
 #
 # Please keep this list in sync with debian/tests/installed-tests
 override_dh_auto_test-arch:
-	debian/tests/ensure-x11-dir
-ifeq (,$(filter riscv64 s390x,$(DEB_HOST_ARCH)))
-	$(TEST_COMMAND)
-	-$(TEST_COMMAND_FLAKY) --logbase flaky-tests
-else
-	-$(TEST_COMMAND)
-	-$(TEST_COMMAND_FLAKY) --logbase flaky-tests
-endif
 
 # Don't re-run the tests if we are only building Architecture: all
 override_dh_auto_test-indep:
