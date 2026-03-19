@@ -37,6 +37,11 @@ typedef struct _MetaWaylandVirtualPointer
   gboolean have_last_coords;
 
   enum wl_pointer_axis_source axis_source;
+
+  double pending_scroll_dx;
+  double pending_scroll_dy;
+  uint64_t pending_scroll_ts_us;
+  gboolean have_pending_scroll;
 } MetaWaylandVirtualPointer;
 
 #ifndef BTN_LEFT
@@ -138,7 +143,7 @@ scroll_source_from_wl (enum wl_pointer_axis_source src)
   case WL_POINTER_AXIS_SOURCE_CONTINUOUS:
     return CLUTTER_SCROLL_SOURCE_CONTINUOUS;
   default:
-    return CLUTTER_SCROLL_SOURCE_WHEEL;
+    return CLUTTER_SCROLL_SOURCE_FINGER;
   }
 }
 
@@ -171,16 +176,19 @@ zwlr_virtual_pointer_v1_motion (struct wl_client   *client,
                                 wl_fixed_t          dy)
 {
   MetaWaylandVirtualPointer *vp = wl_resource_get_user_data (resource);
+  uint64_t ts_us;
+  float w, h;
+  double ddx, ddy;
+  float max_x, max_y;
+
   (void) client;
 
   if (!vp || !vp->virtual_pointer)
     return;
 
-  uint64_t ts_us = (uint64_t) time * 1000;
-  float w, h;
-
-  const double ddx = wl_fixed_to_double (dx);
-  const double ddy = wl_fixed_to_double (dy);
+  ts_us = (uint64_t) time * 1000;
+  ddx = wl_fixed_to_double (dx);
+  ddy = wl_fixed_to_double (dy);
 
   ensure_pointer_initialized (vp, ts_us);
   get_stage_size (vp->compositor, &w, &h);
@@ -189,8 +197,8 @@ zwlr_virtual_pointer_v1_motion (struct wl_client   *client,
   vp->last_coords.y += (float) ddy;
 
   /* clamp to stage bounds */
-  const float max_x = (w > 1.0f) ? (w - 1.0f) : 0.0f;
-  const float max_y = (h > 1.0f) ? (h - 1.0f) : 0.0f;
+  max_x = (w > 1.0f) ? (w - 1.0f) : 0.0f;
+  max_y = (h > 1.0f) ? (h - 1.0f) : 0.0f;
 
   if (vp->last_coords.x < 0.0f)
     vp->last_coords.x = 0.0f;
@@ -217,13 +225,16 @@ zwlr_virtual_pointer_v1_motion_absolute (struct wl_client   *client,
                                          uint32_t            y_extent)
 {
   MetaWaylandVirtualPointer *vp = wl_resource_get_user_data (resource);
+  uint64_t ts_us;
+  float stage_w, stage_h;
+  double abs_x, abs_y;
+
   (void) client;
 
   if (!vp || !vp->virtual_pointer)
     return;
 
-  uint64_t ts_us = (uint64_t) time * 1000;
-  float stage_w, stage_h;
+  ts_us = (uint64_t) time * 1000;
 
   if (x_extent == 0)
     x_extent = 1;
@@ -232,8 +243,8 @@ zwlr_virtual_pointer_v1_motion_absolute (struct wl_client   *client,
 
   get_stage_size (vp->compositor, &stage_w, &stage_h);
 
-  const double abs_x = ((double) x * (double) stage_w) / (double) x_extent;
-  const double abs_y = ((double) y * (double) stage_h) / (double) y_extent;
+  abs_x = ((double) x * (double) stage_w) / (double) x_extent;
+  abs_y = ((double) y * (double) stage_h) / (double) y_extent;
 
   vp->last_coords.x = (float) abs_x;
   vp->last_coords.y = (float) abs_y;
@@ -253,19 +264,23 @@ zwlr_virtual_pointer_v1_button (struct wl_client   *client,
                                 uint32_t            state)
 {
   MetaWaylandVirtualPointer *vp = wl_resource_get_user_data (resource);
+  ClutterButtonState bs;
+  uint64_t ts_us;
+  uint32_t logical;
+
   (void) client;
 
   if (!vp || !vp->virtual_pointer)
     return;
 
-  uint64_t ts_us = (uint64_t) time * 1000;
+  ts_us = (uint64_t) time * 1000;
 
-  uint32_t logical = evdev_button_to_logical (button);
+  logical = evdev_button_to_logical (button);
   if (logical == 0)
     return;
 
-  ClutterButtonState bs = (state == WL_POINTER_BUTTON_STATE_PRESSED) ? CLUTTER_BUTTON_STATE_PRESSED
-                                                                     : CLUTTER_BUTTON_STATE_RELEASED;
+  bs = (state == WL_POINTER_BUTTON_STATE_PRESSED) ? CLUTTER_BUTTON_STATE_PRESSED
+                                                  : CLUTTER_BUTTON_STATE_RELEASED;
 
   clutter_virtual_input_device_notify_button (vp->virtual_pointer,
                                               ts_us,
@@ -281,35 +296,55 @@ zwlr_virtual_pointer_v1_axis (struct wl_client   *client,
                               wl_fixed_t          value)
 {
   MetaWaylandVirtualPointer *vp = wl_resource_get_user_data (resource);
+  double dvalue;
+
   (void) client;
 
   if (!vp || !vp->virtual_pointer)
     return;
 
-  uint64_t ts_us = (uint64_t) time * 1000;
+  dvalue = wl_fixed_to_double (value);
 
-  double dx = 0.0, dy = 0.0;
   if (axis == WL_POINTER_AXIS_VERTICAL_SCROLL)
-    dy = wl_fixed_to_double (value);
+    vp->pending_scroll_dy += dvalue;
   else if (axis == WL_POINTER_AXIS_HORIZONTAL_SCROLL)
-    dx = wl_fixed_to_double (value);
+    vp->pending_scroll_dx += dvalue;
   else
     return;
 
-  clutter_virtual_input_device_notify_scroll_continuous (vp->virtual_pointer,
-                                                         ts_us,
-                                                         dx,
-                                                         dy,
-                                                         scroll_source_from_wl (vp->axis_source),
-                                                         0);
+  vp->pending_scroll_ts_us = (uint64_t) time * 1000;
+  vp->have_pending_scroll = TRUE;
 }
 
 static void
 zwlr_virtual_pointer_v1_frame (struct wl_client   *client,
                                struct wl_resource *resource)
 {
+  MetaWaylandVirtualPointer *vp = wl_resource_get_user_data (resource);
+  ClutterScrollSource source;
+
   (void) client;
-  (void) resource;
+
+  if (!vp || !vp->virtual_pointer)
+    return;
+
+  if (!vp->have_pending_scroll)
+    return;
+
+  source = scroll_source_from_wl (vp->axis_source);
+
+  clutter_virtual_input_device_notify_scroll_continuous (vp->virtual_pointer,
+                                                         vp->pending_scroll_ts_us,
+                                                         vp->pending_scroll_dx,
+                                                         vp->pending_scroll_dy,
+                                                         source,
+                                                         0);
+
+  vp->pending_scroll_dx = 0.0;
+  vp->pending_scroll_dy = 0.0;
+  vp->pending_scroll_ts_us = 0;
+  vp->have_pending_scroll = FALSE;
+  vp->axis_source = WL_POINTER_AXIS_SOURCE_FINGER;
 }
 
 static void
@@ -403,7 +438,11 @@ zwlr_virtual_pointer_manager_v1_create_virtual_pointer (struct wl_client   *clie
 
   vp = g_new0 (MetaWaylandVirtualPointer, 1);
   vp->compositor = compositor;
-  vp->axis_source = WL_POINTER_AXIS_SOURCE_WHEEL;
+  vp->axis_source = WL_POINTER_AXIS_SOURCE_FINGER;
+  vp->pending_scroll_dx = 0.0;
+  vp->pending_scroll_dy = 0.0;
+  vp->pending_scroll_ts_us = 0;
+  vp->have_pending_scroll = FALSE;
 
   vp->virtual_pointer = create_virtual_pointer_device (compositor);
   if (!vp->virtual_pointer) {
