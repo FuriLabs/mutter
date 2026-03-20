@@ -102,6 +102,10 @@ typedef struct _MetaWaylandCompositorPrivate
 
   MetaWaylandFilterManager *filter_manager;
   GHashTable *frame_callback_sources;
+
+#ifdef HAVE_XWAYLAND
+  guint delayed_x11_env_source_id;
+#endif
 } MetaWaylandCompositorPrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (MetaWaylandCompositor, meta_wayland_compositor,
@@ -779,6 +783,23 @@ set_gnome_env (const char *name,
   return TRUE;
 }
 
+#ifdef HAVE_XWAYLAND
+static gboolean
+set_delayed_x11_env_cb (gpointer user_data)
+{
+  MetaWaylandCompositor *compositor = META_WAYLAND_COMPOSITOR (user_data);
+  MetaWaylandCompositorPrivate *priv =
+    meta_wayland_compositor_get_instance_private (compositor);
+
+  priv->delayed_x11_env_source_id = 0;
+
+  set_gnome_env ("DISPLAY",
+                 compositor->xwayland_manager.public_connection.name);
+
+  return G_SOURCE_REMOVE;
+}
+#endif
+
 static void meta_wayland_log_func (const char *, va_list) G_GNUC_PRINTF (1, 0);
 
 static void
@@ -820,6 +841,10 @@ meta_wayland_compositor_finalize (GObject *object)
     meta_wayland_compositor_get_instance_private (compositor);
   MetaBackend *backend = meta_context_get_backend (compositor->context);
   ClutterActor *stage = meta_backend_get_stage (backend);
+
+#ifdef HAVE_XWAYLAND
+  g_clear_handle_id (&priv->delayed_x11_env_source_id, g_source_remove);
+#endif
 
   meta_wayland_xdg_session_management_finalize (compositor);
   meta_wayland_activation_finalize (compositor);
@@ -962,6 +987,7 @@ meta_wayland_compositor_new (MetaContext *context)
   MetaBackend *backend = meta_context_get_backend (context);
   ClutterActor *stage = meta_backend_get_stage (backend);
   MetaWaylandCompositor *compositor;
+  MetaWaylandCompositorPrivate *priv;
   GSource *wayland_event_source;
 #ifdef HAVE_XWAYLAND
   MetaX11DisplayPolicy x11_display_policy;
@@ -969,6 +995,7 @@ meta_wayland_compositor_new (MetaContext *context)
 
   compositor = g_object_new (META_TYPE_WAYLAND_COMPOSITOR, NULL);
   compositor->context = context;
+  priv = meta_wayland_compositor_get_instance_private (compositor);
 
   wl_display_set_default_max_buffer_size (compositor->wayland_display,
                                           1024 * 1024);
@@ -1110,11 +1137,21 @@ meta_wayland_compositor_new (MetaContext *context)
       status &=
         set_gnome_env ("GNOME_SETUP_DISPLAY", compositor->xwayland_manager.private_connection.name);
       status &=
-        set_gnome_env ("DISPLAY", compositor->xwayland_manager.public_connection.name);
-      status &=
         set_gnome_env ("XAUTHORITY", compositor->xwayland_manager.auth_file);
 
       meta_xwayland_set_should_enable_ei_portal (&compositor->xwayland_manager, status);
+
+      /*
+       * Delay exporting DISPLAY so early startup code in gnome-shell
+       * doesn't try to talk to X11/Pulse through Xwayland before the
+       * nested session has settled.
+       */
+      priv->delayed_x11_env_source_id =
+        g_timeout_add_seconds_full (G_PRIORITY_DEFAULT,
+                                    10,
+                                    set_delayed_x11_env_cb,
+                                    g_object_ref (compositor),
+                                    g_object_unref);
     }
 #endif
 
