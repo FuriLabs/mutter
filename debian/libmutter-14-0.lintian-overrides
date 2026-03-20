@@ -1,2 +1,5 @@
 # Ubuntu-only exported symbols that are outside public API for extensions usage
 libmutter-14-0 binary: symbols-file-contains-debian-revision on symbol meta_window_override_constraints@Base (libmutter-14.so.0) [symbols]
+
+# Symbols added by a patch should include the debian revision
+libmutter-14-0 binary: symbols-file-contains-current-version-with-debian-revision on symbol clutter_grab_activate@Base and 1 others (libmutter-clutter-14.so.0) [symbols]
