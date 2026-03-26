@@ -16,8 +16,10 @@ mutter (50.0-1) UNRELEASED; urgency=medium
     - libgtk-4-dev 4.22.0
     - libpipewire-0.3-dev 1.6.1
   * d/copyright: Update
+  * d/watch: Convert to v5 format
+  * Update Lintian overrides
 
- -- Simon McVittie <smcv@debian.org>  Thu, 26 Mar 2026 10:31:44 +0000
+ -- Simon McVittie <smcv@debian.org>  Thu, 26 Mar 2026 11:50:42 +0000
 
 mutter (50~beta-2) experimental; urgency=medium
 
