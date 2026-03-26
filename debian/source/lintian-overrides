@@ -1,2 +1,3 @@
 # We export these in debian/rules
+dh-exec-subst-unknown-variable MUTTER_API_VERSION [debian/mutter-*-tests.install:*]
 dh-exec-subst-unknown-variable env:deb_udevdir [debian/mutter-common.install:*]
