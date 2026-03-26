@@ -1,8 +1,5 @@
 mutter (50.0-1) UNRELEASED; urgency=medium
 
-  [ Simon McVittie ]
-  * Merge packaging from unstable
-
   [ Daniel van Vugt ]
   * New upstream release 50.0
   * Refresh patches:
@@ -12,7 +9,15 @@ mutter (50.0-1) UNRELEASED; urgency=medium
     - pipewire >= 1.6.0
   * Update symbols files for 50.0
 
- -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 05 Mar 2026 15:31:41 +0800
+  [ Simon McVittie ]
+  * Merge packaging from unstable
+  * d/control: Bump dependency versions to those recommended by upstream CI
+    - gsettings-desktop-schemas-dev 50~alpha
+    - libgtk-4-dev 4.22.0
+    - libpipewire-0.3-dev 1.6.1
+  * d/copyright: Update
+
+ -- Simon McVittie <smcv@debian.org>  Thu, 26 Mar 2026 10:31:44 +0000
 
 mutter (50~beta-2) experimental; urgency=medium
 
