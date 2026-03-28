@@ -1,4 +1,6 @@
-mutter (50.0-1) UNRELEASED; urgency=medium
+mutter (50.0-1) experimental; urgency=medium
+
+  * Team upload
 
   [ Daniel van Vugt ]
   * New upstream release 50.0
@@ -19,7 +21,7 @@ mutter (50.0-1) UNRELEASED; urgency=medium
   * d/watch: Convert to v5 format
   * Update Lintian overrides
 
- -- Simon McVittie <smcv@debian.org>  Thu, 26 Mar 2026 11:50:42 +0000
+ -- Simon McVittie <smcv@debian.org>  Sat, 28 Mar 2026 20:50:32 +0000
 
 mutter (50~beta-2) experimental; urgency=medium
 
