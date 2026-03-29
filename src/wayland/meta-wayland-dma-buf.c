@@ -286,20 +286,27 @@ meta_wayland_dma_buf_tranche_send (MetaWaylandDmaBufTranche *tranche,
 }
 
 static void
-meta_wayland_dma_buf_feedback_send (MetaWaylandDmaBufFeedback *feedback,
-                                    MetaWaylandDmaBufManager  *dma_buf_manager,
-                                    struct wl_resource        *resource)
+meta_wayland_dma_buf_feedback_send_format_table (MetaWaylandDmaBufFeedback *feedback,
+                                                 MetaWaylandDmaBufManager  *dma_buf_manager,
+                                                 struct wl_resource        *resource)
 {
   size_t size;
   int fd;
-  struct wl_array main_device_buf;
-  dev_t *device_id_ptr;
 
   fd = meta_anonymous_file_open_fd (dma_buf_manager->format_table_file,
                                     META_ANONYMOUS_FILE_MAPMODE_PRIVATE);
   size = meta_anonymous_file_size (dma_buf_manager->format_table_file);
   zwp_linux_dmabuf_feedback_v1_send_format_table (resource, fd, size);
   meta_anonymous_file_close_fd (fd);
+}
+
+static void
+meta_wayland_dma_buf_feedback_send (MetaWaylandDmaBufFeedback *feedback,
+                                    MetaWaylandDmaBufManager  *dma_buf_manager,
+                                    struct wl_resource        *resource)
+{
+  struct wl_array main_device_buf;
+  dev_t *device_id_ptr;
 
   wl_array_init (&main_device_buf);
   device_id_ptr = wl_array_add (&main_device_buf, sizeof (*device_id_ptr));
@@ -631,12 +638,15 @@ crtc_supports_modifier (MetaCrtcKms *crtc_kms,
 
   g_return_val_if_fail (plane, FALSE);
 
-  crtc_modifiers = meta_kms_plane_get_modifiers_for_format (plane, drm_format);
-  if (!crtc_modifiers)
+  if (!meta_kms_plane_is_format_supported (plane, drm_format))
     return FALSE;
 
   if (drm_modifier == DRM_FORMAT_MOD_INVALID)
     return TRUE;
+
+  crtc_modifiers = meta_kms_plane_get_modifiers_for_format (plane, drm_format);
+  if (!crtc_modifiers)
+    return FALSE;
 
   return has_modifier (crtc_modifiers, drm_modifier);
 }
@@ -1355,6 +1365,9 @@ dma_buf_handle_get_default_feedback (struct wl_client   *client,
                                   NULL,
                                   feedback_destructor);
 
+  meta_wayland_dma_buf_feedback_send_format_table (dma_buf_manager->default_feedback,
+                                                   dma_buf_manager,
+                                                   feedback_resource);
   meta_wayland_dma_buf_feedback_send (dma_buf_manager->default_feedback,
                                       dma_buf_manager,
                                       feedback_resource);
@@ -1620,6 +1633,9 @@ dma_buf_handle_get_surface_feedback (struct wl_client   *client,
   surface_feedback->resources = g_list_prepend (surface_feedback->resources,
                                                 feedback_resource);
 
+  meta_wayland_dma_buf_feedback_send_format_table (surface_feedback->feedback,
+                                                   dma_buf_manager,
+                                                   feedback_resource);
   meta_wayland_dma_buf_feedback_send (surface_feedback->feedback,
                                       dma_buf_manager,
                                       feedback_resource);
