@@ -143,6 +143,7 @@ libdisplay_info_dep = dependency('libdisplay-info', version: libdisplay_info_req
 libdrm_dep = dependency('libdrm', version: libdrm_req)
 
 have_xwayland = get_option('xwayland')
+have_wayland_nested = get_option('xwayland')
 
 have_fonts = get_option('fonts')
 
@@ -558,6 +559,7 @@ cdata.set('HAVE_EGL', have_egl)
 cdata.set('HAVE_GL', have_gl)
 cdata.set('HAVE_GLES2', have_gles2)
 cdata.set('HAVE_XWAYLAND', have_xwayland)
+cdata.set('HAVE_WAYLAND_NESTED', have_wayland_nested)
 cdata.set('HAVE_LOGIND', have_logind)
 cdata.set('HAVE_NATIVE_BACKEND', have_native_backend)
 cdata.set('HAVE_REMOTE_DESKTOP', have_remote_desktop)
@@ -748,6 +750,7 @@ summary('EGL', have_egl, section: 'Rendering APIs')
 
 summary('Wayland EGLStream', have_wayland_eglstream, section: 'Options')
 summary('XWayland', have_xwayland, section: 'Options')
+summary('Wayland nested', have_wayland_nested, section: 'Options')
 summary('Native Backend', have_native_backend, section: 'Options')
 summary('EGL Device', have_egl_device, section: 'Options')
 summary('Remote desktop', have_remote_desktop, section: 'Options')

@@ -34,6 +34,12 @@ option('xwayland',
   description: 'Enable Xwayland support'
 )
 
+option('wayland',
+  type: 'boolean',
+  value: true,
+  description: 'Enable Wayland nested support'
+)
+
 option('logind',
   type: 'boolean',
   value: true,
