@@ -18,6 +18,7 @@ mutter_pkg_deps = [
   glib_dep,
   gsettings_desktop_schemas_dep,
   wayland_server_dep,
+  wayland_client_dep,
 ]
 
 mutter_pkg_private_deps = [
@@ -670,6 +671,39 @@ mutter_sources += [
   'wayland/meta-window-wayland.c',
   'wayland/meta-window-wayland.h',
 ]
+
+if have_wayland_nested
+  mutter_sources += [
+    'backends/wayland-nested/meta-backend-wayland-nested.c',
+    'backends/wayland-nested/meta-backend-wayland-nested.h',
+    'backends/wayland-nested/meta-renderer-wayland-nested.c',
+    'backends/wayland-nested/meta-renderer-wayland-nested.h',
+    'backends/wayland-nested/meta-clutter-backend-wayland-nested.c',
+    'backends/wayland-nested/meta-clutter-backend-wayland-nested.h',
+    'backends/wayland-nested/meta-cursor-renderer-wayland-nested.c',
+    'backends/wayland-nested/meta-cursor-renderer-wayland-nested.h',
+    'backends/wayland-nested/meta-sprite-wayland-nested.c',
+    'backends/wayland-nested/meta-sprite-wayland-nested.h',
+    'backends/wayland-nested/meta-seat-wayland-nested.c',
+    'backends/wayland-nested/meta-seat-wayland-nested.h',
+    'backends/wayland-nested/meta-stage-wayland-nested.c',
+    'backends/wayland-nested/meta-stage-wayland-nested.h',
+    'backends/wayland-nested/meta-barrier-wayland-nested.c',
+    'backends/wayland-nested/meta-barrier-wayland-nested.h',
+    'backends/wayland-nested/meta-monitor-manager-wayland-nested.c',
+    'backends/wayland-nested/meta-monitor-manager-wayland-nested.h',
+    'backends/wayland-nested/meta-gpu-wayland-nested.c',
+    'backends/wayland-nested/meta-gpu-wayland-nested.h',
+    'backends/wayland-nested/meta-virtual-input-device-wayland-nested.c',
+    'backends/wayland-nested/meta-virtual-input-device-wayland-nested.h',
+    'backends/wayland-nested/meta-keymap-wayland-nested.c',
+    'backends/wayland-nested/meta-keymap-wayland-nested.h',
+    'backends/wayland-nested/meta-input-device-wayland-nested.c',
+    'backends/wayland-nested/meta-input-device-wayland-nested.h',
+    'backends/wayland-nested/meta-input-settings-wayland-nested.c',
+    'backends/wayland-nested/meta-input-settings-wayland-nested.h',
+  ]
+endif
 
 if have_native_backend
   mutter_sources += [
