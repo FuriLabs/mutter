@@ -43,11 +43,18 @@
 #include "core/meta-mdk.h"
 #endif
 
+#ifdef HAVE_WAYLAND_NESTED
+#include "backends/wayland-nested/meta-backend-wayland-nested.h"
+#endif
+
 typedef struct _MetaContextMainOptions
 {
   gboolean wayland;
   gboolean no_x11;
   char *wayland_display;
+#ifdef HAVE_WAYLAND_NESTED
+  gboolean nested;
+#endif
 #ifdef HAVE_NATIVE_BACKEND
   gboolean display_server;
   gboolean headless;
@@ -243,6 +250,18 @@ meta_context_main_setup (MetaContext  *context,
   return TRUE;
 }
 
+#ifdef HAVE_WAYLAND_NESTED
+static MetaBackend *
+create_nested_backend (MetaContext  *context,
+                       GError	   **error)
+{
+  return g_initable_new (META_TYPE_BACKEND_WAYLAND_NESTED,
+                         NULL, error,
+                         "context", context,
+                         NULL);
+}
+#endif
+
 #ifdef HAVE_NATIVE_BACKEND
 static MetaBackend *
 create_headless_backend (MetaContext  *context,
@@ -271,6 +290,11 @@ meta_context_main_create_backend (MetaContext  *context,
                                   GError      **error)
 {
   MetaContextMain *context_main = META_CONTEXT_MAIN (context);
+
+#ifdef HAVE_WAYLAND_NESTED
+  if (context_main->options.nested)
+    return create_nested_backend (context, error);
+#endif
 
 #ifdef HAVE_NATIVE_BACKEND
   if (context_main->options.headless ||
@@ -392,6 +416,14 @@ meta_context_main_add_option_entries (MetaContextMain *context_main)
       "devkit", 0, 0, G_OPTION_ARG_NONE,
       &context_main->options.devkit,
       N_("Run development kit")
+    },
+#endif
+#ifdef HAVE_WAYLAND_NESTED
+    {
+      "nested", 0, 0, G_OPTION_ARG_NONE,
+      &context_main->options.nested,
+      N_("Run as a nested compositor"),
+      NULL
     },
 #endif
     {

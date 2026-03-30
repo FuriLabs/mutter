@@ -22,6 +22,11 @@
 #include "backends/native/meta-barrier-native.h"
 #endif
 
+#ifdef HAVE_WAYLAND_NESTED
+#include "backends/wayland-nested/meta-backend-wayland-nested.h"
+#include "backends/wayland-nested/meta-barrier-wayland-nested.h"
+#endif
+
 typedef struct _MetaBarrierPrivate
 {
   MetaBackend *backend;
@@ -244,6 +249,11 @@ init_barrier_impl (MetaBarrier *barrier)
 #if defined(HAVE_NATIVE_BACKEND)
   if (META_IS_BACKEND_NATIVE (priv->backend))
     priv->impl = meta_barrier_impl_native_new (barrier);
+#endif
+
+#ifdef HAVE_WAYLAND_NESTED
+  if (META_IS_BACKEND_WAYLAND_NESTED (priv->backend))
+    priv->impl = meta_barrier_impl_wayland_nested_new (barrier);
 #endif
 
   g_warn_if_fail (priv->impl);

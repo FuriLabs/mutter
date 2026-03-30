@@ -84,6 +84,10 @@
 #include "backends/native/meta-backend-native.h"
 #endif
 
+#ifdef HAVE_WAYLAND_NESTED
+#include "backends/wayland-nested/meta-backend-wayland-nested.h"
+#endif
+
 /*
  * Sometimes we want to see whether a window is responding,
  * so we send it a "ping" message and see whether it sends us back a "pong"
@@ -577,6 +581,11 @@ create_compositor (MetaDisplay *display)
   if (META_IS_BACKEND_NATIVE (backend))
     return META_COMPOSITOR (meta_compositor_native_new (display, backend));
 #endif
+#ifdef HAVE_WAYLAND_NESTED
+  if (META_IS_BACKEND_WAYLAND_NESTED (backend))
+    return META_COMPOSITOR (meta_compositor_server_new (display, backend));
+#endif
+
   g_assert_not_reached ();
 }
 
