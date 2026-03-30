@@ -27,18 +27,10 @@
 CLUTTER_EXPORT
 void clutter_seat_destroy (ClutterSeat *seat);
 
-ClutterGrabState clutter_seat_grab (ClutterSeat *seat,
-                                    uint32_t     time);
-void clutter_seat_ungrab (ClutterSeat *seat,
-                          uint32_t     time);
-
 CLUTTER_EXPORT
 void clutter_seat_init_pointer_position (ClutterSeat *seat,
                                          float        x,
                                          float        y);
 
 CLUTTER_EXPORT
-ClutterInputDevice * clutter_seat_get_pointer (ClutterSeat *seat);
-
-CLUTTER_EXPORT
-ClutterInputDevice * clutter_seat_get_keyboard (ClutterSeat *seat);
+ClutterInputDevice * clutter_seat_get_virtual_source_pointer (ClutterSeat *seat);

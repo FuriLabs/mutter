@@ -2072,6 +2072,11 @@ handle_text (GMarkupParseContext *context,
             parser->current_monitor_config->color_mode =
               META_COLOR_MODE_DEFAULT;
           }
+        else if (text_equals (text, text_len, "sdr-native"))
+          {
+            parser->current_monitor_config->color_mode =
+              META_COLOR_MODE_SDR_NATIVE;
+          }
         else if (text_equals (text, text_len, "bt2100"))
           {
             parser->current_monitor_config->color_mode =
@@ -2140,10 +2145,10 @@ read_config_file (MetaMonitorConfigStore  *config_store,
                   gboolean                *should_update_file,
                   GError                 **error)
 {
-  char *buffer;
+  g_autofree char *buffer = NULL;
   gsize size;
   ConfigParser parser;
-  GMarkupParseContext *parse_context;
+  g_autoptr (GMarkupParseContext) parse_context = NULL;
 
   if (!g_file_load_contents (file, NULL, &buffer, &size, NULL, error))
     return FALSE;
@@ -2184,9 +2189,6 @@ read_config_file (MetaMonitorConfigStore  *config_store,
 
   *out_configs = g_steal_pointer (&parser.pending_configs);
   *should_update_file = parser.should_update_file;
-
-  g_markup_parse_context_free (parse_context);
-  g_free (buffer);
 
   return TRUE;
 }
@@ -2274,6 +2276,9 @@ append_color_mode (GString       *buffer,
     case META_COLOR_MODE_DEFAULT:
     default:
       return;
+    case META_COLOR_MODE_SDR_NATIVE:
+      color_mode_str = "sdr-native";
+      break;
     }
 
   g_string_append_printf (buffer, "%s<colormode>%s</colormode>\n",
@@ -2819,6 +2824,7 @@ meta_monitor_config_store_reset (MetaMonitorConfigStore *config_store)
   g_clear_object (&config_store->custom_write_file);
   g_hash_table_remove_all (config_store->configs);
 
+  g_clear_pointer (&config_store->stores_policy, g_list_free);
   config_store->has_stores_policy = FALSE;
   config_store->policy.enable_dbus = TRUE;
   config_store->has_dbus_policy = FALSE;

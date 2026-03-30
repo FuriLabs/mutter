@@ -55,28 +55,17 @@ typedef struct _CoglOnscreenQueuedDirty
   MtkRectangle info;
 } CoglOnscreenQueuedDirty;
 
-void
-_cogl_framebuffer_winsys_update_size (CoglFramebuffer *framebuffer,
-                                      int width, int height);
-
 COGL_EXPORT void
 _cogl_onscreen_notify_frame_sync (CoglOnscreen *onscreen, CoglFrameInfo *info);
 
 COGL_EXPORT void
 _cogl_onscreen_notify_complete (CoglOnscreen *onscreen, CoglFrameInfo *info);
 
-void
-_cogl_onscreen_queue_dirty (CoglOnscreen       *onscreen,
-                            const MtkRectangle *info);
-
-void
+COGL_EXPORT void
 cogl_onscreen_bind (CoglOnscreen *onscreen);
 
 COGL_EXPORT CoglFrameInfo *
 cogl_onscreen_peek_head_frame_info (CoglOnscreen *onscreen);
-
-COGL_EXPORT CoglFrameInfo *
-cogl_onscreen_peek_tail_frame_info (CoglOnscreen *onscreen);
 
 COGL_EXPORT CoglFrameInfo *
 cogl_onscreen_pop_head_frame_info (CoglOnscreen *onscreen);

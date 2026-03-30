@@ -33,13 +33,10 @@
 #include "core/display-private.h"
 #include "core/window-private.h"
 #include "meta/meta-backend.h"
+#include "wayland/meta-wayland-private.h"
 
 #ifdef HAVE_NATIVE_BACKEND
 #include "backends/native/meta-backend-native.h"
-#endif
-
-#ifdef HAVE_WAYLAND
-#include "wayland/meta-wayland-private.h"
 #endif
 
 #define IS_KEY_EVENT(et) ((et) == CLUTTER_KEY_PRESS || \
@@ -117,47 +114,6 @@ handle_idletime_for_event (MetaDisplay        *display,
 }
 
 static gboolean
-sequence_is_pointer_emulated (MetaDisplay        *display,
-                              const ClutterEvent *event)
-{
-  ClutterEventSequence *sequence;
-
-  sequence = clutter_event_get_event_sequence (event);
-
-  if (!sequence)
-    return FALSE;
-
-  if (clutter_event_get_flags (event) & CLUTTER_EVENT_FLAG_POINTER_EMULATED)
-    return TRUE;
-
-#ifdef HAVE_NATIVE_BACKEND
-  MetaContext *context = meta_display_get_context (display);
-  MetaBackend *backend = meta_context_get_backend (context);
-
-  /* When using Clutter's native input backend there is no concept of
-   * pointer emulating sequence, we still must make up our own to be
-   * able to implement single-touch (hence pointer alike) behavior.
-   *
-   * This is implemented similarly to X11, where only the first touch
-   * on screen gets the "pointer emulated" flag, and it won't get assigned
-   * to another sequence until the next first touch on an idle touchscreen.
-   */
-  if (META_IS_BACKEND_NATIVE (backend))
-    {
-      MetaGestureTracker *tracker;
-
-      tracker = meta_display_get_gesture_tracker (display);
-
-      if (clutter_event_type (event) == CLUTTER_TOUCH_BEGIN &&
-          meta_gesture_tracker_get_n_current_touches (tracker) == 0)
-        return TRUE;
-    }
-#endif /* HAVE_NATIVE_BACKEND */
-
-  return FALSE;
-}
-
-static gboolean
 meta_display_handle_event (MetaDisplay        *display,
                            const ClutterEvent *event,
                            ClutterActor       *event_actor)
@@ -166,29 +122,21 @@ meta_display_handle_event (MetaDisplay        *display,
   MetaBackend *backend = meta_context_get_backend (context);
   MetaA11yManager *a11y_manager = meta_backend_get_a11y_manager (backend);
   MetaCompositor *compositor = meta_display_get_compositor (display);
+  ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
+  ClutterSeat *seat = clutter_backend_get_default_seat (clutter_backend);
   ClutterInputDevice *source_device;
   MetaWindow *window = NULL;
-  MetaGestureTracker *gesture_tracker;
-  ClutterEventSequence *sequence;
   ClutterEventType event_type;
-  ClutterSeat *seat;
   gboolean has_grab;
   gboolean a11y_grabbed;
   MetaTabletActionMapper *mapper;
-  MetaEventMode mode_hint;
-#ifdef HAVE_WAYLAND
   MetaWaylandCompositor *wayland_compositor;
   MetaWaylandTextInput *wayland_text_input = NULL;
-#endif
+  uint32_t time_ms;
 
-#ifdef HAVE_WAYLAND
   wayland_compositor = meta_context_get_wayland_compositor (context);
-  if (wayland_compositor)
-    {
-      wayland_text_input =
-        meta_wayland_compositor_get_text_input (wayland_compositor);
-    }
-#endif
+  wayland_text_input =
+    meta_wayland_compositor_get_text_input (wayland_compositor);
 
   COGL_TRACE_BEGIN_SCOPED (MetaDisplayHandleEvent,
                            "Meta::Display::handle_event()");
@@ -197,7 +145,6 @@ meta_display_handle_event (MetaDisplay        *display,
 
   has_grab = stage_has_grab (display);
 
-  sequence = clutter_event_get_event_sequence (event);
   event_type = clutter_event_type (event);
 
   if (meta_display_process_captured_input (display, event))
@@ -209,41 +156,21 @@ meta_display_handle_event (MetaDisplay        *display,
       if (a11y_grabbed)
         return CLUTTER_EVENT_STOP;
     }
-
-  source_device = clutter_event_get_source_device (event);
-  seat = clutter_input_device_get_seat (clutter_event_get_source_device (event));
-  clutter_seat_a11y_update (seat, event);
-
-  /* Set the pointer emulating sequence on touch begin, if eligible */
-  if (event_type == CLUTTER_TOUCH_BEGIN)
+  else if (event_type == CLUTTER_MOTION &&
+           !clutter_event_get_device_tool (event))
     {
-      if (sequence_is_pointer_emulated (display, event))
-        {
-          /* This is the new pointer emulating sequence */
-          display->pointer_emulating_sequence = sequence;
-        }
-      else if (display->pointer_emulating_sequence == sequence)
-        {
-          /* This sequence was "pointer emulating" in a prior incarnation,
-           * but now it isn't. We unset the pointer emulating sequence at
-           * this point so the current sequence is not mistaken as pointer
-           * emulating, while we've ensured that it's been deemed
-           * "pointer emulating" throughout all of the event processing
-           * of the previous incarnation.
-           */
-          display->pointer_emulating_sequence = NULL;
-        }
+      meta_a11y_manager_maybe_notify_motion (a11y_manager);
     }
 
-#ifdef HAVE_WAYLAND
+  source_device = clutter_event_get_source_device (event);
+  clutter_seat_a11y_update (seat, event);
+
   if (wayland_text_input &&
       !meta_compositor_get_current_window_drag (compositor) &&
       meta_wayland_text_input_update (wayland_text_input, event))
     return CLUTTER_EVENT_STOP;
 
-  if (wayland_compositor)
-    meta_wayland_compositor_update (wayland_compositor, event);
-#endif
+  meta_wayland_compositor_update (wayland_compositor, event);
 
   if (event_type == CLUTTER_PAD_BUTTON_PRESS ||
       event_type == CLUTTER_PAD_BUTTON_RELEASE ||
@@ -296,16 +223,6 @@ meta_display_handle_event (MetaDisplay        *display,
       meta_tablet_action_mapper_handle_event (mapper, event);
     }
 
-  if (event_type == CLUTTER_MOTION &&
-      !(clutter_input_device_get_capabilities (source_device) &
-        CLUTTER_INPUT_CAPABILITY_TABLET_TOOL))
-    {
-      MetaCursorTracker *cursor_tracker =
-        meta_backend_get_cursor_tracker (backend);
-
-      meta_cursor_tracker_invalidate_position (cursor_tracker);
-    }
-
   window = get_window_for_event (display, event, event_actor);
 
   if (window && !window->override_redirect &&
@@ -330,13 +247,6 @@ meta_display_handle_event (MetaDisplay        *display,
         }
     }
 
-  gesture_tracker = meta_display_get_gesture_tracker (display);
-
-  if (meta_gesture_tracker_handle_event (gesture_tracker,
-                                         stage_from_display (display),
-                                         event))
-    return CLUTTER_EVENT_PROPAGATE;
-
   /* For key events, it's important to enforce single-handling, or
    * we can get into a confused state. So if a keybinding is
    * handled (because it's one of our hot-keys, or because we are
@@ -356,8 +266,7 @@ meta_display_handle_event (MetaDisplay        *display,
         return CLUTTER_EVENT_PROPAGATE;
     }
 
-  if (meta_is_wayland_compositor () &&
-      event_type == CLUTTER_SCROLL &&
+  if (event_type == CLUTTER_SCROLL &&
       meta_prefs_get_mouse_button_mods () > 0)
     {
       ClutterModifierType grab_mods;
@@ -385,34 +294,17 @@ meta_display_handle_event (MetaDisplay        *display,
       if (window->close_dialog &&
           meta_close_dialog_is_visible (window->close_dialog))
         return CLUTTER_EVENT_PROPAGATE;
-
-      /* Now replay the button press event to release our own sync grab. */
-      mode_hint = META_EVENT_MODE_REPLAY;
-    }
-  else
-    {
-      /* We could not match the event with a window, make sure we sync
-       * the pointer to discard the sequence and don't keep events frozen.
-       */
-      mode_hint = META_EVENT_MODE_KEEP_FROZEN;
     }
 
-#ifdef HAVE_WAYLAND
-  if (wayland_compositor)
-    {
-      uint32_t time_ms;
+  time_ms = clutter_event_get_time (event);
+  if (window && event_type == CLUTTER_MOTION &&
+      time_ms != CLUTTER_CURRENT_TIME)
+    meta_window_check_alive_on_event (window, time_ms);
 
-      time_ms = clutter_event_get_time (event);
-      if (window && event_type == CLUTTER_MOTION &&
-          time_ms != CLUTTER_CURRENT_TIME)
-        meta_window_check_alive_on_event (window, time_ms);
+  if (meta_wayland_compositor_handle_event (wayland_compositor, event))
+    return CLUTTER_EVENT_STOP;
 
-      if (meta_wayland_compositor_handle_event (wayland_compositor, event))
-        return CLUTTER_EVENT_STOP;
-    }
-#endif
-
-  return meta_compositor_handle_event (compositor, event, window, mode_hint);
+  return CLUTTER_EVENT_PROPAGATE;
 }
 
 static gboolean

@@ -31,10 +31,10 @@ index 3fa9e23..3d98df8 100644
                             &diff_stat))
          {
 diff --git a/src/tests/ref-test-sanity.c b/src/tests/ref-test-sanity.c
-index 90268b4..83265ac 100644
+index 1a556e0..a3f1a77 100644
 --- a/src/tests/ref-test-sanity.c
 +++ b/src/tests/ref-test-sanity.c
-@@ -108,6 +108,11 @@ meta_test_ref_test_sanity (void)
+@@ -102,6 +102,11 @@ meta_test_ref_test_sanity (void)
    clutter_actor_set_background_color (actor2, &COGL_COLOR_INIT (52, 101, 164, 255));
    clutter_actor_add_child (stage, actor2);
  

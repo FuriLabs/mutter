@@ -68,6 +68,7 @@ typedef struct _MetaMonitorPrivate
   GList *outputs;
   GList *modes;
   GHashTable *mode_ids;
+  GHashTable *default_scales;
 
   MetaMonitorMode *preferred_mode;
   MetaMonitorMode *current_mode;
@@ -188,11 +189,11 @@ meta_monitor_get_main_output_info (MetaMonitor *monitor)
 }
 
 static void
-meta_monitor_generate_spec (MetaMonitor *monitor)
+meta_monitor_generate_spec (MetaMonitor *monitor,
+                            MetaOutput  *main_output)
 {
   MetaMonitorPrivate *priv = meta_monitor_get_instance_private (monitor);
-  const MetaOutputInfo *output_info =
-    meta_monitor_get_main_output_info (monitor);
+  const MetaOutputInfo *output_info = meta_output_get_info (main_output);
   MetaMonitorSpec *monitor_spec;
   const char *vendor;
   const char *product;
@@ -222,6 +223,16 @@ meta_monitor_init_supported_color_modes (MetaMonitor *monitor)
 
   priv->color_modes =
     g_list_append (NULL, GINT_TO_POINTER (META_COLOR_MODE_DEFAULT));
+
+  if (output_info->edid_info &&
+      output_info->edid_info->default_gamma > 0.0 &&
+      output_info->edid_info->default_color_primaries.has_primaries &&
+      output_info->edid_info->default_color_primaries.has_default_white_point)
+    {
+      priv->color_modes =
+        g_list_append (priv->color_modes,
+                       GINT_TO_POINTER (META_COLOR_MODE_SDR_NATIVE));
+    }
 
   if ((output_info->supported_color_spaces &
        (1 << META_OUTPUT_COLORSPACE_BT2020)) &&
@@ -697,6 +708,7 @@ meta_monitor_finalize (GObject *object)
 
   g_list_free (priv->color_modes);
   g_hash_table_destroy (priv->mode_ids);
+  g_hash_table_destroy (priv->default_scales);
   g_list_free_full (priv->modes, g_object_unref);
   meta_monitor_spec_free (priv->spec);
   g_free (priv->display_name);
@@ -710,6 +722,8 @@ meta_monitor_init (MetaMonitor *monitor)
   MetaMonitorPrivate *priv = meta_monitor_get_instance_private (monitor);
 
   priv->mode_ids = g_hash_table_new (g_str_hash, g_str_equal);
+  priv->default_scales = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                                g_free, g_free);
 }
 
 static void
@@ -743,6 +757,34 @@ generate_mode_id (MetaMonitorModeSpec *monitor_mode_spec)
                           is_vrr ? "+vrr" : "");
 }
 
+static void
+update_default_scale (MetaMonitor     *monitor,
+                      MetaMonitorMode *monitor_mode)
+{
+  MetaMonitorModePrivate *monitor_mode_priv =
+    meta_monitor_mode_get_instance_private (monitor_mode);
+  int i;
+
+  for (i = 0; i < monitor_mode_priv->n_crtc_modes; i++)
+    {
+      MetaCrtcMode *crtc_mode;
+      const MetaCrtcModeInfo *crtc_mode_info;
+
+      crtc_mode = monitor_mode_priv->crtc_modes[i].crtc_mode;
+      if (!crtc_mode)
+        continue;
+
+      crtc_mode_info = meta_crtc_mode_get_info (crtc_mode);
+      if (crtc_mode_info->has_preferred_scale)
+        {
+          meta_monitor_set_default_scale (monitor,
+                                          monitor_mode,
+                                          crtc_mode_info->preferred_scale);
+          break;
+        }
+    }
+}
+
 static gboolean
 meta_monitor_add_mode (MetaMonitor     *monitor,
                        MetaMonitorMode *monitor_mode,
@@ -766,6 +808,7 @@ meta_monitor_add_mode (MetaMonitor     *monitor,
 
   priv->modes = g_list_append (priv->modes, g_object_ref (monitor_mode));
   g_hash_table_replace (priv->mode_ids, mode_priv->id, monitor_mode);
+  update_default_scale (monitor, monitor_mode);
 
   return TRUE;
 }
@@ -1005,9 +1048,9 @@ meta_monitor_normal_new (MetaMonitorManager *monitor_manager,
 
   monitor_priv->backend = meta_monitor_manager_get_backend (monitor_manager);
 
+  meta_monitor_generate_spec (monitor, output);
   reset_normal_monitor (monitor_normal, output);
 
-  meta_monitor_generate_spec (monitor);
   monitor_priv->display_name = meta_monitor_make_display_name (monitor);
 
   return monitor_normal;
@@ -1414,6 +1457,7 @@ generate_tiled_monitor_modes (MetaMonitorTiled *monitor_tiled)
   GList *tiled_modes = NULL;
   unsigned int i;
   MetaMonitorMode *best_mode = NULL;
+  MetaCrtcRefreshRateMode best_refresh_rate_mode;
   float best_refresh_rate;
   GList *l;
 
@@ -1460,6 +1504,8 @@ generate_tiled_monitor_modes (MetaMonitorTiled *monitor_tiled)
             {
               best_mode = mode;
               best_refresh_rate = meta_monitor_mode_get_refresh_rate (mode);
+              best_refresh_rate_mode =
+                meta_monitor_mode_get_refresh_rate_mode (mode);
               continue;
             }
 
@@ -1467,14 +1513,18 @@ generate_tiled_monitor_modes (MetaMonitorTiled *monitor_tiled)
             {
               best_mode = mode;
               best_refresh_rate = meta_monitor_mode_get_refresh_rate (mode);
+              best_refresh_rate_mode =
+                meta_monitor_mode_get_refresh_rate_mode (mode);
               continue;
             }
 
           if (mode_priv->spec.refresh_rate == best_refresh_rate &&
-              mode_priv->spec.refresh_rate_mode > best_refresh_rate)
+              mode_priv->spec.refresh_rate_mode < best_refresh_rate_mode)
             {
               best_mode = mode;
               best_refresh_rate = meta_monitor_mode_get_refresh_rate (mode);
+              best_refresh_rate_mode =
+                meta_monitor_mode_get_refresh_rate_mode (mode);
               continue;
             }
         }
@@ -1651,6 +1701,7 @@ find_best_mode (MetaMonitor *monitor)
   MetaMonitorPrivate *monitor_priv =
     meta_monitor_get_instance_private (monitor);
   MetaMonitorMode *best_mode = NULL;
+  MetaCrtcRefreshRateMode best_refresh_rate_mode;
   float best_refresh_rate;
   GList *l;
 
@@ -1675,6 +1726,8 @@ find_best_mode (MetaMonitor *monitor)
         {
           best_mode = mode;
           best_refresh_rate = meta_monitor_mode_get_refresh_rate (mode);
+          best_refresh_rate_mode =
+            meta_monitor_mode_get_refresh_rate_mode (mode);
           continue;
         }
 
@@ -1682,14 +1735,18 @@ find_best_mode (MetaMonitor *monitor)
         {
           best_mode = mode;
           best_refresh_rate = meta_monitor_mode_get_refresh_rate (mode);
+          best_refresh_rate_mode =
+            meta_monitor_mode_get_refresh_rate_mode (mode);
           continue;
         }
 
       if (mode_priv->spec.refresh_rate == best_refresh_rate &&
-          mode_priv->spec.refresh_rate_mode > best_refresh_rate)
+          mode_priv->spec.refresh_rate_mode < best_refresh_rate_mode)
         {
           best_mode = mode;
           best_refresh_rate = meta_monitor_mode_get_refresh_rate (mode);
+          best_refresh_rate_mode =
+            meta_monitor_mode_get_refresh_rate_mode (mode);
           continue;
         }
     }
@@ -1878,11 +1935,11 @@ meta_monitor_tiled_new (MetaMonitorManager  *monitor_manager,
     }
 
   main_output = find_untiled_output (origin_output, outputs);
+  meta_monitor_generate_spec (monitor, main_output);
 
   reset_tiled_monitor (monitor_tiled, g_steal_pointer (&outputs),
                        origin_output, main_output);
 
-  meta_monitor_generate_spec (monitor);
   monitor_priv->display_name = meta_monitor_make_display_name (monitor);
   meta_monitor_manager_tiled_monitor_added (monitor_manager,
                                             META_MONITOR (monitor_tiled));
@@ -2308,7 +2365,7 @@ calculate_scale (MetaMonitor                *monitor,
   float diag_inches;
   g_autofree float *scales = NULL;
   int n_scales;
-  float best_scale, physical_dpi, perfect_scale, best_scale_error;
+  float best_scale, physical_dpi, perfect_scale, best_scale_error = 0.0f;
   int target_dpi;
 
   /*
@@ -2881,4 +2938,37 @@ meta_monitor_update_outputs (MetaMonitor *monitor)
   meta_monitor_set_logical_monitor (monitor, NULL);
 
   return META_MONITOR_GET_CLASS (monitor)->update_outputs (monitor);
+}
+
+void
+meta_monitor_set_default_scale (MetaMonitor     *monitor,
+                                MetaMonitorMode *monitor_mode,
+                                float            scale)
+{
+  MetaMonitorPrivate *priv = meta_monitor_get_instance_private (monitor);
+  MetaMonitorModePrivate *monitor_mode_priv =
+    meta_monitor_mode_get_instance_private (monitor_mode);
+
+  g_hash_table_replace (priv->default_scales,
+                        g_strdup (monitor_mode_priv->id),
+                        g_memdup2 (&scale, sizeof (scale)));
+}
+
+gboolean
+meta_monitor_get_default_scale (MetaMonitor     *monitor,
+                                MetaMonitorMode *monitor_mode,
+                                float           *out_scale)
+{
+  MetaMonitorPrivate *priv = meta_monitor_get_instance_private (monitor);
+  float *scale;
+
+  scale = g_hash_table_lookup (priv->default_scales,
+                               meta_monitor_mode_get_id (monitor_mode));
+  if (scale)
+    {
+      *out_scale = *scale;
+      return TRUE;
+    }
+
+  return FALSE;
 }

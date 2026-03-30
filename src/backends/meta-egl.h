@@ -154,11 +154,6 @@ gboolean meta_egl_make_current (MetaEgl   *egl,
                                 EGLContext context,
                                 GError   **error);
 
-gboolean meta_egl_swap_buffers (MetaEgl   *egl,
-                                EGLDisplay display,
-                                EGLSurface surface,
-                                GError   **error);
-
 gboolean meta_egl_bind_wayland_display (MetaEgl            *egl,
                                         EGLDisplay          display,
                                         struct wl_display  *wayland_display,
@@ -196,13 +191,6 @@ gboolean meta_egl_get_output_layers (MetaEgl           *egl,
                                      EGLint             max_layers,
                                      EGLint            *num_layers,
                                      GError           **error);
-
-gboolean meta_egl_query_output_layer_attrib (MetaEgl          *egl,
-                                             EGLDisplay        display,
-                                             EGLOutputLayerEXT layer,
-                                             EGLint            attribute,
-                                             EGLAttrib        *value,
-                                             GError          **error);
 
 EGLStreamKHR meta_egl_create_stream (MetaEgl      *egl,
                                      EGLDisplay    display,
@@ -293,4 +281,8 @@ gboolean meta_egl_wait_sync (MetaEgl     *egl,
                              EGLDisplay   display,
                              EGLSync      sync,
                              EGLint       flags,
+                             GError     **error);
+
+int meta_egl_create_sync_fd (MetaEgl     *egl,
+                             EGLDisplay   display,
                              GError     **error);

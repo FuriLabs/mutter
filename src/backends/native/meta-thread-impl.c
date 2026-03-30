@@ -167,10 +167,12 @@ impl_source_dispatch (GSource     *source,
 {
   MetaThreadImplSource *impl_source = (MetaThreadImplSource *) source;
   MetaThreadImpl *thread_impl = impl_source->thread_impl;
+#ifndef G_DISABLE_ASSERT
   MetaThreadImplPrivate *priv =
     meta_thread_impl_get_instance_private (thread_impl);
 
   g_assert (g_source_get_context (source) == priv->thread_context);
+#endif
 
   meta_thread_impl_dispatch (thread_impl);
 
@@ -226,7 +228,6 @@ meta_thread_impl_finalize (GObject *object)
   MetaThreadImplPrivate *priv =
     meta_thread_impl_get_instance_private (thread_impl);
 
-  g_clear_pointer (&priv->loop, g_main_loop_unref);
   g_clear_pointer (&priv->impl_source, g_source_destroy);
   g_clear_pointer (&priv->task_queue, g_async_queue_unref);
 
@@ -589,6 +590,7 @@ meta_thread_impl_run (MetaThreadImpl         *thread_impl,
   priv->loop = g_main_loop_new (priv->thread_context, FALSE);
   priv->scheduling_priority = scheduling_priority;
   g_main_loop_run (priv->loop);
+  g_clear_pointer (&priv->loop, g_main_loop_unref);
 }
 
 void

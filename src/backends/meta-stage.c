@@ -158,15 +158,28 @@ meta_overlay_paint (MetaOverlay         *overlay,
   ClutterStageView *view;
   MetaOverlayViewState *view_state = NULL;
   CoglFramebuffer *framebuffer;
+  gboolean should_paint_any, should_paint;
 
   view = clutter_paint_context_get_stage_view (paint_context);
   if (view)
     view_state = ensure_view_state (overlay, view);
 
-  if ((!overlay->texture ||
-       !overlay->is_visible) &&
-      !(clutter_paint_context_get_paint_flags (paint_context) &
-        CLUTTER_PAINT_FLAG_FORCE_CURSORS))
+  should_paint_any =
+    !(clutter_paint_context_get_paint_flags (paint_context) &
+      CLUTTER_PAINT_FLAG_NO_CURSORS);
+  if (should_paint_any)
+    {
+      should_paint =
+        (overlay->texture && overlay->is_visible) ||
+        (clutter_paint_context_get_paint_flags (paint_context) &
+         CLUTTER_PAINT_FLAG_FORCE_CURSORS);
+    }
+  else
+    {
+      should_paint = FALSE;
+    }
+
+  if (!should_paint)
     {
       if (view_state)
         view_state->has_painted_rect = FALSE;
@@ -275,27 +288,7 @@ meta_stage_paint (ClutterActor        *actor,
                                 META_STAGE_WATCH_AFTER_ACTOR_PAINT);
     }
 
-  if ((clutter_paint_context_get_paint_flags (paint_context) &
-       CLUTTER_PAINT_FLAG_FORCE_CURSORS))
-    {
-      MetaCursorTracker *cursor_tracker =
-        meta_backend_get_cursor_tracker (stage->backend);
-
-      meta_cursor_tracker_track_position (cursor_tracker);
-    }
-
-  if (!(clutter_paint_context_get_paint_flags (paint_context) &
-        CLUTTER_PAINT_FLAG_NO_CURSORS))
-    g_list_foreach (stage->overlays, (GFunc) meta_overlay_paint, paint_context);
-
-  if ((clutter_paint_context_get_paint_flags (paint_context) &
-       CLUTTER_PAINT_FLAG_FORCE_CURSORS))
-    {
-      MetaCursorTracker *cursor_tracker =
-        meta_backend_get_cursor_tracker (stage->backend);
-
-      meta_cursor_tracker_untrack_position (cursor_tracker);
-    }
+  g_list_foreach (stage->overlays, (GFunc) meta_overlay_paint, paint_context);
 
   if (view)
     {
@@ -364,12 +357,9 @@ meta_stage_init (MetaStage *stage)
   for (i = 0; i < META_N_WATCH_MODES; i++)
     stage->watchers[i] = g_ptr_array_new_with_free_func (g_free);
 
-  if (meta_is_wayland_compositor ())
-    {
-      g_signal_connect (stage,
-                        "notify::key-focus",
-                        G_CALLBACK (key_focus_actor_changed), NULL);
-    }
+  g_signal_connect (stage,
+                    "notify::key-focus",
+                    G_CALLBACK (key_focus_actor_changed), NULL);
 }
 
 ClutterActor *

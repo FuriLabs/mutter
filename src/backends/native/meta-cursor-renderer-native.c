@@ -31,7 +31,7 @@
 #include <errno.h>
 
 #include "backends/meta-backend-private.h"
-#include "backends/meta-cursor-sprite-xcursor.h"
+#include "backends/meta-cursor-xcursor.h"
 #include "backends/meta-logical-monitor-private.h"
 #include "backends/meta-monitor-private.h"
 #include "backends/meta-monitor-manager-private.h"
@@ -56,11 +56,8 @@
 #include "meta/boxes.h"
 #include "meta/meta-backend.h"
 #include "meta/util.h"
-
-#ifdef HAVE_WAYLAND
-#include "wayland/meta-cursor-sprite-wayland.h"
+#include "wayland/meta-cursor-wayland.h"
 #include "wayland/meta-wayland-buffer.h"
-#endif
 
 static GQuark quark_cursor_sprite = 0;
 
@@ -81,7 +78,7 @@ struct _MetaCursorRendererNativePrivate
 {
   MetaBackend *backend;
 
-  MetaCursorSprite *current_cursor;
+  ClutterCursor *current_cursor;
   gulong texture_changed_handler_id;
 
   guint animation_timeout_id;
@@ -104,6 +101,12 @@ typedef struct _MetaCursorRendererNativeGpuData
   uint64_t cursor_height;
 } MetaCursorRendererNativeGpuData;
 
+typedef struct _KmsCursorData
+{
+  ClutterSeat *seat;
+  ClutterSprite *sprite;
+} KmsCursorData;
+
 typedef struct _MetaCursorNativePrivate
 {
   GHashTable *gpu_states;
@@ -124,7 +127,7 @@ static gboolean
 realize_cursor_sprite_for_crtc (MetaCursorRenderer *renderer,
                                 MetaCrtcKms        *crtc_kms,
                                 ClutterColorState  *target_color_state,
-                                MetaCursorSprite   *cursor_sprite);
+                                ClutterCursor      *cursor);
 
 static void
 meta_cursor_renderer_native_invalidate_gpu_state (MetaCursorRendererNative *native);
@@ -231,10 +234,10 @@ meta_cursor_renderer_native_prepare_frame (MetaCursorRendererNative *cursor_rend
   MetaCursorRenderer *cursor_renderer =
     META_CURSOR_RENDERER (cursor_renderer_native);
   CursorStageView *cursor_stage_view;
-  MetaCursorSprite *cursor_sprite;
+  ClutterCursor *cursor;
 
-  cursor_sprite = meta_cursor_renderer_get_cursor (cursor_renderer);
-  if (!cursor_sprite)
+  cursor = meta_cursor_renderer_get_cursor (cursor_renderer);
+  if (!cursor)
     return;
 
   cursor_stage_view = get_cursor_stage_view (META_STAGE_VIEW (view));
@@ -242,7 +245,7 @@ meta_cursor_renderer_native_prepare_frame (MetaCursorRendererNative *cursor_rend
       cursor_stage_view->needs_emit_painted)
     {
       meta_cursor_renderer_emit_painted (cursor_renderer,
-                                         cursor_sprite,
+                                         cursor,
                                          CLUTTER_STAGE_VIEW (view),
                                          frame->frame_count);
       cursor_stage_view->needs_emit_painted = FALSE;
@@ -255,16 +258,16 @@ meta_cursor_renderer_native_update_animation (MetaCursorRendererNative *native)
   MetaCursorRendererNativePrivate *priv =
     meta_cursor_renderer_native_get_instance_private (native);
   MetaCursorRenderer *renderer = META_CURSOR_RENDERER (native);
-  MetaCursorSprite *cursor_sprite = meta_cursor_renderer_get_cursor (renderer);
+  ClutterCursor *cursor = meta_cursor_renderer_get_cursor (renderer);
 
   priv->animation_timeout_id = 0;
-  meta_cursor_sprite_tick_frame (cursor_sprite);
+  clutter_cursor_tick_frame (cursor);
   meta_cursor_renderer_force_update (renderer);
 }
 
 static void
 maybe_schedule_cursor_sprite_animation_frame (MetaCursorRendererNative *native,
-                                              MetaCursorSprite         *cursor_sprite,
+                                              ClutterCursor            *cursor,
                                               gboolean                  cursor_changed)
 {
   MetaCursorRendererNativePrivate *priv =
@@ -276,9 +279,9 @@ maybe_schedule_cursor_sprite_animation_frame (MetaCursorRendererNative *native,
 
   g_clear_handle_id (&priv->animation_timeout_id, g_source_remove);
 
-  if (cursor_sprite && meta_cursor_sprite_is_animated (cursor_sprite))
+  if (cursor && clutter_cursor_is_animated (cursor))
     {
-      delay = meta_cursor_sprite_get_current_frame_time (cursor_sprite);
+      delay = clutter_cursor_get_current_frame_time (cursor);
 
       if (delay == 0)
         return;
@@ -293,7 +296,7 @@ maybe_schedule_cursor_sprite_animation_frame (MetaCursorRendererNative *native,
 }
 
 static void
-on_cursor_sprite_texture_changed (MetaCursorSprite   *cursor_sprite,
+on_cursor_sprite_texture_changed (ClutterCursor      *cursor,
                                   MetaCursorRenderer *cursor_renderer)
 {
   MetaCursorRendererNative *native =
@@ -315,9 +318,49 @@ is_hw_cursor_available_for_gpu (MetaGpuKms *gpu_kms)
   return TRUE;
 }
 
+static void
+query_cursor_position_in_kms_impl (float    *x,
+                                   float    *y,
+                                   gpointer  user_data)
+{
+  KmsCursorData *cursor_data = user_data;
+  graphene_point_t position;
+
+  clutter_seat_query_state (cursor_data->seat, cursor_data->sprite,
+                            &position, NULL);
+  *x = position.x;
+  *y = position.y;
+}
+
+static void
+meta_cursor_renderer_native_update_sprite (MetaCursorRenderer *cursor_renderer,
+                                           ClutterSprite      *sprite)
+{
+  MetaCursorRendererNative *cursor_renderer_native =
+    META_CURSOR_RENDERER_NATIVE (cursor_renderer);
+  MetaCursorRendererNativePrivate *priv =
+    meta_cursor_renderer_native_get_instance_private (cursor_renderer_native);
+  MetaBackendNative *backend_native = META_BACKEND_NATIVE (priv->backend);
+  MetaKms *kms = meta_backend_native_get_kms (backend_native);
+  MetaKmsCursorManager *kms_cursor_manager;
+  KmsCursorData *data;
+
+  kms_cursor_manager = meta_kms_get_cursor_manager (kms);
+  if (!kms_cursor_manager)
+    return;
+
+  data = g_new0 (KmsCursorData, 1);
+  data->seat = meta_backend_get_default_seat (priv->backend);
+  data->sprite = sprite;
+
+  meta_kms_cursor_manager_set_query_func (kms_cursor_manager,
+                                          query_cursor_position_in_kms_impl,
+                                          data, g_free);
+}
+
 static gboolean
 meta_cursor_renderer_native_update_cursor (MetaCursorRenderer *cursor_renderer,
-                                           MetaCursorSprite   *cursor_sprite)
+                                           ClutterCursor      *cursor)
 {
   MetaCursorRendererNative *native =
     META_CURSOR_RENDERER_NATIVE (cursor_renderer);
@@ -328,7 +371,7 @@ meta_cursor_renderer_native_update_cursor (MetaCursorRenderer *cursor_renderer,
   MetaRenderer *renderer = meta_backend_get_renderer (backend);
   MetaKms *kms = meta_backend_native_get_kms (backend_native);
   MetaKmsCursorManager *kms_cursor_manager = meta_kms_get_cursor_manager (kms);
-  gboolean cursor_changed;
+  gboolean cursor_changed, cursor_hw_managed = FALSE;
   GList *views;
   GList *l;
 
@@ -341,7 +384,13 @@ meta_cursor_renderer_native_update_cursor (MetaCursorRenderer *cursor_renderer,
       return FALSE;
     }
 
-  cursor_changed = priv->current_cursor != cursor_sprite;
+  if (cursor &&
+      META_IS_CURSOR_XCURSOR (cursor) &&
+      meta_cursor_xcursor_get_cursor (META_CURSOR_XCURSOR (cursor)) ==
+      CLUTTER_CURSOR_NONE)
+    cursor = NULL;
+
+  cursor_changed = priv->current_cursor != cursor;
 
   views = meta_renderer_get_views (renderer);
   g_list_foreach (views, (GFunc) ensure_cursor_stage_view, NULL);
@@ -368,9 +417,9 @@ meta_cursor_renderer_native_update_cursor (MetaCursorRenderer *cursor_renderer,
           cursor_stage_view->is_hw_cursor_valid = TRUE;
           has_hw_cursor = FALSE;
         }
-      else if (cursor_sprite && !meta_backend_is_hw_cursors_inhibited (backend))
+      else if (cursor && !meta_backend_is_hw_cursors_inhibited (backend))
         {
-          meta_cursor_sprite_realize_texture (cursor_sprite);
+          clutter_cursor_realize_texture (cursor);
 
           if (cursor_changed ||
               !cursor_stage_view->is_hw_cursor_valid)
@@ -378,7 +427,7 @@ meta_cursor_renderer_native_update_cursor (MetaCursorRenderer *cursor_renderer,
               has_hw_cursor = realize_cursor_sprite_for_crtc (cursor_renderer,
                                                               META_CRTC_KMS (crtc),
                                                               target_color_state,
-                                                              cursor_sprite);
+                                                              cursor);
 
               cursor_stage_view->is_hw_cursor_valid = TRUE;
             }
@@ -400,11 +449,6 @@ meta_cursor_renderer_native_update_cursor (MetaCursorRenderer *cursor_renderer,
 
       if (cursor_stage_view->has_hw_cursor != has_hw_cursor)
         {
-          if (has_hw_cursor)
-            meta_stage_view_inhibit_cursor_overlay (view);
-          else
-            meta_stage_view_uninhibit_cursor_overlay (view);
-
           cursor_stage_view->has_hw_cursor = has_hw_cursor;
 
           if (!has_hw_cursor)
@@ -419,6 +463,8 @@ meta_cursor_renderer_native_update_cursor (MetaCursorRenderer *cursor_renderer,
                                                      NULL);
             }
         }
+
+      cursor_hw_managed |= cursor_stage_view->has_hw_cursor;
     }
 
   if (cursor_changed)
@@ -429,21 +475,23 @@ meta_cursor_renderer_native_update_cursor (MetaCursorRenderer *cursor_renderer,
                                   priv->current_cursor);
         }
 
-      g_set_object (&priv->current_cursor, cursor_sprite);
+      g_set_object (&priv->current_cursor, cursor);
 
       if (priv->current_cursor)
         {
           priv->texture_changed_handler_id =
-            g_signal_connect (cursor_sprite, "texture-changed",
+            g_signal_connect (cursor, "texture-changed",
                               G_CALLBACK (on_cursor_sprite_texture_changed),
                               cursor_renderer);
         }
     }
 
-  maybe_schedule_cursor_sprite_animation_frame (native, cursor_sprite,
+  maybe_schedule_cursor_sprite_animation_frame (native, cursor,
                                                 cursor_changed);
 
-  return cursor_sprite && meta_cursor_sprite_get_cogl_texture (cursor_sprite);
+  return (!cursor_hw_managed &&
+          cursor &&
+          clutter_cursor_get_texture (cursor, NULL, NULL));
 }
 
 static void
@@ -698,7 +746,7 @@ supports_exact_cursor_size (MetaCrtcKms *crtc_kms,
 static gboolean
 load_cursor_sprite_gbm_buffer_for_crtc (MetaCursorRendererNative *native,
                                         MetaCrtcKms              *crtc_kms,
-                                        MetaCursorSprite         *cursor_sprite,
+                                        ClutterCursor            *cursor,
                                         uint8_t                  *pixels,
                                         uint                      width,
                                         uint                      height,
@@ -769,7 +817,7 @@ load_cursor_sprite_gbm_buffer_for_crtc (MetaCursorRendererNative *native,
 static CoglTexture *
 scale_and_transform_cursor_sprite_cpu (MetaCursorRendererNative *cursor_renderer_native,
                                        ClutterColorState        *target_color_state,
-                                       MetaCursorSprite         *cursor_sprite,
+                                       ClutterCursor            *cursor,
                                        uint8_t                  *pixels,
                                        CoglPixelFormat           pixel_format,
                                        int                       width,
@@ -827,7 +875,7 @@ scale_and_transform_cursor_sprite_cpu (MetaCursorRendererNative *cursor_renderer
   if (!cogl_texture_get_premultiplied (dst_texture))
     g_warning_once ("Dst texture format doesn't have premultiplied alpha");
 
-  color_state = meta_cursor_sprite_get_color_state (cursor_sprite);
+  color_state = clutter_cursor_get_color_state (cursor);
   clutter_color_state_add_pipeline_transform (color_state,
                                               target_color_state,
                                               pipeline,
@@ -850,7 +898,7 @@ static gboolean
 load_scaled_and_transformed_cursor_sprite (MetaCursorRendererNative *native,
                                            MetaCrtcKms              *crtc_kms,
                                            ClutterColorState        *target_color_state,
-                                           MetaCursorSprite         *cursor_sprite,
+                                           ClutterCursor            *cursor,
                                            uint8_t                  *data,
                                            int                       width,
                                            int                       height,
@@ -893,12 +941,12 @@ load_scaled_and_transformed_cursor_sprite (MetaCursorRendererNative *native,
   logical_monitor = meta_monitor_get_logical_monitor (monitor);
 
   logical_transform = meta_logical_monitor_get_transform (logical_monitor);
-  cursor_transform = meta_cursor_sprite_get_texture_transform (cursor_sprite);
+  cursor_transform = clutter_cursor_get_texture_transform (cursor);
   relative_transform = mtk_monitor_transform_transform (
     mtk_monitor_transform_invert (cursor_transform),
     meta_monitor_logical_to_crtc_transform (monitor, logical_transform));
-  src_rect = meta_cursor_sprite_get_viewport_src_rect (cursor_sprite);
-  sprite_texture = meta_cursor_sprite_get_cogl_texture (cursor_sprite);
+  src_rect = clutter_cursor_get_viewport_src_rect (cursor);
+  sprite_texture = clutter_cursor_get_texture (cursor, &hot_x, &hot_y);
   tex_width = cogl_texture_get_width (sprite_texture);
   tex_height = cogl_texture_get_height (sprite_texture);
 
@@ -907,9 +955,9 @@ load_scaled_and_transformed_cursor_sprite (MetaCursorRendererNative *native,
   else
     monitor_scale = 1.0f;
 
-  if (meta_cursor_sprite_get_viewport_dst_size (cursor_sprite,
-                                                &dst_width,
-                                                &dst_height))
+  if (clutter_cursor_get_viewport_dst_size (cursor,
+                                            &dst_width,
+                                            &dst_height))
     {
       float scale_x;
       float scale_y;
@@ -934,7 +982,7 @@ load_scaled_and_transformed_cursor_sprite (MetaCursorRendererNative *native,
   else
     {
       relative_scale_x = relative_scale_y =
-        monitor_scale * meta_cursor_sprite_get_texture_scale (cursor_sprite);
+        monitor_scale * clutter_cursor_get_texture_scale (cursor);
 
       if (mtk_monitor_transform_is_rotated (cursor_transform))
         {
@@ -950,7 +998,7 @@ load_scaled_and_transformed_cursor_sprite (MetaCursorRendererNative *native,
 
   graphene_matrix_init_identity (&matrix);
   pipeline_transform = mtk_monitor_transform_invert (relative_transform);
-  cursor_scale = meta_cursor_sprite_get_texture_scale (cursor_sprite);
+  cursor_scale = clutter_cursor_get_texture_scale (cursor);
   mtk_compute_viewport_matrix (&matrix,
                                width,
                                height,
@@ -958,9 +1006,8 @@ load_scaled_and_transformed_cursor_sprite (MetaCursorRendererNative *native,
                                pipeline_transform,
                                src_rect);
 
-  cursor_color_state = meta_cursor_sprite_get_color_state (cursor_sprite);
+  cursor_color_state = clutter_cursor_get_color_state (cursor);
 
-  meta_cursor_sprite_get_hotspot (cursor_sprite, &hot_x, &hot_y);
   hot_x = (int) roundf (hot_x * relative_scale_x);
   hot_y = (int) roundf (hot_y * relative_scale_y);
   mtk_monitor_transform_transform_point (relative_transform,
@@ -971,7 +1018,7 @@ load_scaled_and_transformed_cursor_sprite (MetaCursorRendererNative *native,
   if (width != crtc_dst_width || height != crtc_dst_height ||
       !graphene_matrix_is_identity (&matrix) ||
       gbm_format != cursor_renderer_gpu_data->drm_format ||
-      !clutter_color_state_equals (cursor_color_state, target_color_state))
+      clutter_color_state_needs_mapping (cursor_color_state, target_color_state))
     {
       const MetaFormatInfo *format_info;
       g_autoptr (GError) error = NULL;
@@ -986,7 +1033,7 @@ load_scaled_and_transformed_cursor_sprite (MetaCursorRendererNative *native,
 
       texture = scale_and_transform_cursor_sprite_cpu (native,
                                                        target_color_state,
-                                                       cursor_sprite,
+                                                       cursor,
                                                        data,
                                                        format_info->cogl_format,
                                                        width,
@@ -1016,7 +1063,7 @@ load_scaled_and_transformed_cursor_sprite (MetaCursorRendererNative *native,
       retval =
         load_cursor_sprite_gbm_buffer_for_crtc (native,
                                                 crtc_kms,
-                                                cursor_sprite,
+                                                cursor,
                                                 cursor_data,
                                                 crtc_dst_width,
                                                 crtc_dst_height,
@@ -1029,7 +1076,7 @@ load_scaled_and_transformed_cursor_sprite (MetaCursorRendererNative *native,
     {
       retval = load_cursor_sprite_gbm_buffer_for_crtc (native,
                                                        crtc_kms,
-                                                       cursor_sprite,
+                                                       cursor,
                                                        data,
                                                        width,
                                                        height,
@@ -1042,17 +1089,16 @@ load_scaled_and_transformed_cursor_sprite (MetaCursorRendererNative *native,
   return retval;
 }
 
-#ifdef HAVE_WAYLAND
 static gboolean
-realize_cursor_sprite_from_wl_buffer_for_crtc (MetaCursorRenderer      *renderer,
-                                               MetaCrtcKms             *crtc_kms,
-                                               ClutterColorState       *target_color_state,
-                                               MetaCursorSpriteWayland *sprite_wayland)
+realize_cursor_sprite_from_wl_buffer_for_crtc (MetaCursorRenderer *renderer,
+                                               MetaCrtcKms        *crtc_kms,
+                                               ClutterColorState  *target_color_state,
+                                               MetaCursorWayland  *cursor_wayland)
 {
   MetaCursorRendererNative *native = META_CURSOR_RENDERER_NATIVE (renderer);
   MetaCursorRendererNativePrivate *priv =
     meta_cursor_renderer_native_get_instance_private (native);
-  MetaCursorSprite *cursor_sprite = META_CURSOR_SPRITE (sprite_wayland);
+  ClutterCursor *cursor = CLUTTER_CURSOR (cursor_wayland);
   MetaGpu *gpu = meta_crtc_get_gpu (META_CRTC (crtc_kms));
   MetaGpuKms *gpu_kms = META_GPU_KMS (gpu);
   CoglTexture *texture;
@@ -1063,7 +1109,7 @@ realize_cursor_sprite_from_wl_buffer_for_crtc (MetaCursorRenderer      *renderer
   if (!is_hw_cursor_available_for_gpu (gpu_kms))
     return FALSE;
 
-  buffer = meta_cursor_sprite_wayland_get_buffer (sprite_wayland);
+  buffer = meta_cursor_wayland_get_buffer (cursor_wayland);
   if (!buffer)
     return FALSE;
 
@@ -1097,7 +1143,7 @@ realize_cursor_sprite_from_wl_buffer_for_crtc (MetaCursorRenderer      *renderer
       retval = load_scaled_and_transformed_cursor_sprite (native,
                                                           crtc_kms,
                                                           target_color_state,
-                                                          cursor_sprite,
+                                                          cursor,
                                                           buffer_data,
                                                           width,
                                                           height,
@@ -1142,7 +1188,7 @@ realize_cursor_sprite_from_wl_buffer_for_crtc (MetaCursorRenderer      *renderer
        * access to the data, but it's not possible if the buffer is in GPU
        * memory (and possibly tiled too), so if we don't get the right size, we
        * fallback to GL. */
-      texture = meta_cursor_sprite_get_cogl_texture (cursor_sprite);
+      texture = clutter_cursor_get_texture (cursor, &hot_x, &hot_y);
       width = cogl_texture_get_width (texture);
       height = cogl_texture_get_height (texture);
 
@@ -1179,7 +1225,6 @@ realize_cursor_sprite_from_wl_buffer_for_crtc (MetaCursorRenderer      *renderer
           return FALSE;
         }
 
-      meta_cursor_sprite_get_hotspot (cursor_sprite, &hot_x, &hot_y);
       kms_crtc = meta_crtc_kms_get_kms_crtc (crtc_kms);
       meta_kms_cursor_manager_update_sprite (kms_cursor_manager,
                                              kms_crtc,
@@ -1190,24 +1235,23 @@ realize_cursor_sprite_from_wl_buffer_for_crtc (MetaCursorRenderer      *renderer
       return TRUE;
     }
 }
-#endif /* HAVE_WAYLAND */
 
 static gboolean
-realize_cursor_sprite_from_xcursor_for_crtc (MetaCursorRenderer      *renderer,
-                                             MetaCrtcKms             *crtc_kms,
-                                             ClutterColorState       *target_color_state,
-                                             MetaCursorSpriteXcursor *sprite_xcursor)
+realize_cursor_sprite_from_xcursor_for_crtc (MetaCursorRenderer *renderer,
+                                             MetaCrtcKms        *crtc_kms,
+                                             ClutterColorState  *target_color_state,
+                                             MetaCursorXcursor  *cursor_xcursor)
 {
   MetaCursorRendererNative *native = META_CURSOR_RENDERER_NATIVE (renderer);
-  MetaCursorSprite *cursor_sprite = META_CURSOR_SPRITE (sprite_xcursor);
+  ClutterCursor *cursor = CLUTTER_CURSOR (cursor_xcursor);
   XcursorImage *xc_image;
 
-  xc_image = meta_cursor_sprite_xcursor_get_current_image (sprite_xcursor);
+  xc_image = meta_cursor_xcursor_get_current_image (cursor_xcursor);
 
   return load_scaled_and_transformed_cursor_sprite (native,
                                                     crtc_kms,
                                                     target_color_state,
-                                                    cursor_sprite,
+                                                    cursor,
                                                     (uint8_t *) xc_image->pixels,
                                                     xc_image->width,
                                                     xc_image->height,
@@ -1219,7 +1263,7 @@ static gboolean
 realize_cursor_sprite_for_crtc (MetaCursorRenderer *renderer,
                                 MetaCrtcKms        *crtc_kms,
                                 ClutterColorState  *target_color_state,
-                                MetaCursorSprite   *cursor_sprite)
+                                ClutterCursor      *cursor)
 {
   MetaKmsCrtc *kms_crtc = meta_crtc_kms_get_kms_crtc (crtc_kms);
   MetaKmsDevice *kms_device = meta_kms_crtc_get_device (kms_crtc);
@@ -1231,28 +1275,24 @@ realize_cursor_sprite_for_crtc (MetaCursorRenderer *renderer,
 
   COGL_TRACE_BEGIN_SCOPED (CursorRendererNativeRealize,
                            "Meta::CursorRendererNative::realize_cursor_sprite_for_crtc()");
-  if (META_IS_CURSOR_SPRITE_XCURSOR (cursor_sprite))
+  if (META_IS_CURSOR_XCURSOR (cursor))
     {
-      MetaCursorSpriteXcursor *sprite_xcursor =
-        META_CURSOR_SPRITE_XCURSOR (cursor_sprite);
+      MetaCursorXcursor *cursor_xcursor = META_CURSOR_XCURSOR (cursor);
 
       return realize_cursor_sprite_from_xcursor_for_crtc (renderer,
                                                           crtc_kms,
                                                           target_color_state,
-                                                          sprite_xcursor);
+                                                          cursor_xcursor);
     }
-#ifdef HAVE_WAYLAND
-  else if (META_IS_CURSOR_SPRITE_WAYLAND (cursor_sprite))
+  else if (META_IS_CURSOR_WAYLAND (cursor))
     {
-      MetaCursorSpriteWayland *sprite_wayland =
-        META_CURSOR_SPRITE_WAYLAND (cursor_sprite);
+      MetaCursorWayland *cursor_wayland = META_CURSOR_WAYLAND (cursor);
 
       return realize_cursor_sprite_from_wl_buffer_for_crtc (renderer,
                                                             crtc_kms,
                                                             target_color_state,
-                                                            sprite_wayland);
+                                                            cursor_wayland);
     }
-#endif
   else
     {
       return FALSE;
@@ -1266,6 +1306,7 @@ meta_cursor_renderer_native_class_init (MetaCursorRendererNativeClass *klass)
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
   object_class->finalize = meta_cursor_renderer_native_finalize;
+  renderer_class->update_sprite = meta_cursor_renderer_native_update_sprite;
   renderer_class->update_cursor = meta_cursor_renderer_native_update_cursor;
 
   quark_cursor_sprite = g_quark_from_static_string ("-meta-cursor-native");
@@ -1439,7 +1480,6 @@ connect_seat_signals_in_input_impl (gpointer user_data)
   MetaSeatImpl *seat_impl = g_task_get_source_object (task);
   MetaKms *kms = meta_backend_native_get_kms (backend_native);
   MetaKmsCursorManager *kms_cursor_manager = meta_kms_get_cursor_manager (kms);
-  ClutterInputDevice *device;
   graphene_point_t position;
 
   priv->pointer_position_changed_in_impl_handler_id =
@@ -1447,9 +1487,7 @@ connect_seat_signals_in_input_impl (gpointer user_data)
                       G_CALLBACK (on_pointer_position_changed_in_input_impl),
                       backend);
 
-
-  device = meta_seat_impl_get_pointer (seat_impl);
-  meta_seat_impl_query_state (seat_impl, device, NULL, &position, NULL);
+  meta_seat_impl_query_state (seat_impl, NULL, NULL, &position, NULL);
   meta_kms_cursor_manager_position_changed_in_input_impl (kms_cursor_manager,
                                                           &position);
 
@@ -1481,27 +1519,10 @@ disconnect_seat_signals_in_input_impl (gpointer user_data)
 }
 
 static void
-query_cursor_position_in_kms_impl (float    *x,
-                                   float    *y,
-                                   gpointer  user_data)
-{
-  ClutterSeat *seat = user_data;
-  graphene_point_t position;
-
-  clutter_seat_query_state (seat, NULL, &position, NULL);
-  *x = position.x;
-  *y = position.y;
-}
-
-static void
 init_hw_cursor_support (MetaCursorRendererNative *cursor_renderer_native)
 {
   MetaCursorRendererNativePrivate *priv =
     meta_cursor_renderer_native_get_instance_private (cursor_renderer_native);
-  MetaBackend *backend = priv->backend;
-  MetaBackendNative *backend_native = META_BACKEND_NATIVE (backend);
-  MetaKms *kms = meta_backend_native_get_kms (backend_native);
-  MetaKmsCursorManager *kms_cursor_manager = meta_kms_get_cursor_manager (kms);
   ClutterSeat *seat;
   MetaSeatNative *seat_native;
   GList *gpus;
@@ -1524,9 +1545,8 @@ init_hw_cursor_support (MetaCursorRendererNative *cursor_renderer_native)
                                   connect_seat_signals_in_input_impl,
                                   cursor_renderer_native, NULL);
 
-  meta_kms_cursor_manager_set_query_func (kms_cursor_manager,
-                                          query_cursor_position_in_kms_impl,
-                                          seat);
+  meta_cursor_renderer_native_update_sprite (META_CURSOR_RENDERER (cursor_renderer_native),
+                                             NULL);
 }
 
 static void
@@ -1568,21 +1588,21 @@ on_prepare_shutdown (MetaContext              *context,
 }
 
 MetaCursorRendererNative *
-meta_cursor_renderer_native_new (MetaBackend   *backend,
-                                 ClutterSprite *sprite)
+meta_cursor_renderer_native_new (MetaBackend *backend)
 {
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (backend);
   MetaCursorRendererNative *cursor_renderer_native;
   MetaCursorRendererNativePrivate *priv;
+#ifndef G_DISABLE_ASSERT
   MetaSeatNative *seat =
     META_SEAT_NATIVE (meta_backend_get_default_seat (backend));
 
   g_assert (seat);
+#endif
 
   cursor_renderer_native = g_object_new (META_TYPE_CURSOR_RENDERER_NATIVE,
                                          "backend", backend,
-                                         "sprite", sprite,
                                          NULL);
   priv =
     meta_cursor_renderer_native_get_instance_private (cursor_renderer_native);
@@ -1596,7 +1616,7 @@ meta_cursor_renderer_native_new (MetaBackend   *backend,
                     "started",
                     G_CALLBACK (on_started),
                     cursor_renderer_native);
-  g_signal_connect (meta_backend_get_context (backend),
+  g_signal_connect (backend,
                     "prepare-shutdown",
                     G_CALLBACK (on_prepare_shutdown),
                     cursor_renderer_native);

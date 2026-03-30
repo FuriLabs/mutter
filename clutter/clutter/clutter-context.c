@@ -40,7 +40,6 @@
 static gboolean clutter_show_fps = FALSE;
 static gboolean clutter_enable_accessibility = TRUE;
 
-#ifdef CLUTTER_ENABLE_DEBUG
 static const GDebugKey clutter_debug_keys[] = {
   { "misc", CLUTTER_DEBUG_MISC },
   { "actor", CLUTTER_DEBUG_ACTOR },
@@ -63,7 +62,6 @@ static const GDebugKey clutter_debug_keys[] = {
   { "frame-clock", CLUTTER_DEBUG_FRAME_CLOCK },
   { "gestures", CLUTTER_DEBUG_GESTURES },
 };
-#endif /* CLUTTER_ENABLE_DEBUG */
 
 static const GDebugKey clutter_pick_debug_keys[] = {
   { "nop-picking", CLUTTER_DEBUG_NOP_PICKING },
@@ -103,12 +101,15 @@ clutter_context_dispose (GObject *object)
   g_clear_object (&priv->pipeline_cache);
   g_clear_object (&priv->color_manager);
   g_clear_pointer (&context->events_queue, g_async_queue_unref);
+#ifdef HAVE_FONTS
+  g_clear_object (&context->font_map);
+  g_clear_object (&context->font_renderer);
+#endif
+  if (context->backend)
+    g_object_run_dispose (G_OBJECT (context->backend));
   g_clear_pointer (&context->backend, clutter_backend_destroy);
   g_clear_object (&context->stage_manager);
   g_clear_object (&context->settings);
-#ifdef HAVE_FONTS
-  g_clear_object (&context->font_map);
-#endif
 
   G_OBJECT_CLASS (clutter_context_parent_class)->dispose (object);
 }
@@ -225,7 +226,6 @@ init_clutter_debug (ClutterContext *context)
 {
   const char *env_string;
 
-#ifdef CLUTTER_ENABLE_DEBUG
   env_string = g_getenv ("CLUTTER_DEBUG");
   if (env_string != NULL)
     {
@@ -235,7 +235,6 @@ init_clutter_debug (ClutterContext *context)
                               G_N_ELEMENTS (clutter_debug_keys));
       env_string = NULL;
     }
-#endif /* CLUTTER_ENABLE_DEBUG */
 
   env_string = g_getenv ("CLUTTER_PICK");
   if (env_string != NULL)

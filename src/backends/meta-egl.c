@@ -26,6 +26,7 @@
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include <EGL/eglmesaext.h>
+#include <EGL/eglplatform.h>
 #include <gio/gio.h>
 #include <glib.h>
 #include <glib-object.h>
@@ -47,6 +48,7 @@ struct _MetaEgl
   PFNEGLCREATESYNCPROC eglCreateSync;
   PFNEGLDESTROYSYNCPROC eglDestroySync;
   PFNEGLWAITSYNCPROC eglWaitSync;
+  PFNEGLDUPNATIVEFENCEFDANDROIDPROC eglDupNativeFenceFDANDROID;
 
   PFNEGLBINDWAYLANDDISPLAYWL eglBindWaylandDisplayWL;
   PFNEGLQUERYWAYLANDBUFFERWL eglQueryWaylandBufferWL;
@@ -55,7 +57,6 @@ struct _MetaEgl
   PFNEGLQUERYDEVICESTRINGEXTPROC eglQueryDeviceStringEXT;
 
   PFNEGLGETOUTPUTLAYERSEXTPROC eglGetOutputLayersEXT;
-  PFNEGLQUERYOUTPUTLAYERATTRIBEXTPROC eglQueryOutputLayerAttribEXT;
 
   PFNEGLCREATESTREAMKHRPROC eglCreateStreamKHR;
   PFNEGLDESTROYSTREAMKHRPROC eglDestroyStreamKHR;
@@ -739,21 +740,6 @@ meta_egl_make_current (MetaEgl   *egl,
 }
 
 gboolean
-meta_egl_swap_buffers (MetaEgl   *egl,
-                       EGLDisplay display,
-                       EGLSurface surface,
-                       GError   **error)
-{
-  if (!eglSwapBuffers (display, surface))
-    {
-      set_egl_error (error);
-      return FALSE;
-    }
-
-  return TRUE;
-}
-
-gboolean
 meta_egl_bind_wayland_display (MetaEgl            *egl,
                                EGLDisplay          display,
                                struct wl_display  *wayland_display,
@@ -893,27 +879,6 @@ meta_egl_get_output_layers (MetaEgl           *egl,
                                    layers,
                                    max_layers,
                                    num_layers))
-    {
-      set_egl_error (error);
-      return FALSE;
-    }
-
-  return TRUE;
-}
-
-gboolean
-meta_egl_query_output_layer_attrib (MetaEgl          *egl,
-                                    EGLDisplay        display,
-                                    EGLOutputLayerEXT layer,
-                                    EGLint            attribute,
-                                    EGLAttrib        *value,
-                                    GError          **error)
-{
-  if (!is_egl_proc_valid (egl->eglQueryOutputLayerAttribEXT, error))
-    return FALSE;
-
-  if (!egl->eglQueryOutputLayerAttribEXT (display, layer,
-                                          attribute, value))
     {
       set_egl_error (error);
       return FALSE;
@@ -1229,6 +1194,31 @@ meta_egl_wait_sync (MetaEgl     *egl,
   return TRUE;
 }
 
+int
+meta_egl_create_sync_fd (MetaEgl     *egl,
+                         EGLDisplay   display,
+                         GError     **error)
+{
+  EGLSync sync;
+  int sync_fd;
+
+  if (!is_egl_proc_valid (egl->eglDupNativeFenceFDANDROID, error))
+    return -1;
+
+  if (!meta_egl_create_sync (egl, display, EGL_SYNC_NATIVE_FENCE_ANDROID,
+                             NULL, &sync, error))
+    return -1;
+
+  sync_fd = egl->eglDupNativeFenceFDANDROID (display, sync);
+  if (sync_fd < 0)
+    set_egl_error (error);
+
+  if (!meta_egl_destroy_sync (egl, display, sync, NULL))
+    g_warn_if_reached ();
+
+  return sync_fd;
+}
+
 #define GET_EGL_PROC_ADDR(proc) \
   egl->proc = (void *) eglGetProcAddress (#proc);
 
@@ -1245,6 +1235,7 @@ meta_egl_constructed (GObject *object)
   GET_EGL_PROC_ADDR (eglCreateSync);
   GET_EGL_PROC_ADDR (eglDestroySync);
   GET_EGL_PROC_ADDR (eglWaitSync);
+  GET_EGL_PROC_ADDR (eglDupNativeFenceFDANDROID);
 
   GET_EGL_PROC_ADDR (eglBindWaylandDisplayWL);
   GET_EGL_PROC_ADDR (eglQueryWaylandBufferWL);
@@ -1253,7 +1244,6 @@ meta_egl_constructed (GObject *object)
   GET_EGL_PROC_ADDR (eglQueryDeviceStringEXT);
 
   GET_EGL_PROC_ADDR (eglGetOutputLayersEXT);
-  GET_EGL_PROC_ADDR (eglQueryOutputLayerAttribEXT);
 
   GET_EGL_PROC_ADDR (eglCreateStreamKHR);
   GET_EGL_PROC_ADDR (eglDestroyStreamKHR);

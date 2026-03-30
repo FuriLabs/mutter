@@ -18,6 +18,7 @@
 #include "config.h"
 
 #include <gio/gio.h>
+#include <libevdev/libevdev.h>
 #include <wayland-client.h>
 #include <gdesktop-enums.h>
 
@@ -140,6 +141,7 @@ cursor_shape (void)
                                             NULL);
   meta_wayland_test_client_finish (wayland_test_client);
   meta_backend_uninhibit_hw_cursor (backend);
+  g_clear_object (&virtual_pointer);
 }
 
 static void
@@ -888,13 +890,156 @@ toplevel_invalid_geometry_subsurface (void)
 }
 
 static void
-toplevel_activation (void)
+toplevel_activation_no_serial (void)
 {
   MetaWaylandTestClient *wayland_test_client;
 
   wayland_test_client =
-    meta_wayland_test_client_new (test_context, "xdg-activation");
+    meta_wayland_test_client_new (test_context, "xdg-activation-no-serial");
   meta_wayland_test_client_finish (wayland_test_client);
+}
+
+static void
+toplevel_activation_before_mapped (void)
+{
+  MetaBackend *backend = meta_context_get_backend (test_context);
+  ClutterSeat *seat = meta_backend_get_default_seat (backend);
+  g_autoptr (ClutterVirtualInputDevice) virtual_keyboard = NULL;
+  g_autoptr (GSettings) wm_prefs = NULL;
+  MetaWaylandTestClient *wayland_test_client;
+  MetaWindow *window;
+
+  wm_prefs = g_settings_new ("org.gnome.desktop.wm.preferences");
+  virtual_keyboard =
+    clutter_seat_create_virtual_device (seat, CLUTTER_KEYBOARD_DEVICE);
+  wayland_test_client =
+    meta_wayland_test_client_new (test_context, "xdg-activation-before-mapped");
+
+  wait_for_sync_point (0);
+  g_settings_set_enum (wm_prefs, "focus-new-windows",
+                       G_DESKTOP_FOCUS_NEW_WINDOWS_STRICT);
+  emit_sync_event (0);
+
+  wait_for_sync_point (1);
+  window = find_client_window ("activated-window");
+  g_assert_true (meta_window_has_focus (window));
+  g_assert_true (window == meta_stack_get_top (window->display->stack));
+  g_assert_true (window->stack_position == 1);
+
+  meta_wayland_test_client_finish (wayland_test_client);
+  g_settings_reset (wm_prefs, "focus-new-windows");
+}
+
+static void
+toplevel_activation_serial (const char             *client_arg,
+                            ClutterInputDeviceType  device_type)
+{
+  MetaBackend *backend = meta_context_get_backend (test_context);
+  MetaDisplay *display = meta_context_get_display (test_context);
+  g_autoptr (ClutterVirtualInputDevice) device = NULL;
+  g_autoptr (GSettings) wm_prefs = NULL;
+  MetaWaylandTestClient *wayland_test_client;
+  ClutterSeat *seat;
+  MetaWindow *parent_window;
+  MtkRectangle parent_rect;
+  MetaWindow *child_window;
+
+  wm_prefs = g_settings_new ("org.gnome.desktop.wm.preferences");
+
+  seat = meta_backend_get_default_seat (backend);
+  device = clutter_seat_create_virtual_device (seat, device_type);
+
+  wayland_test_client =
+    meta_wayland_test_client_new_with_args (test_context,
+                                            "xdg-activation-serial",
+                                            client_arg,
+                                            NULL);
+
+  while (!(parent_window = find_client_window ("xdg-activation-parent")))
+    g_main_context_iteration (NULL, TRUE);
+  g_object_add_weak_pointer (G_OBJECT (parent_window),
+                             (gpointer *) &parent_window);
+
+  while (meta_window_is_hidden (parent_window))
+    g_main_context_iteration (NULL, TRUE);
+  meta_wait_for_effects (parent_window);
+
+  g_settings_set_enum (wm_prefs, "focus-new-windows",
+                       G_DESKTOP_FOCUS_NEW_WINDOWS_STRICT);
+
+  g_assert_true (meta_display_get_focus_window (display) == parent_window);
+
+  meta_window_get_frame_rect (parent_window, &parent_rect);
+
+  if (device_type == CLUTTER_POINTER_DEVICE)
+    {
+      clutter_virtual_input_device_notify_absolute_motion (device,
+                                                           CLUTTER_CURRENT_TIME,
+                                                           parent_rect.x + 10,
+                                                           parent_rect.y + 10);
+      clutter_virtual_input_device_notify_button (device,
+                                                  CLUTTER_CURRENT_TIME,
+                                                  CLUTTER_BUTTON_PRIMARY,
+                                                  CLUTTER_BUTTON_STATE_PRESSED);
+      clutter_virtual_input_device_notify_button (device,
+                                                  CLUTTER_CURRENT_TIME,
+                                                  CLUTTER_BUTTON_PRIMARY,
+                                                  CLUTTER_BUTTON_STATE_RELEASED);
+    }
+  else if (device_type == CLUTTER_KEYBOARD_DEVICE)
+    {
+      meta_window_activate (parent_window, META_CURRENT_TIME);
+      clutter_virtual_input_device_notify_key (device,
+                                               CLUTTER_CURRENT_TIME,
+                                               KEY_A,
+                                               CLUTTER_KEY_STATE_PRESSED);
+      clutter_virtual_input_device_notify_key (device,
+                                               CLUTTER_CURRENT_TIME,
+                                               KEY_A,
+                                               CLUTTER_KEY_STATE_RELEASED);
+    }
+
+  while (!(child_window = find_client_window ("xdg-activation-child")))
+    g_main_context_iteration (NULL, TRUE);
+  g_object_add_weak_pointer (G_OBJECT (child_window),
+                             (gpointer *) &child_window);
+
+  while (meta_window_is_hidden (child_window))
+    g_main_context_iteration (NULL, TRUE);
+
+  g_assert_true (meta_display_get_focus_window (display) == child_window);
+
+  meta_wayland_test_driver_terminate (test_driver);
+  meta_wayland_test_client_finish (wayland_test_client);
+
+  g_settings_reset (wm_prefs, "focus-new-windows");
+
+  while (child_window || parent_window)
+    g_main_context_iteration (NULL, TRUE);
+}
+
+static void
+toplevel_activation_button_press (void)
+{
+  toplevel_activation_serial ("button-press", CLUTTER_POINTER_DEVICE);
+}
+
+static void
+toplevel_activation_button_release (void)
+{
+  toplevel_activation_serial ("button-release", CLUTTER_POINTER_DEVICE);
+}
+
+static void
+toplevel_activation_key_press (void)
+{
+  toplevel_activation_serial ("key-press", CLUTTER_KEYBOARD_DEVICE);
+}
+
+static void
+toplevel_activation_key_release (void)
+{
+  toplevel_activation_serial ("key-release", CLUTTER_KEYBOARD_DEVICE);
 }
 
 static void
@@ -935,6 +1080,91 @@ mark_later_as_done (gpointer user_data)
   *done = TRUE;
 
   return G_SOURCE_REMOVE;
+}
+
+static void
+delayed_cursor (void)
+{
+  MetaBackend *backend = meta_context_get_backend (test_context);
+  ClutterSeat *seat = meta_backend_get_default_seat (backend);
+  MetaWaylandTestClient *test_client1, *test_client2;
+  MetaWindow *window;
+
+  virtual_pointer = clutter_seat_create_virtual_device (seat,
+                                                        CLUTTER_POINTER_DEVICE);
+
+  clutter_virtual_input_device_notify_absolute_motion (virtual_pointer,
+                                                       g_get_monotonic_time (),
+                                                       600.0f,
+                                                       0.0f);
+  meta_flush_input (test_context);
+
+  /* FIXME workaround for a bug in native cursor renderer where just trying to
+   * get the cursor on a plane results in no software cursor being rendered */
+  meta_backend_inhibit_hw_cursor (backend);
+
+  test_client1 =
+    meta_wayland_test_client_new_with_args (test_context,
+                                            "delayed-cursor",
+                                            "src",
+                                            NULL);
+  meta_wait_for_client_window (test_context, "src");
+  window = find_client_window ("src");
+  g_assert_nonnull (window);
+  meta_wait_for_effects (window);
+  wait_for_sync_point (0);
+  meta_window_move_frame (window, FALSE, 100, 100);
+
+  test_client2 =
+    meta_wayland_test_client_new_with_args (test_context,
+                                            "delayed-cursor",
+                                            "dst",
+                                            NULL);
+  meta_wait_for_client_window (test_context, "dst");
+  window = find_client_window ("dst");
+  g_assert_nonnull (window);
+  meta_wait_for_effects (window);
+  wait_for_sync_point (1);
+  meta_window_move_frame (window, FALSE, 200, 200);
+
+  /* Move into src */
+  clutter_virtual_input_device_notify_absolute_motion (virtual_pointer,
+                                                       g_get_monotonic_time (),
+                                                       150.0f,
+                                                       150.0f);
+  meta_flush_input (test_context);
+
+  wait_for_sync_point (2);
+
+  /* Move into compositor chrome */
+  clutter_virtual_input_device_notify_absolute_motion (virtual_pointer,
+                                                       g_get_monotonic_time (),
+                                                       250.0f,
+                                                       150.0f);
+  meta_flush_input (test_context);
+
+  /* Move into dst */
+  clutter_virtual_input_device_notify_absolute_motion (virtual_pointer,
+                                                       g_get_monotonic_time (),
+                                                       250.0f,
+                                                       250.0f);
+  meta_flush_input (test_context);
+
+  wait_for_sync_point (3);
+
+  /* Move into compositor chrome again */
+  clutter_virtual_input_device_notify_absolute_motion (virtual_pointer,
+                                                       g_get_monotonic_time (),
+                                                       150.0f,
+                                                       250.0f);
+  meta_flush_input (test_context);
+
+  emit_sync_event (0);
+
+  meta_wayland_test_client_finish (test_client1);
+  meta_wayland_test_client_finish (test_client2);
+  meta_backend_uninhibit_hw_cursor (backend);
+  g_clear_object (&virtual_pointer);
 }
 
 static void
@@ -1597,6 +1827,7 @@ toplevel_bounds_monitors (void)
 
   meta_wayland_test_driver_emit_sync_event (test_driver, 0);
   meta_wayland_test_client_finish (wayland_test_client);
+  g_clear_object (&virtual_pointer);
 }
 
 static void
@@ -1800,37 +2031,6 @@ toplevel_tag (void)
 }
 
 static void
-toplevel_activation_before_mapped (void)
-{
-  MetaBackend *backend = meta_context_get_backend (test_context);
-  ClutterSeat *seat = meta_backend_get_default_seat (backend);
-  g_autoptr (ClutterVirtualInputDevice) virtual_keyboard = NULL;
-  g_autoptr (GSettings) wm_prefs = NULL;
-  MetaWaylandTestClient *wayland_test_client;
-  MetaWindow *window;
-
-  wm_prefs = g_settings_new ("org.gnome.desktop.wm.preferences");
-  virtual_keyboard =
-    clutter_seat_create_virtual_device (seat, CLUTTER_KEYBOARD_DEVICE);
-  wayland_test_client =
-    meta_wayland_test_client_new (test_context, "xdg-activation-before-mapped");
-
-  wait_for_sync_point (0);
-  g_settings_set_enum (wm_prefs, "focus-new-windows",
-                       G_DESKTOP_FOCUS_NEW_WINDOWS_STRICT);
-  emit_sync_event (0);
-
-  wait_for_sync_point (1);
-  window = find_client_window ("activated-window");
-  g_assert_true (meta_window_has_focus (window));
-  g_assert_true (window == meta_stack_get_top (window->display->stack));
-  g_assert_true (window->stack_position == 1);
-
-  meta_wayland_test_client_finish (wayland_test_client);
-  g_settings_reset (wm_prefs, "focus-new-windows");
-}
-
-static void
 toplevel_fixed_size_fullscreen (void)
 {
   MetaBackend *backend = meta_context_get_backend (test_context);
@@ -2007,7 +2207,6 @@ toplevel_begin_interactive_resize (void)
   ClutterSeat *seat = meta_backend_get_default_seat (backend);
   ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
   ClutterStage *stage = CLUTTER_STAGE (meta_backend_get_stage (backend));
-  ClutterInputDevice *pointer;
   ClutterSprite *pointer_sprite;
   GSettings *settings;
   MetaWindow *window;
@@ -2024,8 +2223,6 @@ toplevel_begin_interactive_resize (void)
 
   virtual_pointer = clutter_seat_create_virtual_device (seat,
                                                         CLUTTER_POINTER_DEVICE);
-  pointer = clutter_seat_get_pointer (seat);
-  g_assert_nonnull (pointer);
   clutter_virtual_input_device_notify_absolute_motion (virtual_pointer,
                                                        g_get_monotonic_time (),
                                                        0.0f, 0.0f);
@@ -2183,8 +2380,18 @@ init_tests (void)
                    toplevel_invalid_geometry_basic);
   g_test_add_func ("/wayland/toplevel/invalid-geometry/subsurface",
                    toplevel_invalid_geometry_subsurface);
-  g_test_add_func ("/wayland/toplevel/activation",
-                   toplevel_activation);
+  g_test_add_func ("/wayland/toplevel/activation/no-serial",
+                   toplevel_activation_no_serial);
+  g_test_add_func ("/wayland/toplevel/activation/before-mapped",
+                   toplevel_activation_before_mapped);
+  g_test_add_func ("/wayland/toplevel/activation/button-press",
+                   toplevel_activation_button_press);
+  g_test_add_func ("/wayland/toplevel/activation/button-release",
+                   toplevel_activation_button_release);
+  g_test_add_func ("/wayland/toplevel/activation/key-press",
+                   toplevel_activation_key_press);
+  g_test_add_func ("/wayland/toplevel/activation/key-release",
+                   toplevel_activation_key_release);
   g_test_add_func ("/wayland/toplevel/sessions/basic",
                    toplevel_sessions_basic);
   g_test_add_func ("/wayland/toplevel/sessions/replace",
@@ -2222,10 +2429,10 @@ init_tests (void)
                    toplevel_suspended);
   g_test_add_func ("/wayland/cursor/shape",
                    cursor_shape);
+  g_test_add_func ("/wayland/cursor/delayed",
+                   delayed_cursor);
   g_test_add_func ("/wayland/toplevel/tag",
                    toplevel_tag);
-  g_test_add_func ("/wayland/toplevel/activation-before-mapped",
-                   toplevel_activation_before_mapped);
   g_test_add_func ("/wayland/toplevel/fixed-size-fullscreen",
                    toplevel_fixed_size_fullscreen);
   g_test_add_func ("/wayland/toplevel/fixed-size-fullscreen-exceeds",

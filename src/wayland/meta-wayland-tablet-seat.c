@@ -167,9 +167,6 @@ is_tablet_device (ClutterInputDevice *device)
 {
   ClutterInputCapabilities capabilities;
 
-  if (clutter_input_device_get_device_mode (device) == CLUTTER_INPUT_MODE_LOGICAL)
-    return FALSE;
-
   capabilities = clutter_input_device_get_capabilities (device);
 
   return (capabilities & CLUTTER_INPUT_CAPABILITY_TABLET_TOOL) != 0;
@@ -179,9 +176,6 @@ static gboolean
 is_pad_device (ClutterInputDevice *device)
 {
   ClutterInputCapabilities capabilities;
-
-  if (clutter_input_device_get_device_mode (device) == CLUTTER_INPUT_MODE_LOGICAL)
-    return FALSE;
 
   capabilities = clutter_input_device_get_capabilities (device);
 
@@ -649,4 +643,24 @@ meta_wayland_tablet_seat_focus_surface (MetaWaylandTabletSeat *tablet_seat,
       if (meta_wayland_tablet_tool_has_current_tablet (tool, tablet))
         meta_wayland_tablet_tool_focus_surface (tool, surface);
     }
+}
+
+ClutterCursor *
+meta_wayland_tablet_seat_get_cursor (MetaWaylandTabletSeat *tablet_seat,
+                                     ClutterSprite         *sprite)
+{
+  MetaWaylandTabletTool *tool;
+  GHashTableIter iter;
+
+  g_hash_table_iter_init (&iter, tablet_seat->tools);
+  while (g_hash_table_iter_next (&iter, NULL, (gpointer *) &tool))
+    {
+      ClutterCursor *cursor;
+
+      cursor = meta_wayland_tablet_tool_get_cursor (tool, sprite);
+      if (cursor)
+        return cursor;
+    }
+
+  return NULL;
 }

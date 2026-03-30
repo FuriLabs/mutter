@@ -34,17 +34,11 @@
 
 #include "cogl/cogl-types.h"
 #include "cogl/cogl-pixel-format.h"
+#include "cogl/winsys/cogl-winsys.h"
 
 #include <glib-object.h>
 
 G_BEGIN_DECLS
-
-typedef enum _CoglDrmModifierFilter
-{
-  COGL_DRM_MODIFIER_FILTER_NONE = 0,
-  COGL_DRM_MODIFIER_FILTER_SINGLE_PLANE = 1 << 0,
-  COGL_DRM_MODIFIER_FILTER_NOT_EXTERNAL_ONLY = 1 << 1,
-} CoglDrmModifierFilter;
 
 /**
  * CoglRenderer:
@@ -52,8 +46,7 @@ typedef enum _CoglDrmModifierFilter
  * Choosing a means to render
  *
  * A #CoglRenderer represents a means to render. It encapsulates the
- * selection of an underlying driver, such as OpenGL or OpenGL-ES and
- * a selection of a window system binding API such as GLX or EGL.
+ * selection of an underlying driver, such as OpenGL or OpenGL-ES.
  *
  * A #CoglRenderer has two states, "unconnected" and "connected". When
  * a renderer is first instantiated using cogl_renderer_new() it is
@@ -99,11 +92,7 @@ G_DECLARE_FINAL_TYPE (CoglRenderer,
  * Instantiates a new (unconnected) #CoglRenderer object. A
  * #CoglRenderer represents a means to render. It encapsulates the
  * selection of an underlying driver, such as OpenGL or OpenGL-ES and
- * a selection of a window system binding API such as GLX or EGL.
- *
- * There are also some platform specific configuration apis such
- * as cogl_xlib_renderer_set_foreign_display() that may also be
- * used while the renderer is unconnected.
+ * a selection of a window system binding API such as EGL.
  *
  * Once the renderer has been configured, then it may (optionally) be
  * explicitly connected using cogl_renderer_connect() which allows
@@ -124,41 +113,6 @@ COGL_EXPORT CoglRenderer *
 cogl_renderer_new (void);
 
 /* optional configuration APIs */
-
-/**
- * CoglWinsysID:
- * @COGL_WINSYS_ID_ANY: Implies no preference for which backend is used
- * @COGL_WINSYS_ID_STUB: Use the no-op stub backend
- * @COGL_WINSYS_ID_GLX: Use the GLX window system binding API
- * @COGL_WINSYS_ID_EGL_XLIB: Use EGL with the X window system via XLib
- *
- * Identifies specific window system backends that Cogl supports.
- *
- * These can be used to query what backend Cogl is using or to try and
- * explicitly select a backend to use.
- */
-typedef enum
-{
-  COGL_WINSYS_ID_ANY,
-  COGL_WINSYS_ID_STUB,
-  COGL_WINSYS_ID_GLX,
-  COGL_WINSYS_ID_EGL_XLIB,
-  COGL_WINSYS_ID_CUSTOM,
-} CoglWinsysID;
-
-/**
- * cogl_renderer_get_winsys_id:
- * @renderer: A #CoglRenderer
- *
- * Queries which window system backend Cogl has chosen to use.
- *
- * This may only be called on a connected #CoglRenderer.
- *
- * Returns: The #CoglWinsysID corresponding to the chosen window
- *          system backend.
- */
-COGL_EXPORT CoglWinsysID
-cogl_renderer_get_winsys_id (CoglRenderer *renderer);
 
 /* Final connection API */
 
@@ -310,31 +264,27 @@ COGL_EXPORT void *
 cogl_renderer_get_proc_address (CoglRenderer *renderer,
                                 const char   *name);
 
+COGL_EXPORT
+void cogl_renderer_set_winsys_data (CoglRenderer   *renderer,
+                                    void           *winsys,
+                                    GDestroyNotify  destroy);
+
+COGL_EXPORT
+void * cogl_renderer_get_winsys_data (CoglRenderer *renderer);
+
 /**
- * cogl_renderer_handle_event: (skip)
+ * cogl_renderer_get_winsys:
  * @renderer: a #CoglRenderer
- * @event: pointer to an event structure
  *
- * Processes a single event.
+ * Queries the associated #CoglWinsys.
  *
- * Return value: #CoglFilterReturn. %COGL_FILTER_REMOVE indicates that
- * Cogl has internally handled the event and the caller should do no
- * further processing. %COGL_FILTER_CONTINUE indicates that Cogl is
- * either not interested in the event, or has used the event to update
- * internal state without taking any exclusive action.
+ * Return value: (transfer none): The associated #CoglWinsys
  */
-COGL_EXPORT CoglFilterReturn
-cogl_renderer_handle_event (CoglRenderer *renderer,
-                            void         *event);
+COGL_EXPORT
+CoglWinsys * cogl_renderer_get_winsys (CoglRenderer *renderer);
 
 COGL_EXPORT
-void cogl_renderer_set_winsys (CoglRenderer *renderer,
-                               void         *winsys);
-
-COGL_EXPORT
-void * cogl_renderer_get_winsys (CoglRenderer *renderer);
-
-COGL_EXPORT
-void * cogl_renderer_get_custom_winsys_data (CoglRenderer *renderer);
+void cogl_renderer_set_custom_winsys (CoglRenderer *renderer,
+                                      CoglWinsys   *winsys);
 
 G_END_DECLS

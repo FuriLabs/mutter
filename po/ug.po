@@ -9,15 +9,16 @@ msgid ""
 msgstr ""
 "Project-Id-Version: mutter\n"
 "Report-Msgid-Bugs-To: https://gitlab.gnome.org/GNOME/mutter/issues/\n"
-"POT-Creation-Date: 2025-09-10 23:42+0000\n"
-"PO-Revision-Date: 2025-09-23 12:52-0400\n"
+"POT-Creation-Date: 2026-02-28 15:06+0000\n"
+"PO-Revision-Date: 2026-03-02 23:32-0500\n"
 "Last-Translator: Abduqadir Abliz <sahranbay@gmail.com>\n"
 "Language-Team: Uyghur Computer Science Association <UKIJ@yahoogroups.com>\n"
 "Language: ug\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Generator: Poedit 3.7\n"
+"X-DamnedLies-Scope: partial\n"
+"X-Generator: Poedit 3.8\n"
 
 #: data/50-mutter-navigation.xml:6
 msgid "Navigation"
@@ -247,139 +248,212 @@ msgstr "كۆزنەكنى بويىغا چوڭايت"
 msgid "Maximize window horizontally"
 msgstr "كۆزنەكنى توغرىسىغا چوڭايت"
 
-#: data/50-mutter-windows.xml:41 data/org.gnome.mutter.gschema.xml.in:187
+#: data/50-mutter-windows.xml:41 data/org.gnome.mutter.gschema.xml.in:166
 msgid "View split on left"
 msgstr "كۆزنەكنى سولغا بۆل"
 
-#: data/50-mutter-windows.xml:45 data/org.gnome.mutter.gschema.xml.in:192
+#: data/50-mutter-windows.xml:45 data/org.gnome.mutter.gschema.xml.in:171
 msgid "View split on right"
 msgstr "كۆزنەكنى ئوڭغا بۆل"
 
-#: data/org.gnome.mutter.gschema.xml.in:16
+#: data/org.gnome.mutter.gschema.xml.in:15
 msgid "Modifier to use for extended window management operations"
 msgstr "كېڭەيتىلگەن كۆزنەك باشقۇرۇش مەشغۇلاتىغا ئىشلىتىلىدىغان تۈزەتكۈچ"
 
-#: data/org.gnome.mutter.gschema.xml.in:17
-msgid "This key will initiate the “overlay”, which is a combination window overview and application launching system. The default is intended to be the “Windows key” on PC hardware. It’s expected that this binding either the default or set to the empty string."
-msgstr "بۇ كۇنۇپكا «قاپلا» كۆرۈنۈشىنى دەسلەپلەشتۈرىدۇ، كۆزنەك ئىخچام كۆرۈنۈشى ۋە قوللىنىشچان پىروگرامما قوزغىتىش سىستېمىسىنى بىرلەشتۈرىدۇ. كۆڭۈلدىكى ئەھۋالدا يەككە كومپيۇتېردىكى «Windows key» نى ئىشلىتىشنى تەلەپ قىلىدۇ. بىرىكمە كۇنۇپكىغا كۆڭۈلدىكى ياكى بوش تىزىقنى ئىشلىتىشكە بولىدۇ."
+#: data/org.gnome.mutter.gschema.xml.in:16
+msgid ""
+"This key will initiate the “overlay”, which is a combination window overview "
+"and application launching system. The default is intended to be the “Windows "
+"key” on PC hardware. It’s expected that this binding either the default or "
+"set to the empty string."
+msgstr ""
+"بۇ كۇنۇپكا «قاپلا» كۆرۈنۈشىنى دەسلەپلەشتۈرىدۇ، كۆزنەك ئىخچام كۆرۈنۈشى ۋە "
+"قوللىنىشچان پىروگرامما قوزغىتىش سىستېمىسىنى بىرلەشتۈرىدۇ. كۆڭۈلدىكى ئەھۋالدا "
+"يەككە كومپيۇتېردىكى «Windows key» نى ئىشلىتىشنى تەلەپ قىلىدۇ. بىرىكمە "
+"كۇنۇپكىغا كۆڭۈلدىكى ياكى بوش تىزىقنى ئىشلىتىشكە بولىدۇ."
 
-#: data/org.gnome.mutter.gschema.xml.in:29
+#: data/org.gnome.mutter.gschema.xml.in:28
 msgid "Attach modal dialogs"
 msgstr "قوشۇلغان مودېل سۆزلەشكۈ"
 
-#: data/org.gnome.mutter.gschema.xml.in:30
-msgid "When true, instead of having independent titlebars, modal dialogs appear attached to the titlebar of the parent window and are moved together with the parent window."
-msgstr "true بولغاندا مودېل سۆزلەشكۈ ئاتا كۆزنەكنىڭ ماۋزۇ بالداققا يېپىشىپ كۆرۈنىدۇ ھەمدە ئاتا كۆزنەككە ئەگىشىپ يۆتكىلىدۇ، ئايرىم ماۋزۇ بالدىقى بولمايدۇ."
+#: data/org.gnome.mutter.gschema.xml.in:29
+msgid ""
+"When true, instead of having independent titlebars, modal dialogs appear "
+"attached to the titlebar of the parent window and are moved together with "
+"the parent window."
+msgstr ""
+"قىممىتى true بولغاندا مودېل سۆزلەشكۈ ئاتا كۆزنەكنىڭ ماۋزۇ بالداققا يېپىشىپ "
+"كۆرۈنىدۇ ھەمدە ئاتا كۆزنەككە ئەگىشىپ يۆتكىلىدۇ، ئايرىم ماۋزۇ بالدىقى "
+"بولمايدۇ."
 
-#: data/org.gnome.mutter.gschema.xml.in:39
+#: data/org.gnome.mutter.gschema.xml.in:38
 msgid "Enable edge tiling when dropping windows on screen edges"
 msgstr "ئېكران گىرۋىكىدە كۆزنەكنى قويۇپ بەرگەندە گىرۋەكنى جىپىسلاشنى قوزغىتىدۇ"
 
-#: data/org.gnome.mutter.gschema.xml.in:40
-msgid "If enabled, dropping windows on vertical screen edges maximizes them vertically and resizes them horizontally to cover half of the available area. Dropping windows on the top screen edge maximizes them completely."
-msgstr "ئەگەر قوزغىتىلسا، كۆزنەكنى ئېكراننىڭ بوي قىرىغا سۆرەپ قويۇپ بەرگەندە ئېكراننى بويىغا چوڭايتىدۇ، توغرىسىغا يېرىم ئېكراننى ئىگىلەيدۇ. كۆزنەكنى ئېكراننىڭ ئۈستى قىرىغا سۆرەپ قويۇپ بەرگەندە كۆزنەكنى چوڭايتىپ ئېكرانغا لىق تولدۇرىدۇ."
+#: data/org.gnome.mutter.gschema.xml.in:39
+msgid ""
+"If enabled, dropping windows on vertical screen edges maximizes them "
+"vertically and resizes them horizontally to cover half of the available "
+"area. Dropping windows on the top screen edge maximizes them completely."
+msgstr ""
+"ئەگەر قوزغىتىلسا، كۆزنەكنى ئېكراننىڭ بوي قىرىغا سۆرەپ قويۇپ بەرگەندە "
+"ئېكراننى بويىغا چوڭايتىدۇ، توغرىسىغا يېرىم ئېكراننى ئىگىلەيدۇ. كۆزنەكنى "
+"ئېكراننىڭ ئۈستى قىرىغا سۆرەپ قويۇپ بەرگەندە كۆزنەكنى چوڭايتىپ ئېكرانغا لىق "
+"تولدۇرىدۇ."
 
-#: data/org.gnome.mutter.gschema.xml.in:49
+#: data/org.gnome.mutter.gschema.xml.in:48
 msgid "Workspaces are managed dynamically"
 msgstr "خىزمەت بوشلۇقى جانلىق باشقۇرۇلىدۇ"
 
-#: data/org.gnome.mutter.gschema.xml.in:50
-msgid "Determines whether workspaces are managed dynamically or whether there’s a static number of workspaces (determined by the num-workspaces key in org.gnome.desktop.wm.preferences)."
-msgstr "خىزمەت بوشلۇقىنىڭ جانلىق باشقۇرۇلۇشى ياكى خىزمەت بوشلۇق سانىنىڭ مۇقىملىقى بەلگىلىنىدۇ(خىزمەت بوشلۇقىنىڭ سانى org.gnome.desktop.wm.preferences دېگەن ئاچقۇچتا بەلگىلىنىدۇ)"
+#: data/org.gnome.mutter.gschema.xml.in:49
+msgid ""
+"Determines whether workspaces are managed dynamically or whether there’s a "
+"static number of workspaces (determined by the num-workspaces key in "
+"org.gnome.desktop.wm.preferences)."
+msgstr ""
+"خىزمەت بوشلۇقىنىڭ جانلىق باشقۇرۇلۇشى ياكى خىزمەت بوشلۇق سانىنىڭ مۇقىملىقى "
+"بەلگىلىنىدۇ(خىزمەت بوشلۇقىنىڭ سانى org.gnome.desktop.wm.preferences دېگەن "
+"ئاچقۇچتا بەلگىلىنىدۇ)"
 
-#: data/org.gnome.mutter.gschema.xml.in:59
+#: data/org.gnome.mutter.gschema.xml.in:58
 msgid "Workspaces only on primary"
 msgstr "ئاساسىي كۆزەتكۈچتىكى خىزمەت بوشلۇقىغىلا"
 
-#: data/org.gnome.mutter.gschema.xml.in:60
-msgid "Determines whether workspace switching should happen for windows on all monitors or only for windows on the primary monitor."
-msgstr "خىزمەت بوشلۇقى ئالماشتۇرۇشنىڭ ھەممە ئېكراندىكى كۆزنەككىمۇ ياكى ئاساسىي ئېكرانغىلا قارىتىلغانلىقىنى جەزملەيدۇ."
+#: data/org.gnome.mutter.gschema.xml.in:59
+msgid ""
+"Determines whether workspace switching should happen for windows on all "
+"monitors or only for windows on the primary monitor."
+msgstr ""
+"خىزمەت بوشلۇقى ئالماشتۇرۇشنىڭ ھەممە ئېكراندىكى كۆزنەككىمۇ ياكى ئاساسىي "
+"ئېكرانغىلا قارىتىلغانلىقىنى جەزملەيدۇ."
 
-#: data/org.gnome.mutter.gschema.xml.in:68
+#: data/org.gnome.mutter.gschema.xml.in:67
 msgid "Delay focus changes until the pointer stops moving"
 msgstr "تاكى نىشانلىغۇچ يۆتكىلىشتىن توختىغۇچە فوكۇسنىڭ ئۆزگىرىشىنى كېچىكتۈرىدۇ"
 
-#: data/org.gnome.mutter.gschema.xml.in:69
-msgid "If set to true, and the focus mode is either “sloppy” or “mouse” then the focus will not be changed immediately when entering a window, but only after the pointer stops moving."
-msgstr "ئەگەر true قىلىپ تەڭشەلسە، فوكۇس ھالىتى «sloppy» ياكى «mouse» بولسا ئۇنداقتا كۆزنەككە كىرگەندە دەرھال ئۆزگەرمەي بەلكى نىشانلىغۇچنىڭ يۆتكىلىشى توختىغاندا ئاندىن ئۆزگىرىدۇ."
+#: data/org.gnome.mutter.gschema.xml.in:68
+msgid ""
+"If set to true, and the focus mode is either “sloppy” or “mouse” then the "
+"focus will not be changed immediately when entering a window, but only after "
+"the pointer stops moving."
+msgstr ""
+"ئەگەر true قىلىپ تەڭشەلسە، فوكۇس ھالىتى «sloppy» ياكى «mouse» بولسا ئۇنداقتا "
+"كۆزنەككە كىرگەندە دەرھال ئۆزگەرمەي بەلكى نىشانلىغۇچنىڭ يۆتكىلىشى توختىغاندا "
+"ئاندىن ئۆزگىرىدۇ."
 
-#: data/org.gnome.mutter.gschema.xml.in:79
+#: data/org.gnome.mutter.gschema.xml.in:78
 msgid "Draggable border width"
 msgstr "سۆرەشكە بولىدىغان گىرۋەكنىڭ كەڭلىكى"
 
-#: data/org.gnome.mutter.gschema.xml.in:80
-msgid "The amount of total draggable borders. If the theme’s visible borders are not enough, invisible borders will be added to meet this value."
-msgstr "سۆرەشكە بولىدىغان گىرۋەكنىڭ كەڭلىكى. ئۆرنەكتە كۆرسىتىلىۋاتقان گىرۋەكنىڭ كەڭلىكى يېتەرلىك بولمىسا، كۆرسەتكىلى بولمايدىغان گىرۋەككە مۇشۇ قىممەتكە ماس كېلىدىغان قىلىپ قىممەت قوشۇلىدۇ."
+#: data/org.gnome.mutter.gschema.xml.in:79
+msgid ""
+"The amount of total draggable borders. If the theme’s visible borders are "
+"not enough, invisible borders will be added to meet this value."
+msgstr ""
+"سۆرەشكە بولىدىغان گىرۋەكنىڭ كەڭلىكى. ئۆرنەكتە كۆرسىتىلىۋاتقان گىرۋەكنىڭ "
+"كەڭلىكى يېتەرلىك بولمىسا، كۆرسەتكىلى بولمايدىغان گىرۋەككە مۇشۇ قىممەتكە ماس "
+"كېلىدىغان قىلىپ قىممەت قوشۇلىدۇ."
 
-#: data/org.gnome.mutter.gschema.xml.in:89
+#: data/org.gnome.mutter.gschema.xml.in:88
 msgid "Auto maximize nearly monitor sized windows"
 msgstr "ئېكران ئېنىقلىقىغا يېقىن ھالدا كۆزنەكنى ئۆزلۈكىدىن چوڭايتىدۇ"
 
-#: data/org.gnome.mutter.gschema.xml.in:90
-msgid "If enabled, new windows that are initially the size of the monitor automatically get maximized."
-msgstr "ئەگەر قوزغىتىلسا، دەسلەپكى چوڭلۇقتىكى يېڭى كۆزنەك ئۆزلۈكىدىن چوڭايتىلىدۇ."
+#: data/org.gnome.mutter.gschema.xml.in:89
+msgid ""
+"If enabled, new windows that are initially the size of the monitor "
+"automatically get maximized."
+msgstr ""
+"ئەگەر قوزغىتىلسا، دەسلەپكى چوڭلۇقتىكى يېڭى كۆزنەك ئۆزلۈكىدىن چوڭايتىلىدۇ."
 
-#: data/org.gnome.mutter.gschema.xml.in:98
+#: data/org.gnome.mutter.gschema.xml.in:97
 msgid "Place new windows in the center"
 msgstr "يېڭى كۆزنەكنى مەركەزگە جايلاشتۇرىدۇ"
 
-#: data/org.gnome.mutter.gschema.xml.in:99
-msgid "When true, the new windows will always be put in the center of the active screen of the monitor."
-msgstr "ئەگەر true بولسا، يېڭى كۆزنەك كۆزەتكۈچتىكى ئاكتىپلانغان ئېكراننىڭ ھەمىشە مەركىزىگە جايلاشتۇرۇلىدۇ."
+#: data/org.gnome.mutter.gschema.xml.in:98
+msgid ""
+"When true, the new windows will always be put in the center of the active "
+"screen of the monitor."
+msgstr ""
+"ئەگەر true بولسا، يېڭى كۆزنەك كۆزەتكۈچتىكى ئاكتىپلانغان ئېكراننىڭ ھەمىشە "
+"مەركىزىگە جايلاشتۇرۇلىدۇ."
 
-#: data/org.gnome.mutter.gschema.xml.in:108
+#: data/org.gnome.mutter.gschema.xml.in:107
 msgid "Enable experimental features"
 msgstr "تەجرىبە ئىقتىدارىنى قوزغات"
 
-#: data/org.gnome.mutter.gschema.xml.in:109
+#: data/org.gnome.mutter.gschema.xml.in:108
 msgid ""
-"To enable experimental features, add the feature keyword to the list. Whether the feature requires restarting the compositor depends on the given feature. Any experimental feature is not required to still be available, or configurable. Don’t expect adding anything in this setting to be future proof. Currently possible keywords: • “scale-monitor-framebuffer” — makes mutter default to layout logical monitors in a logical pixel coordinate space, while scaling monitor framebuffers instead of window content, to manage HiDPI monitors. Does not require a restart. • “kms-modifiers” — makes mutter always allocate scanout buffers with explicit modifiers, if supported by the driver. Requires a restart. • “autoclose-xwayland” — "
-"automatically terminates Xwayland if all relevant X11 clients are gone. Requires a restart. • “variable-refresh-rate” — makes mutter dynamically adjust the refresh rate of the monitor when applicable if supported by the monitor, GPU and DRM driver. Configurable in Settings. Requires a restart. • “xwayland-native-scaling” — lets Xwayland clients use their native scaling support. If scaling is not supported by client, the client will be unscaled. Setting only takes effect when “scale-monitor-framebuffer” is enabled as well."
+"To enable experimental features, add the feature keyword to the list. "
+"Whether the feature requires restarting the compositor depends on the given "
+"feature. Any experimental feature is not required to still be available, or "
+"configurable. Don’t expect adding anything in this setting to be future "
+"proof. Currently possible keywords: • “kms-modifiers” — makes mutter always "
+"allocate scanout buffers with explicit modifiers, if supported by the "
+"driver. Requires a restart. • “autoclose-xwayland” — automatically "
+"terminates Xwayland if all relevant X11 clients are gone. Requires a restart."
 msgstr ""
-"تەجرىبە خاراكتېرلىك ئىقتىدارنى قوزغىتىشتا، ئىقتىدار ئاچقۇچلۇق سۆزنى تىزىمغا قوشۇڭ. بىرىكتۈرگۈچنى قوزغىتىش قوزغاتماسلىق ئىقتىدارنىڭ ئۆزىگە باغلىق. ھەر قانداق تەجرىبە خاراكتېرلىك ئىقتىدارنىڭ ھەممىسىنى چوقۇم ئىشلەتكىلى ۋە سەپلىگىلى بولۇشى ناتايىن. بۇ تەڭشەكتىكى تەجرىبە خاراكتېرلىك ئىقتىدارنىڭ كاپالىتى بارلىقىدىن ئۈمىد كۈتمەڭ. نۆۋەتتە ئىشلەتكىلى بولىدىغان ئاچقۇچلۇق سۆز:\n"
-"• «scale-monitor-framebuffer» — كۆڭۈلدىكى ئەھۋالدا Mutter لوگىكىلىق پىكسېل كوردىنات ئورنى ئاساسىدا يەرلىك كۆزەتكۈچنى جايلاشتۇرىدۇ ھەمدە HiDPI كۆزەتكۈچنى باشقۇرۇش ئۈچۈن كۆزنەك مەزمۇنىنى ئەمەس بەلكى كۆزەتكۈچ كاندۇك غەملىكىنىڭ چوڭلۇقىنى تەڭشەيدۇ. قايتا قوزغىتىش ھاجەتسىز\n"
-"• «kms-modifiers» — ئەگەر قوزغاتقۇ قوللىسا Mutter ھەمىشە ئېنىق ئۆزگەرتكۈچ ئارقىلىق scanout غەملەكنى تەقسىملەيدۇ. قايتا قوزغىتىش زۆرۈر.\n"
-"• «autoclose-xwayland» — باغلانغان بارلىق X11 خېرىدار پىروگراممىسى چېكىنگەندە Xwayland نى ئۆزلۈكىدىن ئاخىرلاشتۇرىدۇ. قايتا قوزغىتىش زۆرۈر.\n"
-"• «variable-refresh-rate» — ئەگەر كۆزەتكۈچ، كۆرسىتىش كارتىسى ۋە DRM قوزغاتقۇ قوللىسا مۇۋاپىق ۋاقىتتا Mutter كۆزەتكۈچنىڭ يېڭىلاش نىسبىتىنى ھەرىكەتچان تەڭشەيدۇ. تەڭشەكتە سەپلىگىلى بولىدۇ. قايتا قوزغىتىش زۆرۈر.\n"
-"• «xwayland-native-scaling» — بۇ Xwayland خېرىدار پىروگراممىسى ئۆزىدىكى چوڭ كىچىك تەڭشەشنى قوللاش ئىقتىدارىنى ئىشلىتىدۇ. ئەگەر خېرىدار پىروگراممىسى چوڭلۇقىنى تەڭشەشنى قوللىمىسا چوڭلۇقىنى ئۆزگەرتمەيدۇ. بۇ تەڭشەك پەقەت «scale-monitor-framebuffer» نىمۇ قوزغاتقان ۋاقىتتا ئاندىن كۈچكە ئىگە."
+"تەجرىبە خاراكتېرلىك ئىقتىدارنى قوزغىتىشتا، ئىقتىدار ئاچقۇچلۇق سۆزنى تىزىمغا "
+"قوشۇڭ. بىرىكتۈرگۈچنى قوزغىتىش قوزغاتماسلىق ئىقتىدارنىڭ ئۆزىگە باغلىق. ھەر "
+"قانداق تەجرىبە خاراكتېرلىك ئىقتىدارنىڭ ھەممىسىنى چوقۇم ئىشلەتكىلى ۋە "
+"سەپلىگىلى بولۇشى ناتايىن. بۇ تەڭشەكتىكى تەجرىبە خاراكتېرلىك ئىقتىدارنىڭ "
+"كاپالىتى بارلىقىدىن ئۈمىد كۈتمەڭ. نۆۋەتتە ئىشلەتكىلى بولىدىغان ئاچقۇچلۇق "
+"سۆز:\n"
+"• «kms-modifiers» — ئەگەر قوزغاتقۇ قوللىسا Mutter ھەمىشە ئېنىق ئۆزگەرتكۈچ "
+"ئارقىلىق scanout غەملەكنى تەقسىملەيدۇ. قايتا قوزغىتىش زۆرۈر.\n"
+"• «autoclose-xwayland» — باغلانغان بارلىق X11 خېرىدار پىروگراممىسى "
+"چېكىنگەندە Xwayland نى ئۆزلۈكىدىن ئاخىرلاشتۇرىدۇ. قايتا قوزغىتىش زۆرۈر."
 
-#: data/org.gnome.mutter.gschema.xml.in:151
+#: data/org.gnome.mutter.gschema.xml.in:130
 msgid "Modifier to use to locate the pointer"
 msgstr "نىشانلىغۇچنىڭ ئورنىنى بەلگىلەشتە ئىشلىتىدىغان تۈزەتكۈچ"
 
-#: data/org.gnome.mutter.gschema.xml.in:152
+#: data/org.gnome.mutter.gschema.xml.in:131
 msgid "This key will initiate the “locate pointer” action."
 msgstr "بۇ كۇنۇپكا «نىشانلىغۇچ ئورنىنى بەلگىلەش» مەشغۇلاتىنى دەسلەپلەشتۈرىدۇ."
 
-#: data/org.gnome.mutter.gschema.xml.in:159
+#: data/org.gnome.mutter.gschema.xml.in:138
 msgid "Timeout for check-alive ping"
 msgstr "ئاكتىپ ping ۋاقىت ھالقىشىنى تەكشۈرىدۇ"
 
-#: data/org.gnome.mutter.gschema.xml.in:160
-msgid "Number of milliseconds a client has to respond to a ping request in order to not be detected as frozen. Using 0 will disable the alive check completely."
-msgstr "توڭلىتىلغان دەپ بايقالماسلىق ئۈچۈن، خېرىدار پىروگراممىسى ping ئىلتىماسىغا ئىنكاس قايتۇرۇشنىڭ مىللىسېكۇنت سانى. 0 ئىشلىتىلسە پائالىيەت تەكشۈرۈشنى پۈتۈنلەي چەكلەيدۇ."
+#: data/org.gnome.mutter.gschema.xml.in:139
+msgid ""
+"Number of milliseconds a client has to respond to a ping request in order to "
+"not be detected as frozen. Using 0 will disable the alive check completely."
+msgstr ""
+"توڭلىتىلغان دەپ بايقالماسلىق ئۈچۈن، خېرىدار پىروگراممىسى ping ئىلتىماسىغا "
+"ئىنكاس قايتۇرۇشنىڭ مىللىسېكۇنت سانى. 0 ئىشلىتىلسە پائالىيەت تەكشۈرۈشنى "
+"پۈتۈنلەي چەكلەيدۇ."
 
 #. TRANSLATORS: Luminance is different from brightness.
 #. See https://en.wikipedia.org/wiki/Luminance
-#: data/org.gnome.mutter.gschema.xml.in:171
+#: data/org.gnome.mutter.gschema.xml.in:150
 msgid "Per output luminance settings"
 msgstr "ھەر بىر چىقىرىشنىڭ يورۇقلۇق تەڭشىكى"
 
-#: data/org.gnome.mutter.gschema.xml.in:172
-msgid "Per output and color mode luminance setting. Each entry consists of a tuple with connector, vendor, product, serial, and a color mode, as well as an associated floating point value representing the output luminance in percent (%). The default when not specified is 100%."
-msgstr "ھەر بىر چىقىرىش ۋە رەڭ ھالىتىنىڭ  يورۇقلۇق تەڭشىكى. ھەر بىر تۈرنىڭ باغلىغۇچ، تەمىنلىگۈچى، مەھسۇلات، تەرتىپ نومۇرى ۋە رەڭ ھالىتى شۇنداقلا باغلانغان پىرسەنت (%) بىلەن ئىپادىلەنگەن چىقىرىش يورۇقلۇقىنىڭ لەيلىمە قىممىتىنىڭ نۇقتىسىدىن تەشكىل تاپىدۇ. بەلگىلەنمىگەندە كۆڭۈلدىكى قىممىتى 100%."
+#: data/org.gnome.mutter.gschema.xml.in:151
+msgid ""
+"Per output and color mode luminance setting. Each entry consists of a tuple "
+"with connector, vendor, product, serial, and a color mode, as well as an "
+"associated floating point value representing the output luminance in percent "
+"(%). The default when not specified is 100%."
+msgstr ""
+"ھەر بىر چىقىرىش ۋە رەڭ ھالىتىنىڭ  يورۇقلۇق تەڭشىكى. ھەر بىر تۈرنىڭ باغلىغۇچ، "
+"تەمىنلىگۈچى، مەھسۇلات، تەرتىپ نومۇرى ۋە رەڭ ھالىتى شۇنداقلا باغلانغان "
+"پىرسەنت (%) بىلەن ئىپادىلەنگەن چىقىرىش يورۇقلۇقىنىڭ لەيلىمە قىممىتىنىڭ "
+"نۇقتىسىدىن تەشكىل تاپىدۇ. بەلگىلەنمىگەندە كۆڭۈلدىكى قىممىتى 100%."
 
-#: data/org.gnome.mutter.gschema.xml.in:197
+#: data/org.gnome.mutter.gschema.xml.in:176
 msgid "Switch monitor configurations"
 msgstr "كۆزەتكۈچ سەپلىمىسىنى ئالماشتۇر"
 
-#: data/org.gnome.mutter.gschema.xml.in:202
+#: data/org.gnome.mutter.gschema.xml.in:181
 msgid "Rotates the built-in monitor configuration"
 msgstr "ئىچىدىكى كۆزەتكۈچ سەپلىمىسىنى ئايلاندۇرىدۇ"
 
-#: data/org.gnome.mutter.gschema.xml.in:207
+#: data/org.gnome.mutter.gschema.xml.in:186
 msgid "Cancel any active input capture session"
-msgstr "ھەر قانداق ئاكتىپ ھالەتتىكى كىرگۈزۈشنى خاتىرىلەش ئەڭگىمەنى بىكار قىلىدۇ"
+msgstr ""
+"ھەر قانداق ئاكتىپ ھالەتتىكى كىرگۈزۈشنى خاتىرىلەش ئەڭگىمەنى بىكار قىلىدۇ"
 
 #: data/org.gnome.mutter.wayland.gschema.xml.in:12
 msgid "Switch to VT 1"
@@ -435,35 +509,108 @@ msgstr "تېزلەتمىنى قايتا قوزغات"
 
 #: data/org.gnome.mutter.wayland.gschema.xml.in:70
 msgid "Allow X11 grabs to lock keyboard focus with Xwayland"
-msgstr "X11 نىڭ قۇلۇپلانغان Xwayland نىڭ ھەرپتاختا فوكۇسلىنىشىغا ئېرىشىشىگە يول قويىدۇ"
+msgstr ""
+"X11 نىڭ قۇلۇپلانغان Xwayland نىڭ ھەرپتاختا فوكۇسلىنىشىغا ئېرىشىشىگە يول "
+"قويىدۇ"
 
 #: data/org.gnome.mutter.wayland.gschema.xml.in:71
-msgid "Allow all keyboard events to be routed to X11 “override redirect” windows with a grab when running in Xwayland. This option is to support X11 clients which map an “override redirect” window (which do not receive keyboard focus) and issue a keyboard grab to force all keyboard events to that window. This option is seldom used and has no effect on regular X11 windows which can receive keyboard focus under normal circumstances. For a X11 grab to be taken into account under Wayland, the client must also either send a specific X11 ClientMessage to the root window or be among the applications allowed in key “xwayland-grab-access-rules”."
-msgstr "Xwayland ئىجرا قىلىنىۋاتقاندا، بارلىق ھەرپتاختا پائالىيىتىنى X11  «قاپلاپ قايتا نىشانلاش» كۆزنىكىگە يوللاشقا يول قويىدۇ. بۇ تاللانما (ھەرپتاختا فوكۇسلىنىشىنى تاپشۇرۇۋالمايدىغان) X11  «قاپلاپ قايتا نىشانلاش» كۆزنىكى تەسۋىرلىگەن‎‏ خېرىدار پىروگراممىسىنى قوللاش ھەمدە ھەرپتاختا مەشغۇلاتىنى مەجبۇرىي ھالدا ئۇ كۆزنەككە يوللاش. بۇ تاللانما نىسبەتەن ئاز ئىشلىتىلىدۇ ئۇنىڭ ئۈستىگە ئادەتتىكى  X11 كۆزنەككە تەسىرى يوق، بۇ كۆزنەكلەر ئادەتتىكى ئەھۋالدا ھەرپتاختىنىڭ فوكۇسلاش نۇقتىسىنى تاپشۇرۇۋالالايدۇ. Wayland دە X11 ئېرىشىشنىڭ ئادەتتىكىدەك ئىشلىشى ئۈچۈن، خېرىدار پىروگراممىسىمۇ چوقۇم بەلگىلەنگەن X11 ClientMessage نى يىلتىز كۆزنەككە يوللىشى ياكى«xwayland-grab-access-rules» ئاچقۇچنى ئىچىدىكى يول قويىدىغان پىروگرامما قىلىشى كېرەك."
+msgid ""
+"Allow all keyboard events to be routed to X11 “override redirect” windows "
+"with a grab when running in Xwayland. This option is to support X11 clients "
+"which map an “override redirect” window (which do not receive keyboard "
+"focus) and issue a keyboard grab to force all keyboard events to that "
+"window. This option is seldom used and has no effect on regular X11 windows "
+"which can receive keyboard focus under normal circumstances. For a X11 grab "
+"to be taken into account under Wayland, the client must also either send a "
+"specific X11 ClientMessage to the root window or be among the applications "
+"allowed in key “xwayland-grab-access-rules”."
+msgstr ""
+"Xwayland ئىجرا قىلىنىۋاتقاندا، بارلىق ھەرپتاختا پائالىيىتىنى X11  «قاپلاپ "
+"قايتا نىشانلاش» كۆزنىكىگە يوللاشقا يول قويىدۇ. بۇ تاللانما (ھەرپتاختا "
+"فوكۇسلىنىشىنى تاپشۇرۇۋالمايدىغان) X11  «قاپلاپ قايتا نىشانلاش» كۆزنىكى "
+"تەسۋىرلىگەن‎‏ خېرىدار پىروگراممىسىنى قوللاش ھەمدە ھەرپتاختا مەشغۇلاتىنى "
+"مەجبۇرىي ھالدا ئۇ كۆزنەككە يوللاش. بۇ تاللانما نىسبەتەن ئاز ئىشلىتىلىدۇ "
+"ئۇنىڭ ئۈستىگە ئادەتتىكى  X11 كۆزنەككە تەسىرى يوق، بۇ كۆزنەكلەر ئادەتتىكى "
+"ئەھۋالدا ھەرپتاختىنىڭ فوكۇسلاش نۇقتىسىنى تاپشۇرۇۋالالايدۇ. Wayland دە X11 "
+"ئېرىشىشنىڭ ئادەتتىكىدەك ئىشلىشى ئۈچۈن، خېرىدار پىروگراممىسىمۇ چوقۇم "
+"بەلگىلەنگەن X11 ClientMessage نى يىلتىز كۆزنەككە يوللىشى ياكى«xwayland-grab-"
+"access-rules» ئاچقۇچنى ئىچىدىكى يول قويىدىغان پىروگرامما قىلىشى كېرەك."
 
 #: data/org.gnome.mutter.wayland.gschema.xml.in:90
 msgid "Xwayland applications allowed to issue keyboard grabs"
 msgstr "ھەرپتاختا مەشغۇلاتىغا ئېرىشىشنى قوللايدىغان Xwayland پىروگراممىسى"
 
 #: data/org.gnome.mutter.wayland.gschema.xml.in:91
-msgid "List the resource names or resource class of X11 windows either allowed or not allowed to issue X11 keyboard grabs under Xwayland. The resource name or resource class of a given X11 window can be obtained using the command “xprop WM_CLASS”. Wildcards “*” and jokers “?” in the values are supported. Values starting with “!” are denied, which has precedence over the list of values allowed, to revoke applications from the default system list. The default system list includes the following applications: “@XWAYLAND_GRAB_DEFAULT_ACCESS_RULES@” Users can break an existing grab by using the specific keyboard shortcut defined by the keybinding key “restore-shortcuts”."
-msgstr "Xwayland دىكى X11 ھەرپتاختا مەشغۇلاتىغا ئېرىشىدىغان X11 كۆزنىكىگە يول قويامدۇ ياكى يول قويمامدۇ، ئۇنىڭ مەنبە ئىسمى ياكى مەنبە تۈرى تىزىمى. بېرىلگەن X11 كۆزنەك مەنبە ئىسمى ياكى مەنبە تۈرىنى «xprop WM_CLASS» بۇيرۇقى بىلەن ئېرىشكىلى بولىدۇ. قىممىتىدە ئورتاق بەلگە «*» ۋە «?» نى ئىشلىتىشنى قوللايدۇ. «!» قىممىتى بىلەن باشلانغان قىممەت رەت قىلىنىدۇ، ئۇلارنىڭ ئالدىنلىق دەرىجىسى يول قويىدىغان قىممەت تىزىمىدىن يۇقىرى، كۆڭۈلدىكى سىستېما تىزىمىدىكى پىروگراممىنى بىكار قىلىشقا ئىشلىتىلىدۇ. كۆڭۈلدىكى سيستېما تىزىمى تۆۋەندىكى پىروگراممىنى ئۆز ئىچىگە ئالىدۇ: «@XWAYLAND_GRAB_DEFAULT_ACCESS_RULES@» ئىشلەتكۈچى «restore-shortcuts» كۇنۇپكا بىرىكمىسىنى ئىشلىتىپ ھەرپتاختا تېزلەتمىسىنى بەلگىلەپ ئىجرا قىلىنىۋاتقان ئېرىشىشنى توختىتالايدۇ."
+msgid ""
+"List the resource names or resource class of X11 windows either allowed or "
+"not allowed to issue X11 keyboard grabs under Xwayland. The resource name or "
+"resource class of a given X11 window can be obtained using the command "
+"“xprop WM_CLASS”. Wildcards “*” and jokers “?” in the values are supported. "
+"Values starting with “!” are denied, which has precedence over the list of "
+"values allowed, to revoke applications from the default system list. The "
+"default system list includes the following applications: "
+"“@XWAYLAND_GRAB_DEFAULT_ACCESS_RULES@” Users can break an existing grab by "
+"using the specific keyboard shortcut defined by the keybinding key “restore-"
+"shortcuts”."
+msgstr ""
+"Xwayland دىكى X11 ھەرپتاختا مەشغۇلاتىغا ئېرىشىدىغان X11 كۆزنىكىگە يول "
+"قويامدۇ ياكى يول قويمامدۇ، ئۇنىڭ مەنبە ئىسمى ياكى مەنبە تۈرى تىزىمى. "
+"بېرىلگەن X11 كۆزنەك مەنبە ئىسمى ياكى مەنبە تۈرىنى «xprop WM_CLASS» بۇيرۇقى "
+"بىلەن ئېرىشكىلى بولىدۇ. قىممىتىدە ئورتاق بەلگە «*» ۋە «?» نى ئىشلىتىشنى "
+"قوللايدۇ. «!» قىممىتى بىلەن باشلانغان قىممەت رەت قىلىنىدۇ، ئۇلارنىڭ "
+"ئالدىنلىق دەرىجىسى يول قويىدىغان قىممەت تىزىمىدىن يۇقىرى، كۆڭۈلدىكى سىستېما "
+"تىزىمىدىكى پىروگراممىنى بىكار قىلىشقا ئىشلىتىلىدۇ. كۆڭۈلدىكى سيستېما تىزىمى "
+"تۆۋەندىكى پىروگراممىنى ئۆز ئىچىگە ئالىدۇ: "
+"«@XWAYLAND_GRAB_DEFAULT_ACCESS_RULES@» ئىشلەتكۈچى «restore-shortcuts» "
+"كۇنۇپكا بىرىكمىسىنى ئىشلىتىپ ھەرپتاختا تېزلەتمىسىنى بەلگىلەپ ئىجرا "
+"قىلىنىۋاتقان ئېرىشىشنى توختىتالايدۇ."
 
 #: data/org.gnome.mutter.wayland.gschema.xml.in:116
 msgid "Disable selected X extensions in Xwayland"
 msgstr "Xwayland دە تاللانغان X كېڭەيتىلمىنى چەكلەيدۇ"
 
 #: data/org.gnome.mutter.wayland.gschema.xml.in:117
-msgid "This option disables the selected X extensions in Xwayland if Xwayland was built with support for those X extensions. This option has no effect if Xwayland was built without support for the selected extensions. Xwayland needs to be restarted for this setting to take effect."
-msgstr "بۇ تاللانما Xwayland دە بەلگىلەنگەن X كېڭەيتىلمىنى چەكلەيدۇ ئۇنىڭ ئۈستىگە Xwayland قۇرۇلغاندا بۇ X كېڭەيتىلمىنى قوزغاتقاندا ئاندىن مەنىگە ئىگە. ئەگەر Xwayland قۇرۇلغاندا بەلگىلەنگەن كېڭەيتىلمىنى قوزغاتمىغان بولسا مەزكۇر تاللانما ئۈنۈمىنى كۆرسەتمەيدۇ. تەڭشەكنىڭ كۈچكە ئىگە بولۇشى ئۈچۈن Xwayland نى قايتا قوزغىتىش زۆرۈر."
+msgid ""
+"This option disables the selected X extensions in Xwayland if Xwayland was "
+"built with support for those X extensions. This option has no effect if "
+"Xwayland was built without support for the selected extensions. Xwayland "
+"needs to be restarted for this setting to take effect."
+msgstr ""
+"بۇ تاللانما Xwayland دە بەلگىلەنگەن X كېڭەيتىلمىنى چەكلەيدۇ ئۇنىڭ ئۈستىگە "
+"Xwayland قۇرۇلغاندا بۇ X كېڭەيتىلمىنى قوزغاتقاندا ئاندىن مەنىگە ئىگە. ئەگەر "
+"Xwayland قۇرۇلغاندا بەلگىلەنگەن كېڭەيتىلمىنى قوزغاتمىغان بولسا مەزكۇر "
+"تاللانما ئۈنۈمىنى كۆرسەتمەيدۇ. تەڭشەكنىڭ كۈچكە ئىگە بولۇشى ئۈچۈن Xwayland نى "
+"قايتا قوزغىتىش زۆرۈر."
 
 #: data/org.gnome.mutter.wayland.gschema.xml.in:130
 msgid "Allow X11 clients with a different endianness to connect to Xwayland"
-msgstr "پەرقلىق ھەرپ تىزىقى تەرتىپىدىكى X11 خېرىدار پىروگراممىسىنىڭ Xwayland غا باغلىنىشىغا يول قويىدۇ"
+msgstr ""
+"پەرقلىق ھەرپ تىزىقى تەرتىپىدىكى X11 خېرىدار پىروگراممىسىنىڭ Xwayland غا "
+"باغلىنىشىغا يول قويىدۇ"
 
 #: data/org.gnome.mutter.wayland.gschema.xml.in:131
-msgid "Allow connections from clients with an endianness different to that of Xwayland. The X server byte-swapping code is a huge attack surface, much of that code in Xwayland is prone to security issues. The use-case of byte-swapped clients is very niche, and disabled by default in Xwayland. Enable this option to instruct Xwayland to accept connections from X11 clients with a different endianness. This option has no effect if Xwayland does not support the command line option +byteswappedclients/-byteswappedclients to control that setting. Xwayland needs to be restarted for this setting to take effect."
-msgstr "ھەرپ تىزىقى تەرتىپى بىلەن Xwayland نىڭ پەرقلىق خېرىدار پىروگراممىسىنىڭ باغلىنىشىغا يول قويىدۇ. X مۇلازىمېتىرىنىڭ بايت ئالماشتۇرۇش كودى زور بىر ھۇجۇم نىشانى، Xwayland دىكى نۇرغۇن كودتا ئاسانلا بىخەتەرلىك مەسىلىسى كېلىپ چىقىدۇ. بايت ئالماشتۇرۇش خېرىدار پىروگراممىسىنى ئىشلىتىش ئىنتايىن ئاز ئۇچرايدۇ ئۇنىڭ ئۈستىگە كۆڭۈلدىكى ئەھۋالدا Xwayland دە چەكلەنگەن. ئۇ تاللانما قوزغىتىلسا Xwayland گە X11 خېرىدار پىروگراممىسىنىڭ ئوخشاش بولمىغان ھەرپ تىزىقى تەرتىپىنىڭ ئۇلانمىسىنى قوبۇل قىلىشنى ئەسكەرتىدۇ. ئەگەر Xwayland بۇيرۇق قۇرىدىكى +byteswappedclients/-byteswappedclients نى قوللىماسلىق ئارقىلىق شۇ تەڭشەكنى تىزگىنلىمىسە ئۇنداقتا مەزكۇر تاللانمىنىڭ ئۈنۈمى بولمايدۇ. بۇ تاللانمىنىڭ كۈچكە ئىگە بولۇشى ئۈچۈن Xwayland نى قايتا قوزغىتىش زۆرۈر."
+msgid ""
+"Allow connections from clients with an endianness different to that of "
+"Xwayland. The X server byte-swapping code is a huge attack surface, much of "
+"that code in Xwayland is prone to security issues. The use-case of byte-"
+"swapped clients is very niche, and disabled by default in Xwayland. Enable "
+"this option to instruct Xwayland to accept connections from X11 clients with "
+"a different endianness. This option has no effect if Xwayland does not "
+"support the command line option +byteswappedclients/-byteswappedclients to "
+"control that setting. Xwayland needs to be restarted for this setting to "
+"take effect."
+msgstr ""
+"ھەرپ تىزىقى تەرتىپى بىلەن Xwayland نىڭ پەرقلىق خېرىدار پىروگراممىسىنىڭ "
+"باغلىنىشىغا يول قويىدۇ. X مۇلازىمېتىرىنىڭ بايت ئالماشتۇرۇش كودى زور بىر "
+"ھۇجۇم نىشانى، Xwayland دىكى نۇرغۇن كودتا ئاسانلا بىخەتەرلىك مەسىلىسى كېلىپ "
+"چىقىدۇ. بايت ئالماشتۇرۇش خېرىدار پىروگراممىسىنى ئىشلىتىش ئىنتايىن ئاز "
+"ئۇچرايدۇ ئۇنىڭ ئۈستىگە كۆڭۈلدىكى ئەھۋالدا Xwayland دە چەكلەنگەن. ئۇ تاللانما "
+"قوزغىتىلسا Xwayland گە X11 خېرىدار پىروگراممىسىنىڭ ئوخشاش بولمىغان ھەرپ "
+"تىزىقى تەرتىپىنىڭ ئۇلانمىسىنى قوبۇل قىلىشنى ئەسكەرتىدۇ. ئەگەر Xwayland "
+"بۇيرۇق قۇرىدىكى +byteswappedclients/-byteswappedclients نى قوللىماسلىق "
+"ئارقىلىق شۇ تەڭشەكنى تىزگىنلىمىسە ئۇنداقتا مەزكۇر تاللانمىنىڭ ئۈنۈمى "
+"بولمايدۇ. بۇ تاللانمىنىڭ كۈچكە ئىگە بولۇشى ئۈچۈن Xwayland نى قايتا قوزغىتىش "
+"زۆرۈر."
 
 #: mdk/mdk-launcher-adder.c:451 mdk/mdk-launcher-adder.ui:22
 msgid "Application"
@@ -521,23 +668,39 @@ msgstr "تەقلىدىي تېگىش(_E)"
 msgid "_Inhibit system shortcuts"
 msgstr "سىستېما تېزلەتمىسىنى چەكلە(_I)"
 
-#: mdk/mdk-main-window.ui:20
+#: mdk/mdk-main-window.ui:17
+msgid "Use host _keymap"
+msgstr "مۇلازىمېتىر تېزلەتمە خەرىتىسىنى ئىشلەت(_K)"
+
+#: mdk/mdk-main-window.ui:24
+msgid "_Monitors"
+msgstr "كۆرسەتكۈچ(_M)"
+
+#: mdk/mdk-main-window.ui:26
+msgid "_Add monitor"
+msgstr "كۆرسەتكۈچ قوش(_A)"
+
+#: mdk/mdk-main-window.ui:30
+msgid "_Emulate monitor modes"
+msgstr "كۆزەتكۈچ ھالىتىنى تەقلىدلە(_E)"
+
+#: mdk/mdk-main-window.ui:37
 msgid "_Launchers"
 msgstr "قوزغاتقۇچ(_L)"
 
-#: mdk/mdk-main-window.ui:24
+#: mdk/mdk-main-window.ui:41
 msgid "_Edit launchers"
 msgstr "قوزغاتقۇچ تەھرىرلە(_E)"
 
-#: mdk/mdk-main-window.ui:31
+#: mdk/mdk-main-window.ui:48
 msgid "_About Mutter Development Kit"
 msgstr "Mutter ئىجادىيەت يۈرۈشلۈكى ھەققىدە(_A)"
 
-#: mdk/mdk-main-window.ui:37 mdk/mdk-main.c:56
+#: mdk/mdk-main-window.ui:54 mdk/mdk-main.c:56
 msgid "Mutter Development Kit"
 msgstr "Mutter ئىجادىيەت يۈرۈشلۈكى"
 
-#: mdk/mdk-main-window.ui:47
+#: mdk/mdk-main-window.ui:64
 msgid "Main Menu"
 msgstr "ئاساسىي تىزىملىك"
 
@@ -553,31 +716,34 @@ msgstr "Mutter يۇمشاق دېتال ئىجادىيەت يۈرۈشلۈكى"
 msgid "About Mutter Development Kit"
 msgstr "Mutter ئىجادىيەت يۈرۈشلۈكى ھەققىدە"
 
-#: mdk/mdk-monitor.c:674
+#: mdk/mdk-monitor.c:557
 msgid "Failed to create monitor"
 msgstr "كۆزەتكۈچ قۇرالمىدى"
 
-#: src/backends/meta-monitor.c:274
+#: src/backends/meta-monitor.c:285
 msgid "Built-in display"
 msgstr "ئىچكى ئېكران"
 
-#: src/backends/meta-monitor.c:301
+#: src/backends/meta-monitor.c:312
 msgid "Unknown"
 msgstr "يوچۇن"
 
-#: src/backends/meta-monitor.c:303
+#: src/backends/meta-monitor.c:314
 msgid "Unknown Display"
 msgstr "نامەلۇم كۆرسەتكۈچ"
 
-#: src/backends/meta-monitor.c:311
+#: src/backends/meta-monitor.c:322
 #, c-format
-msgctxt "This is a monitor vendor name, followed by a size in inches, like 'Dell 15\"'"
+msgctxt ""
+"This is a monitor vendor name, followed by a size in inches, like 'Dell 15\"'"
 msgid "%s %s"
 msgstr "%s %s"
 
-#: src/backends/meta-monitor.c:319
+#: src/backends/meta-monitor.c:330
 #, c-format
-msgctxt "This is a monitor vendor name followed by product/model name where size in inches could not be calculated, e.g. Dell U2414H"
+msgctxt ""
+"This is a monitor vendor name followed by product/model name where size in "
+"inches could not be calculated, e.g. Dell U2414H"
 msgid "%s %s"
 msgstr "%s %s"
 
@@ -585,74 +751,55 @@ msgstr "%s %s"
 msgid "Bell event"
 msgstr "قوڭغۇراق ھادىسىسى"
 
-#: src/core/display.c:742
+#: src/core/display.c:608
 msgid "Privacy Screen Enabled"
 msgstr "شەخسىيەت ئېكرانى قوزغىتىلغان"
 
-#: src/core/display.c:743
+#: src/core/display.c:609
 msgid "Privacy Screen Disabled"
 msgstr "شەخسىيەت ئېكرانى چەكلەنگەن"
 
-#: src/core/meta-context-main.c:630
-msgid "Replace the running window manager"
-msgstr "ئىجرا قىلىنىۋاتقان كۆزنەك باشقۇرغۇچنى ئالماشتۇر"
-
-#: src/core/meta-context-main.c:636
-msgid "X Display to use"
-msgstr "ئىشلىتىدىغان X كۆرسەتكۈچى"
-
-#: src/core/meta-context-main.c:642
-msgid "Make X calls synchronous"
-msgstr "X نى قەدەمداش قىلىپ ئىشلەت"
-
-#: src/core/meta-context-main.c:650
+#: src/core/meta-context-main.c:356
 msgid "Run as a wayland compositor"
-msgstr "wayland بىرىكتۈرگۈچ سۈپىتىدە ئىجرا قىل"
+msgstr "بىر wayland بىرىكتۈرگۈچ سۈپىتىدە ئىجرا قىل"
 
-#: src/core/meta-context-main.c:657
-msgid "Run as a nested compositor"
-msgstr "سىڭدۈرمە بىرىكتۈرگۈچ سۈپىتىدە ئىجرا قىل"
-
-#: src/core/meta-context-main.c:665
+#: src/core/meta-context-main.c:363
 msgid "Run wayland compositor without starting Xwayland"
 msgstr "Xwayland نى قوزغاتماستىن wayland بىرىكتۈرگۈچنى قوزغات"
 
-#: src/core/meta-context-main.c:672
+#: src/core/meta-context-main.c:370
 msgid "Specify Wayland display name to use"
 msgstr "ئىشلىتىدىغان Wayland كۆرسەتكۈچ ئىسمىنى بەلگىلەيدۇ"
 
-#: src/core/meta-context-main.c:680
+#: src/core/meta-context-main.c:377
 msgid "Run as a full display server, rather than nested"
-msgstr "سىڭدۈرمە شەكلىدە ئەمەس بەلكى تولۇق كۆرسەتكۈچ مۇلازىمېتىر سۈپىتىدە ئىجرا قىل"
+msgstr ""
+"سىڭدۈرمە شەكلىدە ئەمەس بەلكى تولۇق كۆرسەتكۈچ مۇلازىمېتىر سۈپىتىدە ئىجرا قىل"
 
-#: src/core/meta-context-main.c:685
+#: src/core/meta-context-main.c:382
 msgid "Run as a headless display server"
 msgstr "سىرتقى كۆرسەتكۈچى يوق مۇلازىمېتىردەك ئىجرا قىل"
 
-#: src/core/meta-context-main.c:690
+#: src/core/meta-context-main.c:387
 msgid "Add persistent virtual monitor (WxH or WxH@R)"
 msgstr "ئىزچىل مەۋھۇم كۆزەتكۈچ قوش(WxH ياكى WxH@R)"
 
-#: src/core/meta-context-main.c:697
+#: src/core/meta-context-main.c:394
 msgid "Run development kit"
 msgstr "ئىجادىيەت يۈرۈشلۈكىنى قوزغات"
 
-#: src/core/meta-context-main.c:709
-msgid "Run with X11 backend"
-msgstr "X11 ئارقا ئۇچىدا ئىجرا قىل"
-
-#: src/core/meta-context-main.c:715
+#: src/core/meta-context-main.c:405
 msgid "Profile performance using trace instrumentation"
 msgstr "ئىزلاش ئۆلچىگۈچنى ئىشلىتىپ ئۈنۈمنى تەھلىل قىلىدۇ"
 
-#: src/core/meta-context-main.c:721
+#: src/core/meta-context-main.c:411
 msgid "Enable debug control D-Bus interface"
 msgstr "سازلاش كونترول D-Bus ئېغىزىنى قوزغات"
 
 #. TRANSLATORS: This string refers to a button that switches between
 #. * different modes in that button group.
 #.
-#: src/core/meta-pad-action-mapper.c:615
+#: src/core/meta-pad-action-mapper.c:617
 #, c-format
 msgid "Mode Switch (Group %d)"
 msgstr "ھالەت ئالماشتۇر (گۇرۇپپا %d)"
@@ -660,7 +807,7 @@ msgstr "ھالەت ئالماشتۇر (گۇرۇپپا %d)"
 #. TRANSLATORS: This string refers to a button that switches between
 #. * different modes.
 #.
-#: src/core/meta-pad-action-mapper.c:622
+#: src/core/meta-pad-action-mapper.c:624
 #, c-format
 msgid "Mode Switch"
 msgstr "ھالەت ئالماشتۇر"
@@ -668,11 +815,11 @@ msgstr "ھالەت ئالماشتۇر"
 #. TRANSLATORS: This string refers to an action, cycles drawing tablets'
 #. * mapping through the available outputs.
 #.
-#: src/core/meta-pad-action-mapper.c:645
+#: src/core/meta-pad-action-mapper.c:647
 msgid "Switch monitor"
 msgstr "كۆزەتكۈچ ئالماشتۇر"
 
-#: src/core/meta-pad-action-mapper.c:647
+#: src/core/meta-pad-action-mapper.c:649
 msgid "Show on-screen help"
 msgstr "ئېكران ئۈستى ياردىمىنى كۆرسەت"
 
@@ -681,24 +828,24 @@ msgstr "ئېكران ئۈستى ياردىمىنى كۆرسەت"
 msgid "Compositor"
 msgstr "بىرىكتۈرگۈچ"
 
-#: src/core/mutter.c:74
+#: src/core/mutter.c:75
 msgid "Print version"
 msgstr "نەشرىنى باس"
 
-#: src/core/mutter.c:80
+#: src/core/mutter.c:81
 msgid "Mutter plugin to use"
 msgstr "ئىشلىتىدىغان Mutter قىستۇرمىسى"
 
-#: src/core/prefs.c:1869
+#: src/core/prefs.c:1874
 #, c-format
 msgid "Workspace %d"
 msgstr "خىزمەت بوشلۇقى %d"
 
-#: src/core/util.c:150
+#: src/core/util.c:149
 msgid "Mutter was compiled without support for verbose mode"
 msgstr "Mutter تەرجىمە-تەھرىرلىگەندە تەپسىلات قوللاش ھالىتى قوشۇلمىغان"
 
-#: src/core/workspace.c:508
+#: src/core/workspace.c:510
 msgid "Workspace switched"
 msgstr "خىزمەت بوشلۇقى ئالماشتۇرغۇچ"
 
@@ -707,37 +854,65 @@ msgstr "خىزمەت بوشلۇقى ئالماشتۇرغۇچ"
 msgid "Mode Switch: Mode %d"
 msgstr "ھالەت ئۈزچاتى: %d ھالەت"
 
-#: src/x11/meta-x11-display.c:855
+#: src/x11/meta-x11-display.c:776
 #, c-format
-msgid "Display “%s” already has a window manager; try using the --replace option to replace the current window manager."
-msgstr "كۆرسەتكۈچ «%s» نىڭ كۆزنەك باشقۇرغۇچىسى بار؛ ‪«--replace»‬ تاللانمىسىنى نۆۋەتتىكى كۆزنەك باشقۇرغۇچنىڭ ئورنىغا ئالماشتۇرۇشنى سىناڭ."
+msgid "Display “%s” already has a window manager"
+msgstr "«%s» كۆرسەتكۈچنىڭ بىر كۆزنەك باشقۇرغۇچىسى بار"
 
-#: src/x11/meta-x11-display.c:1240
+#: src/x11/meta-x11-display.c:1139
 #, c-format
 msgid "Failed to open X Window System display “%s”"
 msgstr "‏X كۆزنەك سىستېما كۆرسەتكۈچى «‎%s‎‏» نى ئاچالمىدى"
 
-#: src/x11/meta-x11-display.c:1473
+#: src/x11/meta-x11-display.c:1284
 #, c-format
 msgid "Screen %d on display “%s” is invalid"
 msgstr "كۆرسەتكۈچ «%2$s» دىكى %1$d ئېكران ئىناۋەتسىز"
 
 #. This probably means that a non-WM compositor like xcompmgr is running;
 #. * we have no way to get it to exit
-#: src/x11/meta-x11-display.c:2801
+#: src/x11/meta-x11-display.c:2469
 #, c-format
-msgid "Another compositing manager is already running on screen %i on display “%s”."
-msgstr "كۆرسەتكۈچ «%2$s» دىكى %1$i ئېكراندا باشقا بۆلەك باشقۇرغۇچ ئىجرا قىلىنىۋاتىدۇ."
+msgid ""
+"Another compositing manager is already running on screen %i on display “%s”."
+msgstr ""
+"كۆرسەتكۈچ «%2$s» دىكى %1$i ئېكراندا باشقا بۆلەك باشقۇرغۇچ ئىجرا قىلىنىۋاتىدۇ."
 
 #: src/x11/meta-x11-selection-input-stream.c:475
 #, c-format
 msgid "Format %s not supported"
 msgstr "پىچىم «‎%s‎‏» نى قوللىمايدۇ"
 
-#: src/x11/window-props.c:564
+#: src/x11/window-props.c:562
 #, c-format
 msgid "%s (on %s)"
 msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
+
+#~ msgid "_Resizable"
+#~ msgstr "چوڭلۇقى ئۆزگىرىشچان(_R)"
+
+#~ msgid "Replace the running window manager"
+#~ msgstr "ئىجرا قىلىنىۋاتقان كۆزنەك باشقۇرغۇچنى ئالماشتۇر"
+
+#~ msgid "X Display to use"
+#~ msgstr "ئىشلىتىدىغان X كۆرسەتكۈچى"
+
+#~ msgid "Make X calls synchronous"
+#~ msgstr "X نى قەدەمداش قىلىپ ئىشلەت"
+
+#~ msgid "Run as a nested compositor"
+#~ msgstr "سىڭدۈرمە بىرىكتۈرگۈچ سۈپىتىدە ئىجرا قىل"
+
+#~ msgid "Run with X11 backend"
+#~ msgstr "X11 ئارقا ئۇچىدا ئىجرا قىل"
+
+#, c-format
+#~ msgid ""
+#~ "Display “%s” already has a window manager; try using the --replace option "
+#~ "to replace the current window manager."
+#~ msgstr ""
+#~ "كۆرسەتكۈچ «%s» نىڭ كۆزنەك باشقۇرغۇچىسى بار؛ ‪«--replace»‬ تاللانمىسىنى "
+#~ "نۆۋەتتىكى كۆزنەك باشقۇرغۇچنىڭ ئورنىغا ئالماشتۇرۇشنى سىناڭ."
 
 #~ msgid "Move to workspace left"
 #~ msgstr "سولدىكى خىزمەت رايونىغا يۆتكەش"
@@ -771,8 +946,12 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 #~ msgid "Application is not responding."
 #~ msgstr "پروگراممىدا ئىنكاس يوق."
 
-#~ msgid "You may choose to wait a short while for it to continue or force the application to quit entirely."
-#~ msgstr "داۋاملاشتۇرۇش ئۈچۈن كۈتۈشنى ياكى پروگراممىنى تولۇق ئاخىرلاشتۇرۇش ئۈچۈن مەجبۇرىينى تاللىسىڭىز بولىدۇ."
+#~ msgid ""
+#~ "You may choose to wait a short while for it to continue or force the "
+#~ "application to quit entirely."
+#~ msgstr ""
+#~ "داۋاملاشتۇرۇش ئۈچۈن كۈتۈشنى ياكى پروگراممىنى تولۇق ئاخىرلاشتۇرۇش ئۈچۈن "
+#~ "مەجبۇرىينى تاللىسىڭىز بولىدۇ."
 
 #~ msgid "_Wait"
 #~ msgstr "كۈت(_W)"
@@ -785,8 +964,12 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 #~ msgstr "بىرىكتۈرۈش ئۈچۈن زۆرۈر بولغان كېڭەيتىلمە %s يوق"
 
 #, c-format
-#~ msgid "Some other program is already using the key %s with modifiers %x as a binding\n"
-#~ msgstr "باشقا پروگرامما %s كۇنۇپكىسى بىلەن سۈپەتلىگۈچى كۇنۇپكا %x نىڭ بىرىكمىسىنى ئىشلىتىۋاتىدۇ\n"
+#~ msgid ""
+#~ "Some other program is already using the key %s with modifiers %x as a "
+#~ "binding\n"
+#~ msgstr ""
+#~ "باشقا پروگرامما %s كۇنۇپكىسى بىلەن سۈپەتلىگۈچى كۇنۇپكا %x نىڭ بىرىكمىسىنى "
+#~ "ئىشلىتىۋاتىدۇ\n"
 
 #, c-format
 #~| msgid "\"%s\" is not a valid value for focus attribute"
@@ -807,43 +990,61 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 #~ msgstr "ئۆرنەكلەر مۇندەرىجىسىنى ئىزدەش مەغلۇپ بولدى: %s\n"
 
 #, c-format
-#~ msgid "Could not find a theme! Be sure %s exists and contains the usual themes.\n"
-#~ msgstr "بىرەر ئۆرنەك تېپىلمىدى. %s نىڭ مەۋجۇتلۇقى ھەم ئىشلىتىشكە بولىدىغان ئۆرنەكنى ئۆز ئىچىگە ئالغانلىقىنى جەزملەڭ.\n"
+#~ msgid ""
+#~ "Could not find a theme! Be sure %s exists and contains the usual themes.\n"
+#~ msgstr ""
+#~ "بىرەر ئۆرنەك تېپىلمىدى. %s نىڭ مەۋجۇتلۇقى ھەم ئىشلىتىشكە بولىدىغان "
+#~ "ئۆرنەكنى ئۆز ئىچىگە ئالغانلىقىنى جەزملەڭ.\n"
 
 #, c-format
 #~ msgid ""
 #~ "mutter %s\n"
 #~ "Copyright (C) 2001-%d Havoc Pennington, Red Hat, Inc., and others\n"
 #~ "This is free software; see the source for copying conditions.\n"
-#~ "There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n"
+#~ "There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A "
+#~ "PARTICULAR PURPOSE.\n"
 #~ msgstr ""
 #~ "mutter %s\n"
-#~ "نەشر ھوقۇقى (C) 2001-%d Havoc Pennington, Red Hat, Inc., ۋە باشقىلارغا تەۋە\n"
+#~ "نەشر ھوقۇقى (C) 2001-%d Havoc Pennington, Red Hat, Inc., ۋە باشقىلارغا "
+#~ "تەۋە\n"
 #~ "بۇ ھەقسىز دېتال؛ كۆچۈرۈش شەرتلىرىنى مەنبە كودىدىن كۆرۈڭ.\n"
 #~ "مەيلى قانداق مەقسەتتە ئىشلەتمەڭ، ھېچقانداق كاپالەت يوق؛\n"
 
-#~ msgid "Workarounds for broken applications disabled. Some applications may not behave properly.\n"
-#~ msgstr "بۇزۇلغان پروگراممىلارنى تۈزىتىش-ياخشىلاش ئىناۋەتسىز قىلىنغان. بەزى پروگراممىلار نورمال ئىشلىمەسلىكى مۇمكىن.\n"
+#~ msgid ""
+#~ "Workarounds for broken applications disabled. Some applications may not "
+#~ "behave properly.\n"
+#~ msgstr ""
+#~ "بۇزۇلغان پروگراممىلارنى تۈزىتىش-ياخشىلاش ئىناۋەتسىز قىلىنغان. بەزى "
+#~ "پروگراممىلار نورمال ئىشلىمەسلىكى مۇمكىن.\n"
 
 #, c-format
 #~ msgid "Could not parse font description \"%s\" from GSettings key %s\n"
-#~ msgstr "GSettings ئاچقۇچى %s نىڭ تەركىبىدىكى فونت چۈشەندۈرۈشى «%s»نى تەھلىل قىلغىنى بولمىدى\n"
+#~ msgstr ""
+#~ "GSettings ئاچقۇچى %s نىڭ تەركىبىدىكى فونت چۈشەندۈرۈشى «%s»نى تەھلىل "
+#~ "قىلغىنى بولمىدى\n"
 
 #, c-format
-#~ msgid "\"%s\" found in configuration database is not a valid value for mouse button modifier\n"
-#~ msgstr "سەپلىمە سانداندىن تېپىلغان «%s» چاشقىنەك توپچىسىنىڭ سۈپەتلىگۈچىسى ئۈچۈن ئىناۋەتسىز\n"
+#~ msgid ""
+#~ "\"%s\" found in configuration database is not a valid value for mouse "
+#~ "button modifier\n"
+#~ msgstr ""
+#~ "سەپلىمە سانداندىن تېپىلغان «%s» چاشقىنەك توپچىسىنىڭ سۈپەتلىگۈچىسى ئۈچۈن "
+#~ "ئىناۋەتسىز\n"
 
 #, c-format
-#~ msgid "\"%s\" found in configuration database is not a valid value for keybinding \"%s\"\n"
-#~ msgstr "سەپلىمە ساندىنىدىن تېپىلغان «%s»، «%s» كۇنۇپكا باغلانمىسىنىڭ ئىناۋەتلىك قىممىتى ئەمەس\n"
+#~ msgid ""
+#~ "\"%s\" found in configuration database is not a valid value for "
+#~ "keybinding \"%s\"\n"
+#~ msgstr ""
+#~ "سەپلىمە ساندىنىدىن تېپىلغان «%s»، «%s» كۇنۇپكا باغلانمىسىنىڭ ئىناۋەتلىك "
+#~ "قىممىتى ئەمەس\n"
 
 #, c-format
-#~ msgid "Could not acquire window manager selection on screen %d display \"%s\"\n"
-#~ msgstr "كۆرسەتكۈچ «%2$s» نىڭدىكى ئېكران %1$d دا كۆزنەك باشقۇرغۇنىڭ تاللانمىسىنى ئالغىلى بولمىدى\n"
-
-#, c-format
-#~ msgid "Screen %d on display \"%s\" already has a window manager\n"
-#~ msgstr "«%2$s» دىكى %1$d ئېكراندا بىر كۆزنەك باشقۇرغۇ  بار\n"
+#~ msgid ""
+#~ "Could not acquire window manager selection on screen %d display \"%s\"\n"
+#~ msgstr ""
+#~ "كۆرسەتكۈچ «%2$s» نىڭدىكى ئېكران %1$d دا كۆزنەك باشقۇرغۇنىڭ تاللانمىسىنى "
+#~ "ئالغىلى بولمىدى\n"
 
 #, c-format
 #~ msgid "Could not release screen %d on display \"%s\"\n"
@@ -871,7 +1072,9 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 
 #, c-format
 #~ msgid "<mutter_session> attribute seen but we already have the session ID"
-#~ msgstr "<mutter_session> دېگەن خاسلىق بايقالدى، بىراق بىزدە ئەڭگىمە ID سى بار ئىدى."
+#~ msgstr ""
+#~ "<mutter_session> دېگەن خاسلىق بايقالدى، بىراق بىزدە ئەڭگىمە ID سى بار "
+#~ "ئىدى."
 
 #, c-format
 #~ msgid "Unknown attribute %s on <%s> element"
@@ -885,8 +1088,12 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 #~ msgid "Unknown element %s"
 #~ msgstr "نامەلۇم ئېلېمېنت %s"
 
-#~ msgid "These windows do not support &quot;save current setup&quot; and will have to be restarted manually next time you log in."
-#~ msgstr "بۇ كۆزنەكلەردە «ھازىرقى تەڭشەكنى ساقلاش» ئىقتىدارىنى ئىشلەتكىلى بولمايدۇ. كېيىن كىرگەندە يەنە قوزغىتىڭ."
+#~ msgid ""
+#~ "These windows do not support &quot;save current setup&quot; and will have "
+#~ "to be restarted manually next time you log in."
+#~ msgstr ""
+#~ "بۇ كۆزنەكلەردە «ھازىرقى تەڭشەكنى ساقلاش» ئىقتىدارىنى ئىشلەتكىلى بولمايدۇ. "
+#~ "كېيىن كىرگەندە يەنە قوزغىتىڭ."
 
 #, c-format
 #~ msgid "Failed to open debug log: %s\n"
@@ -913,12 +1120,21 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 #~ msgstr "كۆزنەك باشقۇرغۇ خاتالىقى: "
 
 #, c-format
-#~ msgid "Window %s sets SM_CLIENT_ID on itself, instead of on the WM_CLIENT_LEADER window as specified in the ICCCM.\n"
-#~ msgstr "كۆزنەك %s  بەلگىلىمە ICCCM دا بەلگىلەنگەن WM_CLIENT_LEADER كۆزنەكنى ئەمەس SM_CLIENT_ID نى ئۆزى بەلگىلىۋېلىپتۇ.\n"
+#~ msgid ""
+#~ "Window %s sets SM_CLIENT_ID on itself, instead of on the WM_CLIENT_LEADER "
+#~ "window as specified in the ICCCM.\n"
+#~ msgstr ""
+#~ "كۆزنەك %s  بەلگىلىمە ICCCM دا بەلگىلەنگەن WM_CLIENT_LEADER كۆزنەكنى ئەمەس "
+#~ "SM_CLIENT_ID نى ئۆزى بەلگىلىۋېلىپتۇ.\n"
 
 #, c-format
-#~ msgid "Window %s sets an MWM hint indicating it isn't resizable, but sets min size %d x %d and max size %d x %d; this doesn't make much sense.\n"
-#~ msgstr "كۆزنەك %s نىڭدا MWM بەلگىلەنگەن بولۇپ، بۇ كۆزنەك چوڭلۇقىنى ئۆزگەرتكىلى بولمايدۇ دېگەن مەنىدە. بىراق ئەڭ كىچىك چوڭلۇقى%d x %d، ۋە ئەڭ كىچىك چوڭلۇقى %d x %d قىلىپ بەلگىلىنىپتۇ. بۇنىڭ ھېچقانداق ئەھمىيىتى يوق.\n"
+#~ msgid ""
+#~ "Window %s sets an MWM hint indicating it isn't resizable, but sets min "
+#~ "size %d x %d and max size %d x %d; this doesn't make much sense.\n"
+#~ msgstr ""
+#~ "كۆزنەك %s نىڭدا MWM بەلگىلەنگەن بولۇپ، بۇ كۆزنەك چوڭلۇقىنى ئۆزگەرتكىلى "
+#~ "بولمايدۇ دېگەن مەنىدە. بىراق ئەڭ كىچىك چوڭلۇقى%d x %d، ۋە ئەڭ كىچىك "
+#~ "چوڭلۇقى %d x %d قىلىپ بەلگىلىنىپتۇ. بۇنىڭ ھېچقانداق ئەھمىيىتى يوق.\n"
 
 #, c-format
 #~ msgid "Application set a bogus _NET_WM_PID %lu\n"
@@ -926,7 +1142,8 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 
 #, c-format
 #~ msgid "Invalid WM_TRANSIENT_FOR window 0x%lx specified for %s.\n"
-#~ msgstr "%2$s  گە بەلگىلەنگەن ئۈنۈمسىز WM_TRANSIENT_FOR كۆزنەك 0x%1$lx بولىدۇ.\n"
+#~ msgstr ""
+#~ "%2$s  گە بەلگىلەنگەن ئۈنۈمسىز WM_TRANSIENT_FOR كۆزنەك 0x%1$lx بولىدۇ.\n"
 
 #, c-format
 #~ msgid "WM_TRANSIENT_FOR window 0x%lx for %s would create loop.\n"
@@ -951,8 +1168,12 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 #~ msgstr "خاسلىق %s (كۆزنەك 0x%lx) دا ئىناۋەتسىز UTF-8 بار\n"
 
 #, c-format
-#~ msgid "Property %s on window 0x%lx contained invalid UTF-8 for item %d in the list\n"
-#~ msgstr "خاسلىق %s (كۆزنەك 0x%lx) دىكى تىزىمنىڭ %d تۈرى تەركىبىدە ئىناۋەتسىز UTF-8 بار\n"
+#~ msgid ""
+#~ "Property %s on window 0x%lx contained invalid UTF-8 for item %d in the "
+#~ "list\n"
+#~ msgstr ""
+#~ "خاسلىق %s (كۆزنەك 0x%lx) دىكى تىزىمنىڭ %d تۈرى تەركىبىدە ئىناۋەتسىز UTF-8 "
+#~ "بار\n"
 
 #~ msgid "Mutter"
 #~ msgstr "Mutter"
@@ -987,9 +1208,6 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 
 #~ msgid "_Move"
 #~ msgstr "يۆتكە(_M)"
-
-#~ msgid "_Resize"
-#~ msgstr "چوڭلۇقىنى ئۆزگەرت(_R)"
 
 #~ msgid "Move Titlebar On_screen"
 #~ msgstr "ماۋزۇ بالدىقىنى ئېكرانغا يۆتكە(_S)"
@@ -1081,7 +1299,9 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 
 #, c-format
 #~ msgid "frame geometry does not specify dimension \"%s\" for border \"%s\""
-#~ msgstr "كاندۇكنىڭ گېئومېتىرىيىلىك شەكلى گىرۋەك «%2$s» نىڭ ئۆلچىمى «%1$s» ئىپادىلىمەيدۇ"
+#~ msgstr ""
+#~ "كاندۇكنىڭ گېئومېتىرىيىلىك شەكلى گىرۋەك «%2$s» نىڭ ئۆلچىمى «%1$s» "
+#~ "ئىپادىلىمەيدۇ"
 
 #, c-format
 #~ msgid "Button aspect ratio %g is not reasonable"
@@ -1096,24 +1316,45 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 #~ msgstr "تەدرىجىي ئۆزگىرىشتە ئاز دېگەندە ئىككى خىل رەڭ بولۇش كېرەك"
 
 #, c-format
-#~ msgid "GTK custom color specification must have color name and fallback in parentheses, e.g. gtk:custom(foo,bar); could not parse \"%s\""
-#~ msgstr "GTK رەڭ ئۆلچىمىدە ھالەتتىن كېيىن چوقۇم رەڭ ئاتى ۋە زاپاس بولۇشى لازىم، مەسىلەن، gtk:custom(foo,bar) ھالەت؛ «%s» نى تەھلىل قىلالمايدۇ"
+#~ msgid ""
+#~ "GTK custom color specification must have color name and fallback in "
+#~ "parentheses, e.g. gtk:custom(foo,bar); could not parse \"%s\""
+#~ msgstr ""
+#~ "GTK رەڭ ئۆلچىمىدە ھالەتتىن كېيىن چوقۇم رەڭ ئاتى ۋە زاپاس بولۇشى لازىم، "
+#~ "مەسىلەن، gtk:custom(foo,bar) ھالەت؛ «%s» نى تەھلىل قىلالمايدۇ"
 
 #, c-format
-#~ msgid "Invalid character '%c' in color_name parameter of gtk:custom, only A-Za-z0-9-_ are valid"
-#~ msgstr "gtk:custom نىڭ color_name پارامېتىرىدىكى ئىناۋەتسىز ھەرپ '%c'، پەقەت A-Za-z0-9-_  نىلا ئىشلەتكىلى بولىدۇ"
+#~ msgid ""
+#~ "Invalid character '%c' in color_name parameter of gtk:custom, only A-Za-"
+#~ "z0-9-_ are valid"
+#~ msgstr ""
+#~ "gtk:custom نىڭ color_name پارامېتىرىدىكى ئىناۋەتسىز ھەرپ '%c'، پەقەت A-Za-"
+#~ "z0-9-_  نىلا ئىشلەتكىلى بولىدۇ"
 
 #, c-format
-#~ msgid "Gtk:custom format is \"gtk:custom(color_name,fallback)\", \"%s\" does not fit the format"
-#~ msgstr "Gtk:custom نىڭ پىچىمى \"gtk:custom(color_name,fallback)\" بولۇپ، «%s» پىچىمغا توغرا كەلمەيدۇ"
+#~ msgid ""
+#~ "Gtk:custom format is \"gtk:custom(color_name,fallback)\", \"%s\" does not "
+#~ "fit the format"
+#~ msgstr ""
+#~ "Gtk:custom نىڭ پىچىمى \"gtk:custom(color_name,fallback)\" بولۇپ، «%s» "
+#~ "پىچىمغا توغرا كەلمەيدۇ"
 
 #, c-format
-#~ msgid "GTK color specification must have the state in brackets, e.g. gtk:fg[NORMAL] where NORMAL is the state; could not parse \"%s\""
-#~ msgstr "GTK رەڭ بەلگىلىمىسىنىڭ ھالىتى چوقۇم gtk:fg[NORMAL] نىڭدەك تىرناق ئىچىگە ئېلىنىشى كېرەك؛ «%s» نى تەھلىل قىلغىلى بولمىدى."
+#~ msgid ""
+#~ "GTK color specification must have the state in brackets, e.g. "
+#~ "gtk:fg[NORMAL] where NORMAL is the state; could not parse \"%s\""
+#~ msgstr ""
+#~ "GTK رەڭ بەلگىلىمىسىنىڭ ھالىتى چوقۇم gtk:fg[NORMAL] نىڭدەك تىرناق ئىچىگە "
+#~ "ئېلىنىشى كېرەك؛ «%s» نى تەھلىل قىلغىلى بولمىدى."
 
 #, c-format
-#~ msgid "GTK color specification must have a close bracket after the state, e.g. gtk:fg[NORMAL] where NORMAL is the state; could not parse \"%s\""
-#~ msgstr "GTK رەڭ بەلگىلىمىسىنىڭ ھالىتىنىڭ ئارقىسىغا سول تىرناق يېزىلىشى كېرەك.  مەسىلەن gtk:fg[NORMAL] نىڭدەك بۇ يەردىكى «NORMAL» ھالەتنى بىلدۈرىدۇ؛ «%s» نى تەھلىل قىلغىلى بولمىدى."
+#~ msgid ""
+#~ "GTK color specification must have a close bracket after the state, e.g. "
+#~ "gtk:fg[NORMAL] where NORMAL is the state; could not parse \"%s\""
+#~ msgstr ""
+#~ "GTK رەڭ بەلگىلىمىسىنىڭ ھالىتىنىڭ ئارقىسىغا سول تىرناق يېزىلىشى كېرەك.  "
+#~ "مەسىلەن gtk:fg[NORMAL] نىڭدەك بۇ يەردىكى «NORMAL» ھالەتنى بىلدۈرىدۇ؛ «%s» "
+#~ "نى تەھلىل قىلغىلى بولمىدى."
 
 #, c-format
 #~ msgid "Did not understand state \"%s\" in color specification"
@@ -1124,8 +1365,12 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 #~ msgstr "رەڭ بەلگىلىمىسىدىكى «%s» رەڭ بۆلىكىنى چۈشەنگىلى بولمىدى"
 
 #, c-format
-#~ msgid "Blend format is \"blend/bg_color/fg_color/alpha\", \"%s\" does not fit the format"
-#~ msgstr "بىرىكمە رەڭنىڭ فورماتى \"blend/bg_color/fg_color/alpha\"،  «%s» بۇ پىچىمغا ماس كەلمىدى"
+#~ msgid ""
+#~ "Blend format is \"blend/bg_color/fg_color/alpha\", \"%s\" does not fit "
+#~ "the format"
+#~ msgstr ""
+#~ "بىرىكمە رەڭنىڭ فورماتى \"blend/bg_color/fg_color/alpha\"،  «%s» بۇ "
+#~ "پىچىمغا ماس كەلمىدى"
 
 #, c-format
 #~ msgid "Could not parse alpha value \"%s\" in blended color"
@@ -1133,10 +1378,13 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 
 #, c-format
 #~ msgid "Alpha value \"%s\" in blended color is not between 0.0 and 1.0"
-#~ msgstr "بىرىكمە رەڭنىڭ ئالفا قىممىتى «%s» نىڭ دائىرىسى  0.0 ~1.0 ئىچىدە ئەمەس"
+#~ msgstr ""
+#~ "بىرىكمە رەڭنىڭ ئالفا قىممىتى «%s» نىڭ دائىرىسى  0.0 ~1.0 ئىچىدە ئەمەس"
 
 #, c-format
-#~ msgid "Shade format is \"shade/base_color/factor\", \"%s\" does not fit the format"
+#~ msgid ""
+#~ "Shade format is \"shade/base_color/factor\", \"%s\" does not fit the "
+#~ "format"
 #~ msgstr "سايە پىچىمى «shade/base_color/factor»، «%s» بۇ پىچىمغا ماسلاشمىدى"
 
 #, c-format
@@ -1156,15 +1404,24 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 #~ msgstr "كوئوردېنات ئىپادىسىنىڭ تەركىبىدە رۇخسەت قىلىنمىغان ھەرپ '‹%s› بار"
 
 #, c-format
-#~ msgid "Coordinate expression contains floating point number '%s' which could not be parsed"
-#~ msgstr "كوئوردېنات ئىپادىسىنىڭ تەركىبىدە تەھلىل قىلغىلى بولمايدىغان كەسىر سان ‹%s› بار"
+#~ msgid ""
+#~ "Coordinate expression contains floating point number '%s' which could not "
+#~ "be parsed"
+#~ msgstr ""
+#~ "كوئوردېنات ئىپادىسىنىڭ تەركىبىدە تەھلىل قىلغىلى بولمايدىغان كەسىر سان "
+#~ "‹%s› بار"
 
 #, c-format
-#~ msgid "Coordinate expression contains integer '%s' which could not be parsed"
-#~ msgstr "كوئوردېنات ئىپادىسىنىڭ تەركىبىدە تەھلىل قىلغىلى بولمايدىغان پۈتۈن سان ‹%s› بار"
+#~ msgid ""
+#~ "Coordinate expression contains integer '%s' which could not be parsed"
+#~ msgstr ""
+#~ "كوئوردېنات ئىپادىسىنىڭ تەركىبىدە تەھلىل قىلغىلى بولمايدىغان پۈتۈن سان "
+#~ "‹%s› بار"
 
 #, c-format
-#~ msgid "Coordinate expression contained unknown operator at the start of this text: \"%s\""
+#~ msgid ""
+#~ "Coordinate expression contained unknown operator at the start of this "
+#~ "text: \"%s\""
 #~ msgstr "كوئوردېنات ئىپادىسىنىڭ بېشىدا نامەلۇم ئەمەل بار: «%s»"
 
 #, c-format
@@ -1176,56 +1433,80 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 #~ msgstr "كوئوردېنات ئىپادىسى 0 نى بۆلگۈچى قىلغان"
 
 #, c-format
-#~ msgid "Coordinate expression tries to use mod operator on a floating-point number"
+#~ msgid ""
+#~ "Coordinate expression tries to use mod operator on a floating-point number"
 #~ msgstr "كوئوردېنات ئىپادىسى كەسىر سانغا mod ئەمىلىنى ئىشلەتمەكچى"
 
 #, c-format
-#~ msgid "Coordinate expression has an operator \"%s\" where an operand was expected"
-#~ msgstr "كوئوردېنات ئىپادىسىنىڭ تەركىبىدە سان كېلىدىغان يەردە ئەمەل «%s» بار ئىكەن"
+#~ msgid ""
+#~ "Coordinate expression has an operator \"%s\" where an operand was expected"
+#~ msgstr ""
+#~ "كوئوردېنات ئىپادىسىنىڭ تەركىبىدە سان كېلىدىغان يەردە ئەمەل «%s» بار ئىكەن"
 
 #, c-format
 #~ msgid "Coordinate expression had an operand where an operator was expected"
-#~ msgstr "كوئوردېنات ئىپادىسىنىڭ تەركىبىدە ئەمەل كېلىدىغان يەردە سان بار ئىكەن"
+#~ msgstr ""
+#~ "كوئوردېنات ئىپادىسىنىڭ تەركىبىدە ئەمەل كېلىدىغان يەردە سان بار ئىكەن"
 
 #, c-format
 #~ msgid "Coordinate expression ended with an operator instead of an operand"
 #~ msgstr "كوئوردېنات ئىپادىسى سان بىلەن ئاياغلاشماي ئەمەل بىلەن ئاياغلاشقان"
 
 #, c-format
-#~ msgid "Coordinate expression has operator \"%c\" following operator \"%c\" with no operand in between"
-#~ msgstr "كوئوردېنات ئىپادىسىنىڭ تەركىبىدە ئەمەل «%2$c» نىڭ ئارقىسىدىن ئەمەل «%1$c» كېلىپتۇ، ئارىلىقتا سان يوق ئىكەن"
+#~ msgid ""
+#~ "Coordinate expression has operator \"%c\" following operator \"%c\" with "
+#~ "no operand in between"
+#~ msgstr ""
+#~ "كوئوردېنات ئىپادىسىنىڭ تەركىبىدە ئەمەل «%2$c» نىڭ ئارقىسىدىن ئەمەل «%1$c» "
+#~ "كېلىپتۇ، ئارىلىقتا سان يوق ئىكەن"
 
 #, c-format
 #~ msgid "Coordinate expression had unknown variable or constant \"%s\""
-#~ msgstr "كوئوردېنات ئىپادىسىنىڭ تەركىبىدە نامەلۇم ئۆزگەرگۈچى ياكى تۇراقلىق سان «%s» بار ئىكەن"
+#~ msgstr ""
+#~ "كوئوردېنات ئىپادىسىنىڭ تەركىبىدە نامەلۇم ئۆزگەرگۈچى ياكى تۇراقلىق سان "
+#~ "«%s» بار ئىكەن"
 
 #, c-format
 #~ msgid "Coordinate expression parser overflowed its buffer."
 #~ msgstr "كوئوردېنات ئىپادىسىنى تەھلىل قىلىۋاتقاندا يىغلەك تېشىپ كەتتى."
 
 #, c-format
-#~ msgid "Coordinate expression had a close parenthesis with no open parenthesis"
-#~ msgstr "كوئوردېنات ئىپادىسىنىڭ تەركىبىدىكى يېپىلغان تىرناققا ماس كېلىدىغان ئېچىلغان تىرناق يوق"
+#~ msgid ""
+#~ "Coordinate expression had a close parenthesis with no open parenthesis"
+#~ msgstr ""
+#~ "كوئوردېنات ئىپادىسىنىڭ تەركىبىدىكى يېپىلغان تىرناققا ماس كېلىدىغان "
+#~ "ئېچىلغان تىرناق يوق"
 
 #, c-format
-#~ msgid "Coordinate expression had an open parenthesis with no close parenthesis"
-#~ msgstr "كوئوردېنات ئىپادىسىنىڭ تەركىبىدىكى ئېچىلغان تىرناققا ماس كېلىدىغان يېپىلغان تىرناق يوق"
+#~ msgid ""
+#~ "Coordinate expression had an open parenthesis with no close parenthesis"
+#~ msgstr ""
+#~ "كوئوردېنات ئىپادىسىنىڭ تەركىبىدىكى ئېچىلغان تىرناققا ماس كېلىدىغان "
+#~ "يېپىلغان تىرناق يوق"
 
 #, c-format
 #~ msgid "Coordinate expression doesn't seem to have any operators or operands"
-#~ msgstr "كوئوردېنات ئىپادىسىنىڭ تەركىبىدە ئەمەل(قوشۇش، ئېلىش...) ياكى سان يوق"
+#~ msgstr ""
+#~ "كوئوردېنات ئىپادىسىنىڭ تەركىبىدە ئەمەل(قوشۇش، ئېلىش...) ياكى سان يوق"
 
 #, c-format
 #~ msgid "Theme contained an expression that resulted in an error: %s\n"
 #~ msgstr "ئۆرنەك تەركىبىدە خاتالىق چىقىرىدىغان ئىپادە بار: %s\n"
 
 #, c-format
-#~ msgid "<button function=\"%s\" state=\"%s\" draw_ops=\"whatever\"/> must be specified for this frame style"
-#~ msgstr "<button function=\"%s\" state=\"%s\" draw_ops=\"whatever\"/>بۇ كۆزنەكنىڭ ئۇسلۇبى ئۈچۈن بەلگىلىنىشى زۆرۈر"
+#~ msgid ""
+#~ "<button function=\"%s\" state=\"%s\" draw_ops=\"whatever\"/> must be "
+#~ "specified for this frame style"
+#~ msgstr ""
+#~ "<button function=\"%s\" state=\"%s\" draw_ops=\"whatever\"/>بۇ كۆزنەكنىڭ "
+#~ "ئۇسلۇبى ئۈچۈن بەلگىلىنىشى زۆرۈر"
 
 #, c-format
-#~ msgid "Missing <frame state=\"%s\" resize=\"%s\" focus=\"%s\" style=\"whatever\"/>"
-#~ msgstr "<frame state=\"%s\" resize=\"%s\" focus=\"%s\" style=\"whatever\"/> يوق"
+#~ msgid ""
+#~ "Missing <frame state=\"%s\" resize=\"%s\" focus=\"%s\" style=\"whatever\"/"
+#~ ">"
+#~ msgstr ""
+#~ "<frame state=\"%s\" resize=\"%s\" focus=\"%s\" style=\"whatever\"/> يوق"
 
 #, c-format
 #~ msgid "Failed to load theme \"%s\": %s\n"
@@ -1235,12 +1516,20 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 #~ msgid "No <%s> set for theme \"%s\""
 #~ msgstr "ئۆرنەك «%2$s» نىڭ <%1$s> ئى بەلگىلەنمىگەن"
 
-#~ msgid "No frame style set for window type \"%s\" in theme \"%s\", add a <window type=\"%s\" style_set=\"whatever\"/> element"
-#~ msgstr "ئۆرنەك «%2$s» نىڭ ئىچىدىكى كۆزنەك تىپى <%1$s> نىڭ كاندۇك ئۇسلۇبى بەلگىلەنمىگەن. بىر <window type=\"%3$s\" style_set=\"whatever\"/> ئېلېمېنتى قوشۇڭ"
+#~ msgid ""
+#~ "No frame style set for window type \"%s\" in theme \"%s\", add a <window "
+#~ "type=\"%s\" style_set=\"whatever\"/> element"
+#~ msgstr ""
+#~ "ئۆرنەك «%2$s» نىڭ ئىچىدىكى كۆزنەك تىپى <%1$s> نىڭ كاندۇك ئۇسلۇبى "
+#~ "بەلگىلەنمىگەن. بىر <window type=\"%3$s\" style_set=\"whatever\"/> "
+#~ "ئېلېمېنتى قوشۇڭ"
 
 #, c-format
-#~ msgid "User-defined constants must begin with a capital letter; \"%s\" does not"
-#~ msgstr "ئىشلەتكۈچى بەلگىلىگەن تۇراقلىق مىقدار چوقۇم چوڭ ھەرپ بىلەن باشلانسۇن؛ «%s» بولمايدۇ"
+#~ msgid ""
+#~ "User-defined constants must begin with a capital letter; \"%s\" does not"
+#~ msgstr ""
+#~ "ئىشلەتكۈچى بەلگىلىگەن تۇراقلىق مىقدار چوقۇم چوڭ ھەرپ بىلەن باشلانسۇن؛ "
+#~ "«%s» بولمايدۇ"
 
 #, c-format
 #~ msgid "Constant \"%s\" has already been defined"
@@ -1291,12 +1580,19 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 #~ msgstr "بۇلۇڭ قىممىتى 0.0 دىن 360.0 غىچە بولسۇن، ھازىرقىسى %g\n"
 
 #, c-format
-#~ msgid "Alpha must be between 0.0 (invisible) and 1.0 (fully opaque), was %g\n"
-#~ msgstr "Alpha قىممىتى 0.0   (كۆرۈنمەيدۇ) دىن 360.0 (سۈزۈك ئەمەس)غىچە بولسۇن، ھازىرقىسى %g\n"
+#~ msgid ""
+#~ "Alpha must be between 0.0 (invisible) and 1.0 (fully opaque), was %g\n"
+#~ msgstr ""
+#~ "Alpha قىممىتى 0.0   (كۆرۈنمەيدۇ) دىن 360.0 (سۈزۈك ئەمەس)غىچە بولسۇن، "
+#~ "ھازىرقىسى %g\n"
 
 #, c-format
-#~ msgid "Invalid title scale \"%s\" (must be one of xx-small,x-small,small,medium,large,x-large,xx-large)\n"
-#~ msgstr "ئىناۋەتسىز ماۋزۇ نىسبىتى  «%s» ( چوقۇم xx-small، x-small، small، medium، large، x-large، xx-large لارنىڭ بىرى بولۇشى كېرەك)\n"
+#~ msgid ""
+#~ "Invalid title scale \"%s\" (must be one of xx-small,x-"
+#~ "small,small,medium,large,x-large,xx-large)\n"
+#~ msgstr ""
+#~ "ئىناۋەتسىز ماۋزۇ نىسبىتى  «%s» ( چوقۇم xx-small، x-small، small، medium، "
+#~ "large، x-large، xx-large لارنىڭ بىرى بولۇشى كېرەك)\n"
 
 #, c-format
 #~ msgid "<%s> name \"%s\" used a second time"
@@ -1312,7 +1608,9 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 
 #, c-format
 #~ msgid "<%s> must specify either a geometry or a parent that has a geometry"
-#~ msgstr "<%s> چوقۇم بىر گېئومېتىرىيىلىك شەكىلنى كۆرسىتىشى ياكى گېئومېتىرىيىلىك شەكلى بار ئاتىنى ئىپادىلىشى كېرەك"
+#~ msgstr ""
+#~ "<%s> چوقۇم بىر گېئومېتىرىيىلىك شەكىلنى كۆرسىتىشى ياكى گېئومېتىرىيىلىك "
+#~ "شەكلى بار ئاتىنى ئىپادىلىشى كېرەك"
 
 #~ msgid "You must specify a background for an alpha value to be meaningful"
 #~ msgstr "سىز تەگلىكنىڭ ئالفا قىممىتىگە مەنىلىك قىممەت بېرىشىڭىز كېرەك"
@@ -1333,8 +1631,12 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 #~ msgid "Element <%s> is not allowed below <%s>"
 #~ msgstr "<%s> ئېلېمېنت <%s> ئاستىدا بولۇشقا يول قويۇلمايدۇ"
 
-#~ msgid "Cannot specify both \"button_width\"/\"button_height\" and \"aspect_ratio\" for buttons"
-#~ msgstr "بىر قانچە توپچىغا «button_width»/«button_height» ۋە «aspect_ratio» دېگەن ئىككى خاسلىقنى قوشۇشقا بولمايدۇ"
+#~ msgid ""
+#~ "Cannot specify both \"button_width\"/\"button_height\" and "
+#~ "\"aspect_ratio\" for buttons"
+#~ msgstr ""
+#~ "بىر قانچە توپچىغا «button_width»/«button_height» ۋە «aspect_ratio» دېگەن "
+#~ "ئىككى خاسلىقنى قوشۇشقا بولمايدۇ"
 
 #, c-format
 #~ msgid "Distance \"%s\" is unknown"
@@ -1429,60 +1731,101 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 #~ msgstr "«%s» توغرا بولغان resize خاسلىق قىممىتى ئەمەس"
 
 #, c-format
-#~ msgid "Should not have \"resize\" attribute on <%s> element for maximized/shaded states"
-#~ msgstr "ئەڭ چوڭ ياكى سايىلىك ھالەتكە نىسبەتەن ئېلېمېنت <%s> دا «resize» خاسلىقى بولسا بولمايدۇ"
+#~ msgid ""
+#~ "Should not have \"resize\" attribute on <%s> element for maximized/shaded "
+#~ "states"
+#~ msgstr ""
+#~ "ئەڭ چوڭ ياكى سايىلىك ھالەتكە نىسبەتەن ئېلېمېنت <%s> دا «resize» خاسلىقى "
+#~ "بولسا بولمايدۇ"
 
 #, c-format
-#~ msgid "Should not have \"resize\" attribute on <%s> element for maximized states"
-#~ msgstr "ئەڭ چوڭ ھالەتكە نىسبەتەن ئېلېمېنت <%s> دا «resize» خاسلىقى بولسا بولمايدۇ"
+#~ msgid ""
+#~ "Should not have \"resize\" attribute on <%s> element for maximized states"
+#~ msgstr ""
+#~ "ئەڭ چوڭ ھالەتكە نىسبەتەن ئېلېمېنت <%s> دا «resize» خاسلىقى بولسا بولمايدۇ"
 
 #, c-format
 #~ msgid "Style has already been specified for state %s resize %s focus %s"
-#~ msgstr "ئۇسلۇب ئاللىقاچان ھالەت %s resize %s فوكۇس %s ئۈچۈن بەلگىلىنىپ بولغان"
+#~ msgstr ""
+#~ "ئۇسلۇب ئاللىقاچان ھالەت %s resize %s فوكۇس %s ئۈچۈن بەلگىلىنىپ بولغان"
 
 #, c-format
 #~ msgid "Style has already been specified for state %s focus %s"
 #~ msgstr "ئۇسلۇب ئاللىقاچان ھالەت %s فوكۇس %s ئۈچۈن بەلگىلىنىپ بولغان"
 
-#~ msgid "Can't have a two draw_ops for a <piece> element (theme specified a draw_ops attribute and also a <draw_ops> element, or specified two elements)"
-#~ msgstr "<piece> ئېلېمېنتىدا draw_ops بولسا بولمايدۇ (ئۇسۇلۇپتا draw_ops خاسلىق بىلەن <draw_ops> ئېلېمېنتى كۆرسىتىلگەن،  ياكى ئىككى دانە ئېلېمېنت كۆرسىتىلگەن)"
+#~ msgid ""
+#~ "Can't have a two draw_ops for a <piece> element (theme specified a "
+#~ "draw_ops attribute and also a <draw_ops> element, or specified two "
+#~ "elements)"
+#~ msgstr ""
+#~ "<piece> ئېلېمېنتىدا draw_ops بولسا بولمايدۇ (ئۇسۇلۇپتا draw_ops خاسلىق "
+#~ "بىلەن <draw_ops> ئېلېمېنتى كۆرسىتىلگەن،  ياكى ئىككى دانە ئېلېمېنت "
+#~ "كۆرسىتىلگەن)"
 
-#~ msgid "Can't have a two draw_ops for a <button> element (theme specified a draw_ops attribute and also a <draw_ops> element, or specified two elements)"
-#~ msgstr "<button> ئېلېمېنتىدا draw_ops بولسا بولمايدۇ (ئۇسۇلۇپتا draw_ops خاسلىق بىلەن <draw_ops> ئېلېمېنتى كۆرسىتىلگەن،  ياكى ئىككى دانە ئېلېمېنت كۆرسىتىلگەن)"
+#~ msgid ""
+#~ "Can't have a two draw_ops for a <button> element (theme specified a "
+#~ "draw_ops attribute and also a <draw_ops> element, or specified two "
+#~ "elements)"
+#~ msgstr ""
+#~ "<button> ئېلېمېنتىدا draw_ops بولسا بولمايدۇ (ئۇسۇلۇپتا draw_ops خاسلىق "
+#~ "بىلەن <draw_ops> ئېلېمېنتى كۆرسىتىلگەن،  ياكى ئىككى دانە ئېلېمېنت "
+#~ "كۆرسىتىلگەن)"
 
-#~ msgid "Can't have a two draw_ops for a <menu_icon> element (theme specified a draw_ops attribute and also a <draw_ops> element, or specified two elements)"
-#~ msgstr "<menu_icon> ئېلېمېنتىدا draw_ops بولسا بولمايدۇ (ئۇسۇلۇپتا draw_ops خاسلىق بىلەن <draw_ops> ئېلېمېنتى كۆرسىتىلگەن،  ياكى ئىككى دانە ئېلېمېنت كۆرسىتىلگەن)"
+#~ msgid ""
+#~ "Can't have a two draw_ops for a <menu_icon> element (theme specified a "
+#~ "draw_ops attribute and also a <draw_ops> element, or specified two "
+#~ "elements)"
+#~ msgstr ""
+#~ "<menu_icon> ئېلېمېنتىدا draw_ops بولسا بولمايدۇ (ئۇسۇلۇپتا draw_ops "
+#~ "خاسلىق بىلەن <draw_ops> ئېلېمېنتى كۆرسىتىلگەن،  ياكى ئىككى دانە ئېلېمېنت "
+#~ "كۆرسىتىلگەن)"
 
 #, c-format
 #~ msgid "Bad version specification '%s'"
 #~ msgstr "نەشر بەلگىلىمىسى «%s» توغرا ئەمەس"
 
-#~ msgid "\"version\" attribute cannot be used in metacity-theme-1.xml or metacity-theme-2.xml"
-#~ msgstr "\"version\" خاسلىقىنى metacity-theme-1.xml ياكى metacity-theme-2.xml دا ئىشلەتكىلى بولمايدۇ"
+#~ msgid ""
+#~ "\"version\" attribute cannot be used in metacity-theme-1.xml or metacity-"
+#~ "theme-2.xml"
+#~ msgstr ""
+#~ "\"version\" خاسلىقىنى metacity-theme-1.xml ياكى metacity-theme-2.xml دا "
+#~ "ئىشلەتكىلى بولمايدۇ"
 
 #, c-format
-#~ msgid "Theme requires version %s but latest supported theme version is %d.%d"
+#~ msgid ""
+#~ "Theme requires version %s but latest supported theme version is %d.%d"
 #~ msgstr "تېما تەلەپ قىلىدىغان نەشرى %s ئەمما قوللايدىغان تېما نەشرى %d.%d"
 
 #, c-format
 #~ msgid "Outermost element in theme must be <metacity_theme> not <%s>"
-#~ msgstr "ئۆرنەكنىڭ ئەڭ سىرتىدىكى ئېلېمېنت چوقۇم <metacity_theme> بولۇشى كېرەك، <%s> بولسا بولمايدۇ"
+#~ msgstr ""
+#~ "ئۆرنەكنىڭ ئەڭ سىرتىدىكى ئېلېمېنت چوقۇم <metacity_theme> بولۇشى كېرەك، "
+#~ "<%s> بولسا بولمايدۇ"
 
 #, c-format
-#~ msgid "Element <%s> is not allowed inside a name/author/date/description element"
-#~ msgstr "ئېلېمېنت <%s> نى ئېلېمېنت name/author/date/description لارنىڭ ئارىسىدا ئىشلىتىشكە بولمايدۇ"
+#~ msgid ""
+#~ "Element <%s> is not allowed inside a name/author/date/description element"
+#~ msgstr ""
+#~ "ئېلېمېنت <%s> نى ئېلېمېنت name/author/date/description لارنىڭ ئارىسىدا "
+#~ "ئىشلىتىشكە بولمايدۇ"
 
 #, c-format
 #~ msgid "Element <%s> is not allowed inside a <constant> element"
-#~ msgstr "ئېلېمېنت <%s> نى ئېلېمېنت <constant> نىڭ ئارىسىدا ئىشلىتىشكە بولمايدۇ"
+#~ msgstr ""
+#~ "ئېلېمېنت <%s> نى ئېلېمېنت <constant> نىڭ ئارىسىدا ئىشلىتىشكە بولمايدۇ"
 
 #, c-format
-#~ msgid "Element <%s> is not allowed inside a distance/border/aspect_ratio element"
-#~ msgstr "ئېلېمېنت <%s> نى ئېلېمېنت distance/border/aspect_ratio لارنىڭ ئارىسىدا ئىشلىتىشكە بولمايدۇ"
+#~ msgid ""
+#~ "Element <%s> is not allowed inside a distance/border/aspect_ratio element"
+#~ msgstr ""
+#~ "ئېلېمېنت <%s> نى ئېلېمېنت distance/border/aspect_ratio لارنىڭ ئارىسىدا "
+#~ "ئىشلىتىشكە بولمايدۇ"
 
 #, c-format
 #~ msgid "Element <%s> is not allowed inside a draw operation element"
-#~ msgstr "ئېلېمېنت <%s> نى سىزىش مەشغۇلاتى ئېلىپ بارىدىغان ئېلېمېنتنىڭ ئارىسىدا ئىشلىتىشكە بولمايدۇ"
+#~ msgstr ""
+#~ "ئېلېمېنت <%s> نى سىزىش مەشغۇلاتى ئېلىپ بارىدىغان ئېلېمېنتنىڭ ئارىسىدا "
+#~ "ئىشلىتىشكە بولمايدۇ"
 
 #, c-format
 #~ msgid "Element <%s> is not allowed inside a <%s> element"
@@ -1621,8 +1964,14 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 #~ msgstr "بۇ يەردە كۆزنەك ماۋزۇسى كۆرسىتىلىدۇ"
 
 #, c-format
-#~ msgid "Drew %d frames in %g client-side seconds (%g milliseconds per frame) and %g seconds wall clock time including X server resources (%g milliseconds per frame)\n"
-#~ msgstr "%d دانە كاندۇك خېرىدار تەرەپتە %g سېكۇنتتا سىزىلدى(بىر كاندۇك ئۈچۈن %g مىللىسېكۇنت). ئەمەلىيەتتە X مۇلازىمېتىرىنىڭ مەنبەلىرىنىمۇ قوشۇپ %g سېكۇنت(بىر كاندۇكنى %g مىللىسېكۇنت) ۋاقىتتا سىزدى.\n"
+#~ msgid ""
+#~ "Drew %d frames in %g client-side seconds (%g milliseconds per frame) and "
+#~ "%g seconds wall clock time including X server resources (%g milliseconds "
+#~ "per frame)\n"
+#~ msgstr ""
+#~ "%d دانە كاندۇك خېرىدار تەرەپتە %g سېكۇنتتا سىزىلدى(بىر كاندۇك ئۈچۈن %g "
+#~ "مىللىسېكۇنت). ئەمەلىيەتتە X مۇلازىمېتىرىنىڭ مەنبەلىرىنىمۇ قوشۇپ %g "
+#~ "سېكۇنت(بىر كاندۇكنى %g مىللىسېكۇنت) ۋاقىتتا سىزدى.\n"
 
 #~ msgid "position expression test returned TRUE but set error"
 #~ msgstr "ئورۇن ئىپادىسىنى سىناشتا TRUE قايتتى بىراق خاتالىق كۆرۈلدى"
@@ -1650,8 +1999,10 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 #~ msgstr "y نىڭ قىممىتى %d ئىكەن، ئەسلى %d بولسا بولاتتى"
 
 #, c-format
-#~ msgid "%d coordinate expressions parsed in %g seconds (%g seconds average)\n"
-#~ msgstr "%d كوئوردېنات ئىپادىسى %g سېكۇنتتا تەھلىل قىلىندى(%g ئوتتۇرىچە سېكۇنت)\n"
+#~ msgid ""
+#~ "%d coordinate expressions parsed in %g seconds (%g seconds average)\n"
+#~ msgstr ""
+#~ "%d كوئوردېنات ئىپادىسى %g سېكۇنتتا تەھلىل قىلىندى(%g ئوتتۇرىچە سېكۇنت)\n"
 
 #~ msgid "Switch to workspace on the left of the current workspace"
 #~ msgstr "سولدىكى خىزمەت رايونىغا ئالمىشىدۇ"
@@ -1666,10 +2017,14 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 #~ msgstr "ئاستىدىكى خىزمەت مۇھىتىغا ئالمىشىدۇ"
 
 #~ msgid "Move between windows of an application, using a popup window"
-#~ msgstr "قوللىنىشچان پروگرامما كۆزنىكى ئارىسىدا يۆتكىلىپ، قاڭقىش كۆزنىكى ئىشلىتىدۇ"
+#~ msgstr ""
+#~ "قوللىنىشچان پروگرامما كۆزنىكى ئارىسىدا يۆتكىلىپ، قاڭقىش كۆزنىكى ئىشلىتىدۇ"
 
-#~ msgid "Move backward between windows of an application, using a popup window"
-#~ msgstr "قوللىنىشچان پروگرامما كۆزنىكى ئارىسىدا ئەكسىچە يۆتكىلىپ، قاڭقىش كۆزنىكى ئىشلىتىدۇ"
+#~ msgid ""
+#~ "Move backward between windows of an application, using a popup window"
+#~ msgstr ""
+#~ "قوللىنىشچان پروگرامما كۆزنىكى ئارىسىدا ئەكسىچە يۆتكىلىپ، قاڭقىش كۆزنىكى "
+#~ "ئىشلىتىدۇ"
 
 #~ msgid "Move between windows, using a popup window"
 #~ msgstr "كۆزنەك ئارىسىدا يۆتكىلىپ، قاڭقىش كۆزنىكى ئىشلىتىدۇ"
@@ -1681,10 +2036,12 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 #~ msgstr "تاختا ۋە ئۈستەلئۈستى ئارىسىدا يۆتكىلىپ، قاڭقىش كۆزنىكى ئىشلىتىدۇ"
 
 #~ msgid "Move backward between panels and the desktop, using a popup window"
-#~ msgstr "تاختا ۋە ئۈستەلئۈستى ئارىسىدا ئەكسىچە يۆتكىلىپ، قاڭقىش كۆزنىكى ئىشلىتىدۇ"
+#~ msgstr ""
+#~ "تاختا ۋە ئۈستەلئۈستى ئارىسىدا ئەكسىچە يۆتكىلىپ، قاڭقىش كۆزنىكى ئىشلىتىدۇ"
 
 #~ msgid "Move backward between windows of an application immediately"
-#~ msgstr "قوللىنىشچان پروگراممىنىڭ كۆزنىكى ئارىسىدا ئەكسىچە دەرھال تەتۈر يۆتكىلىدۇ"
+#~ msgstr ""
+#~ "قوللىنىشچان پروگراممىنىڭ كۆزنىكى ئارىسىدا ئەكسىچە دەرھال تەتۈر يۆتكىلىدۇ"
 
 #~ msgid "Move between windows immediately"
 #~ msgstr "كۆزنەك ئارىسىدا دەرھال يۆتكىلىدۇ"
@@ -1714,7 +2071,8 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 #~ msgstr "تېرمىنالنى ئىجرا قىل"
 
 #~ msgid "Toggle whether a window will always be visible over other windows"
-#~ msgstr "كۆزنەك ھەمىشە باشقا ھەممە كۆزنەكلەرنىڭ ئۈستىدە تۇرۇشنى ئالماشتۇرامدۇ يوق"
+#~ msgstr ""
+#~ "كۆزنەك ھەمىشە باشقا ھەممە كۆزنەكلەرنىڭ ئۈستىدە تۇرۇشنى ئالماشتۇرامدۇ يوق"
 
 #~ msgid "Minimize window"
 #~ msgstr "كۆزنەكنى كىچىكلەت"
@@ -1794,7 +2152,9 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 #~ " قىلىپ تەڭشەلگەن\n"
 
 #~ msgid "%d stored in GConf key %s is out of range %d to %d\n"
-#~ msgstr "GConf نىڭ %2$s  ئاچقۇچىنىڭ قىممىتى %1$d نىڭ دائىرىسى %3$d〜%4$d نىڭ ئىچىدە ئەمەس\n"
+#~ msgstr ""
+#~ "GConf نىڭ %2$s  ئاچقۇچىنىڭ قىممىتى %1$d نىڭ دائىرىسى %3$d〜%4$d نىڭ "
+#~ "ئىچىدە ئەمەس\n"
 
 #~ msgid "GConf key \"%s\" is set to an invalid type\n"
 #~ msgstr ""
@@ -1802,7 +2162,9 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 #~ " قىلىپ تەڭشەلگەن\n"
 
 #~ msgid "GConf key %s is already in use and can't be used to override %s\n"
-#~ msgstr "GConf ئاچقۇچى %s ئىشلىتىلىۋاتىدۇ، شۇڭا %s نى قاپلاشقا ئىشلەتكىلى بولمايدۇ\n"
+#~ msgstr ""
+#~ "GConf ئاچقۇچى %s ئىشلىتىلىۋاتىدۇ، شۇڭا %s نى قاپلاشقا ئىشلەتكىلى "
+#~ "بولمايدۇ\n"
 
 #~ msgid "Can't override GConf key, %s not found\n"
 #~ msgstr "GConf ئاچقۇچىنى قاپلىغىلى بولمىدى، %s تېپىلمىدى\n"
@@ -1811,16 +2173,22 @@ msgstr "%s (ھازىر %s نىڭ ئۈستىدە)"
 #~ msgstr "خىزمەت رايونى سانىنى %d قىلىپ تەڭشەشتە كۆرۈلگەن خاتالىق ：%s\n"
 
 #~ msgid "Error setting name for workspace %d to \"%s\": %s\n"
-#~ msgstr "خىزمەت مۇھىتى %d  غا \"%s\"  دەپ ئائىت قويۇشتا خاتالىق كۆرۈلدى: %s\n"
+#~ msgstr ""
+#~ "خىزمەت مۇھىتى %d  غا \"%s\"  دەپ ئائىت قويۇشتا خاتالىق كۆرۈلدى: %s\n"
 
 #~ msgid "Error setting live hidden windows status status: %s\n"
-#~ msgstr "شۇئان يوشۇرۇنىدىغان كۆزنەك ھالىتىنى تەڭشەۋاتقاندا خاتالىق كۆرۈلدى: %s\n"
+#~ msgstr ""
+#~ "شۇئان يوشۇرۇنىدىغان كۆزنەك ھالىتىنى تەڭشەۋاتقاندا خاتالىق كۆرۈلدى: %s\n"
 
 #~ msgid "Error setting no tab popup status: %s\n"
 #~ msgstr "بەتكۈچ يوق قاڭقىش ھالىتىنى تەڭشەۋاتقاندا خاتالىق كۆرۈلدى: %s\n"
 
-#~ msgid "Determines whether hidden windows (i.e., minimized windows and windows on other workspaces than the current one) should be kept alive."
-#~ msgstr "يوشۇرۇن كۆزنەك (مەسىلەن، كىچىكلىتىلگەن ۋە باشقا خىزمەت رايونىدىكى كۆزنەك)نىڭ ھالىتىنى ساقلاش ياكى ساقلىماسلىقنى جەزملەيدۇ."
+#~ msgid ""
+#~ "Determines whether hidden windows (i.e., minimized windows and windows on "
+#~ "other workspaces than the current one) should be kept alive."
+#~ msgstr ""
+#~ "يوشۇرۇن كۆزنەك (مەسىلەن، كىچىكلىتىلگەن ۋە باشقا خىزمەت رايونىدىكى "
+#~ "كۆزنەك)نىڭ ھالىتىنى ساقلاش ياكى ساقلىماسلىقنى جەزملەيدۇ."
 
 #~ msgid "Live Hidden Windows"
 #~ msgstr "شۇئان يوشۇرۇنىدىغان كۆزنەكلەر"

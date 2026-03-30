@@ -517,6 +517,7 @@ determine_medium_size (CoglPixelFormat format)
     case COGL_PIXEL_FORMAT_ABGR_2101010_PRE:
     case COGL_PIXEL_FORMAT_R_16:
     case COGL_PIXEL_FORMAT_RG_1616:
+    case COGL_PIXEL_FORMAT_RGBX_16161616:
     case COGL_PIXEL_FORMAT_RGBA_16161616:
     case COGL_PIXEL_FORMAT_RGBA_16161616_PRE:
       return MEDIUM_TYPE_16;
@@ -746,11 +747,11 @@ _cogl_bitmap_convert (CoglBitmap *src_bmp,
 }
 
 static gboolean
-driver_can_convert (CoglContext *ctx,
+driver_can_convert (CoglDriver     *driver,
                     CoglPixelFormat src_format,
                     CoglPixelFormat internal_format)
 {
-  if (!_cogl_has_private_feature (ctx, COGL_PRIVATE_FEATURE_FORMAT_CONVERSION))
+  if (!cogl_driver_has_feature (driver, COGL_FEATURE_ID_FORMAT_CONVERSION))
     return FALSE;
 
   if (src_format == internal_format)
@@ -759,7 +760,7 @@ driver_can_convert (CoglContext *ctx,
   /* If the driver doesn't natively support alpha textures then it
    * won't work correctly to convert to/from component-alpha
    * textures */
-  if (!_cogl_has_private_feature (ctx, COGL_PRIVATE_FEATURE_ALPHA_TEXTURES) &&
+  if (!cogl_driver_has_feature (driver, COGL_FEATURE_ID_ALPHA_TEXTURES) &&
       (src_format == COGL_PIXEL_FORMAT_A_8 ||
        internal_format == COGL_PIXEL_FORMAT_A_8))
     return FALSE;
@@ -767,7 +768,7 @@ driver_can_convert (CoglContext *ctx,
   /* Same for red-green textures. If red-green textures aren't
    * supported then the internal format should never be RG_88 but we
    * should still be able to convert from an RG source image */
-  if (!cogl_context_has_feature (ctx, COGL_FEATURE_ID_TEXTURE_RG) &&
+  if (!cogl_driver_has_feature (driver, COGL_FEATURE_ID_TEXTURE_RG) &&
       src_format == COGL_PIXEL_FORMAT_RG_88)
     return FALSE;
 
@@ -796,7 +797,7 @@ _cogl_bitmap_convert_for_upload (CoglBitmap *src_bmp,
      limited number of formats so we must convert using the Cogl
      bitmap code instead */
 
-  if (driver_can_convert (ctx, src_format, internal_format))
+  if (driver_can_convert (driver, src_format, internal_format))
     {
       /* If the source format does not have the same premult flag as the
          internal_format then we need to copy and convert it */
@@ -818,7 +819,6 @@ _cogl_bitmap_convert_for_upload (CoglBitmap *src_bmp,
 
       closest_format =
         driver_klass->pixel_format_to_gl (driver_gl,
-                                          ctx,
                                           internal_format,
                                           NULL, /* ignore gl intformat */
                                           NULL, /* ignore gl format */

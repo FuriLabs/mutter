@@ -302,4 +302,7 @@ void clutter_actor_set_implicitly_grabbed (ClutterActor *actor,
 
 AtkStateSet * clutter_actor_get_accessible_state (ClutterActor *actor);
 
+ClutterCursor * clutter_actor_get_cursor_for_sprite (ClutterActor  *actor,
+                                                     ClutterSprite *sprite);
+
 G_END_DECLS

@@ -38,6 +38,7 @@
 #include "backends/meta-stage-view-private.h"
 #include "clutter/clutter-mutter.h"
 #include "cogl/cogl.h"
+#include "cogl/cogl-frame-info-private.h"
 #include "core/util-private.h"
 #include "meta/meta-backend.h"
 
@@ -46,6 +47,7 @@
 typedef struct _MetaStageImplPrivate
 {
   MetaBackend *backend;
+  int64_t global_frame_counter;
 } MetaStageImplPrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (MetaStageImpl, meta_stage_impl, CLUTTER_TYPE_STAGE_WINDOW)
@@ -77,6 +79,16 @@ meta_stage_impl_realize (ClutterStageWindow *stage_window)
               stage_window);
 
   return TRUE;
+}
+
+static int64_t
+meta_stage_impl_get_frame_counter (ClutterStageWindow *stage_window)
+{
+  MetaStageImpl *stage_impl = META_STAGE_IMPL (stage_window);
+  MetaStageImplPrivate *priv =
+    meta_stage_impl_get_instance_private (stage_impl);
+
+  return priv->global_frame_counter;
 }
 
 static void
@@ -246,6 +258,9 @@ swap_framebuffer (ClutterStageWindow *stage_window,
                   gboolean            swap_with_damage,
                   ClutterFrame       *frame)
 {
+  MetaStageImpl *stage_impl = META_STAGE_IMPL (stage_window);
+  MetaStageImplPrivate *priv =
+    meta_stage_impl_get_instance_private (stage_impl);
   CoglFramebuffer *framebuffer = clutter_stage_view_get_onscreen (stage_view);
   CoglContext *cogl_context = cogl_framebuffer_get_context (framebuffer);
 
@@ -256,18 +271,14 @@ swap_framebuffer (ClutterStageWindow *stage_window,
   if (COGL_IS_ONSCREEN (framebuffer))
     {
       CoglOnscreen *onscreen = COGL_ONSCREEN (framebuffer);
-      int64_t target_presentation_time_us;
       int n_rects;
       CoglFrameInfo *frame_info;
 
-      frame_info = cogl_frame_info_new (cogl_context, frame->frame_count);
 
-      if (clutter_frame_get_target_presentation_time (frame,
-                                                      &target_presentation_time_us))
-        {
-          cogl_frame_info_set_target_presentation_time (frame_info,
-                                                        target_presentation_time_us);
-        }
+      frame_info =
+        cogl_frame_info_new (cogl_context, priv->global_frame_counter,
+                             frame->frame_count);
+      priv->global_frame_counter++;
 
       n_rects = mtk_region_num_rectangles (swap_region);
       if (n_rects > 0 && !swap_with_damage)
@@ -302,7 +313,9 @@ swap_framebuffer (ClutterStageWindow *stage_window,
                   framebuffer);
 
       cogl_framebuffer_flush (framebuffer);
-      meta_stage_view_perform_fake_swap (view, frame->frame_count);
+      meta_stage_view_perform_fake_swap (view, priv->global_frame_counter,
+                                         frame->frame_count);
+      priv->global_frame_counter++;
     }
 }
 
@@ -729,10 +742,11 @@ meta_stage_impl_scanout_view (MetaStageImpl     *stage_impl,
                               ClutterFrame      *frame,
                               GError           **error)
 {
+  MetaStageImplPrivate *priv =
+    meta_stage_impl_get_instance_private (stage_impl);
   CoglFramebuffer *framebuffer =
     clutter_stage_view_get_onscreen (stage_view);
   CoglContext *cogl_context = cogl_framebuffer_get_context (framebuffer);
-  int64_t target_presentation_time_us;
   CoglOnscreen *onscreen;
   CoglFrameInfo *frame_info;
 
@@ -740,7 +754,8 @@ meta_stage_impl_scanout_view (MetaStageImpl     *stage_impl,
 
   onscreen = COGL_ONSCREEN (framebuffer);
 
-  frame_info = cogl_frame_info_new (cogl_context, frame->frame_count);
+  frame_info = cogl_frame_info_new (cogl_context, priv->global_frame_counter,
+                                    frame->frame_count);
 
   if (!cogl_onscreen_direct_scanout (onscreen,
                                      scanout,
@@ -752,13 +767,7 @@ meta_stage_impl_scanout_view (MetaStageImpl     *stage_impl,
       return FALSE;
     }
 
-  if (clutter_frame_get_target_presentation_time (frame,
-                                                  &target_presentation_time_us))
-    {
-      cogl_frame_info_set_target_presentation_time (frame_info,
-                                                    target_presentation_time_us);
-    }
-
+  priv->global_frame_counter++;
   return TRUE;
 }
 
@@ -799,11 +808,16 @@ meta_stage_impl_add_onscreen_frame_info (MetaStageImpl    *stage_impl,
                                          ClutterStageView *stage_view,
                                          ClutterFrame     *frame)
 {
+  MetaStageImplPrivate *priv =
+    meta_stage_impl_get_instance_private (stage_impl);
   CoglFramebuffer *framebuffer = clutter_stage_view_get_onscreen (stage_view);
   CoglContext *cogl_context = cogl_framebuffer_get_context (framebuffer);
   CoglFrameInfo *frame_info;
 
-  frame_info = cogl_frame_info_new (cogl_context, frame->frame_count);
+  frame_info = cogl_frame_info_new (cogl_context, priv->global_frame_counter,
+                                    frame->frame_count);
+  priv->global_frame_counter++;
+
   cogl_onscreen_add_frame_info (COGL_ONSCREEN (framebuffer), frame_info);
 }
 
@@ -845,6 +859,7 @@ meta_stage_impl_class_init (MetaStageImplClass *klass)
   window_class->resize = meta_stage_impl_resize;
   window_class->show = meta_stage_impl_show;
   window_class->hide = meta_stage_impl_hide;
+  window_class->get_frame_counter = meta_stage_impl_get_frame_counter;
   window_class->redraw_view = meta_stage_impl_redraw_view;
 
   obj_props[PROP_WRAPPER] =

@@ -159,6 +159,7 @@ static void
 meta_wayland_keyboard_take_keymap (MetaWaylandKeyboard *keyboard,
 				   struct xkb_keymap   *keymap)
 {
+  MetaBackend *backend = backend_from_keyboard (keyboard);
   MetaWaylandXkbInfo *xkb_info = &keyboard->xkb_info;
   char *keymap_string;
   size_t keymap_size;
@@ -198,6 +199,7 @@ meta_wayland_keyboard_take_keymap (MetaWaylandKeyboard *keyboard,
 
   inform_clients_of_new_keymap (keyboard);
 
+  keyboard->xkb_info.group = meta_backend_get_keymap_layout_group (backend);
   notify_modifiers (keyboard);
 }
 
@@ -207,7 +209,8 @@ on_keymap_changed (MetaBackend *backend,
 {
   MetaWaylandKeyboard *keyboard = data;
 
-  meta_wayland_keyboard_take_keymap (keyboard, meta_backend_get_keymap (backend));
+  meta_wayland_keyboard_take_keymap (keyboard,
+                                     meta_backend_get_xkb_keymap (backend));
 }
 
 static void
@@ -379,7 +382,7 @@ notify_key_repeat_for_resource (MetaWaylandKeyboard *keyboard,
       unsigned int delay, rate;
 
       repeat = (wl_resource_get_version (keyboard_resource) <
-                WL_KEYBOARD_KEY_STATE_REPEATED_SINCE_VERSION ||
+                WL_KEYBOARD_KEY_STATE_REPEATED_SINCE_VERSION &&
                 g_settings_get_boolean (keyboard->settings, "repeat"));
 
       if (repeat)
@@ -452,7 +455,8 @@ meta_wayland_keyboard_enable (MetaWaylandKeyboard *keyboard)
   g_signal_connect (backend, "keymap-layout-group-changed",
                     G_CALLBACK (on_keymap_layout_group_changed), keyboard);
 
-  meta_wayland_keyboard_take_keymap (keyboard, meta_backend_get_keymap (backend));
+  meta_wayland_keyboard_take_keymap (keyboard,
+                                     meta_backend_get_xkb_keymap (backend));
 
   meta_wayland_keyboard_set_focus (keyboard, seat->input_focus);
 }

@@ -1,3 +1,74 @@
+mutter (50.0-1) experimental; urgency=medium
+
+  * Team upload
+
+  [ Daniel van Vugt ]
+  * New upstream release 50.0
+  * Refresh patches:
+    - workarounds/tests-Skip-thread-priority-test.patch
+  * Bump dependencies:
+    - wayland-protocols >= 1.47
+    - pipewire >= 1.6.0
+  * Update symbols files for 50.0
+
+  [ Simon McVittie ]
+  * Merge packaging from unstable
+  * d/control: Bump dependency versions to those recommended by upstream CI
+    - gsettings-desktop-schemas-dev 50~alpha
+    - libgtk-4-dev 4.22.0
+    - libpipewire-0.3-dev 1.6.1
+  * d/copyright: Update
+  * d/watch: Convert to v5 format
+  * Update Lintian overrides
+
+ -- Simon McVittie <smcv@debian.org>  Sat, 28 Mar 2026 20:50:32 +0000
+
+mutter (50~beta-2) experimental; urgency=medium
+
+  * Add loong64 to the list of architectures where sysprof is available
+  * Fix i386 build
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Sun, 08 Feb 2026 05:12:10 -0500
+
+mutter (50~beta-1) experimental; urgency=medium
+
+  [ Daniel van Vugt ]
+  * New upstream release 50.beta
+  * Refreshed patches and fixed conflicts:
+    - workarounds/Mark-several-additional-tests-as-flaky.patch
+    - workarounds/tests-Install-stacking-tests-into-a-subdirectory.patch
+    - workarounds/tests-Mark-view-verification-tests-as-incomplete-in-big-e.patch
+  * Removed tests that relied strictly on the X11 backend which itself
+    has been removed in this release.
+  * debian/control: Add new Build-Depends: libxkbregistry-dev
+  * Update debian/*.symbols for 50.beta
+  * debian/control: libmutter now requires mutter-common >= 50~beta
+
+  [ Simon McVittie ]
+  * Revert "d/gbp.conf, d/control, d/watch: Branch for 49.x"
+
+  [ Jeremy Bícha ]
+  * Bump Standards Version to 4.7.3
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Fri, 06 Feb 2026 12:17:46 -0500
+
+mutter (49.4-1) unstable; urgency=medium
+
+  * Team upload
+  * New upstream release
+  * d/libmutter-17-0.symbols: Update
+
+ -- Simon McVittie <smcv@debian.org>  Mon, 16 Feb 2026 20:00:36 +0000
+
+mutter (49.3-1) unstable; urgency=medium
+
+  * New upstream release
+  * d/gbp.conf, d/control, d/watch: Branch for 49.x.
+    The debian/latest branch is already in use for early preparations
+    for v50.
+
+ -- Simon McVittie <smcv@debian.org>  Tue, 27 Jan 2026 19:53:34 +0000
+
 mutter (49.2-1) unstable; urgency=medium
 
   * Team upload

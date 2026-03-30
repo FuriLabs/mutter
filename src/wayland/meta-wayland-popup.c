@@ -86,10 +86,10 @@ meta_wayland_popup_surface_dismiss (MetaWaylandPopupSurface *popup_surface)
   META_WAYLAND_POPUP_SURFACE_GET_IFACE (popup_surface)->dismiss (popup_surface);
 }
 
-static void
+static gboolean
 meta_wayland_popup_surface_finish (MetaWaylandPopupSurface *popup_surface)
 {
-  META_WAYLAND_POPUP_SURFACE_GET_IFACE (popup_surface)->finish (popup_surface);
+  return META_WAYLAND_POPUP_SURFACE_GET_IFACE (popup_surface)->finish (popup_surface);
 }
 
 static MetaWaylandSurface *
@@ -212,15 +212,17 @@ meta_wayland_popup_grab_create (MetaWaylandSeat         *seat,
 void
 meta_wayland_popup_grab_finish (MetaWaylandPopupGrab *grab)
 {
-  MetaWaylandPopup *popup, *tmp;
-
-  wl_list_for_each_safe (popup, tmp, &grab->all_popups, link)
+  while (!wl_list_empty (&grab->all_popups))
     {
+      MetaWaylandPopup *popup = wl_container_of (grab->all_popups.next,
+                                                 popup, link);
       MetaWaylandPopupSurface *popup_surface = popup->popup_surface;
 
       meta_wayland_popup_surface_done (popup_surface);
       meta_wayland_popup_destroy (popup);
-      meta_wayland_popup_surface_finish (popup_surface);
+
+      if (meta_wayland_popup_surface_finish (popup_surface))
+        break;
     }
 }
 
@@ -292,9 +294,7 @@ meta_wayland_popup_dismiss (MetaWaylandPopup *popup)
 
   meta_wayland_popup_destroy (popup);
 
-  if (wl_list_empty (&popup_grab->all_popups))
-    meta_wayland_popup_surface_finish (popup_surface);
-  else
+  if (!meta_wayland_popup_surface_finish (popup_surface))
     meta_wayland_popup_grab_repick_keyboard_focus (popup_grab);
 }
 

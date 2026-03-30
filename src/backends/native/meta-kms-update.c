@@ -55,6 +55,8 @@ struct _MetaKmsUpdate
   MetaKmsImplDevice *impl_device;
 
   int sync_fd;
+
+  int64_t target_presentation_time_us;
 };
 
 void
@@ -165,6 +167,19 @@ const GError *
 meta_kms_feedback_get_error (const MetaKmsFeedback *feedback)
 {
   return feedback->error;
+}
+
+int64_t
+meta_kms_feedback_get_ready_time_us (const MetaKmsFeedback *feedback)
+{
+  return feedback->ready_time_us;
+}
+
+void
+meta_kms_feedback_set_ready_time_us (MetaKmsFeedback *feedback,
+                                     int64_t          ready_time_us)
+{
+  feedback->ready_time_us = ready_time_us;
 }
 
 void
@@ -551,6 +566,50 @@ ensure_color_update (MetaKmsUpdate *update,
 }
 
 void
+meta_kms_update_set_crtc_degamma (MetaKmsUpdate      *update,
+                                  MetaKmsCrtc        *crtc,
+                                  const MetaGammaLut *degamma)
+{
+  MetaKmsCrtcColorUpdate *color_update;
+  MetaGammaLut *degamma_update = NULL;
+  const MetaKmsCrtcState *crtc_state = meta_kms_crtc_get_current_state (crtc);
+
+  g_assert (meta_kms_crtc_get_device (crtc) == update->device);
+
+  if (degamma)
+    {
+      degamma_update = meta_gamma_lut_copy_to_size (degamma,
+                                                    crtc_state->degamma.size);
+    }
+
+  color_update = ensure_color_update (update, crtc);
+  color_update->degamma.state = degamma_update;
+  color_update->degamma.has_update = TRUE;
+
+  update_latch_crtc (update, crtc);
+}
+
+void
+meta_kms_update_set_crtc_ctm (MetaKmsUpdate *update,
+                              MetaKmsCrtc   *crtc,
+                              const MetaCtm *ctm)
+{
+  MetaKmsCrtcColorUpdate *color_update;
+  MetaCtm *ctm_update = NULL;
+
+  g_assert (meta_kms_crtc_get_device (crtc) == update->device);
+
+  if (ctm)
+    ctm_update = meta_ctm_copy (ctm);
+
+  color_update = ensure_color_update (update, crtc);
+  color_update->ctm.state = ctm_update;
+  color_update->ctm.has_update = TRUE;
+
+  update_latch_crtc (update, crtc);
+}
+
+void
 meta_kms_update_set_crtc_gamma (MetaKmsUpdate      *update,
                                 MetaKmsCrtc        *crtc,
                                 const MetaGammaLut *gamma)
@@ -574,6 +633,10 @@ meta_kms_update_set_crtc_gamma (MetaKmsUpdate      *update,
 static void
 meta_kms_crtc_color_updates_free (MetaKmsCrtcColorUpdate *color_update)
 {
+  if (color_update->degamma.has_update)
+    g_clear_pointer (&color_update->degamma.state, meta_gamma_lut_free);
+  if (color_update->ctm.has_update)
+    g_clear_pointer (&color_update->ctm.state, meta_ctm_free);
   if (color_update->gamma.has_update)
     g_clear_pointer (&color_update->gamma.state, meta_gamma_lut_free);
   g_free (color_update);
@@ -1102,6 +1165,8 @@ merge_connector_updates_from (MetaKmsUpdate *update,
             {
               connector_update->hdr = other_connector_update->hdr;
             }
+
+          g_list_free_full (l, g_free);
         }
       else
         {
@@ -1160,6 +1225,9 @@ meta_kms_update_merge_from (MetaKmsUpdate *update,
   merge_result_listeners_from (update, other_update);
 
   meta_kms_update_set_sync_fd (update, g_steal_fd (&other_update->sync_fd));
+  update->target_presentation_time_us =
+    MAX (update->target_presentation_time_us,
+         other_update->target_presentation_time_us);
 }
 
 gboolean
@@ -1230,6 +1298,21 @@ int
 meta_kms_update_get_sync_fd (MetaKmsUpdate *update)
 {
   return update->sync_fd;
+}
+
+int64_t
+meta_kms_update_get_target_presentation_time (MetaKmsUpdate *update)
+{
+  return update->target_presentation_time_us;
+}
+
+void
+meta_kms_update_set_target_presentation_time (MetaKmsUpdate *update,
+                                              int64_t        target_presentation_time_us)
+{
+  g_return_if_fail (update->target_presentation_time_us == 0);
+
+  update->target_presentation_time_us = target_presentation_time_us;
 }
 
 void

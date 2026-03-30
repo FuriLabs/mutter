@@ -50,16 +50,15 @@ struct _MetaSeatNative
   GList *devices;
   struct xkb_keymap *xkb_keymap;
   xkb_layout_index_t xkb_layout_index;
-
-  ClutterInputDevice *core_pointer;
-  ClutterInputDevice *core_keyboard;
+  MetaKeymapDescription *keymap_description;
 
   guint virtual_touch_slot_base;
   GHashTable *reserved_virtual_slots;
 
   MetaKeymapNative *keymap;
+  ClutterSprite *native_cursor_owner;
   MetaCursorRenderer *cursor_renderer;
-  GHashTable *tablet_cursors;
+  GHashTable *secondary_cursor_renderers;
 
   gboolean released;
   gboolean touch_mode;
@@ -100,31 +99,21 @@ void  meta_seat_native_set_device_callbacks (MetaOpenDeviceCallback  open_callba
 void  meta_seat_native_release_devices (MetaSeatNative *seat);
 void  meta_seat_native_reclaim_devices (MetaSeatNative *seat);
 
-void meta_seat_native_set_keyboard_map_async (MetaSeatNative      *seat,
-                                              const char          *layouts,
-                                              const char          *variants,
-                                              const char          *options,
-                                              const char          *model,
-                                              GCancellable        *cancellable,
-                                              GAsyncReadyCallback  callback,
-                                              gpointer             user_data);
+void meta_seat_native_set_keymap_async (MetaSeatNative        *seat,
+                                        MetaKeymapDescription *description,
+                                        xkb_layout_index_t     layout_index,
+                                        GCancellable          *cancellable,
+                                        GAsyncReadyCallback    callback,
+                                        gpointer               user_data);
 
-gboolean meta_seat_native_set_keyboard_map_finish (MetaSeatNative  *seat_native,
-                                                   GAsyncResult    *result,
-                                                   GError         **error);
+gboolean meta_seat_native_set_keymap_finish (MetaSeatNative  *seat_native,
+                                             GAsyncResult    *result,
+                                             GError         **error);
 
 META_EXPORT_TEST
-struct xkb_keymap * meta_seat_native_get_keyboard_map (MetaSeatNative *seat);
+struct xkb_keymap * meta_seat_native_get_xkb_keymap (MetaSeatNative *seat);
 
-gboolean meta_seat_native_set_keyboard_layout_index_finish (MetaSeatNative  *seat_native,
-                                                            GAsyncResult    *result,
-                                                            GError         **error);
-
-void meta_seat_native_set_keyboard_layout_index_async (MetaSeatNative      *seat,
-                                                       xkb_layout_index_t   idx,
-                                                       GCancellable        *cancellable,
-                                                       GAsyncReadyCallback  callback,
-                                                       gpointer             user_data);
+MetaKeymapDescription * meta_seat_native_get_keymap_description (MetaSeatNative *seat_native);
 
 xkb_layout_index_t meta_seat_native_get_keyboard_layout_index (MetaSeatNative *seat);
 
@@ -156,3 +145,6 @@ void meta_seat_native_run_impl_task (MetaSeatNative *seat,
 void meta_seat_native_set_a11y_modifiers (MetaSeatNative *seat,
                                           const uint32_t *modifiers,
                                           int             n_modifiers);
+
+void meta_seat_native_remove_cursor_renderer (MetaSeatNative *seat_native,
+                                              ClutterSprite  *sprite);

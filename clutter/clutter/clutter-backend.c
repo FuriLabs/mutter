@@ -593,21 +593,6 @@ clutter_backend_get_sprite (ClutterBackend     *backend,
 }
 
 /**
- * clutter_backend_lookup_sprite: (skip)
- */
-ClutterSprite *
-clutter_backend_lookup_sprite (ClutterBackend       *backend,
-                               ClutterStage         *stage,
-                               ClutterInputDevice   *device,
-                               ClutterEventSequence *sequence)
-{
-  return CLUTTER_BACKEND_GET_CLASS (backend)->lookup_sprite (backend,
-                                                             stage,
-                                                             device,
-                                                             sequence);
-}
-
-/**
  * clutter_backend_get_pointer_sprite:
  * @backend: a #ClutterBackend
  * @stage: a #ClutterStage
@@ -669,4 +654,14 @@ clutter_backend_destroy (ClutterBackend *backend)
 {
   g_object_run_dispose (G_OBJECT (backend));
   g_object_unref (backend);
+}
+
+ClutterCursor *
+clutter_backend_get_cursor (ClutterBackend    *backend,
+                            ClutterCursorType  cursor_type)
+{
+  if (!CLUTTER_BACKEND_GET_CLASS (backend)->get_cursor)
+    return NULL;
+
+  return CLUTTER_BACKEND_GET_CLASS (backend)->get_cursor (backend, cursor_type);
 }

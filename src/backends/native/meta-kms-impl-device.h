@@ -199,6 +199,10 @@ MetaKmsFeedback * meta_kms_impl_device_process_update (MetaKmsImplDevice *impl_d
                                                        MetaKmsUpdateFlag  flags)
   G_GNUC_WARN_UNUSED_RESULT;
 
+META_EXPORT_TEST
+void meta_kms_impl_device_set_updates_inhibited (MetaKmsImplDevice *impl_device,
+                                                 gboolean           inhibited);
+
 void meta_kms_impl_device_handle_update (MetaKmsImplDevice *impl_device,
                                          MetaKmsUpdate     *update,
                                          MetaKmsUpdateFlag  flags);
@@ -217,8 +221,6 @@ void meta_kms_impl_device_discard_pending_page_flips (MetaKmsImplDevice *impl_de
 
 gboolean meta_kms_impl_device_init_mode_setting (MetaKmsImplDevice  *impl_device,
                                                  GError            **error);
-
-void meta_kms_impl_device_resume (MetaKmsImplDevice *impl_device);
 
 void meta_kms_impl_device_prepare_shutdown (MetaKmsImplDevice *impl_device);
 

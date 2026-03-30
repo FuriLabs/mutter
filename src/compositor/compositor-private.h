@@ -59,11 +59,6 @@ struct _MetaCompositorClass
   MetaCompositorView * (* create_view) (MetaCompositor   *compositor,
                                         ClutterStageView *stage_view);
 
-  gboolean (* handle_event) (MetaCompositor     *compositor,
-                             const ClutterEvent *event,
-                             MetaWindow         *event_window,
-                             MetaEventMode       mode_hint);
-
   void (* notify_mapping_change) (MetaCompositor   *compositor,
                                   MetaMappingType   type,
                                   MetaMappingState  state);
@@ -189,11 +184,6 @@ void meta_compositor_show_window_menu (MetaCompositor     *compositor,
                                        int                 x,
                                        int                 y);
 
-gboolean meta_compositor_handle_event (MetaCompositor     *compositor,
-                                       const ClutterEvent *event,
-                                       MetaWindow         *event_window,
-                                       MetaEventMode       mode_hint);
-
 void meta_compositor_notify_mapping_change (MetaCompositor   *compositor,
                                             MetaMappingType   type,
                                             MetaMappingState  state);
@@ -213,3 +203,7 @@ meta_translate_to_high_res_xserver_time (int64_t time_us)
 
   return ms2us (ms & 0xffffffff) + us;
 }
+
+gboolean meta_compositor_query_pointer_a11y (MetaCompositor    *compositor,
+                                             GVariant         **data_out,
+                                             graphene_point_t  *rel_coords);

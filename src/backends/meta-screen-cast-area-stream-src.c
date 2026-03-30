@@ -16,10 +16,6 @@
  *
  */
 
-/* Till https://gitlab.freedesktop.org/pipewire/pipewire/-/issues/4065 is fixed */
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wfloat-conversion"
-
 #include "config.h"
 
 #include "backends/meta-screen-cast-area-stream-src.h"
@@ -125,18 +121,18 @@ is_cursor_in_stream (MetaScreenCastAreaStreamSrc *area_src)
     meta_backend_get_cursor_renderer (backend);
   MtkRectangle *area;
   graphene_rect_t area_rect;
-  MetaCursorSprite *cursor_sprite;
+  ClutterCursor *cursor;
 
   area = meta_screen_cast_area_stream_get_area (area_stream);
   area_rect = mtk_rectangle_to_graphene_rect (area);
 
-  cursor_sprite = meta_cursor_renderer_get_cursor (cursor_renderer);
-  if (cursor_sprite)
+  cursor = meta_cursor_renderer_get_cursor (cursor_renderer);
+  if (cursor)
     {
       graphene_rect_t cursor_rect;
 
       cursor_rect = meta_cursor_renderer_calculate_rect (cursor_renderer,
-                                                         cursor_sprite);
+                                                         cursor);
       return graphene_rect_intersection (&cursor_rect, &area_rect, NULL);
     }
   else
@@ -362,8 +358,12 @@ static void
 on_monitors_changed (MetaMonitorManager          *monitor_manager,
                      MetaScreenCastAreaStreamSrc *area_src)
 {
+  MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (area_src);
   MetaStage *stage = META_STAGE (get_stage (area_src));
   GList *l;
+
+  if (!meta_screen_cast_stream_src_is_enabled (src))
+    return;
 
   for (l = area_src->watches; l; l = l->next)
     meta_stage_remove_watch (stage, l->data);
@@ -402,14 +402,12 @@ meta_screen_cast_area_stream_src_enable (MetaScreenCastStreamSrc *src)
         g_signal_connect_after (stage, "prepare-frame",
                                 G_CALLBACK (on_prepare_frame),
                                 area_src);
-      meta_cursor_tracker_track_position (cursor_tracker);
       G_GNUC_FALLTHROUGH;
     case META_SCREEN_CAST_CURSOR_MODE_HIDDEN:
       add_view_painted_watches (area_src);
       break;
     case META_SCREEN_CAST_CURSOR_MODE_EMBEDDED:
       inhibit_hw_cursor (area_src);
-      meta_cursor_tracker_track_position (cursor_tracker);
       add_view_painted_watches (area_src);
       break;
     }
@@ -426,7 +424,6 @@ meta_screen_cast_area_stream_src_disable (MetaScreenCastStreamSrc *src)
 {
   MetaScreenCastAreaStreamSrc *area_src =
     META_SCREEN_CAST_AREA_STREAM_SRC (src);
-  MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
   MetaBackend *backend = get_backend (area_src);
   MetaCursorTracker *cursor_tracker = meta_backend_get_cursor_tracker (backend);
   ClutterStage *stage;
@@ -455,16 +452,6 @@ meta_screen_cast_area_stream_src_disable (MetaScreenCastStreamSrc *src)
                           stage);
 
   g_clear_handle_id (&area_src->maybe_record_idle_id, g_source_remove);
-
-  switch (meta_screen_cast_stream_get_cursor_mode (stream))
-    {
-    case META_SCREEN_CAST_CURSOR_MODE_METADATA:
-    case META_SCREEN_CAST_CURSOR_MODE_EMBEDDED:
-      meta_cursor_tracker_untrack_position (cursor_tracker);
-      break;
-    case META_SCREEN_CAST_CURSOR_MODE_HIDDEN:
-      break;
-    }
 }
 
 static gboolean
@@ -504,6 +491,7 @@ meta_screen_cast_area_stream_src_record_to_buffer (MetaScreenCastStreamSrc   *sr
                                       data,
                                       stride,
                                       COGL_PIXEL_FORMAT_CAIRO_ARGB32_COMPAT,
+                                      NULL,
                                       paint_flags,
                                       error))
     return FALSE;
@@ -543,26 +531,48 @@ meta_screen_cast_area_stream_src_record_to_framebuffer (MetaScreenCastStreamSrc 
     }
   clutter_stage_paint_to_framebuffer (stage, framebuffer,
                                       area, scale,
+                                      NULL,
                                       paint_flags);
 
   return TRUE;
 }
 
 static void
-meta_screen_cast_area_stream_record_follow_up (MetaScreenCastStreamSrc *src)
+meta_screen_cast_area_stream_queue_follow_up (MetaScreenCastStreamSrc  *src,
+                                              MetaScreenCastRecordFlag  flags)
 {
   MetaScreenCastAreaStreamSrc *area_src =
     META_SCREEN_CAST_AREA_STREAM_SRC (src);
-  MetaScreenCastPaintPhase paint_phase;
-  MetaScreenCastRecordFlag flags;
+  MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
+  MetaScreenCastAreaStream *area_stream = META_SCREEN_CAST_AREA_STREAM (stream);
+  ClutterStage *stage = get_stage (area_src);
+  MtkRectangle *area;
+  GList *l;
 
-  g_clear_handle_id (&area_src->maybe_record_idle_id, g_source_remove);
+  if (flags & META_SCREEN_CAST_RECORD_FLAG_CURSOR_ONLY)
+    {
+      clutter_stage_schedule_update (stage);
+      return;
+    }
 
-  flags = META_SCREEN_CAST_RECORD_FLAG_NONE;
-  paint_phase = META_SCREEN_CAST_PAINT_PHASE_DETACHED;
-  meta_screen_cast_stream_src_maybe_record_frame (src, flags,
-                                                  paint_phase,
-                                                  NULL);
+  area = meta_screen_cast_area_stream_get_area (area_stream);
+
+  for (l = clutter_stage_peek_stage_views (stage); l; l = l->next)
+    {
+      MetaRendererView *view = l->data;
+      MtkRectangle view_layout;
+      MtkRectangle damage;
+
+      clutter_stage_view_get_layout (CLUTTER_STAGE_VIEW (view), &view_layout);
+      if (!mtk_rectangle_overlap (area, &view_layout))
+        if (!mtk_rectangle_intersect (&view_layout, area, &damage))
+          continue;
+
+      damage.width = 1;
+      damage.height = 1;
+
+      clutter_actor_queue_redraw_with_clip (CLUTTER_ACTOR (stage), &damage);
+    }
 }
 
 static gboolean
@@ -642,10 +652,10 @@ meta_screen_cast_area_stream_src_set_cursor_metadata (MetaScreenCastStreamSrc *s
   MetaBackend *backend = get_backend (area_src);
   MetaCursorRenderer *cursor_renderer =
     meta_backend_get_cursor_renderer (backend);
-  MetaCursorSprite *cursor_sprite;
+  ClutterCursor *cursor;
   int x, y;
 
-  cursor_sprite = meta_cursor_renderer_get_cursor (cursor_renderer);
+  cursor = meta_cursor_renderer_get_cursor (cursor_renderer);
 
   if (!should_cursor_metadata_be_set (area_src))
     {
@@ -663,7 +673,7 @@ meta_screen_cast_area_stream_src_set_cursor_metadata (MetaScreenCastStreamSrc *s
 
   if (area_src->cursor_bitmap_invalid)
     {
-      if (cursor_sprite)
+      if (cursor)
         {
           float view_scale;
 
@@ -671,7 +681,7 @@ meta_screen_cast_area_stream_src_set_cursor_metadata (MetaScreenCastStreamSrc *s
 
           meta_screen_cast_stream_src_set_cursor_sprite_metadata (src,
                                                                   spa_meta_cursor,
-                                                                  cursor_sprite,
+                                                                  cursor,
                                                                   x, y,
                                                                   view_scale);
         }
@@ -712,8 +722,11 @@ MetaScreenCastAreaStreamSrc *
 meta_screen_cast_area_stream_src_new (MetaScreenCastAreaStream  *area_stream,
                                       GError                   **error)
 {
+  MtkRectangle *area = meta_screen_cast_area_stream_get_area (area_stream);
+
   return g_initable_new (META_TYPE_SCREEN_CAST_AREA_STREAM_SRC, NULL, error,
                          "stream", area_stream,
+                         "layout", area,
                          NULL);
 }
 
@@ -736,12 +749,10 @@ meta_screen_cast_area_stream_src_class_init (MetaScreenCastAreaStreamSrcClass *k
     meta_screen_cast_area_stream_src_record_to_buffer;
   src_class->record_to_framebuffer =
     meta_screen_cast_area_stream_src_record_to_framebuffer;
-  src_class->record_follow_up =
-    meta_screen_cast_area_stream_record_follow_up;
+  src_class->queue_follow_up =
+    meta_screen_cast_area_stream_queue_follow_up;
   src_class->is_cursor_metadata_valid =
     meta_screen_cast_area_stream_src_is_cursor_metadata_valid;
   src_class->set_cursor_metadata =
     meta_screen_cast_area_stream_src_set_cursor_metadata;
 }
-
-#pragma GCC diagnostic pop

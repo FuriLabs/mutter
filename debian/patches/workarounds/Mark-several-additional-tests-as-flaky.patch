@@ -23,7 +23,7 @@ Forwarded: no
  7 files changed, 63 insertions(+), 4 deletions(-)
 
 diff --git a/src/tests/clutter/conform/gesture.c b/src/tests/clutter/conform/gesture.c
-index ea2e382..4a59589 100644
+index 26ef128..dfa733d 100644
 --- a/src/tests/clutter/conform/gesture.c
 +++ b/src/tests/clutter/conform/gesture.c
 @@ -133,6 +133,12 @@ gesture_state_machine_move_to_waiting (void)
@@ -52,9 +52,9 @@ index ea2e382..4a59589 100644
    virtual_pointer = clutter_seat_create_virtual_device (seat, CLUTTER_POINTER_DEVICE);
    now_us = g_get_monotonic_time ();
  
-@@ -240,6 +252,12 @@ gesture_state_machine_move_to_cancelled_on_sequence_cancel (void)
-   gboolean was_updated;
+@@ -241,6 +253,12 @@ gesture_state_machine_move_to_cancelled_on_sequence_cancel (void)
    ClutterGestureState gesture_state_change;
+   g_autoptr (ClutterGrab) grab = NULL;
  
 +  if (g_getenv ("DEB_ALLOW_FLAKY_TESTS") == NULL)
 +    {
@@ -65,7 +65,7 @@ index ea2e382..4a59589 100644
    virtual_pointer = clutter_seat_create_virtual_device (seat, CLUTTER_POINTER_DEVICE);
    now_us = g_get_monotonic_time ();
  
-@@ -297,6 +315,12 @@ gesture_multiple_mouse_buttons (void)
+@@ -298,6 +316,12 @@ gesture_multiple_mouse_buttons (void)
    ClutterGesture *gesture = CLUTTER_GESTURE (g_object_new (TEST_TYPE_GESTURE, NULL));
    gboolean was_updated;
  
@@ -122,7 +122,7 @@ index 7cb80a2..8e95bc6 100644
      is_parallel: false,
    )
 diff --git a/src/tests/meson.build b/src/tests/meson.build
-index 8c37730..8424d0c 100644
+index d1234c0..7e2cec3 100644
 --- a/src/tests/meson.build
 +++ b/src/tests/meson.build
 @@ -658,6 +658,7 @@ test_cases += [
@@ -133,7 +133,7 @@ index 8c37730..8424d0c 100644
    },
    {
      'name': 'thread',
-@@ -1092,9 +1093,20 @@ foreach test_case: test_cases
+@@ -1122,9 +1123,20 @@ foreach test_case: test_cases
  
    args = test_case.get('args', [])
  
@@ -155,7 +155,7 @@ index 8c37730..8424d0c 100644
      args: args,
      env: test_env,
      depends: test_depends,
-@@ -1185,7 +1197,7 @@ stacking_tests = [
+@@ -1216,7 +1228,7 @@ stacking_tests = [
  
  foreach stacking_test: stacking_tests
    test(stacking_test, test_runner,
@@ -194,7 +194,7 @@ index 4e21b2f..d372d2d 100644
        'mtk/time-utils-tests.c',
      ]
 diff --git a/src/tests/mtk/time-utils-tests.c b/src/tests/mtk/time-utils-tests.c
-index 792f82d..704dcb3 100644
+index 3f54f6b..1b054f8 100644
 --- a/src/tests/mtk/time-utils-tests.c
 +++ b/src/tests/mtk/time-utils-tests.c
 @@ -28,6 +28,12 @@ test_extrapolate_interval_boundary (void)

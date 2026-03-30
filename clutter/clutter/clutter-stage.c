@@ -102,7 +102,6 @@ typedef struct _ClutterStagePrivate
   float viewport[4];
 
   ClutterGrab *topmost_grab;
-  ClutterGrabState grab_state;
 
   GQueue *event_queue;
 
@@ -762,6 +761,8 @@ clutter_stage_compress_motion (ClutterStage       *stage,
 CLUTTER_EXPORT void
 _clutter_stage_process_queued_events (ClutterStage *stage)
 {
+  ClutterContext *context;
+  ClutterBackend *backend;
   ClutterStagePrivate *priv;
   GList *events, *l;
 
@@ -784,15 +785,16 @@ _clutter_stage_process_queued_events (ClutterStage *stage)
   priv->event_queue->tail = NULL;
   priv->event_queue->length = 0;
 
+  context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
+  backend = clutter_context_get_backend (context);
+
   for (l = events; l != NULL; l = l->next)
     {
       ClutterEvent *event;
       ClutterEvent *next_event;
-      ClutterInputDevice *device;
-      ClutterInputDevice *next_device;
-      ClutterInputDeviceTool *tool;
-      ClutterInputDeviceTool *next_tool;
-      gboolean check_device = FALSE;
+      ClutterSprite *sprite = NULL;
+      ClutterSprite *next_sprite = NULL;
+      gboolean check_sprite = FALSE;
 
       event = l->data;
       next_event = l->next ? l->next->data : NULL;
@@ -801,22 +803,18 @@ _clutter_stage_process_queued_events (ClutterStage *stage)
                                "Clutter::Stage::process_queued_events#event()");
       COGL_TRACE_DESCRIBE (ProcessEvent, clutter_event_get_name (event));
 
-      device = clutter_event_get_device (event);
-      tool = clutter_event_get_device_tool (event);
+      if (clutter_event_type (event) == CLUTTER_MOTION ||
+          clutter_event_type (event) == CLUTTER_TOUCH_UPDATE)
+        {
+          sprite = clutter_backend_get_sprite (backend, stage, event);
 
-      if (next_event != NULL)
-        {
-          next_device = clutter_event_get_device (next_event);
-          next_tool = clutter_event_get_device_tool (next_event);
-        }
-      else
-        {
-          next_device = NULL;
-          next_tool = NULL;
+          if (next_event != NULL &&
+              (clutter_event_type (event) == clutter_event_type (next_event)))
+            next_sprite = clutter_backend_get_sprite (backend, stage, next_event);
         }
 
-      if (device != NULL && next_device != NULL)
-        check_device = TRUE;
+      if (sprite != NULL && next_sprite != NULL)
+        check_sprite = TRUE;
 
       /* Skip consecutive motion events coming from the same device. */
       if (next_event != NULL)
@@ -828,7 +826,7 @@ _clutter_stage_process_queued_events (ClutterStage *stage)
           if (clutter_event_type (event) == CLUTTER_MOTION &&
               (clutter_event_type (next_event) == CLUTTER_MOTION ||
                clutter_event_type (next_event) == CLUTTER_LEAVE) &&
-              (!check_device || (device == next_device && tool == next_tool)))
+              (!check_sprite || (sprite == next_sprite)))
             {
               CLUTTER_NOTE (EVENT,
                             "Omitting motion event at %d, %d",
@@ -855,7 +853,7 @@ _clutter_stage_process_queued_events (ClutterStage *stage)
                    clutter_event_type (next_event) == CLUTTER_TOUCH_UPDATE &&
                    clutter_event_get_event_sequence (event) ==
                    clutter_event_get_event_sequence (next_event) &&
-                   (!check_device || (device == next_device)))
+                   (!check_sprite || (sprite == next_sprite)))
             {
               CLUTTER_NOTE (EVENT,
                             "Omitting touch update event at %d, %d",
@@ -1181,15 +1179,22 @@ on_seat_unfocus_inhibited_changed (ClutterStage *stage,
   ClutterContext *context =
     clutter_actor_get_context (CLUTTER_ACTOR (stage));
   ClutterBackend *backend = clutter_context_get_backend (context);
-  ClutterSprite *sprite;
+  ClutterSprite *sprite = clutter_backend_get_pointer_sprite (backend, stage);
   graphene_point_t point = GRAPHENE_POINT_INIT_ZERO;
 
-  sprite = clutter_backend_get_pointer_sprite (backend, stage);
-  clutter_sprite_get_coords (sprite, &point);
-  clutter_stage_pick_and_update_sprite (stage, sprite, NULL,
-                                        CLUTTER_DEVICE_UPDATE_IGNORE_CACHE,
-                                        point,
-                                        CLUTTER_CURRENT_TIME);
+  if (clutter_seat_is_unfocus_inhibited (seat))
+    {
+      clutter_sprite_get_coords (sprite, &point);
+      clutter_stage_pick_and_update_sprite (stage, sprite, NULL,
+                                            CLUTTER_DEVICE_UPDATE_IGNORE_CACHE,
+                                            point,
+                                            CLUTTER_CURRENT_TIME);
+    }
+  else
+    {
+      clutter_focus_set_current_actor (CLUTTER_FOCUS (sprite), NULL,
+                                       NULL, CLUTTER_CURRENT_TIME);
+    }
 }
 
 static void
@@ -2091,6 +2096,8 @@ clutter_stage_get_key_focus (ClutterStage *stage)
   context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
   backend = clutter_context_get_backend (context);
   key_focus = clutter_backend_get_key_focus (backend, stage);
+  if (!key_focus)
+    return NULL;
 
   return clutter_focus_get_current_actor (CLUTTER_FOCUS (key_focus));
 }
@@ -2520,6 +2527,15 @@ clutter_stage_add_to_redraw_clip (ClutterStage       *stage,
   clutter_stage_add_redraw_clip (stage, &stage_clip);
 }
 
+int64_t
+clutter_stage_get_frame_counter (ClutterStage          *stage)
+{
+  ClutterStageWindow *stage_window;
+
+  stage_window = _clutter_stage_get_window (stage);
+  return _clutter_stage_window_get_frame_counter (stage_window);
+}
+
 void
 clutter_stage_presented (ClutterStage     *stage,
                          ClutterStageView *view,
@@ -2601,16 +2617,16 @@ clutter_stage_get_capture_final_size (ClutterStage *stage,
 }
 
 void
-clutter_stage_paint_to_framebuffer (ClutterStage                *stage,
-                                    CoglFramebuffer             *framebuffer,
-                                    const MtkRectangle          *rect,
-                                    float                        scale,
-                                    ClutterPaintFlag             paint_flags)
+clutter_stage_paint_to_framebuffer (ClutterStage       *stage,
+                                    CoglFramebuffer    *framebuffer,
+                                    const MtkRectangle *rect,
+                                    float               scale,
+                                    ClutterColorState  *color_state,
+                                    ClutterPaintFlag    paint_flags)
 {
   ClutterStagePrivate *priv = clutter_stage_get_instance_private (stage);
   ClutterPaintContext *paint_context;
   g_autoptr (MtkRegion) redraw_clip = NULL;
-  ClutterColorState *color_state;
 
   COGL_TRACE_BEGIN_SCOPED (PaintToFramebuffer,
                            "Clutter::Stage::paint_to_framebuffer()");
@@ -2624,8 +2640,10 @@ clutter_stage_paint_to_framebuffer (ClutterStage                *stage,
     }
 
   redraw_clip = mtk_region_create_rectangle (rect);
-  color_state =
-    clutter_actor_get_color_state (CLUTTER_ACTOR (stage));
+
+  if (!color_state)
+    color_state = clutter_actor_get_color_state (CLUTTER_ACTOR (stage));
+
   paint_context =
     clutter_paint_context_new_for_framebuffer (framebuffer,
                                                redraw_clip,
@@ -2655,6 +2673,7 @@ clutter_stage_paint_to_framebuffer (ClutterStage                *stage,
  * @data: (array) (element-type guint8): a pointer to the data
  * @stride: stride of the image surface
  * @format: the pixel format
+ * @color_state: (nullable): the #ClutterColorState
  * @paint_flags: the #ClutterPaintFlag
  * @error: the error
  *
@@ -2669,6 +2688,7 @@ clutter_stage_paint_to_buffer (ClutterStage        *stage,
                                uint8_t             *data,
                                int                  stride,
                                CoglPixelFormat      format,
+                               ClutterColorState   *color_state,
                                ClutterPaintFlag     paint_flags,
                                GError             **error)
 {
@@ -2705,7 +2725,9 @@ clutter_stage_paint_to_buffer (ClutterStage        *stage,
     return FALSE;
 
   clutter_stage_paint_to_framebuffer (stage, framebuffer,
-                                      rect, scale, paint_flags);
+                                      rect, scale,
+                                      color_state,
+                                      paint_flags);
 
   bitmap = cogl_bitmap_new_for_data (cogl_context,
                                      texture_width, texture_height,
@@ -2729,6 +2751,7 @@ clutter_stage_paint_to_buffer (ClutterStage        *stage,
  * @stage: a #ClutterStage actor
  * @rect: a rectangle
  * @scale: the scale
+ * @color_state: (nullable): the #ClutterColorState
  * @paint_flags: the #ClutterPaintFlag
  * @error: the error
  *
@@ -2740,6 +2763,7 @@ ClutterContent *
 clutter_stage_paint_to_content (ClutterStage        *stage,
                                 const MtkRectangle  *rect,
                                 float                scale,
+                                ClutterColorState   *color_state,
                                 ClutterPaintFlag     paint_flags,
                                 GError             **error)
 {
@@ -2775,7 +2799,9 @@ clutter_stage_paint_to_content (ClutterStage        *stage,
     return NULL;
 
   clutter_stage_paint_to_framebuffer (stage, framebuffer,
-                                      rect, scale, paint_flags);
+                                      rect, scale,
+                                      color_state,
+                                      paint_flags);
 
   return clutter_texture_content_new_from_texture (cogl_offscreen_get_texture (offscreen),
                                                    NULL);
@@ -3066,18 +3092,6 @@ clutter_grab_activate (ClutterGrab *grab)
   if (grab->prev || grab->next || priv->topmost_grab == grab)
     return;
 
-  if (!priv->topmost_grab)
-    {
-      ClutterContext *context;
-      ClutterSeat *seat;
-
-      /* First grab in the chain, trigger a backend grab too */
-      context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
-      seat = clutter_backend_get_default_seat (context->backend);
-      priv->grab_state =
-        clutter_seat_grab (seat, clutter_get_current_event_time ());
-    }
-
   grab->prev = NULL;
   grab->next = priv->topmost_grab;
 
@@ -3202,18 +3216,6 @@ clutter_stage_unlink_grab (ClutterStage *stage,
 
   clutter_actor_detach_grab (grab->actor, grab);
 
-  if (!priv->topmost_grab)
-    {
-      ClutterContext *context;
-      ClutterSeat *seat;
-
-      /* This was the last remaining grab, trigger a backend ungrab */
-      context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
-      seat = clutter_backend_get_default_seat (context->backend);
-      clutter_seat_ungrab (seat, clutter_get_current_event_time ());
-      priv->grab_state = CLUTTER_GRAB_STATE_NONE;
-    }
-
   if (was_grabbed != !!priv->topmost_grab)
     g_object_notify_by_pspec (G_OBJECT (stage), obj_props[PROP_IS_GRABBED]);
 
@@ -3253,27 +3255,6 @@ clutter_grab_dismiss (ClutterGrab *grab)
   g_return_if_fail (grab != NULL);
 
   clutter_stage_unlink_grab (grab->stage, grab);
-}
-
-/**
- * clutter_grab_get_seat_state:
- * @grab: a Grab handle
- *
- * Returns the windowing-level state of the
- * grab, the devices that are guaranteed to be
- * grabbed.
- *
- * Returns: The state of the grab.
- **/
-ClutterGrabState
-clutter_grab_get_seat_state (ClutterGrab *grab)
-{
-  ClutterStagePrivate *priv;
-
-  g_return_val_if_fail (grab != NULL, CLUTTER_GRAB_STATE_NONE);
-
-  priv = clutter_stage_get_instance_private (grab->stage);
-  return priv->grab_state;
 }
 
 /**
@@ -3447,6 +3428,13 @@ clutter_stage_emit_event (ClutterStage       *self,
     focus = CLUTTER_FOCUS (clutter_backend_get_key_focus (backend, self));
 
   clutter_focus_propagate_event (focus, event);
+
+  if (clutter_event_type (event) == CLUTTER_PROXIMITY_OUT)
+    {
+      clutter_focus_set_current_actor (focus, NULL,
+                                       clutter_event_get_source_device (event),
+                                       clutter_event_get_time (event));
+    }
 }
 
 static gboolean
@@ -3577,7 +3565,7 @@ update_devices_in_view_foreach_cb (ClutterStage  *stage,
   graphene_point_t coords;
 
   /* touchpoints are implicitly grabbed */
-  if (clutter_sprite_get_sequence (sprite))
+  if (clutter_sprite_get_role (sprite) == CLUTTER_SPRITE_ROLE_TOUCHPOINT)
     return TRUE;
 
   clutter_sprite_get_coords (sprite, &coords);

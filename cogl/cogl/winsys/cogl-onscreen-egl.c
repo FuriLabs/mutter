@@ -31,7 +31,7 @@
 #include "cogl/cogl-frame-info-private.h"
 #include "cogl/cogl-renderer-private.h"
 #include "cogl/cogl-trace.h"
-#include "cogl/winsys/cogl-winsys-egl-private.h"
+#include "cogl/winsys/cogl-winsys-egl.h"
 
 typedef struct _CoglOnscreenEglPrivate
 {
@@ -44,39 +44,6 @@ typedef struct _CoglOnscreenEglPrivate
 G_DEFINE_TYPE_WITH_PRIVATE (CoglOnscreenEgl, cogl_onscreen_egl,
                             COGL_TYPE_ONSCREEN)
 
-gboolean
-cogl_onscreen_egl_choose_config (CoglOnscreenEgl  *onscreen_egl,
-                                 EGLConfig        *out_egl_config,
-                                 GError          **error)
-{
-  CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen_egl);
-  CoglContext *context = cogl_framebuffer_get_context (framebuffer);
-  CoglDisplay *display = context->display;
-  CoglRenderer *renderer = display->renderer;
-  CoglRendererEGL *egl_renderer = cogl_renderer_get_winsys (renderer);
-  EGLint attributes[MAX_EGL_CONFIG_ATTRIBS];
-  EGLConfig egl_config;
-  EGLint config_count = 0;
-  EGLBoolean status;
-
-  cogl_display_egl_determine_attributes (display, attributes);
-
-  status = eglChooseConfig (egl_renderer->edpy,
-                            attributes,
-                            &egl_config, 1,
-                            &config_count);
-  if (status != EGL_TRUE || config_count == 0)
-    {
-      g_set_error (error, COGL_WINSYS_ERROR,
-                   COGL_WINSYS_ERROR_CREATE_ONSCREEN,
-                   "Failed to find a suitable EGL configuration");
-      return FALSE;
-    }
-
-  *out_egl_config = egl_config;
-  return TRUE;
-}
-
 static void
 cogl_onscreen_egl_dispose (GObject *object)
 {
@@ -87,7 +54,7 @@ cogl_onscreen_egl_dispose (GObject *object)
   CoglContext *context = cogl_framebuffer_get_context (framebuffer);
   CoglDisplayEGL *egl_display = context->display->winsys;
   CoglRenderer *renderer = context->display->renderer;
-  CoglRendererEGL *egl_renderer = cogl_renderer_get_winsys (renderer);
+  CoglRendererEGL *egl_renderer = cogl_renderer_get_winsys_data (renderer);
 
   if (priv->egl_surface != EGL_NO_SURFACE)
     {
@@ -132,7 +99,7 @@ bind_onscreen_with_context (CoglOnscreen *onscreen,
   if (status)
     {
       CoglRenderer *renderer = context->display->renderer;
-      CoglRendererEGL *egl_renderer = cogl_renderer_get_winsys (renderer);
+      CoglRendererEGL *egl_renderer = cogl_renderer_get_winsys_data (renderer);
 
       if (egl_renderer->pf_eglSwapBuffersWithDamageKHR)
         {
@@ -172,7 +139,7 @@ cogl_onscreen_egl_get_buffer_age (CoglOnscreen *onscreen)
   CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
   CoglContext *context = cogl_framebuffer_get_context (framebuffer);
   CoglRenderer *renderer = context->display->renderer;
-  CoglRendererEGL *egl_renderer = cogl_renderer_get_winsys (renderer);
+  CoglRendererEGL *egl_renderer = cogl_renderer_get_winsys_data (renderer);
   CoglDisplayEGL *egl_display = context->display->winsys;
   EGLSurface surface = priv->egl_surface;
   static gboolean warned = FALSE;
@@ -212,7 +179,7 @@ cogl_onscreen_egl_swap_region (CoglOnscreen    *onscreen,
   CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
   CoglContext *context = cogl_framebuffer_get_context (framebuffer);
   CoglRenderer *renderer = context->display->renderer;
-  CoglRendererEGL *egl_renderer = cogl_renderer_get_winsys (renderer);
+  CoglRendererEGL *egl_renderer = cogl_renderer_get_winsys_data (renderer);
   int n_rectangles;
   int *egl_rectangles;
 
@@ -251,7 +218,7 @@ cogl_onscreen_egl_queue_damage_region (CoglOnscreen    *onscreen,
   CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
   CoglContext *context = cogl_framebuffer_get_context (framebuffer);
   CoglRenderer *renderer = context->display->renderer;
-  CoglRendererEGL *egl_renderer = cogl_renderer_get_winsys (renderer);
+  CoglRendererEGL *egl_renderer = cogl_renderer_get_winsys_data (renderer);
   int n_rectangles;
   int *egl_rectangles;
 
@@ -275,27 +242,6 @@ cogl_onscreen_egl_queue_damage_region (CoglOnscreen    *onscreen,
     g_warning ("Error reported by eglSetDamageRegion");
 }
 
-void
-cogl_onscreen_egl_maybe_create_timestamp_query (CoglOnscreen  *onscreen,
-                                                CoglFrameInfo *info)
-{
-  CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
-  CoglContext *context = cogl_framebuffer_get_context (framebuffer);
-
-  if (!cogl_context_has_feature (context, COGL_FEATURE_ID_TIMESTAMP_QUERY))
-    return;
-
-  info->gpu_time_before_buffer_swap_ns =
-    cogl_context_get_gpu_time_ns (context);
-  info->cpu_time_before_buffer_swap_us = g_get_monotonic_time ();
-
-  /* Set up a timestamp query for when all rendering will be finished. */
-  info->timestamp_query =
-    cogl_framebuffer_create_timestamp_query (framebuffer);
-
-  info->has_valid_gpu_rendering_duration = TRUE;
-}
-
 static void
 cogl_onscreen_egl_swap_buffers_with_damage (CoglOnscreen    *onscreen,
                                             const MtkRegion *region,
@@ -308,7 +254,7 @@ cogl_onscreen_egl_swap_buffers_with_damage (CoglOnscreen    *onscreen,
   CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
   CoglContext *context = cogl_framebuffer_get_context (framebuffer);
   CoglRenderer *renderer = context->display->renderer;
-  CoglRendererEGL *egl_renderer = cogl_renderer_get_winsys (renderer);
+  CoglRendererEGL *egl_renderer = cogl_renderer_get_winsys_data (renderer);
 
   COGL_TRACE_BEGIN_SCOPED (CoglOnscreenEGLSwapBuffersWithDamage,
                            "Cogl::Onscreen::egl_swap_buffers_with_damage()");

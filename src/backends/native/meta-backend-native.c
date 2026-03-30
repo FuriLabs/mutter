@@ -207,6 +207,7 @@ meta_backend_native_init_post (MetaBackend  *backend,
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (backend);
   MetaA11yManager *a11y_manager = meta_backend_get_a11y_manager (backend);
+  ClutterSeat *seat;
 
   g_clear_pointer (&priv->startup_render_devices,
                    g_hash_table_unref);
@@ -224,6 +225,11 @@ meta_backend_native_init_post (MetaBackend  *backend,
   priv->drm_lease_manager = g_object_new (META_TYPE_DRM_LEASE_MANAGER,
                                           "backend", backend,
                                           NULL);
+
+  seat = meta_backend_get_default_seat (backend);
+  g_signal_connect_swapped (seat, "keymap-changed",
+                            G_CALLBACK (meta_backend_notify_keymap_changed),
+                            backend);
 
   return TRUE;
 }
@@ -312,55 +318,60 @@ meta_backend_native_get_current_logical_monitor (MetaBackend *backend)
 }
 
 static void
-set_keyboard_map_cb (GObject      *source_object,
-                     GAsyncResult *result,
-                     gpointer      user_data)
+set_keymap_cb (GObject      *source_object,
+               GAsyncResult *result,
+               gpointer      user_data)
 {
   MetaSeatNative *seat_native = META_SEAT_NATIVE (source_object);
   g_autoptr (GTask) task = G_TASK (user_data);
   g_autoptr (GError) error = NULL;
-  MetaBackend *backend;
 
-  if (!meta_seat_native_set_keyboard_map_finish (seat_native, result, &error))
+  if (!meta_seat_native_set_keymap_finish (seat_native, result, &error))
     {
       g_task_return_error (task, g_steal_pointer (&error));
       return;
     }
 
-  backend = META_BACKEND (g_task_get_source_object (task));
-  meta_backend_notify_keymap_changed (backend);
-
   g_task_return_boolean (task, TRUE);
 }
 
 static void
-meta_backend_native_set_keymap_async (MetaBackend *backend,
-                                      const char  *layouts,
-                                      const char  *variants,
-                                      const char  *options,
-                                      const char  *model,
-                                      GTask       *task)
+meta_backend_native_set_keymap_async (MetaBackend           *backend,
+                                      MetaKeymapDescription *description,
+                                      xkb_layout_index_t     layout_index,
+                                      GTask                 *task)
 {
   ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
   ClutterSeat *seat;
 
   seat = clutter_backend_get_default_seat (clutter_backend);
-  meta_seat_native_set_keyboard_map_async (META_SEAT_NATIVE (seat),
-                                           layouts, variants, options, model,
-                                           g_task_get_cancellable (task),
-                                           set_keyboard_map_cb,
-                                           task);
+  meta_seat_native_set_keymap_async (META_SEAT_NATIVE (seat),
+                                     description,
+                                     layout_index,
+                                     g_task_get_cancellable (task),
+                                     set_keymap_cb,
+                                     task);
 
 }
 
 static struct xkb_keymap *
-meta_backend_native_get_keymap (MetaBackend *backend)
+meta_backend_native_get_xkb_keymap (MetaBackend *backend)
 {
   ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
   ClutterSeat *seat;
 
   seat = clutter_backend_get_default_seat (clutter_backend);
-  return meta_seat_native_get_keyboard_map (META_SEAT_NATIVE (seat));
+  return meta_seat_native_get_xkb_keymap (META_SEAT_NATIVE (seat));
+}
+
+static MetaKeymapDescription *
+meta_backend_native_get_keymap_description (MetaBackend *backend)
+{
+  ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
+  ClutterSeat *seat;
+
+  seat = clutter_backend_get_default_seat (clutter_backend);
+  return meta_seat_native_get_keymap_description (META_SEAT_NATIVE (seat));
 }
 
 static xkb_layout_index_t
@@ -371,54 +382,6 @@ meta_backend_native_get_keymap_layout_group (MetaBackend *backend)
 
   seat = clutter_backend_get_default_seat (clutter_backend);
   return meta_seat_native_get_keyboard_layout_index (META_SEAT_NATIVE (seat));
-}
-
-static void
-set_layout_index_cb (GObject      *source_object,
-                     GAsyncResult *result,
-                     gpointer      user_data)
-{
-  MetaSeatNative *seat_native = META_SEAT_NATIVE (source_object);
-  g_autoptr (GTask) task = G_TASK (user_data);
-  MetaBackend *backend = META_BACKEND (g_task_get_source_object (task));
-  g_autoptr (GError) error = NULL;
-  gboolean index_changed;
-
-  index_changed =
-    meta_seat_native_set_keyboard_layout_index_finish (seat_native,
-                                                       result,
-                                                       &error);
-  if (error)
-    {
-      g_task_return_error (task, g_steal_pointer (&error));
-      return;
-    }
-
-  if (index_changed)
-    {
-      xkb_layout_index_t idx;
-
-      idx = meta_seat_native_get_keyboard_layout_index (seat_native);
-      meta_backend_notify_keymap_layout_group_changed (backend, idx);
-    }
-
-  g_task_return_boolean (task, TRUE);
-}
-
-static void
-meta_backend_native_set_keymap_layout_group_async (MetaBackend        *backend,
-                                                   xkb_layout_index_t  idx,
-                                                   GTask              *task)
-{
-  ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
-  ClutterSeat *seat;
-
-  seat = clutter_backend_get_default_seat (clutter_backend);
-  meta_seat_native_set_keyboard_layout_index_async (META_SEAT_NATIVE (seat),
-                                                    idx,
-                                                    g_task_get_cancellable (task),
-                                                    set_layout_index_cb,
-                                                    task);
 }
 
 static gboolean
@@ -592,9 +555,6 @@ add_drm_device (MetaBackendNative  *backend_native,
 
   if (meta_is_udev_device_disable_modifiers (device))
     flags |= META_KMS_DEVICE_FLAG_DISABLE_MODIFIERS;
-
-  if (meta_is_udev_device_disable_vrr (device))
-    flags |= META_KMS_DEVICE_FLAG_DISABLE_VRR;
 
   if (meta_is_udev_device_preferred_primary (device))
     flags |= META_KMS_DEVICE_FLAG_PREFERRED_PRIMARY;
@@ -940,9 +900,9 @@ meta_backend_native_class_init (MetaBackendNativeClass *klass)
   backend_class->get_current_logical_monitor = meta_backend_native_get_current_logical_monitor;
 
   backend_class->set_keymap_async = meta_backend_native_set_keymap_async;
-  backend_class->get_keymap = meta_backend_native_get_keymap;
+  backend_class->get_xkb_keymap = meta_backend_native_get_xkb_keymap;
+  backend_class->get_keymap_description = meta_backend_native_get_keymap_description;
   backend_class->get_keymap_layout_group = meta_backend_native_get_keymap_layout_group;
-  backend_class->set_keymap_layout_group_async = meta_backend_native_set_keymap_layout_group_async;
   backend_class->update_stage = meta_backend_native_update_stage;
 
   backend_class->set_pointer_constraint = meta_backend_native_set_pointer_constraint;
@@ -1072,21 +1032,18 @@ meta_backend_native_resume (MetaBackend *backend)
   clutter_seat_ensure_a11y_state (CLUTTER_SEAT (seat));
 }
 
-static MetaRenderDevice *
-meta_backend_native_create_render_device (MetaBackendNative  *backend_native,
-                                          const char         *device_path,
-                                          GError            **error)
-{
-  g_autoptr (MetaRenderDevice) render_device = NULL;
-
-  render_device = create_render_device (backend_native, device_path, error);
-  return g_steal_pointer (&render_device);
-}
-
+/**
+ * meta_backend_native_get_render_device:
+ * @backend_native: A #MetaBackendNative
+ * @device_path: a file path to a device
+ * @error: a pointer to a #GError
+ *
+ * Returns: (transfer full): A render device, or %NULL if error.
+ */
 MetaRenderDevice *
-meta_backend_native_take_render_device (MetaBackendNative  *backend_native,
-                                        const char         *device_path,
-                                        GError            **error)
+meta_backend_native_get_render_device (MetaBackendNative  *backend_native,
+                                       const char         *device_path,
+                                       GError            **error)
 {
   MetaBackendNativePrivate *priv =
     meta_backend_native_get_instance_private (backend_native);
@@ -1103,7 +1060,6 @@ meta_backend_native_take_render_device (MetaBackendNative  *backend_native,
     }
   else
     {
-      return meta_backend_native_create_render_device (backend_native,
-                                                       device_path, error);
+      return create_render_device (backend_native, device_path, error);
     }
 }

@@ -129,11 +129,6 @@ cogl_onscreen_swap_buffers (CoglOnscreen  *onscreen,
  *
  * The queried value remains valid until the next buffer swap.
  *
- * One caveat is that under X11 the buffer age does not reflect
- * changes to buffer contents caused by the window systems. X11
- * applications must track Expose events to determine what buffer
- * regions need to additionally be repaired each frame.
- *
  * The recommended way to take advantage of this buffer age api is to
  * build up a circular buffer of length 3 for tracking damage regions
  * over the last 3 frames and when starting a new frame look at the
@@ -146,7 +141,7 @@ cogl_onscreen_swap_buffers (CoglOnscreen  *onscreen,
  * of back buffers then this function will always return 0 which
  * implies that the contents are undefined.
  *
- * The %COGL_FEATURE_ID_BUFFER_AGE feature can optionally be
+ * The %COGL_WINSYS_FEATURE_BUFFER_AGE feature can optionally be
  * explicitly checked to determine if Cogl is currently tracking the
  * age of #CoglOnscreen back buffer contents. If this feature is
  * missing then this function will always return 0.

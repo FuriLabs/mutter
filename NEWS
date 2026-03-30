@@ -1,34 +1,157 @@
-49.2
+50.0
 ====
-* Fix delay in applying KMS property changes [Marco; !4723]
-* Handle ignored modifiers when grabbing keys and buttons on X11 [duli; !4744]
-* Improve tiled monitor handling [Rahul; !4685]
-* Improve sticky keys handling [Alessandro; !4728]
-* Fix global shortcut keys getting stuck in Xwayland windows [Carlos; !4737]
-* Fixed crashes [Marco, Jonas, Michel; !4742, !4740, !4761]
-* Misc. bug fixes and cleanups [Jonas, Marco, Michel, Alessandro; !4735, !4717,
-  !4722, !4623, !4749, !4736, !4754, !4764, !4765]
+* Ensure DnD cursor offset is applied correctly [Carlos; !4947]
+* Introduce API to get window min/max sizes [Cleo; !4917]
+* Add simple "controller" API for common patterns [Carlos; !4943]
+* Fixed crashes [Michel, Sebastian, cong, Jonas; !4941, !4945, !4950,
+  !4938, !4918, !4956]
+* Misc. bug fixes and cleanups [Carlos, Sebastian, Michel, Nicolas, Jonas;
+  !4944, !4942, !4939, !4948, !4936, !4954, !4957, !4959, !4969]
 
 Contributors:
-  Alessandro Astone, Alessandro Bono, duli, Michel Dänzer, Carlos Garnacho,
-  Rahul Rameshbabu, Marco Trevisan (Treviño), Jonas Ådahl
+  cong, Michel Dänzer, Nicolas Fella, Carlos Garnacho, Sebastian Keller,
+  Cleo Menezes Jr., Jonas Ådahl
 
 Translators:
-  Efstathios Iosifidis [el], Christian Kirbach [de],
-  Милош Поповић [sr, sr@latin]
+  Baurzhan Muftakhidinov [kk], Rafael Fontenelle [pt_BR],
+  Francisco Diéguez Souto [gl], Seong-ho Cho [ko],
+  Asier Saratsua Garmendia [eu], Victor Dargallo [ca], Victoria [pl],
+  Guillaume Bernard [fr], Yaron Shahrabani [he], Efstathios Iosifidis [el],
+  Ask Hjorth Larsen [da], Bruce Cowan [en_GB], Sabri Ünal [tr],
+  Emin Tufan Çetin [tr]
 
-49.1.1
-======
+50.rc
+=====
+* Fix monitor state after closing some fullscreen windows [mohansur; !4876]
+* Fix misbehaving cursor when crossing windows [Carlos; !4887]
+* Make wp_commit_timing work with variable refresh rate [Michel; !4836]
+* Disable tone mapping with HDR [Michel; !4897]
+* Add clipboard integration to devkit [Jonas; !4633]
+* Fix re-enabling touchscreen after power save mode [Lorenzo; !4899]
+* Fix cursors when using gnome-shell magnifier [Carlos; !4907]
+* Add "sdr-native" color mode [Michel; !4900]
+* Support wp-color-management v2 [Sebastian W., Joan; !4905]
+* Blend content with gamma 2.2 transfer by default [Michel; !4584]
+* Fix direct scanout when using SW cursors [Robert; !4916]
+* Fix unexpected cursor changes during window drag operations [Carlos; !4922]
+* Add multi monitor support to devkit [Jonas; !4828]
+* Improve performance with nvidia driver by working around driver quirks
+  [Jonas, Daniel; !4725]
+* Use FBOs for secondary GPU rendering [Michel; !4908]
+* Fix touch input being delivered to the wrong surface [Lorenzo; !4914]
+* Add HDR screen sharing support [Jonas; !4928]
+* Implement a11y interface to query pointer position [Carlos; !4542]
+* Prevent directly switching planes across CRTCs [Stephan; !4850]
+* Fix screen sharing of monitors with no framerate [Jonas; !4798]
+* Fixed crash [Carlos; !4886]
+* Plugged leaks [Sebastian K., Carlos; !4885, !4931, !4932, !4937]
+* Misc. bug fixes and cleanups [Jonas, Michel, Carlos, Florian, FeRD,
+  Alessandro, Frank, Sebastian K.; !4891, !4818, !4862, !4906, !4874, !4909,
+  !4910, !4838, !4919, !4882, !4923, !4915, !4930, !4929, !4927, !4913, !4912,
+  !4911, !4933, !4935]
+
+Contributors:
+  FeRD (Frank Dana), Alessandro Astone, Michel Dänzer, Carlos Garnacho,
+  Stephan Gerhold, Lorenzo Ianotto, Sebastian Keller, Robert Mader, mohansur,
+  Florian Müllner, Frank Praznik, Joan Torres, Daniel van Vugt, Sebastian Wick,
+  Jonas Ådahl
+
+Translators:
+  Daniel Rusek [cs], Quentin PAGÈS [oc], Artur S0 [ru],
+  Aurimas Aurimas Černius [lt], Efstathios Iosifidis [el],
+  Yosef Or Boczko [he], Victor Dargallo [ca], luming zh [zh_CN],
+  Asier Saratsua Garmendia [eu], Fran Diéguez [gl], Balázs Úr [hu],
+  Julien Humbert [fr], Juliano de Souza Camargo [pt_BR], Daniel Mustieles [es],
+  Kristjan ESPERANTO [eo], Yaron Shahrabani [he], Anders Jonsson [sv],
+  Antonio Marin [ro], twlvnn kraftwerk [bg], Martin [sl], Ekaterine Papava [ka],
+  Yuri Chornoivan [uk], Hugo Carvalho [pt], 小山田 純 - Oyamada Jun [ja],
+  Abduqadir Abliz [ug], Guillaume Bernard [fr], Ahmed Najmawi [ar]
+
+50.beta
+=======
+* Fix moving windows to smaller monitors [Jonas; !4851]
+* Make the HW cursor plane able to move between devices [Carlos; !4745]
+* Consider override-redirect windows for monitor fullscreen [mohansur; !4820]
+* Improve frame scheduling [Michel; !4821]
+* Add "target" event propagation phase [Carlos; !4830, !4854]
+* Fix keyboard layout switching with grp:caps_switch [Sebastian; !4858]
+* Don't use invisible cursor for unfocusable windows [Carlos; !4860]
+* Support PanGesture with non-primary buttons [Carlos; !4831]
+* Allow creating uninhibitable idle watches [Sebastian; !4422]
+* Allow remote desktop to set active keyboard layout [Jonas; !4699]
+* Make VRR and fractional scaling non-experimental [Michel, Jonas; !4863, !4877]
+* Add HiDPI and monitor mode emulation for screencasts/devkit [Jonas; !4727]
+* Plugged leaks [Jonas; !4843]
+* Misc. bug fixes and cleanups [Jonas, Michel, Daniel, Xi, Carlos, Olivier,
+  Bilal, Florian, Robert; !4832, !4845, !4844, !4847, !4848, !4835, !4829,
+  !4857, !4839, !4861, !4639, !4865, !4849, !4869, !4870, !4878, !4880,
+  !4867]
+
+Contributors:
+  Michel Dänzer, Bilal Elmoussaoui, Olivier Fourdan, Carlos Garnacho,
+  Sebastian Keller, Robert Mader, mohansur, Florian Müllner, Xi Ruoyao,
+  Daniel van Vugt, Jonas Ådahl
+
+Translators:
+  Antonio Marin [ro], Andika Triwidada [id], Ekaterine Papava [ka],
+  Quentin PAGÈS [oc], Juliano de Souza Camargo [pt_BR], Yuri Chornoivan [uk],
+  Abduqadir Abliz [ug], Sabri Ünal [tr], Martin [sl],
+  Baurzhan Muftakhidinov [kk], Yaron Shahrabani [he], Álvaro Burns [pt_BR],
+  Victor Dargallo [ca], Aurimas Aurimas Černius [lt], Artur S0 [ru],
+  Fran Diéguez [gl], twlvnn kraftwerk [bg], Alexander Alexandrov Shopov [bg]
+
+50.alpha
+========
+* Fix delay in applying KMS property changes [Marco; !4610]
 * Fix broken menus in some Xwayland clients [Carlos; !4729]
 * Avoid processing the same key event twice during keybindings [Carlos; !4724]
-* Fixed crash [Michel; !4720]
-* Misc. bug fixes and cleanups [Carlos; !4726]
+* Drop the X11 backend [Bilal; !4505]
+* Improve tiled monitor handling [Rahul; !4685]
+* Improve sticky keys handling [Alessandro A.; !4728]
+* Fix global shortcut keys getting stuck in Xwayland windows [Carlos; !4737]
+* Drop logical devices from Clutter [Carlos; !4644]
+* Fix hang with libxcb without support for abstract sockets [Michel; !4762]
+* Fix some backlights not being detected [Will; !4763]
+* Add support for RGBA16, RGBX16 and XB48 formats [Mario; !4773, !4775]
+* Fix Xwayland clients becoming unresponsive on 2nd monitor [Michel; !4766]
+* Improve native Xwayland scaling support [Michel; !4731]
+* Improve support for tablet devices [Carlos, Peter; !4781, !4601]
+* Add support for external window constraints [Olivier; !4692]
+* Initialize libinput plugin system [Peter; !4739]
+* Do not spin cursor for startup sequences with no app ID [Sebastian K; !4774]
+* Let gestures influence other gesture before state change [Sebastian K.; !4760]
+* Improve secondary GPU blitting path performance [Gert-dev; !4073]
+* Fix activation or popup from button release events [Jonas; !4792]
+* Make devkit window optionally resizable [Jonas; !4621]
+* Fix cases of spurious tone mapping [Michel; !4804]
+* Introduce support for CRTC KMS color properties [Naveen; !4558]
+* Fix reporing damage region in pipewire streams [Michel; !4793]
+* Initialize all luminance fields for CICP [Michel; !4824]
+* Fix subsurface geometry calculation [Julian; !4826]
+* Send color management image description target volume events [Michel; !4823]
+* Use KMS ready time for frame clock update duration [Daniel, Michel; !4825]
+* Fixed crashes [Michel, Marco, Jonas; !4720, !4742, !4740, !4761, !4801, !4810]
+* Plugged leak [Lukáš; !4684]
+* Misc. bug fixes and cleanups [Florian, Marco, Carlos, Jonas, Michel, Bilal,
+  Fraetor, Joan, Alessandro B., Alessandro A., Serhii, Daniel, Sebastian W.,
+  Robert, Peter; !4718, !4717, !4670, !4722, !4726, !4623, !4735, !4750, !4749,
+  !4753, !4736, !4754, !4752, !4669, !4764, !4765, !4730, !4666, !4779, !4707,
+  !4646, !4759, !4782, !4783, !4778, !4788, !4748, !4790, !4785, !4616, !4559,
+  !4802, !4600, !4797, !4803, !4805, !4813, !4827, !4808, !4817, !3882, !4837,
+  !4842]
 
 Contributors:
-  Michel Dänzer, Carlos Garnacho
+  Alessandro Astone, Alessandro Bono, Michel Dänzer, Bilal Elmoussaoui,
+  Will Fancher, Olivier Fourdan, Fraetor, Carlos Garnacho, Gert-dev,
+  Peter Hutterer, Sebastian Keller, Mario Kleiner, Naveen Kumar, Robert Mader,
+  Florian Müllner, Julian Orth, Rahul Rameshbabu, Serhii Tereshchenko,
+  Joan Torres Lopez, Marco Trevisan (Treviño), Lukáš Tyrychtr,
+  Daniel van Vugt, Sebastian Wick, Jonas Ådahl
 
 Translators:
-  Quentin PAGÈS [oc]
+  Quentin PAGÈS [oc], Efstathios Iosifidis [el], Милош Поповић [sr,
+  sr@latin], Martin [sl], Artur S0 [ru], Antonio Marin [ro],
+  Kjartan Maraas [nb], Baurzhan Muftakhidinov [kk]
 
 49.1
 ====

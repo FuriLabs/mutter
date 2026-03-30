@@ -27,7 +27,7 @@
 #include "core/window-private.h"
 #include "meta/meta-enum-types.h"
 
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
 #include "x11/meta-x11-frame.h"
 #include "x11/window-x11.h"
 #endif
@@ -307,7 +307,7 @@ clear_move_resize_later (MetaWindowDrag *window_drag)
     }
 }
 
-static MetaCursor
+static ClutterCursorType
 meta_cursor_for_grab_op (MetaGrabOp op)
 {
   op &= ~(META_GRAB_OP_WINDOW_FLAG_UNCONSTRAINED);
@@ -316,60 +316,67 @@ meta_cursor_for_grab_op (MetaGrabOp op)
     {
     case META_GRAB_OP_RESIZING_SE:
     case META_GRAB_OP_KEYBOARD_RESIZING_SE:
-      return META_CURSOR_SE_RESIZE;
+      return CLUTTER_CURSOR_SE_RESIZE;
       break;
     case META_GRAB_OP_RESIZING_S:
     case META_GRAB_OP_KEYBOARD_RESIZING_S:
-      return META_CURSOR_S_RESIZE;
+      return CLUTTER_CURSOR_S_RESIZE;
       break;
     case META_GRAB_OP_RESIZING_SW:
     case META_GRAB_OP_KEYBOARD_RESIZING_SW:
-      return META_CURSOR_SW_RESIZE;
+      return CLUTTER_CURSOR_SW_RESIZE;
       break;
     case META_GRAB_OP_RESIZING_N:
     case META_GRAB_OP_KEYBOARD_RESIZING_N:
-      return META_CURSOR_N_RESIZE;
+      return CLUTTER_CURSOR_N_RESIZE;
       break;
     case META_GRAB_OP_RESIZING_NE:
     case META_GRAB_OP_KEYBOARD_RESIZING_NE:
-      return META_CURSOR_NE_RESIZE;
+      return CLUTTER_CURSOR_NE_RESIZE;
       break;
     case META_GRAB_OP_RESIZING_NW:
     case META_GRAB_OP_KEYBOARD_RESIZING_NW:
-      return META_CURSOR_NW_RESIZE;
+      return CLUTTER_CURSOR_NW_RESIZE;
       break;
     case META_GRAB_OP_RESIZING_W:
     case META_GRAB_OP_KEYBOARD_RESIZING_W:
-      return META_CURSOR_W_RESIZE;
+      return CLUTTER_CURSOR_W_RESIZE;
       break;
     case META_GRAB_OP_RESIZING_E:
     case META_GRAB_OP_KEYBOARD_RESIZING_E:
-      return META_CURSOR_E_RESIZE;
+      return CLUTTER_CURSOR_E_RESIZE;
       break;
     case META_GRAB_OP_MOVING:
-      return META_CURSOR_DEFAULT;
+      return CLUTTER_CURSOR_DEFAULT;
       break;
     case META_GRAB_OP_KEYBOARD_MOVING:
     case META_GRAB_OP_KEYBOARD_RESIZING_UNKNOWN:
-      return META_CURSOR_MOVE;
+      return CLUTTER_CURSOR_MOVE;
       break;
     default:
       break;
     }
 
-  return META_CURSOR_DEFAULT;
+  return CLUTTER_CURSOR_DEFAULT;
 }
 
 static void
 meta_window_drag_update_cursor (MetaWindowDrag *window_drag)
 {
-  MetaDisplay *display;
-  MetaCursor cursor;
+  MetaDisplay *display =
+    meta_window_get_display (window_drag->effective_grab_window);
+  MetaContext *context = meta_display_get_context (display);
+  MetaBackend *backend = meta_context_get_backend (context);
+  ClutterStage *stage = CLUTTER_STAGE (meta_backend_get_stage (backend));
+  ClutterCursorType cursor;
+  ClutterActor *grab_actor;
 
   display = meta_window_get_display (window_drag->effective_grab_window);
 
   cursor = meta_cursor_for_grab_op (window_drag->grab_op);
-  meta_display_set_cursor (display, cursor);
+  grab_actor = clutter_stage_get_grab_actor (stage);
+  clutter_actor_set_cursor_type (grab_actor, cursor);
+  clutter_sprite_invalidate_cursor (window_drag->leading_sprite);
 }
 
 void
@@ -404,8 +411,6 @@ meta_window_drag_end (MetaWindowDrag *window_drag)
 
   g_clear_signal_handler (&window_drag->unmanaged_id, grab_window);
   g_clear_signal_handler (&window_drag->size_changed_id, grab_window);
-
-  meta_display_set_cursor (display, META_CURSOR_DEFAULT);
 
   clear_move_resize_later (window_drag);
 
@@ -1461,7 +1466,7 @@ update_move (MetaWindowDrag          *window_drag,
                   window->saved_rect.x = work_area.x;
                   window->saved_rect.y = work_area.y;
 
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XXWAYLAND
                   if (META_IS_WINDOW_X11 (window))
                     {
                       MetaFrame *frame;
@@ -1482,15 +1487,18 @@ update_move (MetaWindowDrag          *window_drag,
 
                   if (meta_window_is_maximized (window))
                     {
-
-                      meta_window_move_to_monitor (window, monitor);
+                      meta_window_move_to_monitor_internal (window,
+                                                            META_MOVE_RESIZE_USER_ACTION,
+                                                            monitor);
                     }
                   else
                     {
                       meta_window_maximize_internal (window,
                                                      META_MAXIMIZE_BOTH,
                                                      &window->saved_rect);
-                      meta_window_move_to_monitor (window, monitor);
+                      meta_window_move_to_monitor_internal (window,
+                                                            META_MOVE_RESIZE_USER_ACTION,
+                                                            monitor);
                     }
 
                   window_drag->target_monitor_number = monitor;
@@ -1689,7 +1697,7 @@ update_resize (MetaWindowDrag          *window_drag,
    * resize the window when the window responds, or when we time
    * the response out.
    */
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   if (window->client_type == META_WINDOW_CLIENT_TYPE_X11 &&
       meta_window_x11_is_awaiting_sync_response (window))
     return;
@@ -2028,14 +2036,6 @@ meta_window_drag_begin (MetaWindowDrag      *window_drag,
                                                                   window_drag,
                                                                   NULL);
       clutter_grab_activate (window_drag->grab);
-      if ((clutter_grab_get_seat_state (window_drag->grab) &
-           CLUTTER_GRAB_STATE_POINTER) == 0 &&
-          !meta_grab_op_is_keyboard (grab_op))
-        {
-          meta_topic (META_DEBUG_WINDOW_OPS,
-                      "Pointer grab failed on a pointer grab op");
-          return FALSE;
-        }
     }
 
   g_set_object (&window_drag->effective_grab_window, grab_window);

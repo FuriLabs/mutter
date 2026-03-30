@@ -20,7 +20,7 @@
 
 /**
  * MetaWaylandClient:
- * 
+ *
  * A class that allows to launch a trusted client and detect if an specific
  * Wayland window belongs to it.
  */
@@ -129,7 +129,13 @@ static void
 set_wayland_client (MetaWaylandClient *client,
                     struct wl_client  *wayland_client)
 {
+  g_autoptr (MetaWaylandClient) old_client = NULL;
+
   client->wayland_client = wayland_client;
+
+  old_client = wl_client_get_user_data (wayland_client);
+  if (old_client)
+    wl_list_remove (&old_client->client_destroy_listener.link);
 
   client->client_destroy_listener.notify = on_client_destroyed;
   wl_client_add_destroy_listener (wayland_client,
@@ -166,8 +172,6 @@ meta_wayland_client_new_create (MetaContext  *context,
   struct wl_client *wayland_client;
   int client_fd[2];
   MetaWaylandClient *client;
-
-  g_return_val_if_fail (meta_is_wayland_compositor (), NULL);
 
   if (socketpair (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, client_fd) < 0)
     {
@@ -232,7 +236,6 @@ meta_wayland_client_new_subprocess (MetaContext          *context,
                         argv[0][0] != '\0',
                         NULL);
   g_return_val_if_fail (error == NULL || *error == NULL, NULL);
-  g_return_val_if_fail (meta_is_wayland_compositor (), NULL);
 
   if (socketpair (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, client_fd) < 0)
     {
@@ -358,7 +361,7 @@ meta_wayland_client_owns_window (MetaWaylandClient *client,
   MetaWindowWayland *wl_window;
   MetaWaylandClient *window_client;
 
-  g_return_val_if_fail (meta_is_wayland_compositor (), FALSE);
+  g_return_val_if_fail (client->subprocess.subprocess != NULL, FALSE);
 
   if (!META_IS_WINDOW_WAYLAND (window))
     return FALSE;

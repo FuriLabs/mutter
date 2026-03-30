@@ -268,6 +268,8 @@ struct _MetaWindow
   char *gtk_window_object_path;
   char *gtk_app_menu_object_path;
   char *gtk_menubar_object_path;
+  char *a11y_dbus_name;
+  char *a11y_object_path;
 
   MetaWindow *transient_for;
 
@@ -608,9 +610,7 @@ struct _MetaWindowClass
 
   MetaStackLayer (*calculate_layer) (MetaWindow *window);
 
-#ifdef HAVE_WAYLAND
   MetaWaylandSurface * (*get_wayland_surface) (MetaWindow *window);
-#endif
 
   gboolean (*set_transient_for) (MetaWindow *window,
                                  MetaWindow *parent);
@@ -627,6 +627,17 @@ struct _MetaWindowClass
                              int                 *stage_x,
                              int                 *stage_y,
                              MtkRoundingStrategy  rounding_strategy);
+
+  void (*stage_to_protocol_size) (MetaWindow *window,
+                                  int         stage_w,
+                                  int         stage_h,
+                                  int        *protocol_w,
+                                  int        *protocol_h);
+  void (*protocol_to_stage_size) (MetaWindow *window,
+                                  int         protocol_w,
+                                  int         protocol_h,
+                                  int        *stage_w,
+                                  int        *stage_h);
 
   MetaGravity (* get_gravity) (MetaWindow *window);
 
@@ -693,10 +704,8 @@ gboolean meta_window_can_ping (MetaWindow *window);
 
 MetaStackLayer meta_window_calculate_layer (MetaWindow *window);
 
-#ifdef HAVE_WAYLAND
 META_EXPORT_TEST
 MetaWaylandSurface * meta_window_get_wayland_surface (MetaWindow *window);
-#endif
 
 void     meta_window_current_workspace_changed (MetaWindow *window);
 
@@ -805,6 +814,10 @@ void meta_window_move_resize_internal (MetaWindow          *window,
                                        MtkRectangle         frame_rect,
                                        MtkRectangle        *result_rect);
 
+void meta_window_move_to_monitor_internal (MetaWindow          *window,
+                                           MetaMoveResizeFlags  flags,
+                                           int                  monitor);
+
 void meta_window_grab_op_began (MetaWindow *window, MetaGrabOp op);
 void meta_window_grab_op_ended (MetaWindow *window, MetaGrabOp op);
 
@@ -886,12 +899,24 @@ void meta_window_stage_to_protocol_point (MetaWindow *window,
                                           int        *protocol_x,
                                           int        *protocol_y);
 
+void meta_window_stage_to_protocol_size (MetaWindow *window,
+                                         int         stage_w,
+                                         int         stage_h,
+                                         int        *protocol_w,
+                                         int        *protocol_h);
+
 void meta_window_protocol_to_stage_point (MetaWindow          *window,
                                           int                  protocol_x,
                                           int                  protocol_y,
                                           int                 *stage_x,
                                           int                 *stage_y,
                                           MtkRoundingStrategy  rounding_strategy);
+
+void meta_window_protocol_to_stage_size (MetaWindow *window,
+                                         int         protocol_w,
+                                         int         protocol_h,
+                                         int        *stage_w,
+                                         int        *stage_h);
 
 gboolean meta_window_is_tiled_side_by_side (MetaWindow *window);
 
@@ -914,3 +939,16 @@ void meta_window_set_tag (MetaWindow *window,
 
 META_EXPORT_TEST
 GPtrArray * meta_window_get_transient_children (MetaWindow *window);
+
+gboolean meta_window_apply_external_constraints (MetaWindow                  *window,
+                                                 MetaGravity                  resize_gravity,
+                                                 MtkRectangle                *constrained_rect,
+                                                 MetaExternalConstraintFlags  constraint_flags);
+
+void meta_window_set_a11y_properties (MetaWindow *window,
+                                      const char *a11y_dbus_name,
+                                      const char *toplevel_object_path);
+
+gboolean meta_window_get_a11y_properties (MetaWindow  *window,
+                                          const char **a11y_dbus_name,
+                                          const char **toplevel_object_path);

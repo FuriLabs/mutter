@@ -31,41 +31,37 @@
 #include "clutter/clutter.h"
 #include "compositor/compositor-private.h"
 #include "compositor/meta-window-actor-private.h"
-#include "core/window-private.h"
-
-#ifdef HAVE_WAYLAND
 #include "compositor/meta-surface-actor-wayland.h"
+#include "core/window-private.h"
 #include "wayland/meta-wayland-surface-private.h"
-#endif /* HAVE_WAYLAND */
 
-static void update_frame_sync_surface (MetaCompositorViewNative *view_native,
-                                       MetaSurfaceActor         *surface_actor);
+static void update_fullscreen_actor (MetaCompositorViewNative *view_native,
+                                     MetaSurfaceActor         *fullscreen_actor);
 
 struct _MetaCompositorViewNative
 {
   MetaCompositorView parent;
 
-#ifdef HAVE_WAYLAND
   MetaWaylandSurface *scanout_candidate;
-#endif /* HAVE_WAYLAND */
 
-  MetaSurfaceActor *frame_sync_surface;
+  MetaSurfaceActor *fullscreen_actor;
 
-  gulong frame_sync_surface_repaint_scheduled_id;
-  gulong frame_sync_surface_update_scheduled_id;
-  gulong frame_sync_surface_is_frozen_changed_id;
-  gulong frame_sync_surface_destroy_id;
+  gulong fullscreen_surface_repaint_scheduled_id;
+  gulong fullscreen_surface_update_scheduled_id;
+  gulong fullscreen_actor_destroy_id;
 };
 
 G_DEFINE_TYPE (MetaCompositorViewNative, meta_compositor_view_native,
                META_TYPE_COMPOSITOR_VIEW)
 
 static void
-maybe_schedule_update_now (MetaCompositorViewNative *view_native)
+maybe_set_fullscreen_update_time (MetaSurfaceActor         *surface_actor,
+                                  MetaCompositorViewNative *view_native)
 {
   MetaCompositorView *compositor_view = META_COMPOSITOR_VIEW (view_native);
   ClutterStageView *stage_view;
   CoglFramebuffer *framebuffer;
+  ClutterFrameClock *frame_clock;
 
   stage_view = meta_compositor_view_get_stage_view (compositor_view);
 
@@ -73,51 +69,21 @@ maybe_schedule_update_now (MetaCompositorViewNative *view_native)
   if (!META_IS_ONSCREEN_NATIVE (framebuffer))
     return;
 
-  if (meta_onscreen_native_is_frame_sync_enabled (META_ONSCREEN_NATIVE (framebuffer)))
+  frame_clock = clutter_stage_view_get_frame_clock (stage_view);
+  if (frame_clock)
     {
-      ClutterFrameClock *frame_clock;
-
-      frame_clock = clutter_stage_view_get_frame_clock (stage_view);
-      if (!frame_clock)
-        return;
-
-      clutter_frame_clock_set_frame_sync_update_time (frame_clock,
+      clutter_frame_clock_set_fullscreen_update_time (frame_clock,
                                                       g_get_monotonic_time ());
-      clutter_frame_clock_schedule_update_now (frame_clock);
     }
 }
 
 static void
-on_frame_sync_surface_repaint_scheduled (MetaSurfaceActor         *surface_actor,
-                                         MetaCompositorViewNative *view_native)
+on_fullscreen_actor_destroyed (MetaSurfaceActor         *surface_actor,
+                               MetaCompositorViewNative *view_native)
 {
-  maybe_schedule_update_now (view_native);
+  update_fullscreen_actor (view_native, NULL);
 }
 
-static void
-on_frame_sync_surface_update_scheduled (MetaSurfaceActor         *surface_actor,
-                                        MetaCompositorViewNative *view_native)
-{
-  maybe_schedule_update_now (view_native);
-}
-
-static void
-on_frame_sync_surface_is_frozen_changed (MetaSurfaceActor         *surface_actor,
-                                         GParamSpec               *pspec,
-                                         MetaCompositorViewNative *view_native)
-{
-  if (meta_surface_actor_is_frozen (surface_actor))
-    update_frame_sync_surface (view_native, NULL);
-}
-
-static void
-on_frame_sync_surface_destroyed (MetaSurfaceActor         *surface_actor,
-                                 MetaCompositorViewNative *view_native)
-{
-  update_frame_sync_surface (view_native, NULL);
-}
-
-#ifdef HAVE_WAYLAND
 static void
 update_scanout_candidate (MetaCompositorViewNative *view_native,
                           MetaWaylandSurface       *surface,
@@ -139,6 +105,102 @@ update_scanout_candidate (MetaCompositorViewNative *view_native,
     }
 }
 
+static MetaSurfaceActor *
+find_candidate (MetaCompositorView *compositor_view,
+                MetaCompositor     *compositor,
+                const char         *topic)
+{
+  ClutterStageView *stage_view =
+    meta_compositor_view_get_stage_view (compositor_view);
+  MetaWindowActor *window_actor;
+  MetaSurfaceActor *surface_actor;
+  MtkRectangle view_rect;
+  ClutterActorBox actor_box;
+
+  if (meta_compositor_is_unredirect_inhibited (compositor))
+    {
+      meta_topic (META_DEBUG_RENDER,
+                  "No %s candidate: unredirect inhibited",
+                  topic);
+      return NULL;
+    }
+
+  window_actor =
+    meta_compositor_view_get_top_window_actor (compositor_view);
+  if (!window_actor)
+    {
+      meta_topic (META_DEBUG_RENDER,
+                  "No %s candidate: no top window actor",
+                  topic);
+      return NULL;
+    }
+
+  if (meta_window_actor_effect_in_progress (window_actor))
+    {
+      meta_topic (META_DEBUG_RENDER,
+                  "No %s candidate: window-actor effects in progress",
+                  topic);
+      return NULL;
+    }
+
+  if (clutter_actor_has_transitions (CLUTTER_ACTOR (window_actor)))
+    {
+      meta_topic (META_DEBUG_RENDER,
+                  "No %s candidate: window-actor has transition",
+                  topic);
+      return NULL;
+    }
+
+  clutter_stage_view_get_layout (stage_view, &view_rect);
+
+  if (!clutter_actor_get_paint_box (CLUTTER_ACTOR (window_actor),
+                                    &actor_box))
+    {
+      meta_topic (META_DEBUG_RENDER,
+                  "No %s candidate: no window actor paint-box",
+                  topic);
+      return NULL;
+    }
+
+  if (!G_APPROX_VALUE (actor_box.x1, view_rect.x,
+                       CLUTTER_COORDINATE_EPSILON) ||
+      !G_APPROX_VALUE (actor_box.y1, view_rect.y,
+                       CLUTTER_COORDINATE_EPSILON) ||
+      !G_APPROX_VALUE (actor_box.x2, view_rect.x + view_rect.width,
+                       CLUTTER_COORDINATE_EPSILON) ||
+      !G_APPROX_VALUE (actor_box.y2, view_rect.y + view_rect.height,
+                       CLUTTER_COORDINATE_EPSILON))
+    {
+      meta_topic (META_DEBUG_RENDER,
+                  "No %s candidate: paint-box (%f,%f,%f,%f) does "
+                  "not match stage-view layout (%d,%d,%d,%d)",
+                  topic,
+                  actor_box.x1, actor_box.y1,
+                  actor_box.x2 - actor_box.x1, actor_box.y2 - actor_box.y1,
+                  view_rect.x, view_rect.y, view_rect.width, view_rect.height);
+      return NULL;
+    }
+
+  surface_actor = meta_window_actor_get_scanout_candidate (window_actor);
+  if (!surface_actor)
+    {
+      meta_topic (META_DEBUG_RENDER,
+                  "No %s candidate: window-actor has no scanout candidate",
+                  topic);
+      return NULL;
+    }
+
+  if (meta_surface_actor_is_effectively_obscured (surface_actor))
+    {
+      meta_topic (META_DEBUG_RENDER,
+                  "No %s candidate: surface-actor is obscured",
+                  topic);
+      return NULL;
+    }
+
+  return surface_actor;
+}
+
 static gboolean
 find_scanout_candidate (MetaCompositorView  *compositor_view,
                         MetaCompositor      *compositor,
@@ -153,12 +215,10 @@ find_scanout_candidate (MetaCompositorView  *compositor_view,
   MetaBackend *backend = meta_compositor_get_backend (compositor);
   MetaCursorTracker *cursor_tracker =
     meta_backend_get_cursor_tracker (backend);
-  CoglTexture *cursor_sprite;
+  MetaCursorRenderer *cursor_renderer =
+    meta_backend_get_cursor_renderer (backend);
   MetaCrtc *crtc;
   CoglFramebuffer *framebuffer;
-  MetaWindowActor *window_actor;
-  MtkRectangle view_rect;
-  ClutterActorBox actor_box;
   MetaSurfaceActor *surface_actor;
   MetaSurfaceActorWayland *surface_actor_wayland;
   MetaWaylandSurface *surface;
@@ -166,20 +226,19 @@ find_scanout_candidate (MetaCompositorView  *compositor_view,
   if (meta_get_debug_paint_flags () & META_DEBUG_PAINT_DISABLE_DIRECT_SCANOUT)
     return FALSE;
 
-  if (meta_compositor_is_unredirect_inhibited (compositor))
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "No direct scanout candidate: unredirect inhibited");
-      return FALSE;
-    }
 
-  clutter_stage_view_get_layout (stage_view, &view_rect);
+  surface_actor = find_candidate (compositor_view,
+                                  compositor,
+                                  "direct scanout");
+  if (!surface_actor)
+    return FALSE;
 
-  cursor_sprite = meta_cursor_tracker_get_sprite (cursor_tracker);
-  if (cursor_sprite &&
-      meta_cursor_tracker_get_pointer_visible (cursor_tracker) &&
-      !meta_stage_view_is_cursor_overlay_inhibited (view))
+  if (meta_cursor_renderer_needs_overlay (cursor_renderer) &&
+      !meta_stage_view_is_cursor_overlay_inhibited (view) &&
+      meta_cursor_tracker_get_pointer_visible (cursor_tracker))
     {
+      CoglTexture *cursor_sprite;
+      MtkRectangle view_rect;
       graphene_rect_t graphene_view_rect;
       graphene_rect_t cursor_rect;
       graphene_point_t position;
@@ -193,12 +252,16 @@ find_scanout_candidate (MetaCompositorView  *compositor_view,
       scale = (clutter_stage_view_get_scale (stage_view) *
                meta_cursor_tracker_get_scale (cursor_tracker));
 
+      cursor_sprite = meta_cursor_tracker_get_sprite (cursor_tracker);
+      g_return_val_if_fail (cursor_sprite != NULL, FALSE);
+
       graphene_rect_init (&cursor_rect,
                           position.x - (hotspot_x * scale),
                           position.y - (hotspot_y * scale),
                           cogl_texture_get_width (cursor_sprite) * scale,
                           cogl_texture_get_height (cursor_sprite) * scale);
 
+      clutter_stage_view_get_layout (stage_view, &view_rect);
       graphene_view_rect = mtk_rectangle_to_graphene_rect (&view_rect);
       if (graphene_rect_intersection (&graphene_view_rect,
                                       &cursor_rect,
@@ -233,63 +296,6 @@ find_scanout_candidate (MetaCompositorView  *compositor_view,
       return FALSE;
     }
 
-  window_actor = meta_compositor_view_get_top_window_actor (compositor_view);
-  if (!window_actor)
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "No direct scanout candidate: no top window actor");
-      return FALSE;
-    }
-
-  if (meta_window_actor_effect_in_progress (window_actor))
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "No direct scanout candidate: window-actor effects in progress");
-      return FALSE;
-    }
-
-  if (clutter_actor_has_transitions (CLUTTER_ACTOR (window_actor)))
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "No direct scanout candidate: window-actor has transition");
-      return FALSE;
-    }
-
-  if (!clutter_actor_get_paint_box (CLUTTER_ACTOR (window_actor),
-                                    &actor_box))
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "No direct scanout candidate: no window actor paint-box");
-      return FALSE;
-    }
-
-  if (!G_APPROX_VALUE (actor_box.x1, view_rect.x,
-                       CLUTTER_COORDINATE_EPSILON) ||
-      !G_APPROX_VALUE (actor_box.y1, view_rect.y,
-                       CLUTTER_COORDINATE_EPSILON) ||
-      !G_APPROX_VALUE (actor_box.x2, view_rect.x + view_rect.width,
-                       CLUTTER_COORDINATE_EPSILON) ||
-      !G_APPROX_VALUE (actor_box.y2, view_rect.y + view_rect.height,
-                       CLUTTER_COORDINATE_EPSILON))
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "No direct scanout candidate: paint-box (%f,%f,%f,%f) does "
-                  "not match stage-view layout (%d,%d,%d,%d)",
-                  actor_box.x1, actor_box.y1,
-                  actor_box.x2 - actor_box.x1, actor_box.y2 - actor_box.y1,
-                  view_rect.x, view_rect.y, view_rect.width, view_rect.height);
-      return FALSE;
-    }
-
-  surface_actor = meta_window_actor_get_scanout_candidate (window_actor);
-  if (!surface_actor)
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "No direct scanout candidate: window-actor has no scanout "
-                  "candidate");
-      return FALSE;
-    }
-
   if (!(meta_get_debug_paint_flags () &
         META_DEBUG_PAINT_IGNORE_COLOR_STATE_FOR_DIRECT_SCANOUT))
     {
@@ -300,22 +306,15 @@ find_scanout_candidate (MetaCompositorView  *compositor_view,
         clutter_stage_view_get_output_color_state (CLUTTER_STAGE_VIEW (view));
       surface_color_state =
         clutter_actor_get_color_state (CLUTTER_ACTOR (surface_actor));
-      if (!clutter_color_state_equals (output_color_state, surface_color_state))
+      if (clutter_color_state_needs_mapping (surface_color_state, output_color_state))
         {
           meta_topic (META_DEBUG_RENDER,
                       "No direct scanout candidate: "
-                      "surface color state (%s) doesn't match the output's (%s)",
+                      "surface color state (%s) needs mapping to the output's (%s)",
                       clutter_color_state_to_string (surface_color_state),
                       clutter_color_state_to_string (output_color_state));
           return FALSE;
         }
-    }
-
-  if (meta_surface_actor_is_effectively_obscured (surface_actor))
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "No direct scanout candidate: surface-actor is obscured");
-      return FALSE;
     }
 
   surface_actor_wayland = META_SURFACE_ACTOR_WAYLAND (surface_actor);
@@ -397,149 +396,47 @@ meta_compositor_view_native_maybe_assign_scanout (MetaCompositorViewNative *view
 
   update_scanout_candidate (view_native, surface, crtc);
 }
-#endif /* HAVE_WAYLAND */
 
 static MetaSurfaceActor *
-find_frame_sync_candidate (MetaCompositorView *compositor_view,
+find_fullscreen_candidate (MetaCompositorView *compositor_view,
                            MetaCompositor     *compositor)
 {
-  ClutterStageView *stage_view =
-    meta_compositor_view_get_stage_view (compositor_view);
-  MetaWindowActor *window_actor;
-  MetaSurfaceActor *surface_actor;
-  MtkRectangle view_rect;
-  ClutterActorBox actor_box;
-
-  if (meta_compositor_is_unredirect_inhibited (compositor))
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "No frame sync candidate: unredirect inhibited");
-      return NULL;
-    }
-
-  window_actor =
-    meta_compositor_view_get_top_window_actor (compositor_view);
-  if (!window_actor)
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "No frame sync candidate: no top window actor");
-      return NULL;
-    }
-
-  if (meta_window_actor_is_frozen (window_actor))
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "No frame sync candidate: window-actor is frozen");
-      return NULL;
-    }
-
-  if (meta_window_actor_effect_in_progress (window_actor))
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "No frame sync candidate: window-actor effects in progress");
-      return NULL;
-    }
-
-  if (clutter_actor_has_transitions (CLUTTER_ACTOR (window_actor)))
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "No frame sync candidate: window-actor has transition");
-      return NULL;
-    }
-
-  clutter_stage_view_get_layout (stage_view, &view_rect);
-
-  if (!clutter_actor_get_paint_box (CLUTTER_ACTOR (window_actor),
-                                    &actor_box))
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "No frame sync candidate: no window actor paint-box");
-      return NULL;
-    }
-
-  if (!G_APPROX_VALUE (actor_box.x1, view_rect.x,
-                       CLUTTER_COORDINATE_EPSILON) ||
-      !G_APPROX_VALUE (actor_box.y1, view_rect.y,
-                       CLUTTER_COORDINATE_EPSILON) ||
-      !G_APPROX_VALUE (actor_box.x2, view_rect.x + view_rect.width,
-                       CLUTTER_COORDINATE_EPSILON) ||
-      !G_APPROX_VALUE (actor_box.y2, view_rect.y + view_rect.height,
-                       CLUTTER_COORDINATE_EPSILON))
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "No frame sync candidate: paint-box (%f,%f,%f,%f) does "
-                  "not match stage-view layout (%d,%d,%d,%d)",
-                  actor_box.x1, actor_box.y1,
-                  actor_box.x2 - actor_box.x1, actor_box.y2 - actor_box.y1,
-                  view_rect.x, view_rect.y, view_rect.width, view_rect.height);
-      return NULL;
-    }
-
-  surface_actor = meta_window_actor_get_scanout_candidate (window_actor);
-  if (!surface_actor)
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "No frame sync candidate: window-actor has no scanout candidate");
-      return NULL;
-    }
-
-  if (meta_surface_actor_is_effectively_obscured (surface_actor))
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "No frame sync candidate: surface-actor is obscured");
-      return NULL;
-    }
-
-  if (meta_surface_actor_is_frozen (surface_actor))
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "No frame sync candidate: surface-actor is frozen");
-      return NULL;
-    }
-
-  return surface_actor;
+  return find_candidate (compositor_view, compositor, "fullscreen");
 }
 
 static void
-update_frame_sync_surface (MetaCompositorViewNative *view_native,
-                           MetaSurfaceActor         *surface_actor)
+update_fullscreen_actor (MetaCompositorViewNative *view_native,
+                         MetaSurfaceActor         *surface_actor)
 {
   MetaCompositorView *compositor_view =
     META_COMPOSITOR_VIEW (view_native);
   ClutterStageView *stage_view;
   CoglFramebuffer *framebuffer;
 
-  g_clear_signal_handler (&view_native->frame_sync_surface_repaint_scheduled_id,
-                          view_native->frame_sync_surface);
-  g_clear_signal_handler (&view_native->frame_sync_surface_update_scheduled_id,
-                          view_native->frame_sync_surface);
-  g_clear_signal_handler (&view_native->frame_sync_surface_is_frozen_changed_id,
-                          view_native->frame_sync_surface);
-  g_clear_signal_handler (&view_native->frame_sync_surface_destroy_id,
-                          view_native->frame_sync_surface);
+  g_clear_signal_handler (&view_native->fullscreen_surface_repaint_scheduled_id,
+                          view_native->fullscreen_actor);
+  g_clear_signal_handler (&view_native->fullscreen_surface_update_scheduled_id,
+                          view_native->fullscreen_actor);
+  g_clear_signal_handler (&view_native->fullscreen_actor_destroy_id,
+                          view_native->fullscreen_actor);
 
   if (surface_actor)
     {
-      view_native->frame_sync_surface_repaint_scheduled_id =
+      view_native->fullscreen_surface_repaint_scheduled_id =
         g_signal_connect (surface_actor, "repaint-scheduled",
-                          G_CALLBACK (on_frame_sync_surface_repaint_scheduled),
+                          G_CALLBACK (maybe_set_fullscreen_update_time),
                           view_native);
-      view_native->frame_sync_surface_update_scheduled_id =
+      view_native->fullscreen_surface_update_scheduled_id =
         g_signal_connect (surface_actor, "update-scheduled",
-                          G_CALLBACK (on_frame_sync_surface_update_scheduled),
+                          G_CALLBACK (maybe_set_fullscreen_update_time),
                           view_native);
-      view_native->frame_sync_surface_is_frozen_changed_id =
-        g_signal_connect (surface_actor,
-                          "notify::is-frozen",
-                          G_CALLBACK (on_frame_sync_surface_is_frozen_changed),
-                          view_native);
-      view_native->frame_sync_surface_destroy_id =
+      view_native->fullscreen_actor_destroy_id =
         g_signal_connect (surface_actor, "destroy",
-                          G_CALLBACK (on_frame_sync_surface_destroyed),
+                          G_CALLBACK (on_fullscreen_actor_destroyed),
                           view_native);
     }
 
-  view_native->frame_sync_surface = surface_actor;
+  view_native->fullscreen_actor = surface_actor;
 
   stage_view = meta_compositor_view_get_stage_view (compositor_view);
 
@@ -547,25 +444,23 @@ update_frame_sync_surface (MetaCompositorViewNative *view_native,
   if (!META_IS_ONSCREEN_NATIVE (framebuffer))
     return;
 
-  meta_onscreen_native_request_frame_sync (META_ONSCREEN_NATIVE (framebuffer),
-                                           surface_actor != NULL);
+  meta_onscreen_native_allow_vrr (META_ONSCREEN_NATIVE (framebuffer),
+                                  surface_actor != NULL);
 }
 
 void
-meta_compositor_view_native_maybe_update_frame_sync_surface (MetaCompositorViewNative *view_native,
-                                                             MetaCompositor           *compositor)
+meta_compositor_view_native_maybe_update_fullscreen_actor (MetaCompositorViewNative *view_native,
+                                                           MetaCompositor           *compositor)
 {
   MetaCompositorView *compositor_view = META_COMPOSITOR_VIEW (view_native);
-  MetaSurfaceActor *surface_actor;
+  MetaSurfaceActor *fullscreen_actor;
 
-  surface_actor = find_frame_sync_candidate (compositor_view,
-                                             compositor);
+  fullscreen_actor = find_fullscreen_candidate (compositor_view, compositor);
 
-  if (G_LIKELY (surface_actor == view_native->frame_sync_surface))
+  if (G_LIKELY (fullscreen_actor == view_native->fullscreen_actor))
     return;
 
-  update_frame_sync_surface (view_native,
-                             surface_actor);
+  update_fullscreen_actor (view_native, fullscreen_actor);
 }
 
 MetaCompositorViewNative *
@@ -583,15 +478,13 @@ meta_compositor_view_native_dispose (GObject *object)
 {
   MetaCompositorViewNative *view_native = META_COMPOSITOR_VIEW_NATIVE (object);
 
-  g_clear_signal_handler (&view_native->frame_sync_surface_repaint_scheduled_id,
-                          view_native->frame_sync_surface);
-  g_clear_signal_handler (&view_native->frame_sync_surface_update_scheduled_id,
-                          view_native->frame_sync_surface);
-  g_clear_signal_handler (&view_native->frame_sync_surface_destroy_id,
-                          view_native->frame_sync_surface);
-  g_clear_signal_handler (&view_native->frame_sync_surface_is_frozen_changed_id,
-                          view_native->frame_sync_surface);
-  view_native->frame_sync_surface = NULL;
+  g_clear_signal_handler (&view_native->fullscreen_surface_repaint_scheduled_id,
+                          view_native->fullscreen_actor);
+  g_clear_signal_handler (&view_native->fullscreen_surface_update_scheduled_id,
+                          view_native->fullscreen_actor);
+  g_clear_signal_handler (&view_native->fullscreen_actor_destroy_id,
+                          view_native->fullscreen_actor);
+  view_native->fullscreen_actor = NULL;
 
   G_OBJECT_CLASS (meta_compositor_view_native_parent_class)->dispose (object);
 }
@@ -599,11 +492,9 @@ meta_compositor_view_native_dispose (GObject *object)
 static void
 meta_compositor_view_native_finalize (GObject *object)
 {
-#ifdef HAVE_WAYLAND
   MetaCompositorViewNative *view_native = META_COMPOSITOR_VIEW_NATIVE (object);
 
   g_clear_weak_pointer (&view_native->scanout_candidate);
-#endif /* HAVE_WAYLAND */
 
   G_OBJECT_CLASS (meta_compositor_view_native_parent_class)->finalize (object);
 }

@@ -39,7 +39,7 @@
 #include "cogl/cogl-texture-private.h"
 #include "cogl/cogl-framebuffer-private.h"
 #include "cogl/cogl-offscreen.h"
-#include "cogl/driver/gl/cogl-util-gl-private.h"
+#include "cogl/driver/gl/cogl-driver-gl-private.h"
 #include "cogl/driver/gl/cogl-pipeline-gl-private.h"
 #include "cogl/driver/gl/cogl-texture-gl-private.h"
 
@@ -117,7 +117,7 @@ _cogl_set_active_texture_unit (CoglContext *ctx,
 
   if (priv->active_texture_unit != unit_index)
     {
-      GE (ctx, glActiveTexture (GL_TEXTURE0 + unit_index));
+      GE (driver, glActiveTexture (GL_TEXTURE0 + unit_index));
       priv->active_texture_unit = unit_index;
     }
 }
@@ -148,6 +148,7 @@ _cogl_bind_gl_texture_transient (CoglContext *ctx,
                                  GLuint       gl_texture)
 {
   CoglTextureUnit *unit;
+  CoglDriver *driver = cogl_context_get_driver (ctx);
 
   /* We choose to always make texture unit 1 active for transient
    * binds so that in the common case where multitexturing isn't used
@@ -162,7 +163,7 @@ _cogl_bind_gl_texture_transient (CoglContext *ctx,
   if (unit->gl_texture == gl_texture && !unit->dirty_gl_texture)
     return;
 
-  GE (ctx, glBindTexture (gl_target, gl_texture));
+  GE (driver, glBindTexture (gl_target, gl_texture));
 
   unit->dirty_gl_texture = TRUE;
 }
@@ -189,7 +190,7 @@ _cogl_delete_gl_texture (CoglContext *ctx,
         }
     }
 
-  GE (ctx, glDeleteTextures (1, &gl_texture));
+  GE (driver, glDeleteTextures (1, &gl_texture));
 }
 
 /* Whenever the underlying GL texture storage of a CoglTexture is
@@ -234,6 +235,7 @@ flush_depth_state (CoglContext *ctx,
                    CoglDepthState *depth_state)
 {
   gboolean depth_writing_enabled = depth_state->write_enabled;
+  CoglDriver *driver = cogl_context_get_driver (ctx);
 
   if (ctx->current_draw_buffer)
     {
@@ -245,26 +247,26 @@ flush_depth_state (CoglContext *ctx,
     {
       if (depth_state->test_enabled == TRUE)
         {
-          GE (ctx, glEnable (GL_DEPTH_TEST));
+          GE (driver, glEnable (GL_DEPTH_TEST));
           if (ctx->current_draw_buffer)
             cogl_framebuffer_set_depth_buffer_clear_needed (ctx->current_draw_buffer);
         }
       else
-        GE (ctx, glDisable (GL_DEPTH_TEST));
+        GE (driver, glDisable (GL_DEPTH_TEST));
       ctx->depth_test_enabled_cache = depth_state->test_enabled;
     }
 
   if (ctx->depth_test_function_cache != depth_state->test_function &&
       depth_state->test_enabled == TRUE)
     {
-      GE (ctx, glDepthFunc (depth_state->test_function));
+      GE (driver, glDepthFunc (depth_state->test_function));
       ctx->depth_test_function_cache = depth_state->test_function;
     }
 
   if (ctx->depth_writing_enabled_cache != depth_writing_enabled)
     {
-      GE (ctx, glDepthMask (depth_writing_enabled ?
-                            GL_TRUE : GL_FALSE));
+      GE (driver, glDepthMask (depth_writing_enabled ?
+                               GL_TRUE : GL_FALSE));
       ctx->depth_writing_enabled_cache = depth_writing_enabled;
     }
 
@@ -274,11 +276,11 @@ flush_depth_state (CoglContext *ctx,
       CoglRenderer *renderer = cogl_context_get_renderer (ctx);
 
       if (cogl_renderer_get_driver_id (renderer) == COGL_DRIVER_ID_GLES2)
-        GE (ctx, glDepthRangef (depth_state->range_near,
-                                depth_state->range_far));
+        GE (driver, glDepthRangef (depth_state->range_near,
+                                   depth_state->range_far));
       else
-        GE (ctx, glDepthRange (depth_state->range_near,
-                               depth_state->range_far));
+        GE (driver, glDepthRange (depth_state->range_near,
+                                  depth_state->range_far));
 
       ctx->depth_range_near_cache = depth_state->range_near;
       ctx->depth_range_far_cache = depth_state->range_far;
@@ -292,6 +294,7 @@ _cogl_pipeline_flush_color_blend_alpha_depth_state (
                                             gboolean      with_color_attrib)
 {
   CoglContext *ctx = pipeline->context;
+  CoglDriver *driver = cogl_context_get_driver (ctx);
 
   if (pipelines_difference & COGL_PIPELINE_STATE_BLEND)
     {
@@ -312,16 +315,16 @@ _cogl_pipeline_flush_color_blend_alpha_depth_state (
           float alpha = cogl_color_get_alpha (&blend_state->blend_constant);
 
 
-          GE (ctx, glBlendColor (red, green, blue, alpha));
+          GE (driver, glBlendColor (red, green, blue, alpha));
         }
 
-      GE (ctx, glBlendEquationSeparate (blend_state->blend_equation_rgb,
-                                        blend_state->blend_equation_alpha));
+      GE (driver, glBlendEquationSeparate (blend_state->blend_equation_rgb,
+                                           blend_state->blend_equation_alpha));
 
-      GE (ctx, glBlendFuncSeparate (blend_state->blend_src_factor_rgb,
-                                    blend_state->blend_dst_factor_rgb,
-                                    blend_state->blend_src_factor_alpha,
-                                    blend_state->blend_dst_factor_alpha));
+      GE (driver, glBlendFuncSeparate (blend_state->blend_src_factor_rgb,
+                                       blend_state->blend_dst_factor_rgb,
+                                       blend_state->blend_src_factor_alpha,
+                                       blend_state->blend_dst_factor_alpha));
     }
 
   if (pipelines_difference & COGL_PIPELINE_STATE_DEPTH)
@@ -341,12 +344,12 @@ _cogl_pipeline_flush_color_blend_alpha_depth_state (
         = &authority->big_state->cull_face_state;
 
       if (cull_face_state->mode == COGL_PIPELINE_CULL_FACE_MODE_NONE)
-        GE( ctx, glDisable (GL_CULL_FACE) );
+        GE (driver, glDisable (GL_CULL_FACE));
       else
         {
           gboolean invert_winding;
 
-          GE( ctx, glEnable (GL_CULL_FACE) );
+          GE (driver, glEnable (GL_CULL_FACE));
 
           switch (cull_face_state->mode)
             {
@@ -354,15 +357,15 @@ _cogl_pipeline_flush_color_blend_alpha_depth_state (
               g_assert_not_reached ();
 
             case COGL_PIPELINE_CULL_FACE_MODE_FRONT:
-              GE( ctx, glCullFace (GL_FRONT) );
+              GE (driver, glCullFace (GL_FRONT));
               break;
 
             case COGL_PIPELINE_CULL_FACE_MODE_BACK:
-              GE( ctx, glCullFace (GL_BACK) );
+              GE (driver, glCullFace (GL_BACK));
               break;
 
             case COGL_PIPELINE_CULL_FACE_MODE_BOTH:
-              GE( ctx, glCullFace (GL_FRONT_AND_BACK) );
+              GE (driver, glCullFace (GL_FRONT_AND_BACK));
               break;
             }
 
@@ -372,11 +375,11 @@ _cogl_pipeline_flush_color_blend_alpha_depth_state (
           switch (cull_face_state->front_winding)
             {
             case COGL_WINDING_CLOCKWISE:
-              GE( ctx, glFrontFace (invert_winding ? GL_CCW : GL_CW) );
+              GE (driver, glFrontFace (invert_winding ? GL_CCW : GL_CW));
               break;
 
             case COGL_WINDING_COUNTER_CLOCKWISE:
-              GE( ctx, glFrontFace (invert_winding ? GL_CW : GL_CCW) );
+              GE (driver, glFrontFace (invert_winding ? GL_CW : GL_CCW));
               break;
             }
         }
@@ -385,62 +388,13 @@ _cogl_pipeline_flush_color_blend_alpha_depth_state (
   if (pipeline->real_blend_enable != ctx->gl_blend_enable_cache)
     {
       if (pipeline->real_blend_enable)
-        GE (ctx, glEnable (GL_BLEND));
+        GE (driver, glEnable (GL_BLEND));
       else
-        GE (ctx, glDisable (GL_BLEND));
+        GE (driver, glDisable (GL_BLEND));
       /* XXX: we shouldn't update any other blend state if blending
        * is disabled! */
       ctx->gl_blend_enable_cache = pipeline->real_blend_enable;
     }
-}
-
-static int
-get_max_activateable_texture_units (CoglContext *ctx)
-{
-  if (G_UNLIKELY (ctx->max_activateable_texture_units == -1))
-    {
-      CoglRenderer *renderer = cogl_context_get_renderer (ctx);
-      GLint values[3];
-      int n_values = 0;
-      int i;
-
-#ifdef HAVE_GL
-      if (cogl_renderer_get_driver_id (renderer) != COGL_DRIVER_ID_GLES2)
-        {
-          /* GL_MAX_TEXTURE_COORDS defines the number of texture coordinates
-           * that can be uploaded (but doesn't necessarily relate to how many
-           * texture images can be sampled) */
-          GE (ctx, glGetIntegerv (GL_MAX_TEXTURE_COORDS, values + n_values++));
-
-          GE (ctx, glGetIntegerv (GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS,
-                                  values + n_values++));
-        }
-#endif /* HAVE_GL */
-
-#ifdef HAVE_GLES2
-      if (cogl_renderer_get_driver_id (renderer) == COGL_DRIVER_ID_GLES2)
-        {
-          GE (ctx, glGetIntegerv (GL_MAX_VERTEX_ATTRIBS, values + n_values));
-          /* Two of the vertex attribs need to be used for the position
-             and color */
-          values[n_values++] -= 2;
-
-          GE (ctx, glGetIntegerv (GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS,
-                                  values + n_values++));
-        }
-#endif
-
-      g_assert (n_values <= G_N_ELEMENTS (values) &&
-                n_values > 0);
-
-      /* Use the maximum value */
-      ctx->max_activateable_texture_units = values[0];
-      for (i = 1; i < n_values; i++)
-        ctx->max_activateable_texture_units =
-          MAX (values[i], ctx->max_activateable_texture_units);
-    }
-
-  return ctx->max_activateable_texture_units;
 }
 
 typedef struct
@@ -454,6 +408,9 @@ flush_layers_common_gl_state_cb (CoglPipelineLayer *layer, void *user_data)
 {
   CoglPipelineFlushLayerState *flush_state = user_data;
   CoglContext *ctx = layer->owner->context;
+  CoglDriver *driver = cogl_context_get_driver (ctx);
+  GLint max_activateable_texture_units =
+    cogl_driver_gl_get_max_activateable_texture_units (COGL_DRIVER_GL (driver));
   int unit_index = flush_state->i;
   CoglTextureUnit *unit = _cogl_get_texture_unit (ctx, unit_index);
   unsigned long layers_difference =
@@ -462,7 +419,7 @@ flush_layers_common_gl_state_cb (CoglPipelineLayer *layer, void *user_data)
   /* There may not be enough texture units so we can bail out if
    * that's the case...
    */
-  if (G_UNLIKELY (unit_index >= get_max_activateable_texture_units (ctx)))
+  if (G_UNLIKELY (unit_index >= max_activateable_texture_units))
     {
       static gboolean shown_warning = FALSE;
 
@@ -520,7 +477,7 @@ flush_layers_common_gl_state_cb (CoglPipelineLayer *layer, void *user_data)
           if (unit_index == 1)
             unit->dirty_gl_texture = TRUE;
           else
-            GE (ctx, glBindTexture (gl_target, gl_texture));
+            GE (driver, glBindTexture (gl_target, gl_texture));
           unit->gl_texture = gl_texture;
           unit->gl_target = gl_target;
         }
@@ -533,13 +490,13 @@ flush_layers_common_gl_state_cb (CoglPipelineLayer *layer, void *user_data)
     }
 
   if ((layers_difference & COGL_PIPELINE_LAYER_STATE_SAMPLER) &&
-      _cogl_has_private_feature (ctx, COGL_PRIVATE_FEATURE_SAMPLER_OBJECTS))
+      cogl_driver_has_feature (driver, COGL_FEATURE_ID_SAMPLER_OBJECTS))
     {
       const CoglSamplerCacheEntry *sampler_state;
 
       sampler_state = _cogl_pipeline_layer_get_sampler_state (layer);
 
-      GE( ctx, glBindSampler (unit_index, sampler_state->sampler_object) );
+      GE (driver, glBindSampler (unit_index, sampler_state->sampler_object));
     }
 
   g_object_ref (layer);
@@ -818,6 +775,7 @@ _cogl_pipeline_flush_gl_state (CoglContext *ctx,
                                gboolean unknown_color_alpha)
 {
   CoglPipeline *current_pipeline = ctx->current_pipeline;
+  CoglDriver *driver = cogl_context_get_driver (ctx);
   unsigned long pipelines_difference;
   int n_layers;
   unsigned long *layer_differences;
@@ -1044,7 +1002,7 @@ done:
       attribute =
         _cogl_pipeline_progend_glsl_get_attrib_location (pipeline, name_index);
       if (attribute != -1)
-        GE (ctx,
+        GE (driver,
             glVertexAttrib4f (attribute,
                               cogl_color_get_red (&authority->color),
                               cogl_color_get_green (&authority->color),
@@ -1060,7 +1018,7 @@ done:
 
   /* Handle the fact that OpenGL associates texture filter and wrap
    * modes with the texture objects not the texture units... */
-  if (!_cogl_has_private_feature (ctx, COGL_PRIVATE_FEATURE_SAMPLER_OBJECTS))
+  if (!cogl_driver_has_feature (driver, COGL_FEATURE_ID_SAMPLER_OBJECTS))
     foreach_texture_unit_update_filter_and_wrap_modes (ctx);
 
   /* If this pipeline has more than one layer then we always need
@@ -1075,7 +1033,7 @@ done:
   if (cogl_pipeline_get_n_layers (pipeline) > 1 && unit1->dirty_gl_texture)
     {
       _cogl_set_active_texture_unit (ctx, 1);
-      GE (ctx, glBindTexture (unit1->gl_target, unit1->gl_texture));
+      GE (driver, glBindTexture (unit1->gl_target, unit1->gl_texture));
       unit1->dirty_gl_texture = FALSE;
     }
 

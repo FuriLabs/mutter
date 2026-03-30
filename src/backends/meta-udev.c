@@ -69,12 +69,17 @@ gboolean
 meta_is_udev_device_boot_vga (GUdevDevice *device)
 {
   g_autoptr (GUdevDevice) pci_device = NULL;
+  g_autoptr (GUdevDevice) drm_device = NULL;
 
   pci_device = g_udev_device_get_parent_with_subsystem (device, "pci", NULL);
-  if (!pci_device)
-    return FALSE;
+  if (pci_device && g_udev_device_get_sysfs_attr_as_int (pci_device, "boot_vga") == 1)
+    return TRUE;
 
-  return g_udev_device_get_sysfs_attr_as_int (pci_device, "boot_vga") == 1;
+  drm_device = g_udev_device_get_parent_with_subsystem (device, "drm", NULL);
+  if (drm_device && g_udev_device_get_sysfs_attr_as_int (drm_device, "boot_display") == 1)
+    return TRUE;
+
+  return FALSE;
 }
 
 static gboolean
@@ -103,13 +108,6 @@ meta_is_udev_device_disable_modifiers (GUdevDevice *device)
 {
   return meta_has_udev_device_tag (device,
                                    "mutter-device-disable-kms-modifiers");
-}
-
-gboolean
-meta_is_udev_device_disable_vrr (GUdevDevice *device)
-{
-  return meta_has_udev_device_tag (device,
-                                   "mutter-device-disable-vrr");
 }
 
 gboolean
@@ -268,15 +266,11 @@ meta_udev_backlight_find_for_connector (GList      *devices,
       if (g_strcmp0 (prop, "raw") != 0)
         continue;
 
-      parent = g_udev_device_get_parent (device);
-      if (!parent)
-        continue;
-
       /* Raw backlight interfaces registered by the drm driver will have the
        * drm-connector as their parent.
        */
-      prop = g_udev_device_get_subsystem (parent);
-      if (g_strcmp0 (prop, "drm") != 0)
+      parent = g_udev_device_get_parent_with_subsystem (device, "drm", "drm_connector");
+      if (!parent)
         continue;
 
       /* The drm-connector name is in the form `card[n]-[connector-name]`, so

@@ -80,10 +80,14 @@
 #include "core/workspace-private.h"
 #include "meta/meta-cursor-tracker.h"
 #include "meta/meta-enum-types.h"
+#include "meta/meta-external-constraint.h"
 #include "meta/prefs.h"
 #include "meta/meta-window-config.h"
+#include "wayland/meta-wayland-private.h"
+#include "wayland/meta-wayland-surface-private.h"
+#include "wayland/meta-window-wayland.h"
 
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
 #include "mtk/mtk-x11.h"
 #include "x11/meta-x11-display-private.h"
 #include "x11/meta-x11-frame.h"
@@ -92,19 +96,7 @@
 #include "x11/window-x11-private.h"
 #include "x11/window-x11.h"
 #include "x11/xprops.h"
-#endif
-
-#ifdef HAVE_WAYLAND
-#include "wayland/meta-wayland-private.h"
-#include "wayland/meta-wayland-surface-private.h"
-#include "wayland/meta-window-wayland.h"
-#endif
-
-#ifdef HAVE_X11_CLIENT
 #include "x11/window-x11-private.h"
-#endif
-
-#ifdef HAVE_XWAYLAND
 #include "wayland/meta-window-xwayland.h"
 #endif
 
@@ -191,6 +183,10 @@ typedef struct _MetaWindowPrivate
     gboolean is_queued;
     guint idle_handle_id;
   } auto_maximize;
+
+  unsigned int mapped_inhibit_count;
+
+  GHashTable *external_constraints;
 } MetaWindowPrivate;
 
 G_DEFINE_ABSTRACT_TYPE_WITH_CODE (MetaWindow, meta_window, G_TYPE_OBJECT,
@@ -232,6 +228,8 @@ enum
   PROP_MAPPED,
   PROP_MAIN_MONITOR,
   PROP_TAG,
+  PROP_A11Y_DBUS_NAME,
+  PROP_A11Y_OBJECT_PATH,
 
   PROP_LAST,
 };
@@ -410,8 +408,12 @@ meta_window_finalize (GObject *object)
   g_free (window->gtk_window_object_path);
   g_free (window->gtk_app_menu_object_path);
   g_free (window->gtk_menubar_object_path);
+  g_free (window->a11y_dbus_name);
+  g_free (window->a11y_object_path);
   g_free (window->placement.rule);
   g_free (window->tag);
+
+  g_clear_pointer (&priv->external_constraints, g_hash_table_destroy);
 
   G_OBJECT_CLASS (meta_window_parent_class)->finalize (object);
 }
@@ -519,6 +521,12 @@ meta_window_get_property (GObject         *object,
       break;
     case PROP_TAG:
       g_value_set_string (value, window->tag);
+      break;
+    case PROP_A11Y_DBUS_NAME:
+      g_value_set_string (value, window->a11y_dbus_name);
+      break;
+    case PROP_A11Y_OBJECT_PATH:
+      g_value_set_string (value, window->a11y_object_path);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -702,6 +710,18 @@ meta_window_class_init (MetaWindowClass *klass)
                          G_PARAM_READABLE | G_PARAM_EXPLICIT_NOTIFY |
                          G_PARAM_STATIC_STRINGS);
 
+  obj_props[PROP_A11Y_DBUS_NAME] =
+    g_param_spec_string ("a11y-dbus-name", NULL, NULL,
+                         NULL,
+                         G_PARAM_READABLE | G_PARAM_EXPLICIT_NOTIFY |
+                         G_PARAM_STATIC_STRINGS);
+
+  obj_props[PROP_A11Y_OBJECT_PATH] =
+    g_param_spec_string ("a11y-object-path", NULL, NULL,
+                         NULL,
+                         G_PARAM_READABLE | G_PARAM_EXPLICIT_NOTIFY |
+                         G_PARAM_STATIC_STRINGS);
+
   g_object_class_install_properties (object_class, PROP_LAST, obj_props);
 
   window_signals[WORKSPACE_CHANGED] =
@@ -835,6 +855,8 @@ meta_window_init (MetaWindow *window)
   window->stamp = next_window_stamp++;
   meta_prefs_add_listener (prefs_changed_callback, window);
   window->is_alive = TRUE;
+  priv->external_constraints =
+    g_hash_table_new_full (NULL, NULL, g_object_unref, NULL);
 }
 
 static gboolean
@@ -913,16 +935,14 @@ meta_window_should_attach_to_parent (MetaWindow *window)
 static gboolean
 client_window_should_be_mapped (MetaWindow *window)
 {
-#ifdef HAVE_WAYLAND
   if (window->client_type == META_WINDOW_CLIENT_TYPE_WAYLAND)
     {
       MetaWaylandSurface *surface = meta_window_get_wayland_surface (window);
       if (!meta_wayland_surface_get_buffer (surface))
         return FALSE;
     }
-#endif
 
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   if (window->client_type == META_WINDOW_CLIENT_TYPE_X11 &&
       window->decorated && !meta_window_x11_is_ssd (window))
     return FALSE;
@@ -1042,7 +1062,7 @@ meta_window_update_desc (MetaWindow *window)
 {
   g_clear_pointer (&window->desc, g_free);
 
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   if (window->client_type == META_WINDOW_CLIENT_TYPE_X11)
     {
       window->desc = g_strdup_printf ("0x%lx (%s)",
@@ -1507,7 +1527,9 @@ meta_window_unmanage (MetaWindow  *window,
 {
   MetaWindowPrivate *priv = meta_window_get_instance_private (window);
   MetaWorkspaceManager *workspace_manager = window->display->workspace_manager;
+#ifndef G_DISABLE_ASSERT
   GList *tmp;
+#endif
 
   meta_topic (META_DEBUG_WINDOW_STATE, "Unmanaging %s", window->desc);
   window->unmanaging = TRUE;
@@ -1553,7 +1575,7 @@ meta_window_unmanage (MetaWindow  *window,
   if (meta_prefs_get_workspaces_only_on_primary ())
     meta_window_on_all_workspaces_changed (window);
 
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   if (meta_window_is_fullscreen (window))
     {
       MetaGroup *group = NULL;
@@ -1576,7 +1598,7 @@ meta_window_unmanage (MetaWindow  *window,
 
   /* safe to do this early as group.c won't re-add to the
    * group if window->unmanaging */
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   if (window->client_type == META_WINDOW_CLIENT_TYPE_X11)
     meta_window_x11_shutdown_group (window);
 #endif
@@ -1629,7 +1651,7 @@ meta_window_unmanage (MetaWindow  *window,
 
   g_assert (window->workspace == NULL);
 
-#ifndef G_DISABLE_CHECKS
+#ifndef G_DISABLE_ASSERT
   tmp = workspace_manager->workspaces;
   while (tmp != NULL)
     {
@@ -1681,7 +1703,7 @@ meta_window_unmanage (MetaWindow  *window,
 static void
 set_wm_state (MetaWindow *window)
 {
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   if (window->client_type == META_WINDOW_CLIENT_TYPE_X11)
     meta_window_x11_set_wm_state (window);
 #endif
@@ -1690,7 +1712,7 @@ set_wm_state (MetaWindow *window)
 static void
 set_net_wm_state (MetaWindow *window)
 {
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   if (window->client_type == META_WINDOW_CLIENT_TYPE_X11)
     meta_window_x11_set_net_wm_state (window);
 #endif
@@ -1699,7 +1721,7 @@ set_net_wm_state (MetaWindow *window)
 static void
 set_allowed_actions_hint (MetaWindow *window)
 {
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   if (window->client_type == META_WINDOW_CLIENT_TYPE_X11)
     meta_window_x11_set_allowed_actions_hint (window);
 #endif
@@ -1757,6 +1779,7 @@ meta_window_showing_on_its_workspace (MetaWindow *window)
   gboolean showing;
   gboolean is_desktop_or_dock;
   MetaWorkspace *workspace_of_window;
+  MetaWindowPrivate *priv = meta_window_get_instance_private (window);
 
   showing = TRUE;
 
@@ -1764,7 +1787,11 @@ meta_window_showing_on_its_workspace (MetaWindow *window)
   if (window->minimized)
     showing = FALSE;
 
-  /* 2. See if we're in "show desktop" mode */
+  /* 2. See if mapping state is inhibited */
+  if (priv->mapped_inhibit_count > 0)
+    showing = FALSE;
+
+  /* 3. See if we're in "show desktop" mode */
   is_desktop_or_dock = FALSE;
   is_desktop_or_dock_foreach (window,
                               &is_desktop_or_dock);
@@ -1802,14 +1829,9 @@ meta_window_showing_on_its_workspace (MetaWindow *window)
 static gboolean
 window_has_buffer (MetaWindow *window)
 {
-#ifdef HAVE_WAYLAND
-  if (meta_is_wayland_compositor ())
-    {
-      MetaWaylandSurface *surface = meta_window_get_wayland_surface (window);
-      if (!surface || !meta_wayland_surface_get_buffer (surface))
-        return FALSE;
-    }
-#endif
+  MetaWaylandSurface *surface = meta_window_get_wayland_surface (window);
+  if (!surface || !meta_wayland_surface_get_buffer (surface))
+    return FALSE;
 
   return TRUE;
 }
@@ -1835,13 +1857,11 @@ meta_window_is_showable (MetaWindow *window)
   if (should_show_be_postponed (window))
     return FALSE;
 
-#ifdef HAVE_WAYLAND
   if (window->client_type == META_WINDOW_CLIENT_TYPE_WAYLAND &&
       !window_has_buffer (window))
     return FALSE;
-#endif
 
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   if (window->client_type == META_WINDOW_CLIENT_TYPE_X11 &&
       window->decorated && !meta_window_x11_is_ssd (window))
     return FALSE;
@@ -3382,23 +3402,6 @@ unmaximize_window_before_freeing (MetaWindow        *window)
       meta_window_config_set_rect (window->config, window->saved_rect);
       set_net_wm_state (window);
     }
-#ifdef HAVE_WAYLAND
-  else if (!meta_is_wayland_compositor ())
-    {
-      /* Do NOT update net_wm_state: this screen is closing,
-       * it likely will be managed by another window manager
-       * that will need the current _NET_WM_STATE atoms.
-       * Moreover, it will need to know the unmaximized geometry,
-       * therefore move_resize the window to saved_rect here
-       * before closing it. */
-      meta_window_move_resize_frame (window,
-                                     FALSE,
-                                     window->saved_rect.x,
-                                     window->saved_rect.y,
-                                     window->saved_rect.width,
-                                     window->saved_rect.height);
-    }
-#endif
 }
 
 void
@@ -4059,10 +4062,12 @@ meta_window_find_monitor_from_id (MetaWindow *window)
 void
 meta_window_update_for_monitors_changed (MetaWindow *window)
 {
+#ifndef G_DISABLE_ASSERT
   MetaContext *context = meta_display_get_context (window->display);
   MetaBackend *backend = meta_context_get_backend (context);
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (backend);
+#endif
   const MetaLogicalMonitor *old, *new;
 
   if (meta_window_has_fullscreen_monitors (window))
@@ -4571,17 +4576,10 @@ meta_window_move_resize_frame (MetaWindow  *window,
   meta_window_move_resize (window, flags, rect);
 }
 
-/**
- * meta_window_move_to_monitor:
- * @window: a #MetaWindow
- * @monitor: desired monitor index
- *
- * Moves the window to the monitor with index @monitor, keeping
- * the relative position of the window's top left corner.
- */
 void
-meta_window_move_to_monitor (MetaWindow  *window,
-                             int          monitor)
+meta_window_move_to_monitor_internal (MetaWindow          *window,
+                                      MetaMoveResizeFlags  flags,
+                                      int                  monitor)
 {
   MtkRectangle old_area, new_area;
 
@@ -4597,7 +4595,7 @@ meta_window_move_to_monitor (MetaWindow  *window,
 
   if (meta_window_is_hidden (window))
     {
-      meta_window_move_between_rects (window, 0, NULL, &new_area);
+      meta_window_move_between_rects (window, flags, NULL, &new_area);
     }
   else
     {
@@ -4613,7 +4611,7 @@ meta_window_move_to_monitor (MetaWindow  *window,
                                           META_SIZE_CHANGE_MONITOR_MOVE,
                                           &old_frame_rect, &old_buffer_rect);
 
-      meta_window_move_between_rects (window, 0, &old_area, &new_area);
+      meta_window_move_between_rects (window, flags, &old_area, &new_area);
     }
 
   g_clear_pointer (&window->preferred_logical_monitor,
@@ -4623,6 +4621,21 @@ meta_window_move_to_monitor (MetaWindow  *window,
 
   if (meta_window_is_fullscreen (window) || window->override_redirect)
     meta_display_queue_check_fullscreen (window->display);
+}
+
+/**
+ * meta_window_move_to_monitor:
+ * @window: a #MetaWindow
+ * @monitor: desired monitor index
+ *
+ * Moves the window to the monitor with index @monitor, keeping
+ * the relative position of the window's top left corner.
+ */
+void
+meta_window_move_to_monitor (MetaWindow  *window,
+                             int          monitor)
+{
+  meta_window_move_to_monitor_internal (window, 0, monitor);
 }
 
 void
@@ -4691,7 +4704,7 @@ meta_window_client_rect_to_frame_rect (MetaWindow   *window,
                                        MtkRectangle *client_rect,
                                        MtkRectangle *frame_rect)
 {
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   MetaFrameBorders borders;
 #endif
 
@@ -4704,7 +4717,7 @@ meta_window_client_rect_to_frame_rect (MetaWindow   *window,
    * constraints.c:get_size_limits() and not something that we provide
    * in other locations or document.
    */
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   if (window->client_type == META_WINDOW_CLIENT_TYPE_X11 &&
       meta_window_x11_get_frame_borders (window, &borders))
     {
@@ -4743,7 +4756,7 @@ meta_window_frame_rect_to_client_rect (MetaWindow   *window,
                                        MtkRectangle *frame_rect,
                                        MtkRectangle *client_rect)
 {
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   MetaFrameBorders borders;
 #endif
 
@@ -4752,7 +4765,7 @@ meta_window_frame_rect_to_client_rect (MetaWindow   *window,
 
   *client_rect = *frame_rect;
 
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   if (window->client_type == META_WINDOW_CLIENT_TYPE_X11 &&
       meta_window_x11_get_frame_borders (window, &borders))
     {
@@ -4804,7 +4817,7 @@ meta_window_get_client_area_rect (MetaWindow   *window,
                                   MtkRectangle *rect)
 {
   MetaFrameBorders borders = { 0, };
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   if (window->client_type == META_WINDOW_CLIENT_TYPE_X11)
     meta_window_x11_get_frame_borders (window, &borders);
 #endif
@@ -4827,7 +4840,7 @@ meta_window_get_client_area_rect (MetaWindow   *window,
 const char*
 meta_window_get_startup_id (MetaWindow *window)
 {
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   if (window->startup_id == NULL && window->client_type == META_WINDOW_CLIENT_TYPE_X11)
     {
       MetaGroup *group;
@@ -4883,13 +4896,11 @@ get_modal_transient (MetaWindow *window)
 static gboolean
 meta_window_transient_can_focus (MetaWindow *window)
 {
-#ifdef HAVE_WAYLAND
   if (window->client_type == META_WINDOW_CLIENT_TYPE_WAYLAND)
     {
       MetaWaylandSurface *surface = meta_window_get_wayland_surface (window);
       return meta_wayland_surface_get_buffer (surface) != NULL;
     }
-#endif
 
   return TRUE;
 }
@@ -5757,7 +5768,7 @@ meta_window_type_changed (MetaWindow *window)
   if (!window->override_redirect)
     set_net_wm_state (window);
 
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   if (window->client_type == META_WINDOW_CLIENT_TYPE_X11)
     {
       /* Update frame */
@@ -5804,7 +5815,7 @@ meta_window_set_type (MetaWindow     *window,
 void
 meta_window_frame_size_changed (MetaWindow *window)
 {
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   MetaFrame *frame;
 
   if (window->client_type == META_WINDOW_CLIENT_TYPE_X11)
@@ -6378,7 +6389,7 @@ meta_window_get_default_layer (MetaWindow *window)
 void
 meta_window_update_layer (MetaWindow *window)
 {
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   MetaGroup *group = NULL;
 
   if (window->client_type == META_WINDOW_CLIENT_TYPE_X11)
@@ -7619,9 +7630,9 @@ window_has_pointer_wayland (MetaWindow *window)
 gboolean
 meta_window_has_pointer (MetaWindow *window)
 {
-  if (meta_is_wayland_compositor ())
+  if (meta_window_get_client_type (window) == META_WINDOW_CLIENT_TYPE_WAYLAND)
     return window_has_pointer_wayland (window);
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   else
     return meta_window_x11_has_pointer (window);
 #else
@@ -7660,14 +7671,7 @@ meta_window_handle_ungrabbed_event (MetaWindow         *window,
     return CLUTTER_EVENT_PROPAGATE;
 
   if (event_type == CLUTTER_TOUCH_BEGIN)
-    {
-      ClutterEventSequence *sequence;
-
-      button = 1;
-      sequence = clutter_event_get_event_sequence (event);
-      if (!meta_display_is_pointer_emulating_sequence (window->display, sequence))
-        return CLUTTER_EVENT_PROPAGATE;
-    }
+    button = CLUTTER_BUTTON_PRIMARY;
   else
     button = clutter_event_get_button (event);
 
@@ -7942,7 +7946,6 @@ meta_window_calculate_layer (MetaWindow *window)
   return META_WINDOW_GET_CLASS (window)->calculate_layer (window);
 }
 
-#ifdef HAVE_WAYLAND
 MetaWaylandSurface *
 meta_window_get_wayland_surface (MetaWindow *window)
 {
@@ -7951,7 +7954,6 @@ meta_window_get_wayland_surface (MetaWindow *window)
 
   return klass->get_wayland_surface (window);
 }
-#endif
 
 /**
  * meta_window_get_id:
@@ -8424,10 +8426,9 @@ meta_window_stage_to_protocol_rect (MetaWindow         *window,
                             stage_rect->x, stage_rect->y,
                             &protocol_rect->x, &protocol_rect->y,
                             MTK_ROUNDING_STRATEGY_SHRINK);
-  klass->stage_to_protocol (window,
-                            stage_rect->width, stage_rect->height,
-                            &protocol_rect->width, &protocol_rect->height,
-                            MTK_ROUNDING_STRATEGY_GROW);
+  klass->stage_to_protocol_size (window,
+                                 stage_rect->width, stage_rect->height,
+                                 &protocol_rect->width, &protocol_rect->height);
 }
 
 /**
@@ -8456,6 +8457,30 @@ meta_window_stage_to_protocol_point (MetaWindow *window,
 }
 
 /**
+ * meta_window_stage_to_protocol_size:
+ * @window: A #MetaWindow
+ * @stage_w: width in stage coordinate space
+ * @stage_h: height in stage coordinate space
+ * @protocol_w: (out): width in protocol coordinate space
+ * @protocol_h: (out): height in protocol coordinate space
+ *
+ * Transform the size from stage coordinates to protocol coordinates
+ */
+void
+meta_window_stage_to_protocol_size (MetaWindow *window,
+                                    int         stage_w,
+                                    int         stage_h,
+                                    int        *protocol_w,
+                                    int        *protocol_h)
+{
+  MetaWindowClass *klass = META_WINDOW_GET_CLASS (window);
+
+  klass->stage_to_protocol_size (window,
+                                 stage_w, stage_h,
+                                 protocol_w, protocol_h);
+}
+
+/**
  * meta_window_protocol_to_stage_rect:
  * @window: A #MetaWindow
  * @protocol_rect: rectangle in protocol coordinate space
@@ -8475,10 +8500,9 @@ meta_window_protocol_to_stage_rect (MetaWindow         *window,
                             protocol_rect->x, protocol_rect->y,
                             &stage_rect->x, &stage_rect->y,
                             MTK_ROUNDING_STRATEGY_SHRINK);
-  klass->protocol_to_stage (window,
-                            protocol_rect->width, protocol_rect->height,
-                            &stage_rect->width, &stage_rect->height,
-                            MTK_ROUNDING_STRATEGY_GROW);
+  klass->protocol_to_stage_size (window,
+                                 protocol_rect->width, protocol_rect->height,
+                                 &stage_rect->width, &stage_rect->height);
 }
 
 /**
@@ -8509,6 +8533,31 @@ meta_window_protocol_to_stage_point (MetaWindow          *window,
 }
 
 /**
+ * meta_window_protocol_to_stage_size:
+ * @window: A #MetaWindow
+ * @protocol_w: width in protocol coordinate space
+ * @protocol_h: height in protocol coordinate space
+ * @stage_w: (out): width in stage coordinate space
+ * @stage_h: (out): height in stage coordinate space
+ *
+ * Transform the size from protocol coordinates to coordinates expected
+ * by the stage and internal window management logic.
+ */
+void
+meta_window_protocol_to_stage_size (MetaWindow *window,
+                                    int         protocol_w,
+                                    int         protocol_h,
+                                    int        *stage_w,
+                                    int        *stage_h)
+{
+  MetaWindowClass *klass = META_WINDOW_GET_CLASS (window);
+
+  klass->protocol_to_stage_size (window,
+                                 protocol_w, protocol_h,
+                                 stage_w, stage_h);
+}
+
+/**
  * meta_window_get_client_content_rect:
  * @window: A #MetaWindow
  * @rect: (out): pointer to an allocated #MtkRectangle
@@ -8522,7 +8571,7 @@ meta_window_get_client_content_rect (MetaWindow   *window,
 {
   meta_window_get_frame_rect (window, rect);
 
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
   if (window->client_type == META_WINDOW_CLIENT_TYPE_X11 &&
       meta_window_x11_is_ssd (window))
     meta_window_frame_rect_to_client_rect (window, rect, rect);
@@ -8652,4 +8701,237 @@ meta_window_show_in_window_list (MetaWindow *window)
 
   window->skip_from_window_list = FALSE;
   meta_window_recalc_features (window);
+}
+
+/**
+ * meta_window_inhibit_mapped
+ * @window: A #MetaWindow
+ *
+ * Inhibits the mapped state of the window.
+ */
+void
+meta_window_inhibit_mapped (MetaWindow *window)
+{
+  MetaWindowPrivate *priv = meta_window_get_instance_private (window);
+
+  if (++priv->mapped_inhibit_count == 1)
+    meta_window_queue (window, META_QUEUE_CALC_SHOWING);
+}
+
+/**
+ * meta_window_uninhibit_mapped
+ * @window: A #MetaWindow
+ *
+ * Uninhibits the mapped state of the window.
+ */
+void
+meta_window_uninhibit_mapped (MetaWindow *window)
+{
+  MetaWindowPrivate *priv = meta_window_get_instance_private (window);
+
+  g_return_if_fail (priv->mapped_inhibit_count > 0);
+
+  if (--priv->mapped_inhibit_count == 0)
+    meta_window_queue (window, META_QUEUE_CALC_SHOWING);
+}
+
+/**
+ * meta_window_is_mapped_inhibited
+ * @window: A #MetaWindow
+ *
+ * Returns whether the mapped state of the window is inhibited.
+ */
+gboolean
+meta_window_is_mapped_inhibited (MetaWindow *window)
+{
+  MetaWindowPrivate *priv = meta_window_get_instance_private (window);
+
+  return priv->mapped_inhibit_count > 0;
+}
+
+/**
+ * meta_window_add_external_constraint:
+ * @window: a #MetaWindow
+ * @constraint: a #MetaExternalConstraint
+ *
+ * Adds an external constraint to the window.
+ *
+ * The constraint object is referenced by the window, so the caller should
+ * release its own reference when no longer needed.
+ */
+void
+meta_window_add_external_constraint (MetaWindow             *window,
+                                     MetaExternalConstraint *constraint)
+{
+  MetaWindowPrivate *priv;
+
+  g_return_if_fail (META_IS_WINDOW (window));
+  g_return_if_fail (META_IS_EXTERNAL_CONSTRAINT (constraint));
+
+  priv = meta_window_get_instance_private (window);
+  if (g_hash_table_contains (priv->external_constraints, constraint))
+    {
+      g_warning ("Not adding external window constraint, already present");
+      return;
+    }
+
+  g_hash_table_add (priv->external_constraints, g_object_ref (constraint));
+}
+
+/**
+ * meta_window_remove_external_constraint:
+ * @window: a #MetaWindow
+ * @constraint: a #MetaExternalConstraint
+ *
+ * Removes a previously added external constraint from the window.
+ */
+void
+meta_window_remove_external_constraint (MetaWindow             *window,
+                                        MetaExternalConstraint *constraint)
+{
+  MetaWindowPrivate *priv;
+
+  g_return_if_fail (META_IS_WINDOW (window));
+  g_return_if_fail (META_IS_EXTERNAL_CONSTRAINT (constraint));
+
+  priv = meta_window_get_instance_private (window);
+  g_hash_table_remove (priv->external_constraints, constraint);
+}
+
+gboolean
+meta_window_apply_external_constraints (MetaWindow                  *window,
+                                        MetaGravity                  resize_gravity,
+                                        MtkRectangle                *constrained_rect,
+                                        MetaExternalConstraintFlags  constraint_flags)
+{
+  MetaWindowPrivate *priv = meta_window_get_instance_private (window);
+  GHashTableIter iter;
+  gpointer constraint_ptr;
+  gboolean constraint_satisfied = TRUE;
+
+  g_return_val_if_fail (META_IS_WINDOW (window), TRUE);
+
+  g_hash_table_iter_init (&iter, priv->external_constraints);
+  while (g_hash_table_iter_next (&iter, &constraint_ptr, NULL))
+    {
+      MetaExternalConstraint *constraint = META_EXTERNAL_CONSTRAINT (constraint_ptr);
+      MetaExternalConstraintInfo constraint_info = {
+        .new_rect = constrained_rect,
+        .flags = constraint_flags,
+        .resize_gravity = resize_gravity,
+      };
+
+      constraint_satisfied |= meta_external_constraint_constrain (constraint,
+                                                                  window,
+                                                                  &constraint_info);
+    }
+
+  return constraint_satisfied;
+}
+
+void
+meta_window_set_a11y_properties (MetaWindow *window,
+                                 const char *a11y_dbus_name,
+                                 const char *toplevel_object_path)
+{
+  if (g_set_str (&window->a11y_dbus_name, a11y_dbus_name))
+    {
+      g_object_notify_by_pspec (G_OBJECT (window),
+                                obj_props[PROP_A11Y_DBUS_NAME]);
+    }
+
+  if (g_set_str (&window->a11y_object_path, toplevel_object_path))
+    {
+      g_object_notify_by_pspec (G_OBJECT (window),
+                                obj_props[PROP_A11Y_OBJECT_PATH]);
+    }
+}
+
+gboolean
+meta_window_get_a11y_properties (MetaWindow  *window,
+                                 const char **a11y_dbus_name,
+                                 const char **toplevel_object_path)
+{
+  if (a11y_dbus_name)
+    *a11y_dbus_name = window->a11y_dbus_name;
+  if (toplevel_object_path)
+    *toplevel_object_path = window->a11y_object_path;
+
+  return window->a11y_dbus_name && window->a11y_object_path;
+}
+
+/**
+ * meta_window_get_min_size:
+ * @window: a #MetaWindow
+ * @width: (out) (optional): location to store the minimum width
+ * @height: (out) (optional): location to store the minimum height
+ *
+ * Gets the minimum size allowed for this window, if set by the client
+ * application, or to 0 if not.
+ *
+ * Returns %TRUE if the minimum size is known.
+ */
+gboolean
+meta_window_get_min_size (MetaWindow *window,
+                          int        *width,
+                          int        *height)
+{
+  g_return_val_if_fail (META_IS_WINDOW (window), FALSE);
+
+  if (window->size_hints.flags & META_SIZE_HINTS_PROGRAM_MIN_SIZE)
+    {
+      if (width)
+        *width = window->size_hints.min_width;
+      if (height)
+        *height = window->size_hints.min_height;
+
+      return TRUE;
+    }
+  else
+    {
+      if (width)
+        *width = 0;
+      if (height)
+        *height = 0;
+
+      return FALSE;
+    }
+}
+
+/**
+ * meta_window_get_max_size:
+ * @window: a #MetaWindow
+ * @width: (out) (optional): location to store the maximum width
+ * @height: (out) (optional): location to store the maximum height
+ *
+ * Gets the maximum size allowed for this window, if set by the client
+ * application, or to 0 if not.
+ *
+ * Returns %TRUE if the maximum size is known.
+ */
+gboolean
+meta_window_get_max_size (MetaWindow *window,
+                          int        *width,
+                          int        *height)
+{
+  g_return_val_if_fail (META_IS_WINDOW (window), FALSE);
+
+  if (window->size_hints.flags & META_SIZE_HINTS_PROGRAM_MAX_SIZE)
+    {
+      if (width)
+        *width = window->size_hints.max_width;
+      if (height)
+        *height = window->size_hints.max_height;
+
+      return TRUE;
+    }
+  else
+    {
+      if (width)
+        *width = 0;
+      if (height)
+        *height = 0;
+
+      return FALSE;
+    }
 }

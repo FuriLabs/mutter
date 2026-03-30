@@ -89,21 +89,6 @@ COGL_EXPORT
 int64_t cogl_frame_info_get_presentation_time_us (CoglFrameInfo *info);
 
 /**
- * cogl_frame_info_get_target_presentation_time_us:
- * @info: a #CoglFrameInfo object
- *
- * Gets the target presentation time for the frame. This is the time at
- * which the frame was expected to became visible to the user.
- *
- * The target presentation time measured in microseconds, is based on
- * CLOCK_MONOTONIC.
- *
- * Return value: the presentation time for the frame if available, or 0
- */
-COGL_EXPORT
-int64_t cogl_frame_info_get_target_presentation_time_us (CoglFrameInfo *info);
-
-/**
  * cogl_frame_info_get_refresh_rate:
  * @info: a #CoglFrameInfo object
  *
@@ -120,6 +105,9 @@ int64_t cogl_frame_info_get_target_presentation_time_us (CoglFrameInfo *info);
  */
 COGL_EXPORT
 float cogl_frame_info_get_refresh_rate (CoglFrameInfo *info);
+
+COGL_EXPORT
+int64_t cogl_frame_info_get_global_frame_counter (CoglFrameInfo *info);
 
 COGL_EXPORT
 int64_t cogl_frame_info_get_view_frame_counter (CoglFrameInfo *info);
@@ -140,12 +128,6 @@ COGL_EXPORT
 unsigned int cogl_frame_info_get_sequence (CoglFrameInfo *info);
 
 COGL_EXPORT
-gboolean cogl_frame_info_has_valid_gpu_rendering_duration (CoglFrameInfo *info);
-
-COGL_EXPORT
-int64_t cogl_frame_info_get_rendering_duration_ns (CoglFrameInfo *info);
-
-COGL_EXPORT
-int64_t cogl_frame_info_get_time_before_buffer_swap_us (CoglFrameInfo *info);
+int64_t cogl_frame_info_get_kms_ready_time_us (CoglFrameInfo *info);
 
 G_END_DECLS

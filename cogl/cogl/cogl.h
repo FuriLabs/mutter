@@ -48,6 +48,7 @@
 #include "cogl/cogl-bitmap.h"
 #include "cogl/cogl-color.h"
 #include "cogl/cogl-dma-buf-handle.h"
+#include "cogl/cogl-driver.h"
 #include "cogl/cogl-matrix-stack.h"
 #include "cogl/cogl-offscreen.h"
 #include "cogl/cogl-pixel-format.h"
@@ -90,6 +91,10 @@
 #include "cogl/cogl-trace.h"
 #include "cogl/cogl-scanout.h"
 #include "cogl/cogl-graphene.h"
+
+#include "cogl/winsys/cogl-onscreen-egl.h"
+#include "cogl/winsys/cogl-winsys.h"
+#include "cogl/winsys/cogl-winsys-egl.h"
 
 /* The gobject introspection scanner seems to parse public headers in
  * isolation which means we need to be extra careful about how we

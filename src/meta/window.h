@@ -460,3 +460,30 @@ void meta_window_set_maximize_flags   (MetaWindow        *window,
 META_EXPORT
 void meta_window_set_unmaximize_flags (MetaWindow        *window,
                                        MetaMaximizeFlags  directions);
+
+META_EXPORT
+void meta_window_inhibit_mapped (MetaWindow *window);
+
+META_EXPORT
+void meta_window_uninhibit_mapped (MetaWindow *window);
+
+META_EXPORT
+gboolean meta_window_is_mapped_inhibited (MetaWindow *window);
+
+META_EXPORT
+void meta_window_add_external_constraint    (MetaWindow             *window,
+                                             MetaExternalConstraint *constraint);
+
+META_EXPORT
+void meta_window_remove_external_constraint (MetaWindow             *window,
+                                             MetaExternalConstraint *constraint);
+
+META_EXPORT
+gboolean meta_window_get_min_size (MetaWindow *window,
+                                   int        *width,
+                                   int        *height);
+
+META_EXPORT
+gboolean meta_window_get_max_size (MetaWindow *window,
+                                   int        *width,
+                                   int        *height);

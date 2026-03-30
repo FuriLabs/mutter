@@ -74,7 +74,7 @@ meta_screen_cast_get_preferred_modifier (MetaScreenCast  *screen_cast,
   CoglRenderer *cogl_renderer =
     cogl_context_get_renderer (cogl_context);
   CoglRendererEGL *cogl_renderer_egl =
-    cogl_renderer_get_winsys (cogl_renderer);
+    cogl_renderer_get_winsys_data (cogl_renderer);
   MetaRendererNativeGpuData *renderer_gpu_data =
     cogl_renderer_egl->platform;
   MetaRenderDevice *render_device =
@@ -279,7 +279,7 @@ handle_create_session (MetaDBusScreenCast    *skeleton,
 {
   MetaDbusSessionManager *session_manager =
     META_DBUS_SESSION_MANAGER (screen_cast);
-  char *remote_desktop_session_id = NULL;
+  const char *remote_desktop_session_id = NULL;
   MetaRemoteDesktopSession *remote_desktop_session = NULL;
   MetaDbusSession *dbus_session;
   MetaScreenCastSession *session;
@@ -287,7 +287,7 @@ handle_create_session (MetaDBusScreenCast    *skeleton,
   gboolean disable_animations;
   const char *session_path;
 
-  g_variant_lookup (properties, "remote-desktop-session-id", "s",
+  g_variant_lookup (properties, "remote-desktop-session-id", "&s",
                     &remote_desktop_session_id);
 
   if (remote_desktop_session_id)

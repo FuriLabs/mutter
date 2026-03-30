@@ -67,6 +67,7 @@ G_DEFINE_TYPE_WITH_CODE (MetaServiceChannel, meta_service_channel,
 static void
 meta_service_channel_data_free (MetaServiceChannelData *data)
 {
+  g_clear_object (&data->invocation);
   g_clear_object (&data->service_channel);
   g_clear_pointer (&data->options, g_variant_unref);
   g_free (data);
@@ -213,21 +214,10 @@ handle_open_wayland_service_connection (MetaDBusServiceChannel *object,
                                         GUnixFDList            *in_fd_list,
                                         uint32_t                service_client_type)
 {
-#ifdef HAVE_WAYLAND
   MetaServiceChannel *service_channel = META_SERVICE_CHANNEL (object);
   GDBusConnection *connection;
   const char *sender;
   g_autoptr (MetaServiceChannelData) data = NULL;
-
-  if (meta_context_get_compositor_type (service_channel->context) !=
-      META_COMPOSITOR_TYPE_WAYLAND)
-    {
-      g_dbus_method_invocation_return_error (invocation,
-                                             G_DBUS_ERROR,
-                                             G_DBUS_ERROR_NOT_SUPPORTED,
-                                             "Not a Wayland compositor");
-      return G_DBUS_METHOD_INVOCATION_HANDLED;
-    }
 
   if (!verify_service_client_type (service_client_type))
     {
@@ -253,13 +243,6 @@ handle_open_wayland_service_connection (MetaDBusServiceChannel *object,
                                            g_steal_pointer (&data));
 
   return G_DBUS_METHOD_INVOCATION_HANDLED;
-#else /* HAVE_WAYLAND */
-  g_dbus_method_invocation_return_error (invocation,
-                                         G_DBUS_ERROR,
-                                         G_DBUS_ERROR_NOT_SUPPORTED,
-                                         "Wayland not supported");
-  return G_DBUS_METHOD_INVOCATION_HANDLED;
-#endif /* HAVE_WAYLAND */
 }
 
 static void
@@ -327,21 +310,10 @@ handle_open_wayland_connection (MetaDBusServiceChannel *object,
                                 GUnixFDList            *in_fd_list,
                                 GVariant               *arg_options)
 {
-#ifdef HAVE_WAYLAND
   MetaServiceChannel *service_channel = META_SERVICE_CHANNEL (object);
   GDBusConnection *connection;
   const char *sender;
   g_autoptr (MetaServiceChannelData) data = NULL;
-
-  if (meta_context_get_compositor_type (service_channel->context) !=
-      META_COMPOSITOR_TYPE_WAYLAND)
-    {
-      g_dbus_method_invocation_return_error (invocation,
-                                             G_DBUS_ERROR,
-                                             G_DBUS_ERROR_NOT_SUPPORTED,
-                                             "Not a Wayland compositor");
-      return G_DBUS_METHOD_INVOCATION_HANDLED;
-    }
 
   connection = g_dbus_method_invocation_get_connection (invocation);
   sender = g_dbus_method_invocation_get_sender (invocation);
@@ -358,13 +330,6 @@ handle_open_wayland_connection (MetaDBusServiceChannel *object,
                                            g_steal_pointer (&data));
 
   return G_DBUS_METHOD_INVOCATION_HANDLED;
-#else /* HAVE_WAYLAND */
-  g_dbus_method_invocation_return_error (invocation,
-                                         G_DBUS_ERROR,
-                                         G_DBUS_ERROR_NOT_SUPPORTED,
-                                         "Wayland not supported");
-  return G_DBUS_METHOD_INVOCATION_HANDLED;
-#endif /* HAVE_WAYLAND */
 }
 
 static void

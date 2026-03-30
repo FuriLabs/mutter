@@ -34,8 +34,8 @@
 #include "cogl/cogl-context-private.h"
 #include "cogl/cogl-framebuffer-private.h"
 #include "cogl/cogl-offscreen-private.h"
+#include "cogl/driver/gl/cogl-driver-gl-private.h"
 #include "cogl/driver/gl/cogl-texture-gl-private.h"
-#include "cogl/driver/gl/cogl-util-gl-private.h"
 
 typedef struct _CoglGlFbo
 {
@@ -59,10 +59,11 @@ G_DEFINE_FINAL_TYPE (CoglGlFramebufferFbo, cogl_gl_framebuffer_fbo,
 static gboolean
 ensure_bits_initialized (CoglGlFramebufferFbo *gl_framebuffer_fbo)
 {
-  CoglFramebufferDriver *driver = COGL_FRAMEBUFFER_DRIVER (gl_framebuffer_fbo);
+  CoglFramebufferDriver *fb_driver = COGL_FRAMEBUFFER_DRIVER (gl_framebuffer_fbo);
   CoglFramebuffer *framebuffer =
-    cogl_framebuffer_driver_get_framebuffer (driver);
+    cogl_framebuffer_driver_get_framebuffer (fb_driver);
   CoglContext *ctx = cogl_framebuffer_get_context (framebuffer);
+  CoglDriver *driver = cogl_context_get_driver (ctx);
   CoglFramebufferBits *bits = &gl_framebuffer_fbo->bits;
 
   if (!gl_framebuffer_fbo->dirty_bitmasks)
@@ -73,7 +74,7 @@ ensure_bits_initialized (CoglGlFramebufferFbo *gl_framebuffer_fbo)
                                         framebuffer,
                                         COGL_FRAMEBUFFER_STATE_BIND);
 
-  if (_cogl_has_private_feature (ctx, COGL_PRIVATE_FEATURE_QUERY_FRAMEBUFFER_BITS))
+  if (cogl_driver_has_feature (driver, COGL_FEATURE_ID_QUERY_FRAMEBUFFER_BITS))
     {
       const struct {
         GLenum attachment, pname;
@@ -117,10 +118,10 @@ ensure_bits_initialized (CoglGlFramebufferFbo *gl_framebuffer_fbo)
           int *value =
             (int *) ((uint8_t *) bits + params[i].offset);
 
-          GE (ctx, glGetFramebufferAttachmentParameteriv (GL_FRAMEBUFFER,
-                                                          params[i].attachment,
-                                                          params[i].pname,
-                                                          value));
+          GE (driver, glGetFramebufferAttachmentParameteriv (GL_FRAMEBUFFER,
+                                                             params[i].attachment,
+                                                             params[i].pname,
+                                                             value));
         }
     }
   else
@@ -128,7 +129,7 @@ ensure_bits_initialized (CoglGlFramebufferFbo *gl_framebuffer_fbo)
       return FALSE;
     }
 
-  if (!_cogl_has_private_feature (ctx, COGL_PRIVATE_FEATURE_ALPHA_TEXTURES) &&
+  if (!cogl_driver_has_feature (driver, COGL_FEATURE_ID_ALPHA_TEXTURES) &&
       (cogl_framebuffer_get_internal_format (framebuffer) ==
        COGL_PIXEL_FORMAT_A_8))
     {
@@ -165,16 +166,17 @@ cogl_gl_framebuffer_fbo_query_bits (CoglFramebufferDriver *driver,
 }
 
 static void
-cogl_gl_framebuffer_fbo_discard_buffers (CoglFramebufferDriver *driver,
+cogl_gl_framebuffer_fbo_discard_buffers (CoglFramebufferDriver *fb_driver,
                                          unsigned long          buffers)
 {
   CoglFramebuffer *framebuffer =
-    cogl_framebuffer_driver_get_framebuffer (driver);
+    cogl_framebuffer_driver_get_framebuffer (fb_driver);
   CoglContext *ctx = cogl_framebuffer_get_context (framebuffer);
+  CoglDriver *driver = cogl_context_get_driver (ctx);
   GLenum attachments[3];
   int i = 0;
 
-  if (!ctx->glDiscardFramebuffer)
+  if (!GE_HAS (driver, glDiscardFramebuffer))
     return;
 
   if (buffers & COGL_BUFFER_BIT_COLOR)
@@ -188,7 +190,7 @@ cogl_gl_framebuffer_fbo_discard_buffers (CoglFramebufferDriver *driver,
                                         framebuffer,
                                         framebuffer,
                                         COGL_FRAMEBUFFER_STATE_BIND);
-  GE (ctx, glDiscardFramebuffer (GL_FRAMEBUFFER, i, attachments));
+  GE (driver, glDiscardFramebuffer (GL_FRAMEBUFFER, i, attachments));
 }
 
 static void
@@ -197,12 +199,13 @@ cogl_gl_framebuffer_fbo_bind (CoglGlFramebuffer *gl_framebuffer,
 {
   CoglGlFramebufferFbo *gl_framebuffer_fbo =
     COGL_GL_FRAMEBUFFER_FBO (gl_framebuffer);
-  CoglFramebufferDriver *driver = COGL_FRAMEBUFFER_DRIVER (gl_framebuffer_fbo);
+  CoglFramebufferDriver *fb_driver = COGL_FRAMEBUFFER_DRIVER (gl_framebuffer_fbo);
   CoglFramebuffer *framebuffer =
-    cogl_framebuffer_driver_get_framebuffer (driver);
+    cogl_framebuffer_driver_get_framebuffer (fb_driver);
   CoglContext *ctx = cogl_framebuffer_get_context (framebuffer);
+  CoglDriver *driver = cogl_context_get_driver (ctx);
 
-  GE (ctx, glBindFramebuffer (target, gl_framebuffer_fbo->gl_fbo.fbo_handle));
+  GE (driver, glBindFramebuffer (target, gl_framebuffer_fbo->gl_fbo.fbo_handle));
 }
 
 static GList *
@@ -211,6 +214,7 @@ try_creating_renderbuffers (CoglContext                *ctx,
                             int                         height,
                             CoglOffscreenAllocateFlags  flags)
 {
+  CoglDriver *driver = cogl_context_get_driver (ctx);
   GList *renderbuffers = NULL;
   GLuint gl_depth_stencil_handle;
 
@@ -225,34 +229,34 @@ try_creating_renderbuffers (CoglContext                *ctx,
        * GL_OES_packed_depth_stencil doesn't allow GL_DEPTH_STENCIL to
        * be passed as an internal format to glRenderbufferStorage.
        */
-      if (_cogl_has_private_feature
-          (ctx, COGL_PRIVATE_FEATURE_EXT_PACKED_DEPTH_STENCIL))
+      if (cogl_driver_has_feature
+          (driver, COGL_FEATURE_ID_EXT_PACKED_DEPTH_STENCIL))
         format = GL_DEPTH_STENCIL;
       else
         {
           g_return_val_if_fail (
-            _cogl_has_private_feature (ctx,
-              COGL_PRIVATE_FEATURE_OES_PACKED_DEPTH_STENCIL),
+            cogl_driver_has_feature (driver,
+              COGL_FEATURE_ID_OES_PACKED_DEPTH_STENCIL),
             NULL);
           format = GL_DEPTH24_STENCIL8;
         }
 
       /* Create a renderbuffer for depth and stenciling */
-      GE (ctx, glGenRenderbuffers (1, &gl_depth_stencil_handle));
-      GE (ctx, glBindRenderbuffer (GL_RENDERBUFFER, gl_depth_stencil_handle));
-      GE (ctx, glRenderbufferStorage (GL_RENDERBUFFER, format,
-                                      width, height));
-      GE (ctx, glBindRenderbuffer (GL_RENDERBUFFER, 0));
+      GE (driver, glGenRenderbuffers (1, &gl_depth_stencil_handle));
+      GE (driver, glBindRenderbuffer (GL_RENDERBUFFER, gl_depth_stencil_handle));
+      GE (driver, glRenderbufferStorage (GL_RENDERBUFFER, format,
+                                         width, height));
+      GE (driver, glBindRenderbuffer (GL_RENDERBUFFER, 0));
 
 
-      GE (ctx, glFramebufferRenderbuffer (GL_FRAMEBUFFER,
-                                          GL_STENCIL_ATTACHMENT,
-                                          GL_RENDERBUFFER,
-                                          gl_depth_stencil_handle));
-      GE (ctx, glFramebufferRenderbuffer (GL_FRAMEBUFFER,
-                                          GL_DEPTH_ATTACHMENT,
-                                          GL_RENDERBUFFER,
-                                          gl_depth_stencil_handle));
+      GE (driver, glFramebufferRenderbuffer (GL_FRAMEBUFFER,
+                                             GL_STENCIL_ATTACHMENT,
+                                             GL_RENDERBUFFER,
+                                             gl_depth_stencil_handle));
+      GE (driver, glFramebufferRenderbuffer (GL_FRAMEBUFFER,
+                                             GL_DEPTH_ATTACHMENT,
+                                             GL_RENDERBUFFER,
+                                             gl_depth_stencil_handle));
       renderbuffers =
         g_list_prepend (renderbuffers,
                         GUINT_TO_POINTER (gl_depth_stencil_handle));
@@ -262,16 +266,16 @@ try_creating_renderbuffers (CoglContext                *ctx,
     {
       GLuint gl_depth_handle;
 
-      GE (ctx, glGenRenderbuffers (1, &gl_depth_handle));
-      GE (ctx, glBindRenderbuffer (GL_RENDERBUFFER, gl_depth_handle));
+      GE (driver, glGenRenderbuffers (1, &gl_depth_handle));
+      GE (driver, glBindRenderbuffer (GL_RENDERBUFFER, gl_depth_handle));
       /* For now we just ask for GL_DEPTH_COMPONENT16 since this is all that's
        * available under GLES */
-      GE (ctx, glRenderbufferStorage (GL_RENDERBUFFER, GL_DEPTH_COMPONENT16,
-                                      width, height));
-      GE (ctx, glBindRenderbuffer (GL_RENDERBUFFER, 0));
-      GE (ctx, glFramebufferRenderbuffer (GL_FRAMEBUFFER,
-                                          GL_DEPTH_ATTACHMENT,
-                                          GL_RENDERBUFFER, gl_depth_handle));
+      GE (driver, glRenderbufferStorage (GL_RENDERBUFFER, GL_DEPTH_COMPONENT16,
+                                         width, height));
+      GE (driver, glBindRenderbuffer (GL_RENDERBUFFER, 0));
+      GE (driver, glFramebufferRenderbuffer (GL_FRAMEBUFFER,
+                                             GL_DEPTH_ATTACHMENT,
+                                             GL_RENDERBUFFER, gl_depth_handle));
       renderbuffers =
         g_list_prepend (renderbuffers, GUINT_TO_POINTER (gl_depth_handle));
     }
@@ -280,14 +284,14 @@ try_creating_renderbuffers (CoglContext                *ctx,
     {
       GLuint gl_stencil_handle;
 
-      GE (ctx, glGenRenderbuffers (1, &gl_stencil_handle));
-      GE (ctx, glBindRenderbuffer (GL_RENDERBUFFER, gl_stencil_handle));
-      GE (ctx, glRenderbufferStorage (GL_RENDERBUFFER, GL_STENCIL_INDEX8,
-                                      width, height));
-      GE (ctx, glBindRenderbuffer (GL_RENDERBUFFER, 0));
-      GE (ctx, glFramebufferRenderbuffer (GL_FRAMEBUFFER,
-                                          GL_STENCIL_ATTACHMENT,
-                                          GL_RENDERBUFFER, gl_stencil_handle));
+      GE (driver, glGenRenderbuffers (1, &gl_stencil_handle));
+      GE (driver, glBindRenderbuffer (GL_RENDERBUFFER, gl_stencil_handle));
+      GE (driver, glRenderbufferStorage (GL_RENDERBUFFER, GL_STENCIL_INDEX8,
+                                         width, height));
+      GE (driver, glBindRenderbuffer (GL_RENDERBUFFER, 0));
+      GE (driver, glFramebufferRenderbuffer (GL_FRAMEBUFFER,
+                                             GL_STENCIL_ATTACHMENT,
+                                             GL_RENDERBUFFER, gl_stencil_handle));
       renderbuffers =
         g_list_prepend (renderbuffers, GUINT_TO_POINTER (gl_stencil_handle));
     }
@@ -299,12 +303,13 @@ static void
 delete_renderbuffers (CoglContext *ctx,
                       GList       *renderbuffers)
 {
+  CoglDriver *driver = cogl_context_get_driver (ctx);
   GList *l;
 
   for (l = renderbuffers; l; l = l->next)
     {
       GLuint renderbuffer = GPOINTER_TO_UINT (l->data);
-      GE (ctx, glDeleteRenderbuffers (1, &renderbuffer));
+      GE (driver, glDeleteRenderbuffers (1, &renderbuffer));
     }
 
   g_list_free (renderbuffers);
@@ -325,6 +330,7 @@ try_creating_fbo (CoglContext                 *ctx,
                   CoglOffscreenAllocateFlags   flags,
                   CoglGlFbo                   *gl_fbo)
 {
+  CoglDriver *driver = cogl_context_get_driver (ctx);
   GLuint tex_gl_handle;
   GLenum tex_gl_target;
   GLenum status;
@@ -345,13 +351,13 @@ try_creating_fbo (CoglContext                 *ctx,
   ctx->current_draw_buffer_changes |= COGL_FRAMEBUFFER_STATE_BIND;
 
   /* Generate framebuffer */
-  ctx->glGenFramebuffers (1, &gl_fbo->fbo_handle);
-  GE (ctx, glBindFramebuffer (GL_FRAMEBUFFER, gl_fbo->fbo_handle));
+  GE (driver, glGenFramebuffers (1, &gl_fbo->fbo_handle));
+  GE (driver, glBindFramebuffer (GL_FRAMEBUFFER, gl_fbo->fbo_handle));
 
 
-  GE (ctx, glFramebufferTexture2D (GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                                   tex_gl_target, tex_gl_handle,
-                                   texture_level));
+  GE (driver, glFramebufferTexture2D (GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                      tex_gl_target, tex_gl_handle,
+                                      texture_level));
 
   if (flags)
     {
@@ -363,11 +369,11 @@ try_creating_fbo (CoglContext                 *ctx,
     }
 
   /* Make sure it's complete */
-  status = ctx->glCheckFramebufferStatus (GL_FRAMEBUFFER);
+  GE_RET (status, driver, glCheckFramebufferStatus (GL_FRAMEBUFFER));
 
   if (status != GL_FRAMEBUFFER_COMPLETE)
     {
-      GE (ctx, glDeleteFramebuffers (1, &gl_fbo->fbo_handle));
+      GE (driver, glDeleteFramebuffers (1, &gl_fbo->fbo_handle));
 
       delete_renderbuffers (ctx, gl_fbo->renderbuffers);
       gl_fbo->renderbuffers = NULL;
@@ -384,6 +390,7 @@ cogl_gl_framebuffer_fbo_new (CoglFramebuffer                    *framebuffer,
                              GError                            **error)
 {
   CoglContext *context = cogl_framebuffer_get_context (framebuffer);
+  CoglDriver *driver = cogl_context_get_driver (context);
   CoglOffscreen *offscreen;
   CoglTexture *texture;
   int texture_level;
@@ -452,10 +459,10 @@ cogl_gl_framebuffer_fbo_new (CoglFramebuffer                    *framebuffer,
       (
        /* NB: WebGL introduces a DEPTH_STENCIL_ATTACHMENT and doesn't
         * need an extension to handle _FLAG_DEPTH_STENCIL */
-       (_cogl_has_private_feature
-        (context, COGL_PRIVATE_FEATURE_EXT_PACKED_DEPTH_STENCIL) ||
-        _cogl_has_private_feature
-        (context, COGL_PRIVATE_FEATURE_OES_PACKED_DEPTH_STENCIL)) &&
+       (cogl_driver_has_feature
+        (driver, COGL_FEATURE_ID_EXT_PACKED_DEPTH_STENCIL) ||
+        cogl_driver_has_feature
+          (driver, COGL_FEATURE_ID_OES_PACKED_DEPTH_STENCIL)) &&
        try_creating_fbo (context,
                          texture,
                          texture_level,
@@ -521,9 +528,9 @@ static void
 cogl_gl_framebuffer_fbo_dispose (GObject *object)
 {
   CoglGlFramebufferFbo *gl_framebuffer_fbo = COGL_GL_FRAMEBUFFER_FBO (object);
-  CoglFramebufferDriver *driver = COGL_FRAMEBUFFER_DRIVER (gl_framebuffer_fbo);
+  CoglFramebufferDriver *fb_driver = COGL_FRAMEBUFFER_DRIVER (gl_framebuffer_fbo);
   CoglFramebuffer *framebuffer =
-    cogl_framebuffer_driver_get_framebuffer (driver);
+    cogl_framebuffer_driver_get_framebuffer (fb_driver);
   CoglContext *ctx = cogl_framebuffer_get_context (framebuffer);
 
   delete_renderbuffers (ctx, gl_framebuffer_fbo->gl_fbo.renderbuffers);
@@ -531,8 +538,10 @@ cogl_gl_framebuffer_fbo_dispose (GObject *object)
 
   if (gl_framebuffer_fbo->gl_fbo.fbo_handle)
     {
-      GE (ctx, glDeleteFramebuffers (1,
-                                     &gl_framebuffer_fbo->gl_fbo.fbo_handle));
+      CoglDriver *driver = cogl_context_get_driver (ctx);
+
+      GE (driver, glDeleteFramebuffers (1,
+                                        &gl_framebuffer_fbo->gl_fbo.fbo_handle));
       gl_framebuffer_fbo->gl_fbo.fbo_handle = 0;
     }
 

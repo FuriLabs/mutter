@@ -483,7 +483,8 @@ pick_keycode_for_keyval_in_current_group_in_impl (ClutterVirtualInputDevice *vir
 
   seat = clutter_virtual_input_device_get_seat (virtual_device);
   keymap = clutter_seat_get_keymap (seat);
-  xkb_keymap = meta_keymap_native_get_keyboard_map_in_impl (META_KEYMAP_NATIVE (keymap));
+  xkb_keymap =
+    meta_keymap_native_get_xkb_keymap_in_impl (META_KEYMAP_NATIVE (keymap));
   state = meta_seat_impl_get_xkb_state_in_impl (seat_native->impl);
 
   layout = xkb_state_serialize_layout (state, XKB_STATE_LAYOUT_EFFECTIVE);
@@ -1026,9 +1027,7 @@ create_device_in_impl (GTask *task)
 
   impl_state->seat_impl = seat_impl;
   impl_state->device =
-    meta_input_device_native_new_virtual_in_impl (seat_impl,
-                                                  device_type,
-                                                  CLUTTER_INPUT_MODE_PHYSICAL);
+    meta_input_device_native_new_virtual_in_impl (seat_impl, device_type);
   meta_seat_impl_add_virtual_input_device (seat_impl, impl_state->device);
 
   g_task_return_boolean (task, TRUE);

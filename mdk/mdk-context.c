@@ -36,6 +36,8 @@ enum
 
   PROP_EMULATE_TOUCH,
   PROP_INHIBIT_SYSTEM_SHORTCUTS,
+  PROP_EMULATE_MONITOR_MODES,
+  PROP_USE_HOST_KEYMAP,
 
   N_PROPS
 };
@@ -67,6 +69,9 @@ struct _MdkContext
 
   gboolean emulate_touch;
   gboolean inhibit_system_shortcuts;
+  gboolean use_host_keymap;
+
+  gboolean emulate_monitor_modes;
 
   GSettings *settings;
 
@@ -324,6 +329,12 @@ mdk_context_set_property (GObject      *object,
     case PROP_INHIBIT_SYSTEM_SHORTCUTS:
       context->inhibit_system_shortcuts = g_value_get_boolean (value);
       break;
+    case PROP_EMULATE_MONITOR_MODES:
+      context->emulate_monitor_modes = g_value_get_boolean (value);
+      break;
+    case PROP_USE_HOST_KEYMAP:
+      context->use_host_keymap = g_value_get_boolean (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -345,6 +356,12 @@ mdk_context_get_property (GObject    *object,
       break;
     case PROP_INHIBIT_SYSTEM_SHORTCUTS:
       g_value_set_boolean (value, context->inhibit_system_shortcuts);
+      break;
+    case PROP_EMULATE_MONITOR_MODES:
+      g_value_set_boolean (value, context->emulate_monitor_modes);
+      break;
+    case PROP_USE_HOST_KEYMAP:
+      g_value_set_boolean (value, context->use_host_keymap);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -383,6 +400,16 @@ mdk_context_class_init (MdkContextClass *klass)
                           G_PARAM_STATIC_STRINGS);
   obj_props[PROP_INHIBIT_SYSTEM_SHORTCUTS] =
     g_param_spec_boolean ("inhibit-system-shortcuts", NULL, NULL,
+                          FALSE,
+                          G_PARAM_READWRITE |
+                          G_PARAM_STATIC_STRINGS);
+  obj_props[PROP_EMULATE_MONITOR_MODES] =
+    g_param_spec_boolean ("emulate-monitor-modes", NULL, NULL,
+                          FALSE,
+                          G_PARAM_READWRITE |
+                          G_PARAM_STATIC_STRINGS);
+  obj_props[PROP_USE_HOST_KEYMAP] =
+    g_param_spec_boolean ("use-host-keymap", NULL, NULL,
                           FALSE,
                           G_PARAM_READWRITE |
                           G_PARAM_STATIC_STRINGS);
@@ -591,6 +618,12 @@ gboolean
 mdk_context_get_inhibit_system_shortcuts (MdkContext *context)
 {
   return context->inhibit_system_shortcuts;
+}
+
+gboolean
+mdk_context_get_use_host_keymap (MdkContext *context)
+{
+  return context->use_host_keymap;
 }
 
 GPtrArray *

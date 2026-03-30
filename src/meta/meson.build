@@ -21,10 +21,12 @@ mutter_public_headers = [
   'meta-debug-control.h',
   'meta-dnd.h',
   'meta-enums.h',
+  'meta-external-constraint.h',
   'meta-idle-monitor.h',
   'meta-inhibit-shortcuts-dialog.h',
-  'meta-launch-context.h',
+  'meta-keymap-description.h',
   'meta-later.h',
+  'meta-launch-context.h',
   'meta-logical-monitor.h',
   'meta-monitor.h',
   'meta-monitor-manager.h',
@@ -41,6 +43,9 @@ mutter_public_headers = [
   'meta-sound-player.h',
   'meta-stage.h',
   'meta-startup-notification.h',
+  'meta-wayland-client.h',
+  'meta-wayland-compositor.h',
+  'meta-wayland-surface.h',
   'meta-window-actor.h',
   'meta-window-config.h',
   'meta-window-group.h',
@@ -52,15 +57,7 @@ mutter_public_headers = [
   'workspace.h',
 ]
 
-if have_wayland
-  mutter_public_headers += [
-    'meta-wayland-client.h',
-    'meta-wayland-compositor.h',
-    'meta-wayland-surface.h',
-  ]
-endif
-
-if have_x11_client
+if have_xwayland
   mutter_public_headers += [
     'meta-x11-display.h',
     'meta-x11-types.h',

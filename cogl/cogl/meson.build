@@ -30,6 +30,7 @@ cogl_headers = [
   'cogl-depth-state.h',
   'cogl-display.h',
   'cogl-dma-buf-handle.h',
+  'cogl-driver.h',
   'cogl-framebuffer.h',
   'cogl-frame-info.h',
   'cogl-glib-source.h',
@@ -54,6 +55,16 @@ cogl_headers = [
   'cogl-texture-2d-sliced.h',
   'cogl-texture.h',
   'cogl-trace.h',
+]
+
+cogl_winsys_headers = [
+  'winsys/cogl-winsys.h',
+  'winsys/cogl-winsys-egl.h',
+  'winsys/cogl-onscreen-egl.h',
+]
+
+cogl_winsys_nonintrospected_headers = [
+  'winsys/cogl-winsys-egl-feature-functions.h',
 ]
 
 cogl_nonintrospected_headers = [
@@ -106,8 +117,6 @@ cogl_common_driver_sources = [
   'driver/gl/cogl-texture-driver-gl.c',
   'driver/gl/cogl-texture-driver-gl-private.h',
   'driver/gl/cogl-texture-gl.c',
-  'driver/gl/cogl-util-gl-private.h',
-  'driver/gl/cogl-util-gl.c',
 ]
 
 gl_driver_sources = [
@@ -277,56 +286,15 @@ cogl_sources = [
   'deprecated/cogl-shader-private.h',
   'deprecated/cogl-shader.c',
   'gl-prototypes/cogl-all-functions.h',
-  'winsys/cogl-winsys-private.h',
   'winsys/cogl-winsys.c',
 ]
-
-if have_x11
-  cogl_gir_includes += ['xlib-2.0']
-  cogl_nonintrospected_headers += [
-    'winsys/cogl-texture-pixmap-x11.h',
-  ]
-  cogl_sources += [
-    'cogl-x11-onscreen.c',
-    'cogl-x11-onscreen.h',
-    'cogl-xlib-renderer-private.h',
-    'cogl-xlib-renderer.c',
-    'winsys/cogl-texture-pixmap-x11-private.h',
-    'winsys/cogl-texture-pixmap-x11.c',
-  ]
-  cogl_headers += [
-    'cogl-xlib-renderer.h'
-  ]
-endif
-
-if have_glx
-  cogl_sources += [
-    'winsys/cogl-glx-display-private.h',
-    'winsys/cogl-glx-renderer-private.h',
-    'winsys/cogl-onscreen-glx.c',
-    'winsys/cogl-onscreen-glx.h',
-    'winsys/cogl-winsys-glx-feature-functions.h',
-    'winsys/cogl-winsys-glx-private.h',
-    'winsys/cogl-winsys-glx.c',
-  ]
-endif
 
 if have_egl
   cogl_sources += [
     'winsys/cogl-onscreen-egl.c',
     'winsys/cogl-onscreen-egl.h',
     'winsys/cogl-winsys-egl-feature-functions.h',
-    'winsys/cogl-winsys-egl-private.h',
     'winsys/cogl-winsys-egl.c',
-  ]
-endif
-
-if have_egl_xlib
-  cogl_sources += [
-    'winsys/cogl-onscreen-xlib.c',
-    'winsys/cogl-onscreen-xlib.h',
-    'winsys/cogl-winsys-egl-x11-private.h',
-    'winsys/cogl-winsys-egl-x11.c',
   ]
 endif
 
@@ -338,6 +306,7 @@ cogl_enum_headers = [
 
 cogl_headers += [
   cogl_enum_headers,
+  cogl_winsys_headers,
 ]
 
 cogl_enums = gnome.mkenums('cogl-enums',
@@ -359,6 +328,7 @@ cogl_introspected_headers = [
 cogl_headers_all = [
   cogl_introspected_headers,
   cogl_nonintrospected_headers,
+  cogl_winsys_nonintrospected_headers,
   cogl_deprecated_headers,
 ]
 
@@ -412,6 +382,12 @@ install_headers([
 
 install_headers(cogl_gl_prototype_headers,
   subdir: cogl_cogl_includesubdir / 'gl-prototypes')
+
+install_headers(cogl_winsys_headers,
+  subdir: cogl_cogl_includesubdir / 'winsys')
+
+install_headers(cogl_winsys_nonintrospected_headers,
+  subdir: cogl_cogl_includesubdir / 'winsys')
 
 pkg.generate(libmutter_cogl,
   name: 'Cogl',

@@ -34,6 +34,7 @@ typedef struct _MetaKmsCursorManagerImpl
 
   MetaKmsCursorQueryInImpl cursor_query_in_impl_func;
   gpointer cursor_query_in_impl_func_user_data;
+  GDestroyNotify cursor_query_in_impl_func_user_data_free;
 
   MetaKmsUpdateFilter *update_filter;
 } MetaKmsCursorManagerImpl;
@@ -561,6 +562,14 @@ finalize_in_impl (MetaThreadImpl  *thread_impl,
     {
       GPtrArray *crtc_states;
 
+      if (cursor_manager_impl->cursor_query_in_impl_func_user_data &&
+          cursor_manager_impl->cursor_query_in_impl_func_user_data_free)
+        {
+          GDestroyNotify free_func =
+            cursor_manager_impl->cursor_query_in_impl_func_user_data_free;
+          free_func (cursor_manager_impl->cursor_query_in_impl_func_user_data);
+        }
+
       meta_kms_impl_remove_update_filter (impl,
                                           cursor_manager_impl->update_filter);
       crtc_states = g_steal_pointer (&cursor_manager_impl->crtc_states);
@@ -618,6 +627,7 @@ typedef struct
 {
   MetaKmsCursorQueryInImpl func;
   gpointer user_data;
+  GDestroyNotify free_func;
 } SetQueryFuncData;
 
 static gpointer
@@ -629,8 +639,17 @@ set_query_func_in_impl (MetaThreadImpl  *thread_impl,
   MetaKmsCursorManagerImpl *cursor_manager_impl =
     ensure_cursor_manager_impl (META_KMS_IMPL (thread_impl));
 
+  if (cursor_manager_impl->cursor_query_in_impl_func_user_data &&
+      cursor_manager_impl->cursor_query_in_impl_func_user_data_free)
+    {
+      GDestroyNotify free_func =
+        cursor_manager_impl->cursor_query_in_impl_func_user_data_free;
+      free_func (cursor_manager_impl->cursor_query_in_impl_func_user_data);
+    }
+
   cursor_manager_impl->cursor_query_in_impl_func = data->func;
   cursor_manager_impl->cursor_query_in_impl_func_user_data = data->user_data;
+  cursor_manager_impl->cursor_query_in_impl_func_user_data_free = data->free_func;
 
   return NULL;
 }
@@ -638,13 +657,15 @@ set_query_func_in_impl (MetaThreadImpl  *thread_impl,
 void
 meta_kms_cursor_manager_set_query_func (MetaKmsCursorManager     *cursor_manager,
                                         MetaKmsCursorQueryInImpl  func,
-                                        gpointer                  user_data)
+                                        gpointer                  user_data,
+                                        GDestroyNotify            free_func)
 {
   SetQueryFuncData *data;
 
   data = g_new0 (SetQueryFuncData, 1);
   data->func = func;
   data->user_data = user_data;
+  data->free_func = free_func;
 
   meta_thread_post_impl_task (META_THREAD (cursor_manager->kms),
                               set_query_func_in_impl,

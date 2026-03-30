@@ -32,7 +32,6 @@
 
 #include "backends/meta-backend-private.h"
 #include "backends/meta-crtc.h"
-#include "backends/meta-cursor.h"
 #include "backends/meta-display-config-shared.h"
 #include "backends/meta-output.h"
 #include "backends/meta-viewport-info.h"
@@ -110,17 +109,6 @@ struct _MetaOutputAssignment
   unsigned int rgb_range;
   MetaColorMode color_mode;
 };
-
-/*
- * MetaOutputCtm:
- *
- * A 3x3 color transform matrix in the fixed-point S31.32 sign-magnitude format
- * used by DRM.
- */
-typedef struct _MetaOutputCtm
-{
-  uint64_t matrix[9];
-} MetaOutputCtm;
 
 #define META_TYPE_MONITOR_MANAGER            (meta_monitor_manager_get_type ())
 #define META_MONITOR_MANAGER(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), META_TYPE_MONITOR_MANAGER, MetaMonitorManager))
@@ -247,26 +235,19 @@ struct _MetaMonitorManagerClass
 
   MetaLogicalMonitorLayoutMode (* get_default_layout_mode) (MetaMonitorManager *manager);
 
-  void (* set_output_ctm) (MetaOutput          *output,
-                           const MetaOutputCtm *ctm);
+  void (* set_output_ctm) (MetaOutput    *output,
+                           const MetaCtm *ctm);
 
   MetaVirtualMonitor * (* create_virtual_monitor) (MetaMonitorManager            *manager,
                                                    const MetaVirtualMonitorInfo  *info,
                                                    GError                       **error);
 };
 
-META_EXPORT_TEST
-MetaBackend *       meta_monitor_manager_get_backend (MetaMonitorManager *manager);
-
 void                meta_monitor_manager_setup (MetaMonitorManager *manager);
 
 META_EXPORT_TEST
 void                meta_monitor_manager_rebuild (MetaMonitorManager *manager,
                                                   MetaMonitorsConfig *config);
-
-META_EXPORT_TEST
-void                meta_monitor_manager_rebuild_derived (MetaMonitorManager *manager,
-                                                          MetaMonitorsConfig *config);
 
 META_EXPORT_TEST
 int                 meta_monitor_manager_get_num_logical_monitors (MetaMonitorManager *manager);
@@ -344,11 +325,6 @@ void               meta_monitor_manager_update_logical_state (MetaMonitorManager
 
 void               meta_monitor_manager_update_for_lease_state (MetaMonitorManager *manager,
                                                                 MetaMonitorsConfig *config);
-
-META_EXPORT_TEST
-void               meta_monitor_manager_update_logical_state_derived (MetaMonitorManager *manager,
-                                                                      MetaMonitorsConfig *config,
-                                                                      MtkDisposeBin      *bin);
 
 META_EXPORT_TEST
 void               meta_monitor_manager_lid_is_closed_changed (MetaMonitorManager *manager);
@@ -431,3 +407,6 @@ MetaLogicalMonitorLayoutMode meta_monitor_manager_get_layout_mode (MetaMonitorMa
 
 MetaOutput * meta_monitor_manager_find_output (MetaMonitorManager *monitor_manager,
                                                MetaOutput         *old_output);
+
+MetaMonitor * meta_monitor_manager_find_monitor (MetaMonitorManager *monitor_manager,
+                                                 MetaMonitor        *old_monitor);

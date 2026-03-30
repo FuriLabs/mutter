@@ -47,7 +47,8 @@
 #include "cogl/cogl-private.h"
 #include "cogl/cogl-primitives-private.h"
 #include "cogl/cogl-trace.h"
-#include "cogl/winsys/cogl-winsys-private.h"
+#include "cogl/driver/gl/cogl-driver-gl-private.h"
+#include "cogl/winsys/cogl-winsys.h"
 
 enum
 {
@@ -900,7 +901,6 @@ cogl_framebuffer_init_driver (CoglFramebuffer  *framebuffer,
   CoglFramebufferDriver *fb_driver;
 
   fb_driver = driver_klass->create_framebuffer_driver (driver,
-                                                       priv->context,
                                                        framebuffer,
                                                        &priv->driver_config,
                                                        error);
@@ -1409,6 +1409,39 @@ cogl_framebuffer_is_y_flipped (CoglFramebuffer *framebuffer)
 }
 
 gboolean
+cogl_can_blit_between_formats (CoglPixelFormat src_format,
+                               CoglPixelFormat dst_format)
+{
+  gboolean dst_has_alpha, src_is_premult, dst_is_premult;
+
+  /* If the source format has no alpha, the resulting alpha is always 1.0, in
+   * which case the RGB values are the same regardless of premultiplication.
+   */
+  if (!(src_format & COGL_A_BIT))
+    return TRUE;
+
+  src_is_premult = !!(src_format & COGL_PREMULT_BIT);
+  dst_has_alpha = !!(dst_format & COGL_A_BIT);
+
+  /* If the destination format has no alpha, the information from a
+   * non-premultiplied source alpha channel would be lost.
+   */
+  if (!dst_has_alpha &&
+      !src_is_premult)
+    return FALSE;
+
+  dst_is_premult = dst_has_alpha &&
+                   !!(dst_format & COGL_PREMULT_BIT);
+
+  /* If both formats have alpha, their premultiplication status must match */
+  if (dst_has_alpha &&
+      src_is_premult != dst_is_premult)
+    return FALSE;
+
+  return TRUE;
+}
+
+gboolean
 cogl_framebuffer_blit (CoglFramebuffer *framebuffer,
                        CoglFramebuffer *dst,
                        int src_x,
@@ -1424,10 +1457,11 @@ cogl_framebuffer_blit (CoglFramebuffer *framebuffer,
   CoglFramebufferPrivate *dst_priv =
     cogl_framebuffer_get_instance_private (dst);
   CoglContext *ctx = cogl_framebuffer_get_context (framebuffer);
+  CoglDriver *driver = cogl_context_get_driver (ctx);
   int src_x1, src_y1, src_x2, src_y2;
   int dst_x1, dst_y1, dst_x2, dst_y2;
 
-  if (!cogl_context_has_feature (ctx, COGL_FEATURE_ID_BLIT_FRAMEBUFFER))
+  if (!cogl_driver_has_feature (driver, COGL_FEATURE_ID_BLIT_FRAMEBUFFER))
     {
       g_set_error_literal (error, COGL_SYSTEM_ERROR,
                            COGL_SYSTEM_ERROR_UNSUPPORTED,
@@ -1435,10 +1469,8 @@ cogl_framebuffer_blit (CoglFramebuffer *framebuffer,
       return FALSE;
     }
 
-  /* The buffers must use the same premult convention */
-  if (((priv->internal_format & COGL_PREMULT_BIT) !=
-       (dst_priv->internal_format & COGL_PREMULT_BIT)) &&
-      dst_priv->internal_format & COGL_A_BIT)
+  if (!cogl_can_blit_between_formats (priv->internal_format,
+                                      dst_priv->internal_format))
     {
       g_set_error_literal (error, COGL_SYSTEM_ERROR,
                            COGL_SYSTEM_ERROR_UNSUPPORTED,
@@ -1504,10 +1536,10 @@ cogl_framebuffer_blit (CoglFramebuffer *framebuffer,
       dst_y2 = dst_y1 - height;
     }
 
-  ctx->glBlitFramebuffer (src_x1, src_y1, src_x2, src_y2,
-                          dst_x1, dst_y1, dst_x2, dst_y2,
-                          GL_COLOR_BUFFER_BIT,
-                          GL_NEAREST);
+  GE (driver, glBlitFramebuffer (src_x1, src_y1, src_x2, src_y2,
+                                 dst_x1, dst_y1, dst_x2, dst_y2,
+                                 GL_COLOR_BUFFER_BIT,
+                                 GL_NEAREST));
 
   return TRUE;
 }
@@ -2380,30 +2412,4 @@ cogl_framebuffer_get_driver (CoglFramebuffer *framebuffer)
     cogl_framebuffer_get_instance_private (framebuffer);
 
   return priv->driver;
-}
-
-CoglTimestampQuery *
-cogl_framebuffer_create_timestamp_query (CoglFramebuffer *framebuffer)
-{
-  CoglFramebufferPrivate *priv =
-    cogl_framebuffer_get_instance_private (framebuffer);
-  CoglDriver *driver = cogl_context_get_driver (priv->context);
-  CoglDriverClass *driver_klass = COGL_DRIVER_GET_CLASS (driver);
-
-  g_return_val_if_fail (cogl_context_has_feature (priv->context,
-                                                  COGL_FEATURE_ID_TIMESTAMP_QUERY),
-                        NULL);
-
-  /* The timestamp query completes upon completion of all previously submitted
-   * GL commands. So make sure those commands are indeed submitted by flushing
-   * the journal.
-   */
-  _cogl_framebuffer_flush_journal (framebuffer);
-
-  cogl_context_flush_framebuffer_state (priv->context,
-                                        framebuffer,
-                                        framebuffer,
-                                        COGL_FRAMEBUFFER_STATE_BIND);
-
-  return driver_klass->create_timestamp_query (driver, priv->context);
 }

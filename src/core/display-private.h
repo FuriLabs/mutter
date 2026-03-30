@@ -30,8 +30,8 @@
 
 #include "clutter/clutter.h"
 #include "core/keybindings-private.h"
-#include "core/meta-gesture-tracker-private.h"
 #include "core/meta-pad-action-mapper.h"
+#include "core/meta-private-enums.h"
 #include "core/meta-tool-action-mapper.h"
 #include "core/stack-tracker.h"
 #include "core/startup-notification-private.h"
@@ -40,7 +40,7 @@
 #include "meta/common.h"
 #include "meta/meta-selection.h"
 #include "meta/prefs.h"
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
 #include "meta/meta-x11-types.h"
 #endif
 
@@ -63,7 +63,7 @@ typedef void (* MetaDisplayWindowFunc) (MetaWindow *window,
 
 
 /* To avoid ifdefing MetaX11Display usage when built without X11 support */
-#ifndef HAVE_X11_CLIENT
+#ifndef HAVE_XWAYLAND
 typedef struct _MetaX11Display MetaX11Display;
 #endif
 
@@ -129,16 +129,13 @@ struct _MetaDisplay
   /* Managed by compositor.c */
   MetaCompositor *compositor;
 
-  MetaGestureTracker *gesture_tracker;
-  ClutterEventSequence *pointer_emulating_sequence;
-
   ClutterActor *current_pad_osd;
   MetaPadActionMapper *pad_action_mapper;
   MetaToolActionMapper *tool_action_mapper;
 
   MetaStartupNotification *startup_notification;
 
-  MetaCursor current_cursor;
+  ClutterCursorType current_cursor;
 
   MetaStack *stack;
   MetaStackTracker *stack_tracker;
@@ -185,7 +182,7 @@ MetaDisplay * meta_display_new (MetaContext  *context,
                                 GVariant     *plugin_options,
                                 GError      **error);
 
-#ifdef HAVE_X11_CLIENT
+#ifdef HAVE_XWAYLAND
 void meta_display_manage_all_xwindows (MetaDisplay *display);
 #endif
 
@@ -248,7 +245,7 @@ void meta_display_accelerator_activate (MetaDisplay           *display,
 void meta_display_accelerator_deactivate (MetaDisplay           *display,
                                           guint                  action,
                                           const ClutterEvent    *event);
-gboolean meta_display_modifiers_accelerator_activate (MetaDisplay *display);
+void meta_display_modifiers_accelerator_activate (MetaDisplay *display);
 
 void meta_display_update_focus_window (MetaDisplay *display,
                                        MetaWindow  *window);
@@ -259,19 +256,11 @@ void meta_display_sanity_check_timestamps (MetaDisplay *display,
 void meta_display_remove_pending_pings_for_window (MetaDisplay *display,
                                                    MetaWindow  *window);
 
-MetaGestureTracker * meta_display_get_gesture_tracker (MetaDisplay *display);
-
-gboolean meta_display_show_restart_message (MetaDisplay *display,
-                                            const char  *message);
-gboolean meta_display_request_restart      (MetaDisplay *display);
-
 gboolean meta_display_show_resize_popup (MetaDisplay  *display,
                                          gboolean      show,
                                          MtkRectangle *rect,
                                          int           display_w,
                                          int           display_h);
-
-void meta_set_is_restart (gboolean whether);
 
 void meta_display_cancel_touch (MetaDisplay *display);
 
@@ -335,6 +324,3 @@ void meta_display_handle_window_enter (MetaDisplay *display,
                                        uint32_t     timestamp_ms,
                                        int          root_x,
                                        int          root_y);
-
-void meta_display_handle_window_leave (MetaDisplay *display,
-                                       MetaWindow  *window);

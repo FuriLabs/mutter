@@ -49,30 +49,13 @@
 #include "cogl/cogl-offscreen-private.h"
 #include "cogl/cogl-onscreen-private.h"
 #include "cogl/cogl-private.h"
-#include "cogl/winsys/cogl-winsys-private.h"
-
-typedef struct
-{
-  GLfloat v[3];
-  GLfloat t[2];
-  GLubyte c[4];
-} CoglTextureGLVertex;
-
-struct _CoglTimestampQuery
-{
-  unsigned int id;
-};
+#include "cogl/winsys/cogl-winsys.h"
 
 struct _CoglContext
 {
   GObject parent_instance;
 
   CoglDisplay *display;
-
-  /* Features cache */
-  unsigned long features[COGL_FLAGS_N_LONGS_FOR_SIZE (_COGL_N_FEATURE_IDS)];
-  unsigned long private_features
-    [COGL_FLAGS_N_LONGS_FOR_SIZE (COGL_N_PRIVATE_FEATURES)];
 
   CoglPipeline *default_pipeline;
   CoglPipelineLayer *default_layer_0;
@@ -174,10 +157,6 @@ struct _CoglContext
      chances of getting the same colour during an animation */
   uint8_t            journal_rectangles_color;
 
-  /* Cached values for GL_MAX_TEXTURE_[IMAGE_]UNITS to avoid calling
-     glGetInteger too often */
-  GLint             max_activateable_texture_units;
-
   /* Fragment processing programs */
   GLuint                  current_gl_program;
 
@@ -211,7 +190,6 @@ struct _CoglContext
 
   unsigned long winsys_features
     [COGL_FLAGS_N_LONGS_FOR_SIZE (COGL_WINSYS_FEATURE_N_FEATURES)];
-  void *winsys;
 
   /* Array of names of uniforms. These are used like quarks to give a
      unique number to each uniform name except that we ensure that
@@ -226,41 +204,8 @@ struct _CoglContext
   int n_uniform_names;
 
   GHashTable *named_pipelines;
-
-  /* This defines a list of function pointers that Cogl uses from
-     either GL or GLES. All functions are accessed indirectly through
-     these pointers rather than linking to them directly */
-#ifndef APIENTRY
-#define APIENTRY
-#endif
-
-#define COGL_EXT_BEGIN(name, \
-                       min_gl_major, min_gl_minor, \
-                       gles_availability, \
-                       extension_suffixes, extension_names)
-#define COGL_EXT_FUNCTION(ret, name, args) \
-  ret (APIENTRY * name) args;
-#define COGL_EXT_END()
-
-#include "gl-prototypes/cogl-all-functions.h"
-
-#undef COGL_EXT_BEGIN
-#undef COGL_EXT_FUNCTION
-#undef COGL_EXT_END
 };
 
-const CoglWinsysVtable *
-_cogl_context_get_winsys (CoglContext *context);
-
-/* Query the GL extensions and lookup the corresponding function
- * pointers. Theoretically the list of extensions can change for
- * different GL contexts so it is the winsys backend's responsibility
- * to know when to re-query the GL extensions. The backend should also
- * check whether the GL context is supported by Cogl. If not it should
- * return FALSE and set @error */
-gboolean
-_cogl_context_update_features (CoglContext *context,
-                               GError **error);
 
 void
 _cogl_context_set_current_projection_entry (CoglContext *context,
@@ -273,4 +218,4 @@ _cogl_context_set_current_modelview_entry (CoglContext *context,
 void
 _cogl_context_update_sync (CoglContext *context);
 
-CoglDriver * cogl_context_get_driver (CoglContext *context);
+void cogl_context_clear_onscreen_dirty_queue (CoglContext *context);

@@ -21,6 +21,7 @@
 
 #include "backends/meta-sprite.h"
 #include "backends/meta-backend-private.h"
+#include "backends/meta-cursor-tracker-private.h"
 
 #include "clutter/clutter-sprite-private.h"
 
@@ -88,12 +89,50 @@ meta_sprite_get_property (GObject    *object,
 }
 
 static void
+meta_sprite_update_cursor (ClutterSprite *sprite,
+                           ClutterCursor *cursor)
+{
+  MetaSprite *meta_sprite = META_SPRITE (sprite);
+  MetaSpritePrivate *priv = meta_sprite_get_instance_private (meta_sprite);
+  MetaCursorRenderer *cursor_renderer;
+
+  if (!clutter_focus_get_current_actor (CLUTTER_FOCUS (sprite)))
+    return;
+
+  cursor_renderer = meta_backend_get_cursor_renderer_for_sprite (priv->backend,
+                                                                 sprite);
+  if (!cursor_renderer)
+    return;
+
+  if (clutter_sprite_get_role (sprite) == CLUTTER_SPRITE_ROLE_POINTER)
+    {
+      MetaCursorTracker *cursor_tracker =
+        meta_backend_get_cursor_tracker (priv->backend);
+      gboolean pointer_visible;
+
+      pointer_visible =
+        meta_cursor_tracker_get_pointer_visible (cursor_tracker);
+
+      meta_cursor_renderer_set_cursor (cursor_renderer,
+                                       pointer_visible ? cursor : NULL);
+      meta_cursor_tracker_set_current_cursor (cursor_tracker, cursor);
+    }
+  else
+    {
+      meta_cursor_renderer_set_cursor (cursor_renderer, cursor);
+    }
+}
+
+static void
 meta_sprite_class_init (MetaSpriteClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
+  ClutterSpriteClass *sprite_class = CLUTTER_SPRITE_CLASS (klass);
 
   object_class->set_property = meta_sprite_set_property;
   object_class->get_property = meta_sprite_get_property;
+
+  sprite_class->update_cursor = meta_sprite_update_cursor;
 
   props[PROP_BACKEND] =
     g_param_spec_object ("backend", NULL, NULL,
@@ -111,4 +150,13 @@ meta_sprite_get_backend (MetaSprite *sprite)
   MetaSpritePrivate *priv = meta_sprite_get_instance_private (sprite);
 
   return priv->backend;
+}
+
+void
+meta_sprite_sync_cursor (MetaSprite *sprite)
+{
+  ClutterCursor *cursor;
+
+  cursor = clutter_sprite_get_cursor (CLUTTER_SPRITE (sprite));
+  meta_sprite_update_cursor (CLUTTER_SPRITE (sprite), cursor);
 }

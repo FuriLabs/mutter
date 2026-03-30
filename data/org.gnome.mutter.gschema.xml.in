@@ -4,8 +4,7 @@
     <value nick="scale-monitor-framebuffer" value="1"/>
     <value nick="kms-modifiers" value="2"/>
     <value nick="autoclose-xwayland" value="4"/>
-    <value nick="variable-refresh-rate" value="8"/>
-    <value nick="xwayland-native-scaling" value="16"/>
+    <value nick="xwayland-native-scaling" value="8"/>
   </flags>
 
   <schema id="org.gnome.mutter" path="/org/gnome/mutter/"
@@ -115,13 +114,6 @@
 
         Currently possible keywords:
 
-        • “scale-monitor-framebuffer” — makes mutter default to layout logical
-                                        monitors in a logical pixel coordinate
-                                        space, while scaling monitor
-                                        framebuffers instead of window content,
-                                        to manage HiDPI monitors. Does not
-                                        require a restart.
-
         • “kms-modifiers”             — makes mutter always allocate scanout
                                         buffers with explicit modifiers, if
                                         supported by the driver. Requires a
@@ -130,19 +122,6 @@
         • “autoclose-xwayland”        — automatically terminates Xwayland if all
                                         relevant X11 clients are gone.
                                         Requires a restart.
-
-        • “variable-refresh-rate”     — makes mutter dynamically adjust the
-                                        refresh rate of the monitor when
-                                        applicable if supported by the monitor,
-                                        GPU and DRM driver. Configurable in
-                                        Settings. Requires a restart.
-
-        • “xwayland-native-scaling”   — lets Xwayland clients use their native
-                                        scaling support. If scaling is not
-                                        supported by client, the client will
-                                        be unscaled. Setting only takes effect
-                                        when “scale-monitor-framebuffer” is
-                                        enabled as well.
       </description>
     </key>
 

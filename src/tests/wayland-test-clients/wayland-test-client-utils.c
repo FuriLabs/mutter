@@ -49,6 +49,8 @@ enum
   SURFACE_CONFIGURE,
   SURFACE_POINTER_ENTER,
   SURFACE_KEYBOARD_ENTER,
+  SURFACE_BUTTON_EVENT,
+  SURFACE_KEY_EVENT,
   N_SURFACE_SIGNALS
 };
 
@@ -243,7 +245,10 @@ pointer_handle_enter (void              *user_data,
                       wl_fixed_t         sx,
                       wl_fixed_t         sy)
 {
+  WaylandDisplay *display = user_data;
   WaylandSurface *surface = wl_surface_get_user_data (surface_resource);
+
+  display->pointer_focus = surface;
 
   g_signal_emit (surface, surface_signals[SURFACE_POINTER_ENTER],
                  0, pointer, serial);
@@ -253,8 +258,13 @@ static void
 pointer_handle_leave (void              *user_data,
                       struct wl_pointer *pointer,
                       uint32_t           serial,
-                      struct wl_surface *surface)
+                      struct wl_surface *surface_resource)
 {
+  WaylandDisplay *display = user_data;
+  WaylandSurface *surface = wl_surface_get_user_data (surface_resource);
+
+  if (display->pointer_focus == surface)
+    display->pointer_focus = NULL;
 }
 
 static void
@@ -274,6 +284,10 @@ pointer_handle_button (void              *user_data,
                        uint32_t           button,
                        uint32_t           state)
 {
+  WaylandDisplay *display = user_data;
+
+  g_signal_emit (display->pointer_focus, surface_signals[SURFACE_BUTTON_EVENT],
+                 0, wl_pointer, serial, button, !!state);
 }
 
 static void
@@ -309,7 +323,10 @@ wl_keyboard_enter (void               *user_data,
                    struct wl_surface  *surface_resource,
                    struct wl_array    *keys)
 {
+  WaylandDisplay *display = user_data;
   WaylandSurface *surface = wl_surface_get_user_data (surface_resource);
+
+  display->keyboard_focus = surface;
 
   g_signal_emit (surface, surface_signals[SURFACE_KEYBOARD_ENTER],
                  0, keyboard, serial);
@@ -319,8 +336,13 @@ static void
 wl_keyboard_leave (void               *user_data,
                    struct wl_keyboard *wl_keyboard,
                    uint32_t            serial,
-                   struct wl_surface  *surface)
+                   struct wl_surface  *surface_resource)
 {
+  WaylandDisplay *display = user_data;
+  WaylandSurface *surface = wl_surface_get_user_data (surface_resource);
+
+  if (display->keyboard_focus == surface)
+    display->keyboard_focus = NULL;
 }
 
 static void
@@ -331,6 +353,10 @@ wl_keyboard_key (void               *user_data,
                  uint32_t            key,
                  uint32_t            state)
 {
+  WaylandDisplay *display = user_data;
+
+  g_signal_emit (display->keyboard_focus, surface_signals[SURFACE_KEY_EVENT],
+                 0, wl_keyboard, serial, key, !!state);
 }
 
 static void
@@ -814,6 +840,32 @@ wayland_display_dispatch (WaylandDisplay *display)
 }
 
 static void
+wayland_display_dispose (GObject *object)
+{
+  WaylandDisplay *display = WAYLAND_DISPLAY (object);
+  GHashTableIter iter;
+  gpointer key;
+
+  if (display->buffers)
+    {
+      g_hash_table_iter_init (&iter, display->buffers);
+      while (g_hash_table_iter_next (&iter, &key, NULL))
+        {
+          WaylandBuffer *buffer = key;
+          WaylandBufferPrivate *buffer_priv =
+            wayland_buffer_get_instance_private (buffer);
+
+          g_clear_pointer (&buffer_priv->buffer, wl_buffer_destroy);
+          g_hash_table_iter_remove (&iter);
+          g_object_unref (buffer);
+        }
+      g_clear_pointer (&display->buffers, g_hash_table_unref);
+    }
+
+  G_OBJECT_CLASS (wayland_display_parent_class)->dispose (object);
+}
+
+static void
 wayland_display_finalize (GObject *object)
 {
   WaylandDisplay *display = WAYLAND_DISPLAY (object);
@@ -832,6 +884,7 @@ wayland_display_class_init (WaylandDisplayClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
+  object_class->dispose = wayland_display_dispose;
   object_class->finalize = wayland_display_finalize;
 
   signals[SYNC_EVENT] =
@@ -858,6 +911,7 @@ wayland_display_class_init (WaylandDisplayClass *klass)
 static void
 wayland_display_init (WaylandDisplay *display)
 {
+  display->buffers = g_hash_table_new (NULL, NULL);
 }
 
 void
@@ -1049,6 +1103,28 @@ wayland_surface_class_init (WaylandSurfaceClass *klass)
                   G_TYPE_NONE, 2,
                   G_TYPE_POINTER,
                   G_TYPE_UINT);
+  surface_signals[SURFACE_BUTTON_EVENT] =
+    g_signal_new ("button-event",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_LAST,
+                  0,
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE, 4,
+                  G_TYPE_POINTER,
+                  G_TYPE_UINT,
+                  G_TYPE_UINT,
+                  G_TYPE_BOOLEAN);
+  surface_signals[SURFACE_KEY_EVENT] =
+    g_signal_new ("key-event",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_LAST,
+                  0,
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE, 4,
+                  G_TYPE_POINTER,
+                  G_TYPE_UINT,
+                  G_TYPE_UINT,
+                  G_TYPE_BOOLEAN);
 }
 
 static void
@@ -1416,7 +1492,8 @@ wayland_buffer_dispose (GObject *object)
   WaylandBuffer *buffer = WAYLAND_BUFFER (object);
   WaylandBufferPrivate *priv = wayland_buffer_get_instance_private (buffer);
 
-  g_clear_object (&priv->display);
+  if (priv->display)
+    g_hash_table_remove (priv->display->buffers, buffer);
 
   G_OBJECT_CLASS (wayland_buffer_parent_class)->dispose (object);
 }
@@ -1439,8 +1516,9 @@ handle_buffer_release (void             *user_data,
                        struct wl_buffer *buffer_resource)
 {
   WaylandBuffer *buffer = WAYLAND_BUFFER (user_data);
+  WaylandBufferPrivate *priv = wayland_buffer_get_instance_private (buffer);
 
-  wl_buffer_destroy (buffer_resource);
+  g_clear_pointer (&priv->buffer, wl_buffer_destroy);
   g_object_unref (buffer);
 }
 
@@ -1471,7 +1549,8 @@ wayland_buffer_create (WaylandDisplay                  *display,
     }
 
   priv = wayland_buffer_get_instance_private (buffer);
-  priv->display = g_object_ref (display);
+  priv->display = display;
+  g_hash_table_add (priv->display->buffers, buffer);
   priv->format = format;
   priv->width = width;
   priv->height = height;
@@ -2004,6 +2083,8 @@ wayland_buffer_dmabuf_dispose (GObject *object)
 
   for (i = 0; i < dmabuf->n_planes; i++)
     g_clear_fd (&dmabuf->fd[i], NULL);
+
+  G_OBJECT_CLASS (wayland_buffer_dmabuf_parent_class)->dispose (object);
 }
 
 static void

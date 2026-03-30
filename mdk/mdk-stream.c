@@ -31,7 +31,9 @@
 #include <pipewire/stream.h>
 #include <spa/debug/format.h>
 #include <spa/node/command.h>
+#include <spa/param/tag-utils.h>
 #include <spa/param/video/format-utils.h>
+#include <spa/pod/dynamic.h>
 #include <spa/utils/hook.h>
 #include <sys/mman.h>
 
@@ -50,12 +52,18 @@
 
 enum
 {
-  ERROR,
+  PROP_0,
 
-  N_SIGNALS
+  PROP_SESSION,
+  PROP_SCALE,
+  PROP_IS_RESIZABLE,
+  PROP_DEFAULT_WIDTH,
+  PROP_DEFAULT_HEIGHT,
+
+  N_PROPS
 };
 
-static guint signals[N_SIGNALS];
+static GParamSpec *obj_props[N_PROPS];
 
 typedef struct
 {
@@ -69,15 +77,18 @@ struct _MdkStream
   GtkMediaStream parent;
 
   MdkSession *session;
+
   int width;
   int height;
-
-  GCancellable *init_cancellable;
+  double scale;
+  gboolean is_resizable;
 
   MdkDBusScreenCastStream *proxy;
 
   GdkPaintable *paintable;
   GArray *formats;
+
+  char *mapping_id;
 
   uint32_t node_id;
   struct pw_stream *pipewire_stream;
@@ -104,9 +115,23 @@ struct _MdkStream
   } cursor;
 };
 
+#define PARAMS_BUFFER_SIZE 1024
+
 #define CURSOR_META_SIZE(width, height) \
-  (sizeof(struct spa_meta_cursor) + \
-   sizeof(struct spa_meta_bitmap) + width * height * 4)
+  (sizeof (struct spa_meta_cursor) + \
+   sizeof (struct spa_meta_bitmap) + width * height * 4)
+
+#define mdk_pod_builder_add_object(pod_builder, offsets, type, id, ...) \
+  G_STMT_START \
+    { \
+      struct spa_pod_builder *_pod_builder = (pod_builder); \
+      struct spa_pod_frame _frame; \
+      g_array_append_val (pod_offsets, _pod_builder->state.offset); \
+      spa_pod_builder_push_object (_pod_builder, &_frame, type, id); \
+      spa_pod_builder_add(_pod_builder, ##__VA_ARGS__, 0); \
+      spa_pod_builder_pop(_pod_builder, &_frame); \
+    } \
+  G_STMT_END
 
 static const struct
 {
@@ -136,9 +161,13 @@ static const struct
   },
 };
 
+static void initable_iface_init (GInitableIface *iface);
+
 static void paintable_iface_init (GdkPaintableInterface *iface);
 
 G_DEFINE_FINAL_TYPE_WITH_CODE (MdkStream, mdk_stream, GTK_TYPE_MEDIA_STREAM,
+                               G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
+                                                      initable_iface_init)
                                G_IMPLEMENT_INTERFACE (GDK_TYPE_PAINTABLE,
                                                       paintable_iface_init))
 
@@ -191,17 +220,37 @@ spa_pixel_format_to_drm_format (uint32_t  spa_format,
   return TRUE;
 }
 
-static inline struct spa_pod *
+static GPtrArray *
+finish_params (struct spa_pod_builder *pod_builder,
+               GArray                 *pod_offsets)
+{
+  GPtrArray *params = NULL;
+  size_t i;
+
+  params = g_ptr_array_new ();
+
+  for (i = 0; i < pod_offsets->len; i++)
+    {
+      uint32_t pod_offset = g_array_index (pod_offsets, uint32_t, i);
+
+      g_ptr_array_add (params, spa_pod_builder_deref (pod_builder, pod_offset));
+    }
+
+  return params;
+}
+
+static void
 build_format_param (MdkStream              *stream,
                     struct spa_pod_builder *pod_builder,
+                    GArray                 *pod_offsets,
                     const MdkFormat        *format,
                     gboolean                build_modifiers)
 {
   struct spa_pod_frame object_frame;
-  struct spa_rectangle rect;
   struct spa_fraction min_framerate;
   struct spa_fraction max_framerate;
 
+  g_array_append_val (pod_offsets, pod_builder->state.offset);
   spa_pod_builder_push_object (pod_builder, &object_frame,
                                SPA_TYPE_OBJECT_Format, SPA_PARAM_EnumFormat);
   spa_pod_builder_add (pod_builder,
@@ -236,43 +285,89 @@ build_format_param (MdkStream              *stream,
       spa_pod_builder_pop (pod_builder, &modifiers_frame);
     }
 
-  rect = SPA_RECTANGLE (stream->width, stream->height);
-  min_framerate = SPA_FRACTION (0, 1);
-  max_framerate = SPA_FRACTION (60, 1);
-  spa_pod_builder_add (
-    pod_builder,
-    SPA_FORMAT_VIDEO_size, SPA_POD_Rectangle (&rect),
-    SPA_FORMAT_VIDEO_framerate, SPA_POD_Fraction (&SPA_FRACTION (0, 1)),
-    SPA_FORMAT_VIDEO_maxFramerate, SPA_POD_CHOICE_RANGE_Fraction (&min_framerate,
-                                                                  &min_framerate,
-                                                                  &max_framerate),
-    0);
+  if (stream->is_resizable)
+    {
+      struct spa_rectangle rect;
 
-  return spa_pod_builder_pop (pod_builder, &object_frame);
+      rect = SPA_RECTANGLE (stream->width, stream->height);
+      min_framerate = SPA_FRACTION (0, 1);
+      max_framerate = SPA_FRACTION (60, 1);
+      spa_pod_builder_add (
+        pod_builder,
+        SPA_FORMAT_VIDEO_size, SPA_POD_Rectangle (&rect),
+        SPA_FORMAT_VIDEO_framerate, SPA_POD_Fraction (&SPA_FRACTION (0, 1)),
+        SPA_FORMAT_VIDEO_maxFramerate, SPA_POD_CHOICE_RANGE_Fraction (&min_framerate,
+                                                                      &min_framerate,
+                                                                      &max_framerate),
+        0);
+    }
+  else
+    {
+      struct spa_rectangle min_rect, max_rect;
+
+      min_rect = SPA_RECTANGLE (1, 1);
+      max_rect = SPA_RECTANGLE (INT32_MAX, INT32_MAX);
+
+      min_framerate = SPA_FRACTION (0, 1);
+      max_framerate = SPA_FRACTION (60, 1);
+      spa_pod_builder_add (
+        pod_builder,
+        SPA_FORMAT_VIDEO_size, SPA_POD_CHOICE_RANGE_Rectangle (&min_rect,
+                                                               &min_rect,
+                                                               &max_rect),
+        SPA_FORMAT_VIDEO_framerate, SPA_POD_Fraction (&SPA_FRACTION (0, 1)),
+        SPA_FORMAT_VIDEO_maxFramerate, SPA_POD_CHOICE_RANGE_Fraction (&min_framerate,
+                                                                      &min_framerate,
+                                                                      &max_framerate),
+        0);
+    }
+
+  spa_pod_builder_pop (pod_builder, &object_frame);
+}
+
+static void
+build_tag_param (MdkStream              *stream,
+                 struct spa_pod_builder *pod_builder,
+                 GArray                 *pod_offsets)
+{
+  struct spa_pod_frame tag_frame;
+  char scale_string[G_ASCII_DTOSTR_BUF_SIZE];
+  struct spa_dict_item items[1];
+
+  g_array_append_val (pod_offsets, pod_builder->state.offset);
+  spa_tag_build_start (pod_builder, &tag_frame,
+                       SPA_PARAM_Tag, SPA_DIRECTION_INPUT);
+  g_ascii_dtostr (scale_string, G_ASCII_DTOSTR_BUF_SIZE, stream->scale);
+  items[0] = SPA_DICT_ITEM_INIT ("org.gnome.preferred-scale",
+                                 scale_string);
+  spa_tag_build_add_dict (pod_builder,
+                          &SPA_DICT_INIT (items, G_N_ELEMENTS (items)));
+
+  spa_tag_build_end (pod_builder, &tag_frame);
 }
 
 static GPtrArray *
-build_stream_format_params (MdkStream              *stream,
-                            struct spa_pod_builder *pod_builder)
+build_stream_params (MdkStream              *stream,
+                     struct spa_pod_builder *pod_builder)
 {
-  g_autoptr (GPtrArray) params = NULL;
+  g_autoptr (GArray) pod_offsets = NULL;
   uint32_t i;
 
   g_assert (stream->formats);
 
-  params = g_ptr_array_sized_new (2 * stream->formats->len);
+  pod_offsets = g_array_new (FALSE, FALSE, sizeof (uint32_t));
 
   for (i = 0; i < stream->formats->len; i++)
     {
       const MdkFormat *format = &g_array_index (stream->formats, MdkFormat, i);
 
-      g_ptr_array_add (params,
-                       build_format_param (stream, pod_builder, format, TRUE));
-      g_ptr_array_add (params,
-                       build_format_param (stream, pod_builder, format, FALSE));
+      build_format_param (stream, pod_builder, pod_offsets, format, TRUE);
+      build_format_param (stream, pod_builder, pod_offsets, format, FALSE);
     }
 
-  return g_steal_pointer (&params);
+  build_tag_param (stream, pod_builder, pod_offsets);
+
+  return finish_params (pod_builder, pod_offsets);
 }
 
 static GArray *
@@ -380,6 +475,7 @@ on_stream_state_changed (void                 *user_data,
     case PW_STREAM_STATE_PAUSED:
       break;
     case PW_STREAM_STATE_STREAMING:
+      gdk_paintable_invalidate_size (GDK_PAINTABLE (stream));
       gdk_paintable_invalidate_contents (GDK_PAINTABLE (stream));
       break;
     case PW_STREAM_STATE_UNCONNECTED:
@@ -389,18 +485,14 @@ on_stream_state_changed (void                 *user_data,
 }
 
 static void
-on_stream_param_changed (void                 *user_data,
-                         uint32_t              id,
+on_format_param_changed (MdkStream            *stream,
                          const struct spa_pod *format)
 {
-  MdkStream *stream = MDK_STREAM (user_data);
-  uint8_t params_buffer[1024];
-  struct spa_pod_builder pod_builder;
-  const struct spa_pod *params[3];
+  g_autoptr (GArray) pod_offsets = NULL;
+  g_autoptr (GPtrArray) params = NULL;
+  struct spa_pod_dynamic_builder pod_builder;
+  const size_t meta_region_size = sizeof (struct spa_meta_region);
   int result;
-
-  if (!format || id != SPA_PARAM_Format)
-    return;
 
   result = spa_format_parse (format,
                              &stream->format.media_type,
@@ -426,34 +518,135 @@ on_stream_param_changed (void                 *user_data,
            stream->format.info.raw.framerate.num,
            stream->format.info.raw.framerate.denom);
 
-  pod_builder = SPA_POD_BUILDER_INIT (params_buffer, sizeof (params_buffer));
+  spa_pod_dynamic_builder_init (&pod_builder, NULL, 0, PARAMS_BUFFER_SIZE);
+  pod_offsets = g_array_new (FALSE, FALSE, sizeof (uint32_t));
 
-  params[0] = spa_pod_builder_add_object (
-    &pod_builder,
+  mdk_pod_builder_add_object (
+    &pod_builder.b,
+    pod_offsets,
     SPA_TYPE_OBJECT_ParamBuffers, SPA_PARAM_Buffers,
     SPA_PARAM_BUFFERS_buffers, SPA_POD_CHOICE_RANGE_Int (2, 2, 2),
     SPA_PARAM_BUFFERS_dataType, SPA_POD_Int ((1 << SPA_DATA_MemFd) |
-                                             (1 << SPA_DATA_DmaBuf)),
-    0);
+                                             (1 << SPA_DATA_DmaBuf)));
 
-  params[1] = spa_pod_builder_add_object (
-    &pod_builder,
+  mdk_pod_builder_add_object (
+    &pod_builder.b,
+    pod_offsets,
     SPA_TYPE_OBJECT_ParamMeta, SPA_PARAM_Meta,
     SPA_PARAM_META_type, SPA_POD_Id (SPA_META_Header),
-    SPA_PARAM_META_size, SPA_POD_Int (sizeof (struct spa_meta_header)),
-    0);
+    SPA_PARAM_META_size, SPA_POD_Int (sizeof (struct spa_meta_header)));
 
-  params[2] = spa_pod_builder_add_object(
-    &pod_builder,
+  mdk_pod_builder_add_object (
+    &pod_builder.b,
+    pod_offsets,
     SPA_TYPE_OBJECT_ParamMeta, SPA_PARAM_Meta,
     SPA_PARAM_META_type, SPA_POD_Id (SPA_META_Cursor),
     SPA_PARAM_META_size, SPA_POD_CHOICE_RANGE_Int (CURSOR_META_SIZE (384, 384),
                                                    CURSOR_META_SIZE (1,1),
-                                                   CURSOR_META_SIZE (384, 384)),
-    0);
+                                                   CURSOR_META_SIZE (384, 384)));
+
+  mdk_pod_builder_add_object (
+    &pod_builder.b,
+    pod_offsets,
+    SPA_TYPE_OBJECT_ParamMeta, SPA_PARAM_Meta,
+    SPA_PARAM_META_type, SPA_POD_Id (SPA_META_VideoDamage),
+    SPA_PARAM_META_size, SPA_POD_CHOICE_RANGE_Int (meta_region_size * 32,
+                                                   meta_region_size * 1,
+                                                   meta_region_size * 32));
+
+  params = finish_params (&pod_builder.b, pod_offsets);
+  pw_stream_update_params (stream->pipewire_stream,
+                           (const struct spa_pod **) params->pdata,
+                           params->len);
+
+  spa_pod_dynamic_builder_clean (&pod_builder);
+
+  if (!stream->is_resizable)
+    {
+      stream->width = stream->format.info.raw.size.width;
+      stream->height = stream->format.info.raw.size.height;
+
+      if (!stream->paintable)
+        {
+          stream->paintable = gdk_paintable_new_empty (stream->width,
+                                                       stream->height);
+        }
+      gdk_paintable_invalidate_size (GDK_PAINTABLE (stream));
+    }
+}
+
+static void
+on_tag_changed (MdkStream  *stream,
+                const char *key,
+                const char *value)
+{
+  if (g_strcmp0 (key, "org.gnome.mapping-id") == 0)
+    {
+      if (!stream->mapping_id)
+        stream->mapping_id = g_strdup (value);
+    }
+}
+
+static void
+on_tag_param_changed (MdkStream            *stream,
+                      const struct spa_pod *tag)
+{
+  struct spa_tag_info tag_info;
+  void *state = NULL;
+
+  while (spa_tag_parse (tag, &tag_info, &state) == 1)
+    {
+      struct spa_dict dict = {};
+      g_autofree struct spa_dict_item *items = NULL;
+
+      if (spa_tag_info_parse (&tag_info, &dict, NULL) < 0)
+        return;
+
+      items = g_new0 (struct spa_dict_item, dict.n_items);
+
+      if (spa_tag_info_parse (&tag_info, &dict, items) < 0)
+        return;
+
+      for (int i = 0; i < dict.n_items; i++)
+        on_tag_changed (stream, items[i].key, items[i].value);
+    }
+}
+
+static void
+on_stream_param_changed (void                 *user_data,
+                         uint32_t              id,
+                         const struct spa_pod *param)
+{
+  MdkStream *stream = MDK_STREAM (user_data);
+
+  if (!param)
+    return;
+
+  switch (id)
+    {
+    case SPA_PARAM_Format:
+      on_format_param_changed (stream, param);
+      break;
+    case SPA_PARAM_Tag:
+      on_tag_param_changed (stream, param);
+      break;
+    }
+}
+
+static void
+mdk_stream_renegotiate (MdkStream *stream)
+{
+  g_autoptr (GPtrArray) new_params = NULL;
+  struct spa_pod_dynamic_builder pod_builder;
+
+  spa_pod_dynamic_builder_init (&pod_builder, NULL, 0, PARAMS_BUFFER_SIZE);
+  new_params = build_stream_params (stream, &pod_builder.b);
 
   pw_stream_update_params (stream->pipewire_stream,
-                           params, G_N_ELEMENTS (params));
+                           (const struct spa_pod **) new_params->pdata,
+                           new_params->len);
+
+  spa_pod_dynamic_builder_clean (&pod_builder);
 }
 
 static void
@@ -461,16 +654,8 @@ renegotiate_stream_format (void     *user_data,
                            uint64_t  expirations)
 {
   MdkStream *stream = user_data;
-  g_autoptr (GPtrArray) new_params = NULL;
-  struct spa_pod_builder builder;
-  uint8_t params_buffer[2048];
 
-  builder = SPA_POD_BUILDER_INIT (params_buffer, sizeof (params_buffer));
-  new_params = build_stream_format_params (stream, &builder);
-
-  pw_stream_update_params (stream->pipewire_stream,
-                           (const struct spa_pod **) new_params->pdata,
-                           new_params->len);
+  mdk_stream_renegotiate (stream);
 }
 
 static void
@@ -537,6 +722,60 @@ read_cursor_metadata (MdkStream         *stream,
     }
 }
 
+static cairo_region_t *
+read_damage_metadata (MdkStream         *stream,
+                      struct spa_buffer *spa_buffer)
+{
+  struct spa_meta *video_damage;
+  struct spa_meta_region *meta_region;
+  g_autofree cairo_rectangle_int_t *cairo_rects = NULL;
+  int num_rects = 0;
+
+  video_damage = spa_buffer_find_meta (spa_buffer, SPA_META_VideoDamage);
+  if (!video_damage)
+    return NULL;
+
+  meta_region = spa_meta_first (video_damage);
+  if (!meta_region)
+    return NULL;
+
+  spa_meta_for_each (meta_region, video_damage)
+    {
+      if (!spa_meta_region_is_valid (meta_region))
+        break;
+
+      num_rects++;
+    }
+
+  if (!num_rects)
+    return NULL;
+
+  g_debug ("Stream has damage with %d rectangles", num_rects);
+
+  cairo_rects = g_new (cairo_rectangle_int_t, num_rects);
+  num_rects = 0;
+  spa_meta_for_each (meta_region, video_damage)
+    {
+      if (!spa_meta_region_is_valid (meta_region))
+        break;
+
+      g_debug ("Stream damage rectangle %d: %ux%u +%d+%d",
+               num_rects,
+               meta_region->region.size.width,
+               meta_region->region.size.height,
+               meta_region->region.position.x,
+               meta_region->region.position.y);
+
+      cairo_rects[num_rects].x = meta_region->region.position.x;
+      cairo_rects[num_rects].y = meta_region->region.position.y;
+      cairo_rects[num_rects].width = meta_region->region.size.width;
+      cairo_rects[num_rects].height = meta_region->region.size.height;
+      num_rects++;
+    }
+
+  return cairo_region_create_rectangles (cairo_rects, num_rects);
+}
+
 static void
 on_stream_process (void *user_data)
 {
@@ -545,6 +784,7 @@ on_stream_process (void *user_data)
   struct pw_buffer *buffer = NULL;
   struct spa_buffer *spa_buffer;
   struct spa_meta_header *spa_header;
+  cairo_region_t *damage_region = NULL;
   gboolean hold_buffer = FALSE;
   gboolean has_buffer;
   uint32_t drm_format;
@@ -569,11 +809,13 @@ on_stream_process (void *user_data)
   if (!has_buffer)
     goto read_metadata;
 
+  damage_region = read_damage_metadata (stream, spa_buffer);
+
   if (spa_buffer->datas[0].type == SPA_DATA_DmaBuf)
     {
       g_autoptr (GdkDmabufTextureBuilder) builder = NULL;
-      unsigned int i;
       g_autoptr (GError) error = NULL;
+      unsigned int i;
 
       if (!spa_pixel_format_to_drm_format (stream->format.info.raw.format,
                                            &drm_format))
@@ -604,6 +846,13 @@ on_stream_process (void *user_data)
           gdk_dmabuf_texture_builder_set_stride (builder, i, spa_buffer->datas[i].chunk->stride);
         }
 
+      if (GDK_IS_TEXTURE (stream->paintable))
+        {
+          gdk_dmabuf_texture_builder_set_update_region (builder, damage_region);
+          gdk_dmabuf_texture_builder_set_update_texture (builder,
+                                                         GDK_TEXTURE (stream->paintable));
+        }
+
       g_clear_object (&stream->paintable);
       stream->paintable =
         GDK_PAINTABLE (gdk_dmabuf_texture_builder_build (builder,
@@ -629,9 +878,10 @@ on_stream_process (void *user_data)
     }
   else
     {
-      g_autoptr (GdkTexture) texture = NULL;
+      g_autoptr (GdkMemoryTextureBuilder) builder = NULL;
       g_autoptr (GBytes) bytes = NULL;
       GdkMemoryFormat gdk_format;
+      unsigned int i;
       uint8_t *map;
       void *data;
       uint32_t bpp;
@@ -646,6 +896,29 @@ on_stream_process (void *user_data)
           goto read_metadata;
         }
 
+      builder = gdk_memory_texture_builder_new ();
+      gdk_memory_texture_builder_set_width (builder,
+                                            stream->format.info.raw.size.width);
+      gdk_memory_texture_builder_set_height (builder,
+                                             stream->format.info.raw.size.height);
+      gdk_memory_texture_builder_set_format (builder,
+                                             gdk_format);
+
+      for (i = 0; i < spa_buffer->n_datas; i++)
+        {
+          gdk_memory_texture_builder_set_offset (builder, i,
+                                                 spa_buffer->datas[i].chunk->offset);
+          gdk_memory_texture_builder_set_stride_for_plane (builder, i,
+                                                           spa_buffer->datas[i].chunk->stride);
+        }
+
+      if (GDK_IS_TEXTURE (stream->paintable))
+        {
+          gdk_memory_texture_builder_set_update_region (builder, damage_region);
+          gdk_memory_texture_builder_set_update_texture (builder,
+                                                         GDK_TEXTURE (stream->paintable));
+        }
+
       size = spa_buffer->datas[0].maxsize + spa_buffer->datas[0].mapoffset;
 
       map = mmap (NULL, size, PROT_READ, MAP_PRIVATE, spa_buffer->datas[0].fd, 0);
@@ -658,12 +931,11 @@ on_stream_process (void *user_data)
 
       bytes = g_bytes_new (data, size);
 
-      texture = gdk_memory_texture_new (stream->format.info.raw.size.width,
-                                        stream->format.info.raw.size.height,
-                                        gdk_format,
-                                        bytes,
-                                        spa_buffer->datas[0].chunk->stride);
-      g_set_object (&stream->paintable, GDK_PAINTABLE (texture));
+      gdk_memory_texture_builder_set_bytes (builder, bytes);
+
+      g_clear_object (&stream->paintable);
+      stream->paintable =
+        GDK_PAINTABLE (gdk_memory_texture_builder_build (builder));
 
       munmap (map, size);
     }
@@ -692,6 +964,8 @@ read_metadata:
 
   if (!pw_stream_is_driving (stream->pipewire_stream))
     gdk_paintable_invalidate_contents (GDK_PAINTABLE (stream));
+
+  g_clear_pointer (&damage_region, cairo_region_destroy);
 }
 
 static void
@@ -714,12 +988,23 @@ on_stream_command (void                     *user_data,
     }
 }
 
+static void
+on_stream_remove_buffer (void             *user_data,
+                         struct pw_buffer *buffer)
+{
+  MdkStream *stream = MDK_STREAM (user_data);
+
+  if (buffer == stream->active_buffer)
+    stream->active_buffer = NULL;
+}
+
 static const struct pw_stream_events stream_events = {
   PW_VERSION_STREAM_EVENTS,
   .state_changed = on_stream_state_changed,
   .param_changed = on_stream_param_changed,
   .process = on_stream_process,
   .command = on_stream_command,
+  .remove_buffer = on_stream_remove_buffer,
 };
 
 static gboolean
@@ -731,8 +1016,7 @@ connect_to_stream (MdkStream  *stream,
   MdkPipewire *pipewire = mdk_context_get_pipewire (context);
   struct pw_properties *pipewire_props;
   struct pw_stream *pipewire_stream;
-  uint8_t params_buffer[1024];
-  struct spa_pod_builder pod_builder;
+  struct spa_pod_dynamic_builder pod_builder;
   g_autoptr (GPtrArray) params = NULL;
   int ret;
 
@@ -743,8 +1027,8 @@ connect_to_stream (MdkStream  *stream,
                                    "mdk-pipewire-stream",
                                    pipewire_props);
 
-  pod_builder = SPA_POD_BUILDER_INIT (params_buffer, sizeof (params_buffer));
-  params = build_stream_format_params (stream, &pod_builder);
+  spa_pod_dynamic_builder_init (&pod_builder, NULL, 0, PARAMS_BUFFER_SIZE);
+  params = build_stream_params (stream, &pod_builder.b);
 
   stream->pipewire_stream = pipewire_stream;
 
@@ -771,72 +1055,6 @@ connect_to_stream (MdkStream  *stream,
 }
 
 static void
-on_pipewire_stream_added (MdkDBusScreenCastStream *proxy,
-                          unsigned int             node_id,
-                          MdkStream               *stream)
-{
-  g_autoptr (GError) error = NULL;
-
-  stream->node_id = (uint32_t) node_id;
-
-  g_debug ("Received PipeWire stream node %u, connecting", node_id);
-
-  if (!connect_to_stream (stream, &error))
-    {
-      if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
-        g_signal_emit (stream, signals[ERROR], 0, error);
-      return;
-    }
-}
-
-static void
-start_cb (GObject      *source_object,
-          GAsyncResult *res,
-          gpointer      user_data)
-{
-  MdkStream *stream = MDK_STREAM (user_data);
-  g_autoptr (GError) error = NULL;
-
-  if (!mdk_dbus_screen_cast_stream_call_start_finish (stream->proxy,
-                                                      res,
-                                                      &error))
-    {
-      if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
-        g_signal_emit (stream, signals[ERROR], 0, error);
-      return;
-    }
-}
-
-static void
-stream_proxy_ready_cb (GObject      *source_object,
-                       GAsyncResult *res,
-                       gpointer      user_data)
-{
-  MdkStream *stream = user_data;
-  g_autoptr (GError) error = NULL;
-
-  stream->proxy =
-    mdk_dbus_screen_cast_stream_proxy_new_for_bus_finish (res, &error);
-  if (!stream->proxy)
-    {
-      if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
-        g_signal_emit (stream, signals[ERROR], 0, error);
-      return;
-    }
-
-  g_debug ("Stream ready, waiting for PipeWire stream node");
-
-  g_signal_connect (stream->proxy, "pipewire-stream-added",
-                    G_CALLBACK (on_pipewire_stream_added),
-                    stream);
-
-  mdk_dbus_screen_cast_stream_call_start (stream->proxy,
-                                          stream->init_cancellable,
-                                          start_cb,
-                                          stream);
-}
-
-static void
 render_compositor_frame (MdkStream *stream)
 {
   MdkSession *session = mdk_stream_get_session (stream);
@@ -849,12 +1067,12 @@ render_compositor_frame (MdkStream *stream)
 
   if (active_buffer)
     pw_stream_queue_buffer (stream->pipewire_stream, active_buffer);
-
   pw_stream_trigger_process (stream->pipewire_stream);
 
   mdk_pipewire_push_main_context (pipewire, stream->main_context);
 
   frame_sequence = stream->frame_sequence;
+
   while (frame_sequence == stream->frame_sequence &&
          pw_stream_get_state (stream->pipewire_stream, NULL) ==
          PW_STREAM_STATE_STREAMING)
@@ -937,7 +1155,7 @@ mdk_stream_paintable_get_intrinsic_width (GdkPaintable *paintable)
 {
   MdkStream *stream = MDK_STREAM (paintable);
 
-  return stream->width;
+  return (int) round (stream->width / stream->scale);
 }
 
 static int
@@ -945,7 +1163,7 @@ mdk_stream_paintable_get_intrinsic_height (GdkPaintable *paintable)
 {
   MdkStream *stream = MDK_STREAM (paintable);
 
-  return stream->height;
+  return (int) round (stream->height / stream->scale);
 }
 
 static double
@@ -967,20 +1185,284 @@ paintable_iface_init (GdkPaintableInterface *iface)
 }
 
 static void
+on_pipewire_stream_added (MdkDBusScreenCastStream *proxy,
+                          unsigned int             node_id,
+                          MdkStream               *stream)
+{
+  g_autoptr (GError) error = NULL;
+
+  stream->node_id = (uint32_t) node_id;
+
+  g_debug ("Received PipeWire stream node %u, connecting", node_id);
+}
+
+static gboolean
+init_pipewire_stream (MdkStream  *stream,
+                      GError    **error)
+{
+  MdkContext *context = mdk_session_get_context (stream->session);
+  MdkPipewire *pipewire = mdk_context_get_pipewire (context);
+  g_autolist (MdkMonitorMode) monitor_modes = NULL;
+  g_autoptr (MdkMonitorInfo) monitor_info = NULL;
+  g_autofree char *stream_path = NULL;
+  gboolean ret = FALSE;
+  /* Set preferred size to 60% of a FHD resolution. */
+  const double max_logical_size = (1920 * 1080 * 0.6);
+
+  g_main_context_push_thread_default (stream->main_context);
+  mdk_pipewire_push_main_context (pipewire, stream->main_context);
+
+  query_formats_and_modifiers (stream);
+
+  if (!stream->is_resizable)
+    {
+      const struct {
+        int width;
+        int height;
+        float preferred_scale;
+      } modes[] = {
+        /* 5:3 */
+        { 5120, 3200, },
+        { 4096, 2560, },
+        { 3840, 2400, },
+        { 3456, 2160, },
+        { 3360, 2100, },
+        { 3072, 1920, },
+        { 2880, 1800, },
+        { 2880, 1800, },
+        { 2560, 1600, },
+        { 2304, 1440, },
+        { 2296, 1435, },
+        { 2294, 1432, },
+        { 2240, 1400, },
+        { 2160, 1350, },
+        { 2048, 1280, },
+        { 1920, 1200, },
+        { 1800, 1125, },
+        { 1728, 1080, },
+        { 1706, 1066, },
+        { 1680, 1050, },
+        { 1536, 960, },
+        { 1440, 900, },
+        { 1440, 900, },
+        { 1384, 864, },
+        { 1280, 800, },
+        { 1152, 720, },
+        { 1024, 640, },
+        { 960, 600, },
+        { 768, 480, },
+        /* 16:9 */
+        { 5120, 2880, },
+        { 4480, 2520, },
+        { 4096, 2304, },
+        { 3840, 2160, },
+        { 3200, 1800, },
+        { 3200, 1800, },
+        { 3072, 1728, },
+        { 2880, 1620, },
+        { 2880, 1620, },
+        { 2576, 1450, },
+        { 2560, 1440, },
+        { 2400, 1350, },
+        { 2304, 1280, },
+        { 2240, 1260, },
+        { 2132, 1200, },
+        { 2048, 1152, },
+        { 1920, 1080, },
+        { 1888, 1062, },
+        { 1776, 1000, },
+        { 1706, 960, },
+        { 1600, 900, },
+        { 1536, 864, },
+        { 1440, 810, },
+        { 1366, 768, },
+        { 1360, 768, },
+        { 1334, 750, },
+        { 1280, 720, },
+        { 1248, 702, },
+        { 1136, 640, },
+        { 1064, 600, },
+        { 1050, 576, },
+        { 1024, 600, },
+        { 1024, 576, },
+        { 960, 544, },
+        { 960, 540, },
+        { 873, 480, },
+        { 854, 480, },
+        { 848, 480, },
+      };
+      size_t i;
+
+      for (i = 0; i < G_N_ELEMENTS (modes); i++)
+        {
+          MdkMonitorMode *monitor_mode;
+          int width = modes[i].width;
+          int height = modes[i].height;
+          double mode_scale;
+
+          if (!G_APPROX_VALUE (fmod (width, stream->scale), 0, 0.00001) ||
+              !G_APPROX_VALUE (fmod (height, stream->scale), 0, 0.00001))
+            {
+              if (width > 1280)
+                continue;
+              else
+                mode_scale = 1.0;
+            }
+          else
+            mode_scale = stream->scale;
+
+          if (max_logical_size < ((width / mode_scale) * (height / mode_scale)))
+            continue;
+
+          monitor_mode = mdk_monitor_mode_new (width, height, mode_scale);
+          monitor_modes = g_list_append (monitor_modes, monitor_mode);
+        }
+    }
+
+  monitor_info = mdk_monitor_info_new (monitor_modes);
+
+  stream_path = mdk_session_create_monitor (stream->session,
+                                            monitor_info,
+                                            error);
+  if (!stream_path)
+    goto err;
+
+  g_debug ("Creating stream proxy for '%s'", stream_path);
+
+  stream->proxy =
+    mdk_dbus_screen_cast_stream_proxy_new_for_bus_sync (
+      G_BUS_TYPE_SESSION,
+      G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
+      "org.gnome.Mutter.ScreenCast",
+      stream_path,
+      NULL, error);
+  if (!stream->proxy)
+    goto err;
+
+  g_debug ("Stream ready, waiting for PipeWire stream node");
+
+  g_signal_connect (stream->proxy, "pipewire-stream-added",
+                    G_CALLBACK (on_pipewire_stream_added),
+                    stream);
+
+  if (!mdk_dbus_screen_cast_stream_call_start_sync (stream->proxy,
+                                                    NULL,
+                                                    error))
+    goto err;
+
+  while (!stream->node_id)
+    g_main_context_iteration (stream->main_context, TRUE);
+
+  if (!connect_to_stream (stream, error))
+    goto err;
+
+  while (stream->format.info.raw.size.width == 0 &&
+         pw_stream_get_state (stream->pipewire_stream, NULL) !=
+         PW_STREAM_STATE_ERROR)
+    g_main_context_iteration (stream->main_context, TRUE);
+
+  if (pw_stream_get_state (stream->pipewire_stream, NULL) ==
+      PW_STREAM_STATE_ERROR)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "PipeWire stream error occurred");
+      goto err;
+    }
+
+  ret = TRUE;
+
+err:
+  mdk_pipewire_pop_main_context (pipewire, stream->main_context);
+  g_main_context_pop_thread_default (stream->main_context);
+
+  return ret;
+}
+
+static gboolean
+mdk_stream_initable_init (GInitable      *initable,
+                          GCancellable   *cancellable,
+                          GError        **error)
+{
+  MdkStream *stream = MDK_STREAM (initable);
+  MdkContext *context = mdk_session_get_context (stream->session);
+  MdkPipewire *pipewire = mdk_context_get_pipewire (context);
+  struct pw_loop *pipewire_loop = mdk_pipewire_get_loop (pipewire);
+
+  if (stream->is_resizable)
+    stream->paintable = gdk_paintable_new_empty (stream->width, stream->height);
+
+  stream->renegotiate_event = pw_loop_add_event (pipewire_loop,
+                                                 renegotiate_stream_format,
+                                                 stream);
+
+
+  return init_pipewire_stream (stream, error);
+}
+
+static void
+initable_iface_init (GInitableIface *iface)
+{
+  iface->init = mdk_stream_initable_init;
+}
+
+static void
+mdk_stream_set_property (GObject      *object,
+                         guint         prop_id,
+                         const GValue *value,
+                         GParamSpec   *pspec)
+{
+  MdkStream *stream = MDK_STREAM (object);
+
+  switch (prop_id)
+    {
+    case PROP_SESSION:
+      stream->session = g_value_get_object (value);
+      break;
+    case PROP_SCALE:
+      stream->scale = g_value_get_double (value);
+      break;
+    case PROP_IS_RESIZABLE:
+      stream->is_resizable = g_value_get_boolean (value);
+      break;
+    case PROP_DEFAULT_WIDTH:
+      stream->width = g_value_get_int (value);
+      break;
+    case PROP_DEFAULT_HEIGHT:
+      stream->height = g_value_get_int (value);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+    }
+}
+
+static void
+mdk_stream_get_property (GObject    *object,
+                         guint       prop_id,
+                         GValue     *value,
+                         GParamSpec *pspec)
+{
+  switch (prop_id)
+    {
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+    }
+}
+
+static void
 mdk_stream_finalize (GObject *object)
 {
   MdkStream *stream = MDK_STREAM (object);
 
-  if (stream->init_cancellable)
-    {
-      g_cancellable_cancel (stream->init_cancellable);
-      g_clear_object (&stream->init_cancellable);
-    }
   g_clear_pointer (&stream->pipewire_stream, pw_stream_destroy);
   g_clear_handle_id (&stream->reinvalidate_source_id, g_source_remove);
+  if (stream->proxy)
+    mdk_dbus_screen_cast_stream_call_stop (stream->proxy, NULL, NULL, NULL);
   g_clear_object (&stream->proxy);
   g_clear_pointer (&stream->formats, g_array_unref);
   g_clear_object (&stream->paintable);
+  g_clear_pointer (&stream->mapping_id, g_free);
   g_clear_pointer (&stream->main_context, g_main_context_unref);
 
   G_OBJECT_CLASS (mdk_stream_parent_class)->finalize (object);
@@ -991,15 +1473,41 @@ mdk_stream_class_init (MdkStreamClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
+  object_class->set_property = mdk_stream_set_property;
+  object_class->get_property = mdk_stream_get_property;
   object_class->finalize = mdk_stream_finalize;
 
-  signals[ERROR] = g_signal_new ("error",
-                                 G_TYPE_FROM_CLASS (klass),
-                                 G_SIGNAL_RUN_LAST,
-                                 0,
-                                 NULL, NULL, NULL,
-                                 G_TYPE_NONE, 1,
-                                 G_TYPE_ERROR);
+  obj_props[PROP_SESSION] =
+    g_param_spec_object ("session", NULL, NULL,
+                         MDK_TYPE_SESSION,
+                         G_PARAM_WRITABLE |
+                         G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+  obj_props[PROP_SCALE] =
+    g_param_spec_double ("scale", NULL, NULL,
+                         1.0, 10.0, 1.0,
+                         G_PARAM_WRITABLE |
+                         G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+  obj_props[PROP_IS_RESIZABLE] =
+    g_param_spec_boolean ("is-resizable", NULL, NULL,
+                          FALSE,
+                          G_PARAM_WRITABLE |
+                          G_PARAM_CONSTRUCT_ONLY |
+                          G_PARAM_STATIC_STRINGS);
+  obj_props[PROP_DEFAULT_WIDTH] =
+    g_param_spec_int ("default-width", NULL, NULL,
+                      0, INT_MAX, 0,
+                      G_PARAM_WRITABLE |
+                      G_PARAM_CONSTRUCT_ONLY |
+                      G_PARAM_STATIC_STRINGS);
+  obj_props[PROP_DEFAULT_HEIGHT] =
+    g_param_spec_int ("default-height", NULL, NULL,
+                      0, INT_MAX, 0,
+                      G_PARAM_WRITABLE |
+                      G_PARAM_CONSTRUCT_ONLY |
+                      G_PARAM_STATIC_STRINGS);
+  g_object_class_install_properties (object_class, N_PROPS, obj_props);
 }
 
 static void
@@ -1007,78 +1515,33 @@ mdk_stream_init (MdkStream *stream)
 {
   stream->process_requested = TRUE;
   stream->main_context = g_main_context_new ();
-}
-
-static void
-create_monitor_cb (GObject      *source_object,
-                   GAsyncResult *res,
-                   gpointer      user_data)
-{
-  MdkStream *stream = MDK_STREAM (user_data);
-  g_autoptr (GError) error = NULL;
-  g_autofree char *stream_path = NULL;
-
-  stream_path = mdk_session_create_monitor_finish (stream->session,
-                                                   res,
-                                                   &error);
-  if (!stream_path)
-    {
-      if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
-        g_signal_emit (stream, signals[ERROR], 0, error);
-      return;
-    }
-
-  g_debug ("Creating stream proxy for '%s'", stream_path);
-
-  mdk_dbus_screen_cast_stream_proxy_new_for_bus (
-    G_BUS_TYPE_SESSION,
-    G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-    "org.gnome.Mutter.ScreenCast",
-    stream_path,
-    stream->init_cancellable,
-    stream_proxy_ready_cb,
-    stream);
-}
-
-static void
-init_async (MdkStream *stream)
-{
-  GCancellable *cancellable;
-
-  cancellable = g_cancellable_new ();
-  stream->init_cancellable = cancellable;
-
-  mdk_session_create_monitor_async (stream->session,
-                                    cancellable,
-                                    create_monitor_cb,
-                                    stream);
+  stream->scale = 1.0f;
 }
 
 MdkStream *
-mdk_stream_new (MdkSession *session,
-                int         width,
-                int         height)
+mdk_stream_new_resizable (MdkSession  *session,
+                          double       scale,
+                          GError     **error)
 {
-  MdkContext *context = mdk_session_get_context (session);
-  MdkPipewire *pipewire = mdk_context_get_pipewire (context);
-  struct pw_loop *pipewire_loop = mdk_pipewire_get_loop (pipewire);
-  MdkStream *stream;
+  return g_initable_new (MDK_TYPE_STREAM, NULL, error,
+                         "session", session,
+                         "scale", scale,
+                         "is-resizable", TRUE,
+                         "default-width", (int) round (DEFAULT_MONITOR_WIDTH * scale),
+                         "default-height", (int) round (DEFAULT_MONITOR_HEIGHT * scale),
+                         NULL);
+}
 
-
-  stream = g_object_new (MDK_TYPE_STREAM, NULL);
-  stream->session = session;
-  stream->width = width;
-  stream->height = height;
-  stream->paintable = gdk_paintable_new_empty (stream->width, stream->height);
-
-  stream->renegotiate_event = pw_loop_add_event (pipewire_loop,
-                                                 renegotiate_stream_format,
-                                                 stream);
-
-
-  init_async (stream);
-
-  return stream;
+MdkStream *
+mdk_stream_new_with_modes (MdkSession  *session,
+                           double       scale,
+                           GError     **error)
+{
+  return g_initable_new (MDK_TYPE_STREAM, NULL, error,
+                         "session", session,
+                         "scale", scale,
+                         "is-resizable", FALSE,
+                         NULL);
 }
 
 MdkSession *
@@ -1093,14 +1556,59 @@ mdk_stream_get_path (MdkStream *stream)
   return g_dbus_proxy_get_object_path (G_DBUS_PROXY (stream->proxy));
 }
 
-void
-mdk_stream_realize (MdkStream *stream)
+const char *
+mdk_stream_get_mapping_id (MdkStream *stream)
 {
-  query_formats_and_modifiers (stream);
+  return stream->mapping_id;
+}
+
+double
+mdk_stream_get_scale (MdkStream *stream)
+{
+  return stream->scale;
 }
 
 void
-mdk_stream_unrealize (MdkStream *stream)
+mdk_stream_set_scale (MdkStream *stream,
+                      double     scale)
 {
-  g_clear_pointer (&stream->formats, g_array_unref);
+  stream->scale = scale;
+  gdk_paintable_invalidate_size (GDK_PAINTABLE (stream));
+  mdk_stream_renegotiate (stream);
+}
+
+void
+mdk_stream_resize (MdkStream *stream,
+                   int        width,
+                   int        height)
+{
+  MdkContext *context = mdk_session_get_context (stream->session);
+  MdkPipewire *pipewire = mdk_context_get_pipewire (context);
+
+  g_return_if_fail (stream->is_resizable);
+
+  if (!stream->pipewire_stream)
+    return;
+
+  width = (int) round (width * stream->scale);
+  height = (int) round (height * stream->scale);
+
+  if (stream->width == width &&
+      stream->height == height)
+    return;
+
+  stream->width = width;
+  stream->height = height;
+
+  mdk_pipewire_push_main_context (pipewire, stream->main_context);
+
+  mdk_stream_renegotiate (stream);
+
+  while (stream->format.info.raw.size.width != stream->width ||
+         stream->format.info.raw.size.height != stream->height ||
+         pw_stream_get_state (stream->pipewire_stream, NULL) !=
+         PW_STREAM_STATE_STREAMING)
+    g_main_context_iteration (stream->main_context, TRUE);
+
+  mdk_pipewire_pop_main_context (pipewire, stream->main_context);
 }

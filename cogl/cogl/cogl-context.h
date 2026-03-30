@@ -37,6 +37,7 @@
 #endif
 
 #include "cogl/cogl-display.h"
+#include "cogl/cogl-driver.h"
 #include "cogl/cogl-pipeline.h"
 #include "cogl/cogl-primitive.h"
 
@@ -149,124 +150,6 @@ cogl_context_get_display (CoglContext *context);
 COGL_EXPORT CoglRenderer *
 cogl_context_get_renderer (CoglContext *context);
 
-/* XXX: not guarded by the EXPERIMENTAL_API defines to avoid
- * upsetting glib-mkenums, but this can still be considered implicitly
- * experimental since it's only useable with experimental API... */
-/**
- * CoglFeatureID:
- * @COGL_FEATURE_ID_TEXTURE_RG: Support for
- *    %COGL_TEXTURE_COMPONENTS_RG as the internal components of a
- *    texture.
- * @COGL_FEATURE_ID_TEXTURE_RGBA1010102: Support for 10bpc RGBA formats
- * @COGL_FEATURE_ID_TEXTURE_HALF_FLOAT: Support for half float formats
- * @COGL_FEATURE_ID_TEXTURE_NORM16: Support for 16bpc formats
- * @COGL_FEATURE_ID_UNSIGNED_INT_INDICES: Set if
- *     %COGL_INDICES_TYPE_UNSIGNED_INT is supported in
- *     cogl_indices_new().
- * @COGL_FEATURE_ID_MAP_BUFFER_FOR_READ: Whether cogl_buffer_map() is
- *     supported with CoglBufferAccess including read support.
- * @COGL_FEATURE_ID_MAP_BUFFER_FOR_WRITE: Whether cogl_buffer_map() is
- *     supported with CoglBufferAccess including write support.
- * @COGL_FEATURE_ID_BUFFER_AGE: Available if the age of #CoglOnscreen back
- *    buffers are tracked and so cogl_onscreen_get_buffer_age() can be
- *    expected to return age values other than 0.
- * @COGL_FEATURE_ID_BLIT_FRAMEBUFFER: Whether blitting using
- *    [method@Cogl.Framebuffer.blit] is supported.
- * @COGL_FEATURE_ID_SYNC_FD
- *    cogl_context_get_latest_sync_fd() is supported.
- *
- * All the capabilities that can vary between different GPUs supported
- * by Cogl. Applications that depend on any of these features should explicitly
- * check for them using [method@Cogl.Context.has_feature].
- */
-typedef enum _CoglFeatureID
-{
-  COGL_FEATURE_ID_UNSIGNED_INT_INDICES,
-  COGL_FEATURE_ID_MAP_BUFFER_FOR_READ,
-  COGL_FEATURE_ID_MAP_BUFFER_FOR_WRITE,
-  COGL_FEATURE_ID_FENCE,
-  COGL_FEATURE_ID_TEXTURE_RG,
-  COGL_FEATURE_ID_TEXTURE_RGBA1010102,
-  COGL_FEATURE_ID_TEXTURE_HALF_FLOAT,
-  COGL_FEATURE_ID_TEXTURE_NORM16,
-  COGL_FEATURE_ID_BUFFER_AGE,
-  COGL_FEATURE_ID_TEXTURE_EGL_IMAGE_EXTERNAL,
-  COGL_FEATURE_ID_BLIT_FRAMEBUFFER,
-  COGL_FEATURE_ID_TIMESTAMP_QUERY,
-  COGL_FEATURE_ID_SYNC_FD,
-
-  /*< private >*/
-  _COGL_N_FEATURE_IDS   /*< skip >*/
-} CoglFeatureID;
-
-
-/**
- * cogl_context_has_feature:
- * @context: A #CoglContext pointer
- * @feature: A #CoglFeatureID
- *
- * Checks if a given @feature is currently available
- *
- * Cogl does not aim to be a lowest common denominator API, it aims to
- * expose all the interesting features of GPUs to application which
- * means applications have some responsibility to explicitly check
- * that certain features are available before depending on them.
- *
- * Returns: %TRUE if the @feature is currently supported or %FALSE if
- * not.
- */
-COGL_EXPORT gboolean
-cogl_context_has_feature (CoglContext   *context,
-                          CoglFeatureID  feature);
-
-/**
- * CoglGraphicsResetStatus:
- * @COGL_GRAPHICS_RESET_STATUS_NO_ERROR:
- * @COGL_GRAPHICS_RESET_STATUS_GUILTY_CONTEXT_RESET:
- * @COGL_GRAPHICS_RESET_STATUS_INNOCENT_CONTEXT_RESET:
- * @COGL_GRAPHICS_RESET_STATUS_UNKNOWN_CONTEXT_RESET:
- * @COGL_GRAPHICS_RESET_STATUS_PURGED_CONTEXT_RESET:
- *
- * All the error values that might be returned by
- * cogl_context_get_graphics_reset_status(). Each value's meaning corresponds
- * to the similarly named value defined in the ARB_robustness and
- * NV_robustness_video_memory_purge extensions.
- */
-typedef enum _CoglGraphicsResetStatus
-{
-  COGL_GRAPHICS_RESET_STATUS_NO_ERROR,
-  COGL_GRAPHICS_RESET_STATUS_GUILTY_CONTEXT_RESET,
-  COGL_GRAPHICS_RESET_STATUS_INNOCENT_CONTEXT_RESET,
-  COGL_GRAPHICS_RESET_STATUS_UNKNOWN_CONTEXT_RESET,
-  COGL_GRAPHICS_RESET_STATUS_PURGED_CONTEXT_RESET,
-} CoglGraphicsResetStatus;
-
-/**
- * cogl_context_get_graphics_reset_status:
- * @context: a #CoglContext pointer
- *
- * Returns the graphics reset status as reported by
- * GetGraphicsResetStatusARB defined in the ARB_robustness extension.
- *
- * Note that Cogl doesn't normally enable the ARB_robustness
- * extension in which case this will only ever return
- * #COGL_GRAPHICS_RESET_STATUS_NO_ERROR.
- *
- * Return value: a #CoglGraphicsResetStatus
- */
-COGL_EXPORT CoglGraphicsResetStatus
-cogl_context_get_graphics_reset_status (CoglContext *context);
-
-/**
- * cogl_context_is_hardware_accelerated:
- * @context: a #CoglContext pointer
- *
- * Returns: %TRUE if the @context is hardware accelerated, or %FALSE if
- * not.
- */
-COGL_EXPORT gboolean
-cogl_context_is_hardware_accelerated (CoglContext *context);
-
 typedef const char * const CoglPipelineKey;
 
 /**
@@ -298,31 +181,6 @@ cogl_context_set_named_pipeline (CoglContext     *context,
 COGL_EXPORT CoglPipeline *
 cogl_context_get_named_pipeline (CoglContext     *context,
                                  CoglPipelineKey *key);
-
-/**
- * cogl_context_free_timestamp_query:
- * @context: a #CoglContext pointer
- * @query: (transfer full): a #CoglTimestampQuery
- */
-COGL_EXPORT void
-cogl_context_free_timestamp_query (CoglContext        *context,
-                                   CoglTimestampQuery *query);
-
-COGL_EXPORT int64_t
-cogl_context_timestamp_query_get_time_ns (CoglContext        *context,
-                                          CoglTimestampQuery *query);
-
-/**
- * cogl_context_get_gpu_time_ns:
- * @context: a #CoglContext pointer
- *
- * This function should only be called if the COGL_FEATURE_ID_TIMESTAMP_QUERY
- * feature is advertised.
- *
- * Return value: Current GPU time in nanoseconds
- */
-COGL_EXPORT int64_t
-cogl_context_get_gpu_time_ns (CoglContext *context);
 
 /**
  * cogl_context_get_latest_sync_fd
@@ -388,8 +246,6 @@ cogl_context_get_rectangle_indices (CoglContext *context,
  * handle that was setup internally. The result is undefined if Cogl
  * is not using EGL.
  *
- * Note: The current window system backend can be checked using
- * cogl_renderer_get_winsys_id().
  *
  * Return value: The internally setup EGLDisplay handle.
  */
@@ -397,8 +253,13 @@ COGL_EXPORT EGLDisplay
 cogl_context_get_egl_display (CoglContext *context);
 #endif /* HAVE_EGL */
 
-COGL_EXPORT gboolean
-cogl_context_format_supports_upload (CoglContext     *ctx,
-                                     CoglPixelFormat  format);
+/**
+ * cogl_context_get_driver:
+ * @context: A #CoglContext
+ *
+ * Returns: (transfer none): the associated #CoglDriver
+ */
+COGL_EXPORT
+CoglDriver * cogl_context_get_driver (CoglContext *context);
 
 G_END_DECLS

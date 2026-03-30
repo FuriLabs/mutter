@@ -229,6 +229,30 @@ configure_rel (MetaEisClient     *client,
 }
 
 static void
+send_keyboard_modifiers (MetaEisClient *client)
+{
+  MetaBackend *backend = meta_eis_get_backend (client->eis);
+  ClutterSeat *seat = meta_backend_get_default_seat (backend);
+  ClutterKeymap *keymap = clutter_seat_get_keymap (seat);
+  xkb_mod_mask_t depressed_mods;
+  xkb_mod_mask_t latched_mods;
+  xkb_mod_mask_t locked_mods;
+  xkb_layout_index_t group;
+
+  clutter_keymap_get_modifier_state (keymap,
+                                     &depressed_mods,
+                                     &latched_mods,
+                                     &locked_mods);
+  group = clutter_keymap_get_layout_index (keymap);
+
+  eis_device_keyboard_send_xkb_modifiers (client->keyboard_device->eis_device,
+                                          depressed_mods,
+                                          latched_mods,
+                                          locked_mods,
+                                          group);
+}
+
+static void
 configure_keyboard (MetaEisClient     *client,
                     struct eis_device *eis_device,
                     gpointer           user_data)
@@ -242,7 +266,7 @@ configure_keyboard (MetaEisClient     *client,
   eis_device_configure_capability (eis_device, EIS_DEVICE_CAP_KEYBOARD);
 
   xkb_keymap =
-    meta_backend_get_keymap (meta_eis_get_backend (client->eis));
+    meta_backend_get_xkb_keymap (meta_eis_get_backend (client->eis));
   if (!xkb_keymap)
     return;
 
@@ -786,22 +810,7 @@ static void
 on_keymap_state_changed (ClutterKeymap *keymap,
                          MetaEisClient *client)
 {
-  xkb_mod_mask_t depressed_mods;
-  xkb_mod_mask_t latched_mods;
-  xkb_mod_mask_t locked_mods;
-  xkb_layout_index_t group;
-
-  clutter_keymap_get_modifier_state (keymap,
-                                     &depressed_mods,
-                                     &latched_mods,
-                                     &locked_mods);
-  group = clutter_keymap_get_layout_index (keymap);
-
-  eis_device_keyboard_send_xkb_modifiers (client->keyboard_device->eis_device,
-                                          depressed_mods,
-                                          latched_mods,
-                                          locked_mods,
-                                          group);
+  send_keyboard_modifiers (client);
 }
 
 static void
@@ -949,6 +958,7 @@ meta_eis_client_process_event (MetaEisClient    *client,
                                                   CLUTTER_KEYBOARD_DEVICE,
                                                   "virtual keyboard",
                                                   configure_keyboard, NULL);
+            send_keyboard_modifiers (client);
 
             client->keymap_changed_handler_id =
               g_signal_connect (backend, "keymap-changed",
@@ -1124,6 +1134,7 @@ meta_eis_client_disconnect (MetaEisClient *client)
 {
   g_clear_signal_handler (&client->viewports_changed_handler_id, client->eis);
   g_hash_table_foreach_remove (client->eis_devices, drop_device, client);
+  g_clear_pointer (&client->eis_devices, g_hash_table_unref);
   g_clear_pointer (&client->eis_seat, eis_seat_unref);
   if (client->eis_client)
     eis_client_disconnect (client->eis_client);

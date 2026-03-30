@@ -1,6 +1,5 @@
 Source: mutter
 Section: x11
-Priority: optional
 Maintainer: Debian GNOME Maintainers <pkg-gnome-maintainers@lists.alioth.debian.org>
 Uploaders: Jeremy Bícha <jbicha@ubuntu.com>
 Build-Depends: debhelper-compat (= 13),
@@ -28,7 +27,7 @@ Build-Depends: debhelper-compat (= 13),
                gnome-settings-daemon-common <!nocheck>,
                gnome-settings-daemon-dev,
                gobject-introspection (>= 1.80),
-               gsettings-desktop-schemas-dev (>= 40~alpha),
+               gsettings-desktop-schemas-dev (>= 50~alpha),
                gtk-doc-tools,
                libadwaita-1-dev,
                libei-dev (>= 1.3.901),
@@ -47,21 +46,21 @@ Build-Depends: debhelper-compat (= 13),
                libgnome-desktop-4-dev,
                libgraphene-1.0-dev,
                libgtk-3-dev <!nocheck>,
-               libgtk-4-dev (>= 4.14.0),
+               libgtk-4-dev (>= 4.22.0),
                libgudev-1.0-dev (>= 238),
                libice-dev,
-               libinput-dev (>= 1.27.0),
+               libinput-dev (>= 1.30.0),
                libjson-glib-dev,
                liblcms2-dev,
                libnvidia-egl-wayland-dev,
                libpam0g-dev,
                libpango1.0-dev,
-               libpipewire-0.3-dev (>= 1.2.7),
+               libpipewire-0.3-dev (>= 1.6.1),
                libpixman-1-dev (>= 0.42),
                libsm-dev,
                libstartup-notification0-dev,
-               libsysprof-6-dev [amd64 arm64 armhf ppc64el riscv64 s390x],
-               libsysprof-capture-4-dev (>= 3.40.1) [amd64 arm64 armhf ppc64el riscv64 s390x],
+               libsysprof-6-dev [amd64 arm64 armhf loong64 ppc64el riscv64 s390x],
+               libsysprof-capture-4-dev (>= 3.40.1) [amd64 arm64 armhf loong64 ppc64el riscv64 s390x],
                libsystemd-dev,
                libumockdev-dev (>= 0.3.0),
                libwacom-dev,
@@ -69,7 +68,6 @@ Build-Depends: debhelper-compat (= 13),
                libxau-dev,
                libx11-dev,
                libx11-xcb-dev,
-               libxcb-randr0-dev,
                libxcb-res0-dev,
                libxcomposite-dev,
                libxcursor-dev,
@@ -79,8 +77,7 @@ Build-Depends: debhelper-compat (= 13),
                libxi-dev,
                libxinerama-dev,
                libxkbcommon-dev,
-               libxkbcommon-x11-dev,
-               libxkbfile-dev,
+               libxkbregistry-dev,
                libxrandr-dev,
                libxrender-dev,
                meson (>= 1.5.0),
@@ -90,18 +87,17 @@ Build-Depends: debhelper-compat (= 13),
                python3-dbus <!nocheck>,
                python3-dbusmock,
                python3-docutils,
-               sysprof [amd64 arm64 armhf ppc64el riscv64 s390x],
+               sysprof [amd64 arm64 armhf loong64 ppc64el riscv64 s390x],
                systemd-dev,
                umockdev <!nocheck>,
-               wayland-protocols (>= 1.45),
+               wayland-protocols (>= 1.47),
                wireplumber <!nocheck>,
                xauth <!nocheck>,
                xcvt:native,
                xkb-data,
-               xvfb,
                xwayland (>= 2:23.1.0),
                zenity,
-Standards-Version: 4.7.2
+Standards-Version: 4.7.3
 Homepage: https://mutter.gnome.org/
 Vcs-Git: https://salsa.debian.org/gnome-team/mutter.git
 Vcs-Browser: https://salsa.debian.org/gnome-team/mutter
@@ -111,7 +107,7 @@ Architecture: linux-any
 Depends: adwaita-icon-theme,
          gnome-settings-daemon-common,
          gsettings-desktop-schemas (>= 40~alpha),
-         mutter-common (>= ${source:Version}),
+         mutter-common (>= 49.0),
          ${misc:Depends},
          ${shlibs:Depends}
 Provides: x-window-manager
@@ -132,17 +128,17 @@ Description: Example window manager using GNOME's window manager library
  This package contains the mutter executable. It can be used as a
  standalone window manager, but is primarily intended for debugging.
 
-Package: mutter-17-tests
+Package: mutter-18-tests
 Architecture: linux-any
 Depends: at-spi2-core,
          gir1.2-glib-2.0,
          dbus-daemon,
          dmz-cursor-theme,
          libglib2.0-bin,
-         libmutter-17-0 (= ${binary:Version}),
-         libmutter-test-17 (= ${binary:Version}),
+         libmutter-18-0 (= ${binary:Version}),
+         libmutter-test-18 (= ${binary:Version}),
          mutter (= ${binary:Version}),
-         pipewire (>= 1.2.7),
+         pipewire (>= 1.6.0),
          python3,
          python3-gi,
          python3-dbus,
@@ -150,7 +146,6 @@ Depends: at-spi2-core,
          umockdev,
          wireplumber,
          xauth,
-         xvfb,
          xwayland (>= 2:23.1.0),
          zenity,
          ${misc:Depends},
@@ -168,11 +163,11 @@ Description: Tests for GNOME's window manager library
  This package contains test programs, designed to be run as part of a
  regression testsuite.
 
-Package: gir1.2-mutter-17
+Package: gir1.2-mutter-18
 Section: introspection
 Architecture: linux-any
 Multi-Arch: same
-Depends: libmutter-17-0 (= ${binary:Version}),
+Depends: libmutter-18-0 (= ${binary:Version}),
          ${gir:Depends},
          ${misc:Depends}
 Provides: ${gir:Provides}
@@ -189,18 +184,18 @@ Description: GObject introspection data for Mutter
  This package contains the GObject introspection data which may be
  used to generate dynamic bindings.
 
-Package: libmutter-17-0
+Package: libmutter-18-0
 Section: libs
 Architecture: linux-any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: adwaita-icon-theme,
          gsettings-desktop-schemas (>= 40~alpha),
-         mutter-common (>= ${source:Version}),
-         mutter-common-bin (= ${binary:Version}),
+         mutter-common (>= 50~beta),
+         mutter-common-bin (>= 49.0),
          ${misc:Depends},
          ${shlibs:Depends}
-Breaks: gnome-shell (<< 49~rc~),
+Breaks: gnome-shell (<< 50~rc~),
         xwayland (<< 2:23.1.0),
 Description: window manager library from the Mutter window manager
  Mutter is a Wayland display server and X11 window manager and
@@ -215,11 +210,11 @@ Description: window manager library from the Mutter window manager
  This package contains the window manager shared library, used by mutter
  itself, and gnome-shell.
 
-Package: libmutter-17-dev
+Package: libmutter-18-dev
 Section: libdevel
 Architecture: linux-any
 Multi-Arch: same
-Depends: gir1.2-mutter-17 (= ${binary:Version}),
+Depends: gir1.2-mutter-18 (= ${binary:Version}),
          gnome-settings-daemon-dev,
          gobject-introspection,
          gsettings-desktop-schemas-dev (>= 40~alpha),
@@ -237,32 +232,28 @@ Depends: gir1.2-mutter-17 (= ${binary:Version}),
          libglycin-2-dev (>= 2.0~beta.2),
          libgnome-desktop-4-dev,
          libgraphene-1.0-dev,
-         libinput-dev (>= 1.27.0),
+         libinput-dev (>= 1.30.0),
          liblcms2-dev,
-         libmutter-17-0 (= ${binary:Version}),
+         libmutter-18-0 (= ${binary:Version}),
          libnvidia-egl-wayland-dev,
          libpango1.0-dev,
-         libpipewire-0.3-dev (>= 1.2.7),
-         libsysprof-capture-4-dev (>= 3.40.1) [amd64 arm64 armhf ppc64el riscv64 s390x],
+         libpipewire-0.3-dev (>= 1.6.0),
+         libsysprof-capture-4-dev (>= 3.40.1) [amd64 arm64 armhf loong64 ppc64el riscv64 s390x],
          libstartup-notification0-dev,
          libsystemd-dev,
          libwayland-dev (>= 1.24),
          libx11-dev,
          libx11-xcb-dev,
-         libxcb-randr0-dev,
          libxcb-res0-dev,
          libxcomposite-dev,
          libxcursor-dev,
-         libxkbcommon-x11-dev,
          libxdamage-dev,
          libxext-dev,
          libxfixes-dev,
          libxi-dev,
          libxinerama-dev,
          libxkbcommon-dev,
-         libxkbfile-dev,
          libxrandr-dev,
-         libxtst-dev,
          ${gir:Depends},
          ${misc:Depends}
 Provides: ${gir:Provides}
@@ -278,14 +269,14 @@ Description: Development files for the Mutter window manager
  .
  This package contains the development files.
 
-Package: libmutter-test-17
+Package: libmutter-test-18
 Section: libs
 Architecture: linux-any
-Depends: libmutter-17-0 (= ${binary:Version}),
+Depends: libmutter-18-0 (= ${binary:Version}),
          mutter (= ${binary:Version}),
          ${misc:Depends},
          ${shlibs:Depends}
-Provides: gir1.2-metatest-17
+Provides: gir1.2-metatest-18
 Description: Test helper library for GNOME's window manager library
  Mutter is a Wayland display server and X11 window manager and
  compositor library. It contains functionality related to, among other
@@ -302,6 +293,7 @@ Multi-Arch: foreign
 Depends: ${misc:Depends},
          python3,
 Breaks: magpie-common (<< 0.9.3-0ubuntu8~),
+        libmutter-17-0 (<< 50~),
         libmutter-16-0 (<< 49~),
         libmutter-15-0 (<< 49~),
         libmutter-14-0 (<< 49~),
@@ -332,7 +324,8 @@ Depends: ${misc:Depends},
          python3,
          python3-gi,
 Suggests: python3-argcomplete,
-Breaks: mutter (<< 48.1~)
+Breaks: mutter (<< 48.1~),
+        libmutter-17-0 (<< 50~)
 Replaces: mutter (<< 48.1~)
 Description: shared programs for the Mutter window manager
  Mutter is a Wayland display server and X11 window manager and

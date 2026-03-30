@@ -800,6 +800,8 @@ kms_test_cases = [
     'name': 'kms-render',
     'suite': 'backends/native/kms',
     'sources': [
+      'meta-kms-test-utils.c',
+      'meta-kms-test-utils.h',
       'native-kms-render.c',
       wayland_test_utils,
     ],
@@ -949,10 +951,37 @@ wayland_test_cases = [
     ],
   },
   {
+    'name': 'wayland-stable-rounding',
+    'suite': 'wayland',
+    'sources': [
+      'wayland-stable-rounding-test.c',
+      wayland_test_utils,
+    ],
+    'depends': [
+      test_client_executables.get('stable-rounding'),
+    ],
+  },
+  {
     'name': 'window-config',
     'suite': 'wayland',
     'sources': [
       'window-config-tests.c',
+      wayland_test_utils,
+    ],
+  },
+  {
+    'name': 'external-constraint',
+    'suite': 'wayland',
+    'sources': [
+      'external-constraint-tests.c',
+      wayland_test_utils,
+    ],
+  },
+  {
+    'name': 'window-mapped-inhibit',
+    'suite': 'wayland',
+    'sources': [
+      'window-mapped-inhibit-tests.c',
       wayland_test_utils,
     ],
   },
@@ -994,11 +1023,12 @@ wayland_test_cases = [
       test_client_executables.get('service-client'),
       test_client_executables.get('shm-destroy-before-release'),
       test_client_executables.get('single-pixel-buffer'),
+      test_client_executables.get('stable-rounding'),
       test_client_executables.get('subsurface-corner-cases'),
       test_client_executables.get('subsurface-parent-unmapped'),
       test_client_executables.get('subsurface-remap-toplevel'),
       test_client_executables.get('subsurface-reparenting'),
-      test_client_executables.get('xdg-activation'),
+      test_client_executables.get('xdg-activation-no-serial'),
       test_client_executables.get('xdg-activation-before-mapped'),
       test_client_executables.get('xdg-apply-limits'),
       test_client_executables.get('xdg-foreign'),
@@ -1193,6 +1223,7 @@ stacking_tests = [
   'partially-maximized',
   'move-to-monitor',
   'keyboard-resize',
+  'move-to-smaller-monitor',
 ]
 
 foreach stacking_test: stacking_tests
@@ -1270,40 +1301,6 @@ if have_kvm_tests or have_tty_tests
       )
     endforeach
   endif
-endif
-
-if have_x11_tests
-  xvfb_args = [
-    '-a',
-    '-s',
-    '+iglx -noreset',
-  ]
-
-  zenity = find_program('zenity', required: true)
-
-  foreach mode: ['', 'sync']
-    x11_env = test_env
-    x11_env.set('ZENITY', zenity.full_path())
-    if mode == 'sync'
-      x11_env.set('MUTTER_SYNC', '1')
-    endif
-    test('x11' + (mode != '' ? '-' + mode : ''), xvfb,
-      args: [
-        xvfb_args,
-        find_program('x11-test.sh').full_path(),
-        mutter.full_path(),
-      ],
-      depends: [
-        mutter,
-        default_plugin,
-        x11_frames,
-      ],
-      env: x11_env,
-      suite: ['core', 'mutter/x11'],
-      is_parallel: false,
-      timeout: 60,
-    )
-  endforeach
 endif
 
 tools_test_env = test_env

@@ -418,6 +418,9 @@ xserver_died (GObject      *source,
       g_clear_error (&error);
     }
 
+  g_clear_object (&manager->xserver_died_cancellable);
+  g_clear_object (&manager->proc);
+
   x11_display_policy =
     meta_context_get_x11_display_policy (compositor->context);
   if (!g_subprocess_get_successful (proc))
@@ -597,21 +600,22 @@ open_display_sockets (MetaXWaylandManager  *manager,
                       int                  *unix_fd_out,
                       GError              **error)
 {
-  int abstract_fd, unix_fd;
+  g_autofd int abstract_fd = -1, unix_fd = -1;
 
-  abstract_fd = bind_to_abstract_socket (display_index, error);
-  if (abstract_fd < 0)
-    return FALSE;
+  if (abstract_fd_out)
+    {
+      abstract_fd = bind_to_abstract_socket (display_index, error);
+      if (abstract_fd < 0)
+        return FALSE;
+    }
 
   unix_fd = bind_to_unix_socket (display_index, error);
   if (unix_fd < 0)
-    {
-      close (abstract_fd);
-      return FALSE;
-    }
+    return FALSE;
 
-  *abstract_fd_out = abstract_fd;
-  *unix_fd_out = unix_fd;
+  if (abstract_fd_out)
+    *abstract_fd_out = g_steal_fd (&abstract_fd);
+  *unix_fd_out = g_steal_fd (&unix_fd);
 
   return TRUE;
 }
@@ -631,9 +635,10 @@ choose_xdisplay (MetaXWaylandManager     *manager,
   do
     {
       g_autoptr (GError) local_error = NULL;
+      g_autofree char *file = NULL;
 
-      lock_file = create_lock_file (*display, display, &local_error);
-      if (!lock_file)
+      file = create_lock_file (*display, display, &local_error);
+      if (!file)
         {
           g_prefix_error (&local_error, "Failed to create an X lock file: ");
           g_propagate_error (error, g_steal_pointer (&local_error));
@@ -645,13 +650,12 @@ choose_xdisplay (MetaXWaylandManager     *manager,
                                  &connection->unix_fd,
                                  &local_error))
         {
-          unlink (lock_file);
+          unlink (file);
 
           if (++number_of_tries >= 50)
             {
               g_prefix_error (&local_error, "Failed to bind X11 socket: ");
               g_propagate_error (error, g_steal_pointer (&local_error));
-              g_free (lock_file);
               return FALSE;
             }
 
@@ -659,12 +663,13 @@ choose_xdisplay (MetaXWaylandManager     *manager,
           continue;
         }
 
+      lock_file = g_steal_pointer (&file);
+
       break;
     }
   while (1);
 
   connection->display_index = *display;
-  connection->name = g_strdup_printf (":%d", connection->display_index);
   connection->lock_file = lock_file;
 
   return TRUE;
@@ -860,7 +865,7 @@ meta_xwayland_start_xserver (MetaXWaylandManager *manager,
   g_subprocess_launcher_take_fd (launcher,
                                  steal_fd (&displayfd[1]), 6);
   g_subprocess_launcher_take_fd (launcher,
-                                 steal_fd (&manager->private_connection.abstract_fd), 7);
+                                 steal_fd (&manager->private_connection.unix_fd), 7);
 
   g_subprocess_launcher_setenv (launcher, "WAYLAND_SOCKET", "3", TRUE);
 
@@ -1097,10 +1102,15 @@ meta_xwayland_init (MetaXWaylandManager    *manager,
     {
       if (!choose_xdisplay (manager, &manager->public_connection, &display, error))
         return FALSE;
+      manager->public_connection.name =
+        g_strdup_printf (":%d", manager->public_connection.display_index);
 
       display++;
       if (!choose_xdisplay (manager, &manager->private_connection, &display, error))
         return FALSE;
+      manager->private_connection.name =
+        g_strdup_printf ("unix:%s%d", X11_TMP_UNIX_PATH,
+                         manager->private_connection.display_index);
 
       if (!prepare_auth_file (manager, error))
         return FALSE;
@@ -1116,7 +1126,7 @@ meta_xwayland_init (MetaXWaylandManager    *manager,
 
       if (!open_display_sockets (manager,
                                  manager->private_connection.display_index,
-                                 &manager->private_connection.abstract_fd,
+                                 NULL,
                                  &manager->private_connection.unix_fd,
                                  error))
         return FALSE;
@@ -1148,7 +1158,7 @@ meta_xwayland_init (MetaXWaylandManager    *manager,
   /* Xwayland specific protocol, needs to be filtered out for all other clients */
   meta_xwayland_grab_keyboard_init (compositor);
 
-  g_signal_connect_swapped (monitor_manager, "monitors-changed-internal",
+  g_signal_connect_swapped (monitor_manager, "monitors-changing",
                             G_CALLBACK (update_highest_monitor_scale), manager);
   update_highest_monitor_scale (manager);
 
@@ -1344,22 +1354,25 @@ meta_xwayland_get_effective_scale (MetaXWaylandManager *manager)
   MetaBackend *backend = meta_context_get_backend (context);
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (backend);
-  MetaSettings *settings = meta_backend_get_settings (backend);
 
   switch (meta_monitor_manager_get_layout_mode (monitor_manager))
     {
     case META_LOGICAL_MONITOR_LAYOUT_MODE_PHYSICAL:
-      break;
-
+      return 1;
     case META_LOGICAL_MONITOR_LAYOUT_MODE_LOGICAL:
-      if (meta_settings_is_experimental_feature_enabled (settings,
-                                                         META_EXPERIMENTAL_FEATURE_XWAYLAND_NATIVE_SCALING) &&
-          meta_settings_is_experimental_feature_enabled (settings,
-                                                         META_EXPERIMENTAL_FEATURE_SCALE_MONITOR_FRAMEBUFFER))
-        return (int) ceil (manager->highest_monitor_scale);
+      {
+        MetaSettings *settings = meta_backend_get_settings (backend);
+        float scaling_factor;
+
+        if (meta_settings_get_xwayland_scaling_factor (settings,
+                                                       &scaling_factor))
+          return (int) roundf (scaling_factor);
+        else
+          return (int) ceil (manager->highest_monitor_scale);
+      }
     }
 
-  return 1;
+  g_assert_not_reached ();
 }
 
 int

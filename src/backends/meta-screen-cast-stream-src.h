@@ -24,7 +24,6 @@
 
 #include "backends/meta-backend-private.h"
 #include "backends/meta-cursor-renderer.h"
-#include "backends/meta-cursor.h"
 #include "backends/meta-renderer.h"
 #include "clutter/clutter.h"
 #include "cogl/cogl.h"
@@ -51,6 +50,18 @@ typedef enum _MetaScreenCastPaintPhase
   META_SCREEN_CAST_PAINT_PHASE_PRE_PAINT,
   META_SCREEN_CAST_PAINT_PHASE_PRE_SWAP_BUFFER,
 } MetaScreenCastPaintPhase;
+
+typedef struct _MetaTagEntry
+{
+  char *key;
+  char *value;
+} MetaTagEntry;
+
+typedef struct _MetaScreenCastFormat
+{
+  CoglPixelFormat format;
+  ClutterColorState *color_state;
+} MetaScreenCastFormat;
 
 /* Declare some SPA types to avoid including the headers in too many places. */
 struct spa_meta_cursor;
@@ -83,7 +94,8 @@ struct _MetaScreenCastStreamSrcClass
                                       MetaScreenCastPaintPhase   paint_phase,
                                       CoglFramebuffer           *framebuffer,
                                       GError                   **error);
-  void (* record_follow_up) (MetaScreenCastStreamSrc *src);
+  void (* queue_follow_up) (MetaScreenCastStreamSrc  *src,
+                            MetaScreenCastRecordFlag  flags);
 
   gboolean (* get_videocrop) (MetaScreenCastStreamSrc *src,
                               MtkRectangle            *crop_rect);
@@ -94,14 +106,24 @@ struct _MetaScreenCastStreamSrcClass
   void (* notify_params_updated) (MetaScreenCastStreamSrc   *src,
                                   struct spa_video_info_raw *video_format);
 
-  CoglPixelFormat (* get_preferred_format) (MetaScreenCastStreamSrc *src);
+  const MetaScreenCastFormat * (* get_formats) (MetaScreenCastStreamSrc *src);
 
   void (* dispatch) (MetaScreenCastStreamSrc *src);
+
+  void (* append_tags) (MetaScreenCastStreamSrc *src,
+                        GArray                  *tags);
+  void (* tag_changed) (MetaScreenCastStreamSrc *src,
+                        const char              *key,
+                        const char              *value);
 };
 
 void meta_screen_cast_stream_src_close (MetaScreenCastStreamSrc *src);
 
 gboolean meta_screen_cast_stream_src_is_enabled (MetaScreenCastStreamSrc *src);
+
+void meta_screen_cast_stream_src_accumulate_damage (MetaScreenCastStreamSrc  *src,
+                                                    MetaScreenCastRecordFlag  flags,
+                                                    const MtkRegion          *redraw_clip);
 
 MetaScreenCastRecordResult meta_screen_cast_stream_src_maybe_record_frame (MetaScreenCastStreamSrc  *src,
                                                                            MetaScreenCastRecordFlag  flags,
@@ -129,8 +151,6 @@ gboolean meta_screen_cast_stream_src_is_driving (MetaScreenCastStreamSrc *src);
 
 void meta_screen_cast_stream_src_request_process (MetaScreenCastStreamSrc *src);
 
-gboolean meta_screen_cast_stream_src_pending_follow_up_frame (MetaScreenCastStreamSrc *src);
-
 MetaScreenCastStream * meta_screen_cast_stream_src_get_stream (MetaScreenCastStreamSrc *src);
 
 gboolean meta_screen_cast_stream_src_draw_cursor_into (MetaScreenCastStreamSrc  *src,
@@ -156,14 +176,17 @@ void meta_screen_cast_stream_src_set_empty_cursor_sprite_metadata (MetaScreenCas
 
 void meta_screen_cast_stream_src_set_cursor_sprite_metadata (MetaScreenCastStreamSrc *src,
                                                              struct spa_meta_cursor  *spa_meta_cursor,
-                                                             MetaCursorSprite        *cursor_sprite,
+                                                             ClutterCursor           *cursor,
                                                              int                      x,
                                                              int                      y,
                                                              float                    view_scale);
 
 gboolean meta_screen_cast_stream_src_uses_dma_bufs (MetaScreenCastStreamSrc *src);
 
-CoglPixelFormat
-meta_screen_cast_stream_src_get_preferred_format (MetaScreenCastStreamSrc *src);
+const MetaScreenCastFormat * meta_screen_cast_stream_src_get_formats (MetaScreenCastStreamSrc *src);
 
 void meta_screen_cast_stream_src_queue_empty_buffer (MetaScreenCastStreamSrc *src);
+
+void meta_screen_cast_stream_src_renegotiate (MetaScreenCastStreamSrc *src);
+
+ClutterColorState * meta_screen_cast_stream_src_get_color_state (MetaScreenCastStreamSrc *src);

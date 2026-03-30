@@ -63,8 +63,8 @@ void meta_wayland_pointer_broadcast_frame (MetaWaylandPointer *pointer);
 
 void meta_wayland_pointer_get_relative_coordinates (MetaWaylandPointer *pointer,
                                                     MetaWaylandSurface *surface,
-                                                    wl_fixed_t         *x,
-                                                    wl_fixed_t         *y);
+                                                    float              *x,
+                                                    float              *y);
 
 void meta_wayland_pointer_create_new_resource (MetaWaylandPointer *pointer,
                                                struct wl_client   *client,
@@ -94,8 +94,6 @@ void meta_wayland_relative_pointer_init (MetaWaylandCompositor *compositor);
 
 MetaWaylandSeat *meta_wayland_pointer_get_seat (MetaWaylandPointer *pointer);
 
-void meta_wayland_pointer_update_cursor_surface (MetaWaylandPointer *pointer);
-
 MetaWaylandSurface * meta_wayland_pointer_get_current_surface (MetaWaylandPointer *pointer);
 
 META_EXPORT_TEST
@@ -109,8 +107,10 @@ MetaWaylandSurface * meta_wayland_pointer_get_implicit_grab_surface (MetaWayland
 MetaWaylandPointerClient * meta_wayland_pointer_get_focus_client (MetaWaylandPointer *pointer);
 
 void meta_wayland_pointer_set_cursor_shape (MetaWaylandPointer *pointer,
-                                            MetaCursor          shape);
+                                            ClutterCursorType   shape);
 
 gboolean meta_wayland_pointer_check_focus_serial (MetaWaylandPointer *pointer,
                                                   struct wl_client   *client,
                                                   uint32_t            serial);
+
+ClutterCursor * meta_wayland_pointer_get_cursor (MetaWaylandPointer *pointer);

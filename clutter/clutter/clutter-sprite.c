@@ -28,10 +28,12 @@
 #include "clutter/clutter-action-private.h"
 #include "clutter/clutter-actor-private.h"
 #include "clutter/clutter-debug.h"
+#include "clutter/clutter-enum-types.h"
 #include "clutter/clutter-event-private.h"
 #include "clutter/clutter-focus-private.h"
 #include "clutter/clutter-grab.h"
 #include "clutter/clutter-private.h"
+#include "clutter/clutter-seat-private.h"
 #include "clutter/clutter-stage.h"
 
 typedef struct _EventReceiver
@@ -46,8 +48,9 @@ typedef struct _EventReceiver
 enum
 {
   PROP_0,
-  PROP_DEVICE,
+  PROP_SPRITE_DEVICE,
   PROP_SEQUENCE,
+  PROP_ROLE,
   N_PROPS,
 };
 
@@ -57,7 +60,7 @@ typedef struct _ClutterSpritePrivate ClutterSpritePrivate;
 
 struct _ClutterSpritePrivate
 {
-  ClutterInputDevice *device;
+  ClutterInputDevice *sprite_device;
   ClutterEventSequence *sequence;
   graphene_point_t coords;
   ClutterActor *current_actor;
@@ -65,10 +68,13 @@ struct _ClutterSpritePrivate
 
   GPtrArray *cur_event_actors;
   GArray *cur_event_emission_chain;
+  ClutterSpriteRole role;
 
   unsigned int press_count;
   ClutterActor *implicit_grab_actor;
   GArray *event_emission_chain;
+
+  ClutterCursor *cursor;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (ClutterSprite, clutter_sprite, CLUTTER_TYPE_FOCUS)
@@ -136,6 +142,8 @@ cleanup_implicit_grab (ClutterSprite *sprite)
                         priv->event_emission_chain->len);
 
   priv->press_count = 0;
+
+  clutter_sprite_invalidate_cursor (sprite);
 }
 
 static gboolean
@@ -155,7 +163,7 @@ setup_implicit_grab (ClutterSprite *sprite)
 
   CLUTTER_NOTE (GRABS,
                 "[device=%p sequence=%p] Acquiring implicit grab",
-                priv->device, priv->sequence);
+                priv->sprite_device, priv->sequence);
 
   g_assert (priv->press_count == 0);
   g_assert (priv->event_emission_chain->len == 0);
@@ -181,7 +189,7 @@ release_implicit_grab (ClutterSprite *sprite)
 
   CLUTTER_NOTE (GRABS,
                 "[device=%p sequence=%p] Releasing implicit grab",
-                priv->device, priv->sequence);
+                priv->sprite_device, priv->sequence);
 
   g_assert (priv->press_count == 1);
 
@@ -205,6 +213,26 @@ clutter_sprite_remove_all_actions_from_chain (ClutterSprite *sprite)
           clutter_action_sequence_cancelled (receiver->action, sprite);
           g_clear_object (&receiver->action);
         }
+    }
+}
+
+static ClutterInputDevice *
+get_source_device_for_crossing (ClutterSprite *sprite)
+{
+  ClutterSpritePrivate *priv = clutter_sprite_get_instance_private (sprite);
+
+  if (priv->sprite_device)
+    {
+      return priv->sprite_device;
+    }
+  else
+    {
+      ClutterStage *stage = clutter_focus_get_stage (CLUTTER_FOCUS (sprite));
+      ClutterContext *context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
+      ClutterBackend *backend = clutter_context_get_backend (context);
+      ClutterSeat *seat = clutter_backend_get_default_seat (backend);
+
+      return clutter_seat_get_virtual_source_pointer (seat);
     }
 }
 
@@ -235,7 +263,7 @@ sync_crossings_on_implicit_grab_end (ClutterSprite *sprite)
   crossing = clutter_event_crossing_new (CLUTTER_ENTER,
                                          CLUTTER_EVENT_FLAG_GRAB_NOTIFY,
                                          CLUTTER_CURRENT_TIME,
-                                         priv->device,
+                                         get_source_device_for_crossing (sprite),
                                          priv->sequence,
                                          priv->coords,
                                          priv->current_actor,
@@ -344,6 +372,7 @@ create_event_emission_chain (ClutterSprite *sprite,
                              ClutterActor  *deepmost)
 {
   ClutterSpritePrivate *priv = clutter_sprite_get_instance_private (sprite);
+  const GList *l;
   int i;
 
   g_assert (priv->cur_event_actors->len == 0);
@@ -352,7 +381,6 @@ create_event_emission_chain (ClutterSprite *sprite,
   for (i = priv->cur_event_actors->len - 1; i >= 0; i--)
     {
       ClutterActor *actor = g_ptr_array_index (priv->cur_event_actors, i);
-      const GList *l;
 
       for (l = clutter_actor_peek_actions (actor); l; l = l->next)
         {
@@ -366,10 +394,18 @@ create_event_emission_chain (ClutterSprite *sprite,
       add_actor_to_event_emission_chain (chain, actor, CLUTTER_PHASE_CAPTURE);
     }
 
+  for (l = clutter_actor_peek_actions (deepmost); l; l = l->next)
+    {
+      ClutterAction *action = l->data;
+
+      if (clutter_actor_meta_get_enabled (CLUTTER_ACTOR_META (action)) &&
+          clutter_action_get_phase (action) == CLUTTER_PHASE_TARGET)
+        add_action_to_event_emission_chain (chain, action);
+    }
+
   for (i = 0; i < priv->cur_event_actors->len; i++)
     {
       ClutterActor *actor = g_ptr_array_index (priv->cur_event_actors, i);
-      const GList *l;
 
       for (l = clutter_actor_peek_actions (actor); l; l = l->next)
         {
@@ -427,6 +463,8 @@ clutter_sprite_finalize (GObject *object)
   g_assert (priv->cur_event_emission_chain->len == 0);
   g_clear_pointer (&priv->cur_event_emission_chain, g_array_unref);
 
+  g_clear_object (&priv->cursor);
+
   G_OBJECT_CLASS (clutter_sprite_parent_class)->finalize (object);
 }
 
@@ -441,11 +479,14 @@ clutter_sprite_set_property (GObject      *object,
 
   switch (prop_id)
     {
-    case PROP_DEVICE:
-      priv->device = g_value_get_object (value);
+    case PROP_SPRITE_DEVICE:
+      priv->sprite_device = g_value_get_object (value);
       break;
     case PROP_SEQUENCE:
       priv->sequence = g_value_get_boxed (value);
+      break;
+    case PROP_ROLE:
+      priv->role = g_value_get_enum (value);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -464,11 +505,14 @@ clutter_sprite_get_property (GObject    *object,
 
   switch (prop_id)
     {
-    case PROP_DEVICE:
-      g_value_set_object (value, priv->device);
+    case PROP_SPRITE_DEVICE:
+      g_value_set_object (value, priv->sprite_device);
       break;
     case PROP_SEQUENCE:
       g_value_set_boxed (value, priv->sequence);
+      break;
+    case PROP_ROLE:
+      g_value_set_enum (value, priv->role);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -504,7 +548,10 @@ clutter_sprite_set_current_actor (ClutterFocus       *focus,
   root = find_common_root_actor (stage, actor, old_actor);
 
   if (!source_device)
-    source_device = priv->device;
+    source_device = get_source_device_for_crossing (sprite);
+
+  if (!source_device)
+    return TRUE;
 
   grab_actor = clutter_stage_get_grab_actor (stage);
 
@@ -564,6 +611,8 @@ clutter_sprite_set_current_actor (ClutterFocus       *focus,
       clutter_event_free (event);
     }
 
+  clutter_sprite_invalidate_cursor (sprite);
+
   return TRUE;
 }
 
@@ -604,7 +653,7 @@ clutter_sprite_notify_grab (ClutterFocus *focus,
 
   if (grab_actor && priv->press_count > 0)
     {
-      ClutterInputDevice *device = priv->device;
+      ClutterInputDevice *device = priv->sprite_device;
       ClutterEventSequence *sequence = priv->sequence;
       unsigned int i;
 
@@ -730,7 +779,7 @@ clutter_sprite_notify_grab (ClutterFocus *focus,
       event = clutter_event_crossing_new (event_type,
                                           CLUTTER_EVENT_FLAG_GRAB_NOTIFY,
                                           CLUTTER_CURRENT_TIME,
-                                          priv->device,
+                                          get_source_device_for_crossing (sprite),
                                           priv->sequence,
                                           priv->coords,
                                           priv->current_actor,
@@ -890,8 +939,8 @@ clutter_sprite_class_init (ClutterSpriteClass *klass)
   focus_class->propagate_event = clutter_sprite_propagate_event;
   focus_class->notify_grab = clutter_sprite_notify_grab;
 
-  props[PROP_DEVICE] =
-    g_param_spec_object ("device", NULL, NULL,
+  props[PROP_SPRITE_DEVICE] =
+    g_param_spec_object ("sprite-device", NULL, NULL,
                          CLUTTER_TYPE_INPUT_DEVICE,
                          G_PARAM_READWRITE |
                          G_PARAM_STATIC_STRINGS |
@@ -902,16 +951,23 @@ clutter_sprite_class_init (ClutterSpriteClass *klass)
                         G_PARAM_READWRITE |
                         G_PARAM_STATIC_STRINGS |
                         G_PARAM_CONSTRUCT_ONLY);
+  props[PROP_ROLE] =
+    g_param_spec_enum ("role", NULL, NULL,
+                       CLUTTER_TYPE_SPRITE_ROLE,
+                       CLUTTER_SPRITE_ROLE_POINTER,
+                       G_PARAM_READWRITE |
+                       G_PARAM_STATIC_STRINGS |
+                       G_PARAM_CONSTRUCT_ONLY);
 
   g_object_class_install_properties (object_class, N_PROPS, props);
 }
 
 ClutterInputDevice *
-clutter_sprite_get_device (ClutterSprite *sprite)
+clutter_sprite_get_sprite_device (ClutterSprite *sprite)
 {
   ClutterSpritePrivate *priv = clutter_sprite_get_instance_private (sprite);
 
-  return priv->device;
+  return priv->sprite_device;
 }
 
 ClutterEventSequence *
@@ -1022,7 +1078,7 @@ clutter_sprite_maybe_break_implicit_grab (ClutterSprite *sprite,
   CLUTTER_NOTE (GRABS,
                 "[device=%p sequence=%p] Cancelling implicit grab on actor (%s) "
                 "due to unmap",
-                priv->device, priv->sequence,
+                priv->sprite_device, priv->sequence,
                 _clutter_actor_get_debug_name (actor));
 
   for (i = 0; i < priv->event_emission_chain->len; i++)
@@ -1058,6 +1114,8 @@ clutter_sprite_maybe_break_implicit_grab (ClutterSprite *sprite,
       priv->implicit_grab_actor = parent;
       clutter_actor_set_implicitly_grabbed (priv->implicit_grab_actor, TRUE);
     }
+
+  clutter_sprite_invalidate_cursor (sprite);
 }
 
 void
@@ -1116,4 +1174,68 @@ clutter_sprite_point_in_clear_area (ClutterSprite    *sprite,
 
   return mtk_region_contains_point (priv->clear_area,
                                     (int) point.x, (int) point.y);
+}
+
+ClutterSpriteRole
+clutter_sprite_get_role (ClutterSprite *sprite)
+{
+  ClutterSpritePrivate *priv = clutter_sprite_get_instance_private (sprite);
+
+  return priv->role;
+}
+
+void
+clutter_sprite_invalidate_cursor (ClutterSprite *sprite)
+{
+  ClutterSpritePrivate *priv = clutter_sprite_get_instance_private (sprite);
+  ClutterActor *actor = NULL, *grab_actor;
+  ClutterStage *stage = clutter_focus_get_stage (CLUTTER_FOCUS (sprite));
+  ClutterContext *context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
+  ClutterBackend *backend = clutter_context_get_backend (context);
+  ClutterSeat *seat = clutter_backend_get_default_seat (backend);
+  g_autoptr (ClutterCursor) cursor = NULL;
+
+  if (clutter_sprite_get_role (sprite) == CLUTTER_SPRITE_ROLE_POINTER &&
+      !clutter_seat_is_unfocus_inhibited (seat))
+    goto out;
+
+  /* If there's an implicit grab, use this actor */
+  if (priv->implicit_grab_actor)
+    actor = priv->implicit_grab_actor;
+  else if (priv->current_actor)
+    actor = priv->current_actor;
+
+  /* If there is no focus actor, this sprite is on its way out
+   * (touch_end, proximity_out, ...)
+   */
+  if (!actor)
+    goto out;
+
+  /* Make cursor honor explicit grab semantics when outside of the
+   * grabbed subtree
+   */
+  grab_actor = clutter_stage_get_grab_actor (stage);
+  if (grab_actor && !clutter_actor_contains (grab_actor, actor))
+    actor = grab_actor;
+
+  cursor = clutter_actor_get_cursor_for_sprite (actor, sprite);
+
+  /* Delay cursor updates if no cursor is given */
+  if (!cursor)
+    return;
+
+ out:
+  if (g_set_object (&priv->cursor, cursor))
+    {
+      if (CLUTTER_SPRITE_GET_CLASS (sprite)->update_cursor)
+        CLUTTER_SPRITE_GET_CLASS (sprite)->update_cursor (sprite, priv->cursor);
+    }
+}
+
+ClutterCursor *
+clutter_sprite_get_cursor (ClutterSprite *sprite)
+{
+  ClutterSpritePrivate *priv = clutter_sprite_get_instance_private (sprite);
+
+  return priv->cursor;
 }

@@ -86,8 +86,8 @@ service_client_thread_func (gpointer user_data)
   g_autoptr (GVariant) result = NULL;
   g_autoptr (GVariant) fd_variant = NULL;
   g_autoptr (GUnixFDList) fd_list = NULL;
-  g_autoptr (WaylandDisplay) display = NULL;
-  g_autoptr (WaylandSurface) surface = NULL;
+  WaylandDisplay *display;
+  WaylandSurface *surface;
   g_auto(GVariantBuilder) options_builder =
     G_VARIANT_BUILDER_INIT (G_VARIANT_TYPE_VARDICT);
   g_autofd int fd = -1;
@@ -134,22 +134,29 @@ service_client_thread_func (gpointer user_data)
   g_assert_cmpint (fd, >=, 0);
 
   /* Test that we can connect to the Wayland display */
-  wayland_display = wl_display_connect_to_fd (fd);
+  wayland_display = wl_display_connect_to_fd (g_steal_fd (&fd));
   g_assert_nonnull (wayland_display);
 
   display = wayland_display_new_full (WAYLAND_DISPLAY_CAPABILITY_TEST_DRIVER,
                                       wayland_display);
   g_assert_nonnull (display);
+  g_object_add_weak_pointer (G_OBJECT (display), (gpointer *) &display);
 
   surface = wayland_surface_new (display, "test-tagged-window",
-                  100, 100, 0xffabcdff);
+                                 100, 100, 0xffabcdff);
   g_assert_nonnull (surface);
 
   wl_surface_commit (surface->wl_surface);
   wait_for_sync_event (display, 0);
+
+  g_object_unref (surface);
   g_object_unref (display);
+  g_assert_null (display);
 
   g_atomic_int_set (&testdata->client_terminated, TRUE);
+
+  g_clear_object (&service_channel_proxy);
+  while (g_main_context_iteration (thread_main_context, FALSE));
 
   return NULL;
 }
@@ -195,7 +202,7 @@ meta_test_service_channel_open_wayland_connection (void)
     g_main_context_iteration (NULL, TRUE);
 
   g_debug ("Waiting for thread to terminate");
-  g_thread_join (thread);
+  g_thread_join (g_steal_pointer (&thread));
 }
 
 static void

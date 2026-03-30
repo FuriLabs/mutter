@@ -83,7 +83,6 @@ typedef struct _MetaReadBytesContext
 } MetaReadBytesContext;
 
 static gint verbose_topics = 0;
-static gboolean is_wayland_compositor = FALSE;
 static int debug_paint_flags = 0;
 static GLogLevelFlags mutter_log_level = G_LOG_LEVEL_MESSAGE;
 
@@ -224,18 +223,6 @@ meta_init_debug_utils (void)
 
   if (g_test_initialized ())
     mutter_log_level = G_LOG_LEVEL_DEBUG;
-}
-
-gboolean
-meta_is_wayland_compositor (void)
-{
-  return is_wayland_compositor;
-}
-
-void
-meta_set_is_wayland_compositor (gboolean value)
-{
-  is_wayland_compositor = value;
 }
 
 char *
@@ -441,6 +428,14 @@ meta_is_topic_enabled (MetaDebugTopic topic)
     return FALSE;
 
   return !!(verbose_topics & topic);
+}
+
+#else /* WITH_VERBOSE_MODE */
+
+gboolean
+meta_is_topic_enabled (MetaDebugTopic topic)
+{
+  return FALSE;
 }
 #endif /* WITH_VERBOSE_MODE */
 
