@@ -38,6 +38,7 @@
 #include "core/events.h"
 #include "core/meta-context-private.h"
 #include "wayland/meta-wayland-activation.h"
+#include "wayland/meta-wayland-android-wlegl.h"
 #include "wayland/meta-wayland-buffer.h"
 #include "wayland/meta-wayland-client-private.h"
 #include "wayland/meta-wayland-color-management.h"
@@ -1063,6 +1064,7 @@ meta_wayland_compositor_new (MetaContext *context)
   meta_wayland_idle_inhibit_init (compositor);
   meta_wayland_drm_syncobj_init (compositor);
   meta_wayland_init_xdg_wm_dialog (compositor);
+  meta_wayland_android_wlegl_init (compositor);
   meta_wayland_init_color_management (compositor);
   meta_wayland_xdg_session_management_init (compositor);
   meta_wayland_init_system_bell (compositor);

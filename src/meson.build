@@ -567,6 +567,8 @@ mutter_sources += [
   'wayland/meta-wayland-activation.h',
   'wayland/meta-wayland-actor-surface.c',
   'wayland/meta-wayland-actor-surface.h',
+  'wayland/meta-wayland-android-wlegl.c',
+  'wayland/meta-wayland-android-wlegl.h',
   'wayland/meta-wayland-buffer.c',
   'wayland/meta-wayland-buffer.h',
   'wayland/meta-wayland.c',
@@ -1136,6 +1138,7 @@ wayland_protocol_sources = []
 #    * 'eglstreams' are from wayland-eglstream-protocols
 #  - protocol version (optional for 'stable', 'staging' and 'unstable')
 wayland_protocols = [
+  ['wayland-android', 'private', ],
   ['color-management', 'staging', 1, ],
   ['color-representation', 'staging', 1, ],
   ['commit-timing', 'staging', 1, ],

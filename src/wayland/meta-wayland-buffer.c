@@ -56,6 +56,7 @@
 #include "cogl/cogl-texture-private.h"
 #include "meta/util.h"
 #include "wayland/meta-wayland-dma-buf.h"
+#include "wayland/meta-wayland-android-wlegl.h"
 #include "wayland/meta-wayland-private.h"
 #include "common/meta-cogl-drm-formats.h"
 #include "common/meta-drm-format-helpers.h"
@@ -69,6 +70,13 @@
 #include "backends/native/meta-onscreen-native.h"
 #include "backends/native/meta-renderer-native.h"
 #endif
+
+#include <hybris/eglplatformcommon/hybris_nativebufferext.h>
+#include <hardware/gralloc.h>
+#include <hybris/gralloc/gralloc.h>
+
+#include <GLES3/gl3.h>
+#include <GLES2/gl2ext.h>
 
 #define META_WAYLAND_SHM_MAX_PLANES 4
 
@@ -172,6 +180,28 @@ meta_wayland_buffer_realize (MetaWaylandBuffer *buffer)
       return TRUE;
     }
 #endif /* HAVE_WAYLAND_EGLSTREAM */
+
+  if (meta_wayland_android_wlegl_buffer_is_android (buffer->resource))
+    {
+      int width = 0;
+      int height = 0;
+      int format = 0;
+
+      meta_wayland_android_wlegl_buffer_get_size (buffer->resource,
+                                                  &width,
+                                                  &height);
+      format = meta_wayland_android_wlegl_buffer_get_format (buffer->resource);
+
+      g_warning ("android_wlegl wl_buffer detected: %dx%d format=%d",
+                 width,
+                 height,
+                 format);
+
+      buffer->type = META_WAYLAND_BUFFER_TYPE_EGL_IMAGE;
+      buffer->is_y_inverted = TRUE;
+
+      return TRUE;
+    }
 
   if (meta_wayland_compositor_is_egl_display_bound (buffer->compositor))
     {
@@ -473,6 +503,204 @@ shm_buffer_attach (MetaWaylandBuffer  *buffer,
   return TRUE;
 }
 
+static MetaMultiTexture *
+android_wlegl_buffer_create_texture (MetaWaylandBuffer  *buffer,
+                                     CoglContext        *cogl_context,
+                                     MetaEgl            *egl,
+                                     EGLDisplay          egl_display,
+                                     GError            **error)
+{
+  const struct wl_array *ints_array;
+  GArray *fds;
+  native_handle_t *handle;
+  buffer_handle_t imported_handle = NULL;
+  EGLImageKHR egl_image;
+  PFNGLEGLIMAGETARGETTEXTURE2DOESPROC glEGLImageTargetTexture2DOES;
+  GLuint gl_tex = 0;
+  GLuint fbo = 0;
+  uint8_t *pixels = NULL;
+  CoglTexture *texture_2d;
+  int width = 1;
+  int height = 1;
+
+  meta_wayland_android_wlegl_buffer_get_size (buffer->resource,
+                                              &width,
+                                              &height);
+
+  ints_array = meta_wayland_android_wlegl_buffer_get_ints (buffer->resource);
+  fds = meta_wayland_android_wlegl_buffer_get_fds (buffer->resource);
+
+  if (!ints_array || !fds)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "android_wlegl missing ints/fds");
+      return NULL;
+    }
+
+  handle = native_handle_create (fds->len, ints_array->size / sizeof (int));
+  if (!handle)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "native_handle_create failed");
+      return NULL;
+    }
+
+  for (guint i = 0; i < fds->len; i++)
+    handle->data[i] = dup (g_array_index (fds, int, i));
+
+  memcpy (&handle->data[fds->len],
+          ints_array->data,
+          ints_array->size);
+
+  if (hybris_gralloc_import_buffer ((buffer_handle_t) handle,
+                                    &imported_handle) != 0)
+    {
+      native_handle_close (handle);
+      native_handle_delete (handle);
+
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "hybris_gralloc_import_buffer failed");
+      return NULL;
+    }
+
+  egl_image =
+    meta_egl_create_image (egl,
+                           egl_display,
+                           EGL_NO_CONTEXT,
+                           EGL_NATIVE_BUFFER_ANDROID,
+                           (EGLClientBuffer) imported_handle,
+                           (const EGLint[]) {
+                             EGL_IMAGE_PRESERVED_KHR, EGL_TRUE,
+                             EGL_NONE
+                           },
+                           error);
+
+  if (egl_image == EGL_NO_IMAGE_KHR)
+    {
+      hybris_gralloc_release (imported_handle, 0);
+      native_handle_close (handle);
+      native_handle_delete (handle);
+      return NULL;
+    }
+
+  glEGLImageTargetTexture2DOES =
+    (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)
+    eglGetProcAddress ("glEGLImageTargetTexture2DOES");
+
+  if (!glEGLImageTargetTexture2DOES)
+    {
+      meta_egl_destroy_image (egl, egl_display, egl_image, NULL);
+      hybris_gralloc_release (imported_handle, 0);
+      native_handle_close (handle);
+      native_handle_delete (handle);
+
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "missing glEGLImageTargetTexture2DOES");
+      return NULL;
+    }
+
+  glGenTextures (1, &gl_tex);
+  glBindTexture (GL_TEXTURE_2D, gl_tex);
+  glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+  glEGLImageTargetTexture2DOES (GL_TEXTURE_2D, (GLeglImageOES) egl_image);
+
+  if (glGetError () != GL_NO_ERROR)
+    {
+      glBindTexture (GL_TEXTURE_2D, 0);
+      glDeleteTextures (1, &gl_tex);
+      meta_egl_destroy_image (egl, egl_display, egl_image, NULL);
+      hybris_gralloc_release (imported_handle, 0);
+      native_handle_close (handle);
+      native_handle_delete (handle);
+
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "glEGLImageTargetTexture2DOES failed");
+      return NULL;
+    }
+
+  glGenFramebuffers (1, &fbo);
+  glBindFramebuffer (GL_FRAMEBUFFER, fbo);
+  glFramebufferTexture2D (GL_FRAMEBUFFER,
+                          GL_COLOR_ATTACHMENT0,
+                          GL_TEXTURE_2D,
+                          gl_tex,
+                          0);
+
+  if (glCheckFramebufferStatus (GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+    {
+      glBindFramebuffer (GL_FRAMEBUFFER, 0);
+      glBindTexture (GL_TEXTURE_2D, 0);
+      glDeleteFramebuffers (1, &fbo);
+      glDeleteTextures (1, &gl_tex);
+      meta_egl_destroy_image (egl, egl_display, egl_image, NULL);
+      hybris_gralloc_release (imported_handle, 0);
+      native_handle_close (handle);
+      native_handle_delete (handle);
+
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "android_wlegl imported texture FBO incomplete");
+      return NULL;
+    }
+
+  pixels = g_malloc0 ((gsize) width * height * 4);
+
+  glReadPixels (0, 0,
+                width,
+                height,
+                GL_RGBA,
+                GL_UNSIGNED_BYTE,
+                pixels);
+
+  if (glGetError () != GL_NO_ERROR)
+    {
+      g_free (pixels);
+      glBindFramebuffer (GL_FRAMEBUFFER, 0);
+      glBindTexture (GL_TEXTURE_2D, 0);
+      glDeleteFramebuffers (1, &fbo);
+      glDeleteTextures (1, &gl_tex);
+      meta_egl_destroy_image (egl, egl_display, egl_image, NULL);
+      hybris_gralloc_release (imported_handle, 0);
+      native_handle_close (handle);
+      native_handle_delete (handle);
+
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "glReadPixels failed");
+      return NULL;
+    }
+
+  glBindFramebuffer (GL_FRAMEBUFFER, 0);
+  glBindTexture (GL_TEXTURE_2D, 0);
+  glDeleteFramebuffers (1, &fbo);
+  glDeleteTextures (1, &gl_tex);
+
+  texture_2d =
+    cogl_texture_2d_new_from_data (cogl_context,
+                                   width,
+                                   height,
+                                   COGL_PIXEL_FORMAT_RGBA_8888,
+                                   width * 4,
+                                   pixels,
+                                   error);
+
+  g_free (pixels);
+
+  meta_egl_destroy_image (egl, egl_display, egl_image, NULL);
+  hybris_gralloc_release (imported_handle, 0);
+  native_handle_close (handle);
+  native_handle_delete (handle);
+
+  if (!texture_2d)
+    return NULL;
+
+  g_warning ("android_wlegl import SUCCESS via readback copy");
+
+  return meta_multi_texture_new_simple (texture_2d);
+}
+
 static gboolean
 egl_image_buffer_attach (MetaWaylandBuffer  *buffer,
                          MetaMultiTexture  **texture,
@@ -495,6 +723,30 @@ egl_image_buffer_attach (MetaWaylandBuffer  *buffer,
     {
       g_clear_object (texture);
       *texture = g_object_ref (buffer->egl_image.texture);
+      return TRUE;
+    }
+
+  if (meta_wayland_android_wlegl_buffer_is_android (buffer->resource))
+    {
+      g_warning ("android_wlegl buffer attach: importing real texture");
+
+      if (!buffer->egl_image.texture)
+        {
+          buffer->egl_image.texture =
+            android_wlegl_buffer_create_texture (buffer,
+                                                 cogl_context,
+                                                 egl,
+                                                 egl_display,
+                                                 error);
+
+          if (!buffer->egl_image.texture)
+            return FALSE;
+        }
+
+      g_clear_object (texture);
+      *texture = g_object_ref (buffer->egl_image.texture);
+      buffer->is_y_inverted = TRUE;
+
       return TRUE;
     }
 
