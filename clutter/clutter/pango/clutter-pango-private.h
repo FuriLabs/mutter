@@ -79,8 +79,6 @@ void clutter_show_layout (ClutterContext    *context,
                           ClutterColorState *color_state,
                           ClutterColorState *target_color_state);
 
-G_DEFINE_AUTOPTR_CLEANUP_FUNC (PangoRenderer, g_object_unref)
-
 static inline PangoDirection
 clutter_text_direction_to_pango_direction (ClutterTextDirection dir)
 {
