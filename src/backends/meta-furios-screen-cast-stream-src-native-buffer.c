@@ -271,9 +271,33 @@ stage_is_ready_for_kick (ClutterActor *stage_actor)
 {
   if (!stage_actor)
     return FALSE;
+
   if (!clutter_actor_is_realized (stage_actor))
     return FALSE;
+
   return TRUE;
+}
+
+static guint
+get_stage_kick_delay_ms (MetaFuriosScreenCastStreamSrcNativeBuffer *self)
+{
+  gint64 now;
+  gint64 elapsed_us;
+  gint64 remaining_us;
+
+  if (self->last_stage_kick_us == 0)
+    return 0;
+
+  now = g_get_monotonic_time ();
+  elapsed_us = now - self->last_stage_kick_us;
+
+  if (elapsed_us >= STAGE_KICK_MIN_INTERVAL_US)
+    return 0;
+
+  remaining_us = STAGE_KICK_MIN_INTERVAL_US - elapsed_us;
+
+  /* round upward so we don't wake just before the deadline and have to schedule another timeout. */
+  return (guint) ((remaining_us + 999) / 1000);
 }
 
 static void
@@ -283,12 +307,7 @@ kick_stage_update (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
   if (!actor)
     return;
 
-  const gint64 now = g_get_monotonic_time ();
-  if (self->last_stage_kick_us != 0 &&
-      (now - self->last_stage_kick_us) < STAGE_KICK_MIN_INTERVAL_US)
-    return;
-
-  self->last_stage_kick_us = now;
+  self->last_stage_kick_us = g_get_monotonic_time ();
 
   if (!clutter_actor_has_allocation (actor))
     clutter_actor_queue_relayout (actor);
@@ -654,41 +673,87 @@ ensure_stage_watch (MetaFuriosScreenCastStreamSrcNativeBuffer *self)
 }
 
 static gboolean
-stage_kick_idle_cb (gpointer user_data)
+stage_kick_cb (gpointer user_data)
 {
   MetaFuriosScreenCastStreamSrcNativeBuffer *self = user_data;
+  ClutterActor *actor;
+  guint delay_ms;
 
   if (!self)
     return G_SOURCE_REMOVE;
 
-  if (!self->backend) {
-    self->stage_kick_idle_id = 0;
+  /* this source is executing now. clear the ID before scheduling a replacement */
+  self->stage_kick_idle_id = 0;
+
+  if (!self->backend)
+    return G_SOURCE_REMOVE;
+
+  /* some unrelated damage may have already satisfied the request before us */
+  if (!self->pending_requests)
+    return G_SOURCE_REMOVE;
+
+  actor = meta_backend_get_stage (self->backend);
+
+  if (!stage_is_ready_for_kick (actor)) {
+    self->stage_kick_idle_id = g_timeout_add_full (G_PRIORITY_DEFAULT,
+                                                   16,
+                                                   stage_kick_cb,
+                                                   g_object_ref (self),
+                                                   (GDestroyNotify) g_object_unref);
+
     return G_SOURCE_REMOVE;
   }
 
-  ClutterActor *actor = meta_backend_get_stage (self->backend);
-  if (!stage_is_ready_for_kick (actor))
-    return G_SOURCE_CONTINUE;
-
   ensure_stage_watch (self);
 
-  if (self->pending_requests)
-    kick_stage_update (self, actor);
+  if (!self->watch_ready) {
+    self->stage_kick_idle_id = g_timeout_add_full (G_PRIORITY_DEFAULT,
+                                                   16,
+                                                   stage_kick_cb,
+                                                   g_object_ref (self),
+                                                   (GDestroyNotify) g_object_unref);
 
-  self->stage_kick_idle_id = 0;
+    return G_SOURCE_REMOVE;
+  }
+
+  delay_ms = get_stage_kick_delay_ms (self);
+
+  if (delay_ms > 0) {
+    self->stage_kick_idle_id = g_timeout_add_full (G_PRIORITY_DEFAULT,
+                                                   delay_ms,
+                                                   stage_kick_cb,
+                                                   g_object_ref (self),
+                                                   (GDestroyNotify) g_object_unref);
+
+    return G_SOURCE_REMOVE;
+  }
+
+  kick_stage_update (self, actor);
+
   return G_SOURCE_REMOVE;
 }
 
 static void
 ensure_stage_kick_scheduled (MetaFuriosScreenCastStreamSrcNativeBuffer *self)
 {
+  guint delay_ms;
+
   if (self->stage_kick_idle_id != 0)
     return;
 
-  self->stage_kick_idle_id = g_idle_add_full (G_PRIORITY_DEFAULT_IDLE,
-                                              stage_kick_idle_cb,
-                                              g_object_ref (self),
-                                              (GDestroyNotify) g_object_unref);
+  delay_ms = get_stage_kick_delay_ms (self);
+
+  if (delay_ms > 0)
+    self->stage_kick_idle_id = g_timeout_add_full (G_PRIORITY_DEFAULT,
+                                                   delay_ms,
+                                                   stage_kick_cb,
+                                                   g_object_ref (self),
+                                                   (GDestroyNotify) g_object_unref);
+  else
+    self->stage_kick_idle_id = g_idle_add_full (G_PRIORITY_DEFAULT_IDLE,
+                                                stage_kick_cb,
+                                                g_object_ref (self),
+                                                (GDestroyNotify) g_object_unref);
 }
 
 static void
@@ -884,14 +949,11 @@ meta_furios_screen_cast_stream_src_native_buffer_request_frame_async (MetaFurios
 
   ensure_stage_watch (self);
 
-  /* coalesce multiple requests. only need 1 pending capture */
+  /* coalesce multiple requests. we only need one future paint to satisfy all outstanding requests. */
   self->pending_requests = 1;
 
+  /* always arrange for the request to eventually produce a stage update. */
   ensure_stage_kick_scheduled (self);
-
-  ClutterActor *actor = meta_backend_get_stage (self->backend);
-  if (stage_is_ready_for_kick (actor))
-    kick_stage_update (self, actor);
 }
 
 static GVariant *
