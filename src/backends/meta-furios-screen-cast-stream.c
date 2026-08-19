@@ -600,6 +600,8 @@ meta_furios_screen_cast_stream_new (MetaFuriosScreenCastSession *session,
   int pref_h = 1080;
   float pref_rr = 0.0f;
 
+  MetaFuriosScreenCastStreamBackendForce force = META_FURIOS_SCREEN_CAST_STREAM_BACKEND_FORCE_UNSET;
+
   if (properties && g_variant_is_of_type (properties, G_VARIANT_TYPE_VARDICT)) {
     GVariant *v = NULL;
 
@@ -620,6 +622,17 @@ meta_furios_screen_cast_stream_new (MetaFuriosScreenCastSession *session,
       fps = (float) g_variant_get_uint32 (v);
       g_variant_unref (v);
     }
+
+    if ((v = g_variant_lookup_value (properties, "backend", G_VARIANT_TYPE_STRING))) {
+      const char *backend_name = g_variant_get_string (v, NULL);
+
+      force = parse_backend_force_env (backend_name);
+
+      if (force == META_FURIOS_SCREEN_CAST_STREAM_BACKEND_FORCE_UNSET)
+        g_warning ("Unknown screencast backend '%s', using automatic selection", backend_name);
+
+      g_variant_unref (v);
+    }
   }
 
   const char *env = g_getenv ("MUTTER_WAYLAND_NESTED_DISPLAY_RESOLUTION");
@@ -636,8 +649,10 @@ meta_furios_screen_cast_stream_new (MetaFuriosScreenCastSession *session,
 
   MetaBackend *backend = meta_furios_screen_cast_session_get_backend (session);
 
-  const char *force_env = g_getenv ("MUTTER_FURIOS_SCREENCAST_BACKEND");
-  MetaFuriosScreenCastStreamBackendForce force = parse_backend_force_env (force_env);
+  if (force == META_FURIOS_SCREEN_CAST_STREAM_BACKEND_FORCE_UNSET) {
+    const char *force_env = g_getenv ("MUTTER_FURIOS_SCREENCAST_BACKEND");
+    force = parse_backend_force_env (force_env);
+  }
 
 #ifdef HAVE_FURIOS_NATIVE_BUFFER
   if (force == META_FURIOS_SCREEN_CAST_STREAM_BACKEND_FORCE_NATIVE_BUFFER ||
@@ -664,9 +679,8 @@ meta_furios_screen_cast_stream_new (MetaFuriosScreenCastSession *session,
     self->backend_type = META_FURIOS_SCREEN_CAST_STREAM_BACKEND_MEMFD;
   }
 #else
-  if (force == META_FURIOS_SCREEN_CAST_STREAM_BACKEND_FORCE_NATIVE_BUFFER) {
+  if (force == META_FURIOS_SCREEN_CAST_STREAM_BACKEND_FORCE_NATIVE_BUFFER)
     g_debug ("native-buffer backend forced but not built, falling back to memfd");
-  }
   self->backend_type = META_FURIOS_SCREEN_CAST_STREAM_BACKEND_MEMFD;
 #endif
 
