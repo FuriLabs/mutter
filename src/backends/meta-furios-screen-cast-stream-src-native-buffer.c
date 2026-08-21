@@ -70,6 +70,8 @@ struct _MetaFuriosScreenCastStreamSrcNativeBuffer
   guint cur_slot;
   gboolean slots_initialized;
 
+  MtkRegion **slot_damage;
+
   MetaStageWatch *paint_watch;
   gboolean watch_ready;
 
@@ -254,9 +256,13 @@ init_ring (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
   self->slot_cogl_fbs = g_new0 (CoglFramebuffer*, self->n_slots);
   self->slot_cogl_formats = g_new0 (CoglPixelFormat, self->n_slots);
 
+  self->slot_damage = g_new0 (MtkRegion*, self->n_slots);
+
   for (guint i = 0; i < self->n_slots; i++) {
     self->slot_images[i] = EGL_NO_IMAGE_KHR;
     self->slot_cogl_formats[i] = COGL_PIXEL_FORMAT_ANY;
+    self->slot_damage[i] = mtk_region_create ();
+
     if (!alloc_and_serialize_slot (self, i, error))
       return FALSE;
   }
@@ -507,6 +513,75 @@ ensure_slot_cogl_framebuffer (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
   return TRUE;
 }
 
+static MtkRegion *
+create_full_damage_region (MetaFuriosScreenCastStreamSrcNativeBuffer *self)
+{
+  MtkRectangle rect = {
+    .x = 0,
+    .y = 0,
+    .width = (int) self->width,
+    .height = (int) self->height,
+  };
+
+  return mtk_region_create_rectangle (&rect);
+}
+
+static void
+clear_slot_damage (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
+                   guint                                      slot)
+{
+  if (!self->slot_damage || slot >= self->n_slots)
+    return;
+
+  if (self->slot_damage[slot])
+    mtk_region_unref (self->slot_damage[slot]);
+
+  self->slot_damage[slot] = mtk_region_create ();
+}
+
+static void
+clear_all_slot_damage (MetaFuriosScreenCastStreamSrcNativeBuffer *self)
+{
+  if (!self->slot_damage)
+    return;
+
+  for (guint slot = 0; slot < self->n_slots; slot++) {
+    clear_slot_damage (self, slot);
+  }
+}
+
+static void
+accumulate_slot_damage (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
+                        const MtkRegion                            *redraw_clip)
+{
+  if (!self->slot_damage)
+    return;
+
+  MtkRegion *damage;
+
+  if (redraw_clip && !mtk_region_is_empty (redraw_clip))
+    damage = mtk_region_copy (redraw_clip);
+  else
+    damage = create_full_damage_region (self);
+
+  MtkRectangle bounds = {
+    .x = 0,
+    .y = 0,
+    .width = (int) self->width,
+    .height = (int) self->height,
+  };
+
+  mtk_region_intersect_rectangle (damage, &bounds);
+
+  if (!mtk_region_is_empty (damage)) {
+    for (guint slot = 0; slot < self->n_slots; slot++) {
+      mtk_region_union (self->slot_damage[slot], damage);
+    }
+  }
+
+  mtk_region_unref (damage);
+}
+
 static gboolean
 blit_stage_view_into_slot (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
                            ClutterStageView                          *view,
@@ -558,15 +633,89 @@ blit_stage_view_into_slot (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
 }
 
 static gboolean
+blit_stage_view_damage_into_slot (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
+                                  ClutterStageView                          *view,
+                                  guint                                      slot,
+                                  const MtkRegion                            *damage,
+                                  GError                                   **error)
+{
+  if (!view) {
+    g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "No stage view");
+    return FALSE;
+  }
+
+  if (!damage || mtk_region_is_empty (damage))
+    return TRUE;
+
+  CoglFramebuffer *src_fb = clutter_stage_view_get_framebuffer (view);
+  if (!src_fb) {
+    g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "No stage view framebuffer");
+    return FALSE;
+  }
+
+  if (!ensure_slot_cogl_framebuffer (self, slot, COGL_PIXEL_FORMAT_RGBX_8888, error))
+    return FALSE;
+
+  CoglFramebuffer *dst_fb = self->slot_cogl_fbs[slot];
+  if (!dst_fb) {
+    g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "No destination framebuffer");
+    return FALSE;
+  }
+
+  int n_rectangles = mtk_region_num_rectangles (damage);
+
+  for (int i = 0; i < n_rectangles; i++) {
+    MtkRectangle rect = mtk_region_get_rectangle (damage, i);
+
+    if (rect.width <= 0 || rect.height <= 0)
+      continue;
+
+    g_autoptr (GError) local_error = NULL;
+
+    if (!cogl_framebuffer_blit (src_fb,
+                                dst_fb,
+                                rect.x,
+                                rect.y,
+                                rect.x,
+                                rect.y,
+                                rect.width,
+                                rect.height,
+                                &local_error)) {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "cogl_framebuffer_blit failed for damage rectangle %d: %s",
+                   i,
+                   local_error ? local_error->message : "unknown");
+      return FALSE;
+    }
+  }
+
+  return TRUE;
+}
+
+static gboolean
 copy_stage_view_into_slot (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
                            ClutterStageView                          *view,
                            guint                                      slot,
                            GError                                   **error)
 {
-  if (!blit_stage_view_into_slot (self, view, slot, error))
+  if (!self->slot_damage || slot >= self->n_slots)
+    return FALSE;
+
+  MtkRegion *damage = self->slot_damage[slot];
+
+  if (!damage || mtk_region_is_empty (damage))
+    return TRUE;
+
+  if (!blit_stage_view_damage_into_slot (self,
+                                         view,
+                                         slot,
+                                         damage,
+                                         error))
     return FALSE;
 
   glFinish ();
+
+  clear_slot_damage (self, slot);
 
   return TRUE;
 }
@@ -596,6 +745,8 @@ initialize_slots_from_stage_view (MetaFuriosScreenCastStreamSrcNativeBuffer *sel
 
   glFinish ();
 
+  clear_all_slot_damage (self);
+
   self->slots_initialized = TRUE;
 
   return TRUE;
@@ -609,13 +760,15 @@ on_after_paint (MetaStage        *stage,
                 gpointer          user_data)
 {
   (void) stage;
-  (void) redraw_clip;
   (void) frame;
 
   MetaFuriosScreenCastStreamSrcNativeBuffer *self = user_data;
 
   if (!self)
     return;
+
+  if (self->slots_initialized)
+    accumulate_slot_damage (self, redraw_clip);
 
   if (!self->pending_requests)
     return;
@@ -643,7 +796,10 @@ on_after_paint (MetaStage        *stage,
   }
 
   guint slot = self->cur_slot;
-  self->cur_slot = (self->cur_slot + 1) % self->n_slots;
+
+  if (!self->slot_damage[slot] ||
+      mtk_region_is_empty (self->slot_damage[slot]))
+    return;
 
   if (!copy_stage_view_into_slot (self, view, slot, &local_error)) {
     if (local_error) {
@@ -654,6 +810,8 @@ on_after_paint (MetaStage        *stage,
     /* keep pending_requests set so a future paint can satisfy it */
     return;
   }
+
+  self->cur_slot = (self->cur_slot + 1) % self->n_slots;
 
   publish_slot (self, slot);
 
@@ -799,6 +957,16 @@ meta_furios_screen_cast_stream_src_native_buffer_dispose (GObject *object)
   g_clear_pointer (&self->slot_cogl_fbs, g_free);
   g_clear_pointer (&self->slot_cogl_formats, g_free);
 
+  if (self->slot_damage) {
+    for (guint i = 0; i < self->n_slots; i++) {
+      if (self->slot_damage[i])
+        mtk_region_unref (self->slot_damage[i]);
+    }
+
+    g_free (self->slot_damage);
+    self->slot_damage = NULL;
+  }
+
   if (self->buffers) {
     for (guint i = 0; i < self->n_slots; i++) {
       free_slot_data (self, i);
@@ -867,6 +1035,8 @@ meta_furios_screen_cast_stream_src_native_buffer_init (MetaFuriosScreenCastStrea
   self->last_published_slot = 0;
   self->cur_slot = 0;
   self->slots_initialized = FALSE;
+
+  self->slot_damage = NULL;
 
   self->paint_watch = NULL;
   self->watch_ready = FALSE;
