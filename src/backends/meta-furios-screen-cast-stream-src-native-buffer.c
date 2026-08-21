@@ -33,8 +33,6 @@
 #include "backends/meta-stage-private.h"
 #include "backends/meta-backend-private.h"
 
-#define STAGE_KICK_MIN_INTERVAL_US 16000  /* ~60Hz */
-
 enum
 {
   SIGNAL_FRAME_PUBLISHED,
@@ -70,6 +68,7 @@ struct _MetaFuriosScreenCastStreamSrcNativeBuffer
   guint last_published_slot;
 
   guint cur_slot;
+  gboolean slots_initialized;
 
   MetaStageWatch *paint_watch;
   gboolean watch_ready;
@@ -77,7 +76,6 @@ struct _MetaFuriosScreenCastStreamSrcNativeBuffer
   GObject *watch_self_ref;
 
   guint stage_kick_idle_id;
-  gint64 last_stage_kick_us;
 
   guint pending_requests;
 
@@ -282,13 +280,6 @@ kick_stage_update (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
 {
   if (!actor)
     return;
-
-  const gint64 now = g_get_monotonic_time ();
-  if (self->last_stage_kick_us != 0 &&
-      (now - self->last_stage_kick_us) < STAGE_KICK_MIN_INTERVAL_US)
-    return;
-
-  self->last_stage_kick_us = now;
 
   if (!clutter_actor_has_allocation (actor))
     clutter_actor_queue_relayout (actor);
@@ -517,7 +508,7 @@ ensure_slot_cogl_framebuffer (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
 }
 
 static gboolean
-copy_stage_view_into_slot (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
+blit_stage_view_into_slot (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
                            ClutterStageView                          *view,
                            guint                                      slot,
                            GError                                   **error)
@@ -563,6 +554,18 @@ copy_stage_view_into_slot (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
     return FALSE;
   }
 
+  return TRUE;
+}
+
+static gboolean
+copy_stage_view_into_slot (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
+                           ClutterStageView                          *view,
+                           guint                                      slot,
+                           GError                                   **error)
+{
+  if (!blit_stage_view_into_slot (self, view, slot, error))
+    return FALSE;
+
   glFinish ();
 
   return TRUE;
@@ -576,6 +579,26 @@ publish_slot (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
   self->last_published_slot = slot;
 
   g_signal_emit (self, signals[SIGNAL_FRAME_PUBLISHED], 0, self->seq, slot);
+}
+
+static gboolean
+initialize_slots_from_stage_view (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
+                                  ClutterStageView                          *view,
+                                  GError                                   **error)
+{
+  if (!self || !view)
+    return FALSE;
+
+  for (guint slot = 0; slot < self->n_slots; slot++) {
+    if (!blit_stage_view_into_slot (self, view, slot, error))
+      return FALSE;
+  }
+
+  glFinish ();
+
+  self->slots_initialized = TRUE;
+
+  return TRUE;
 }
 
 static void
@@ -597,15 +620,37 @@ on_after_paint (MetaStage        *stage,
   if (!self->pending_requests)
     return;
 
+  GError *local_error = NULL;
+
+  if (!self->slots_initialized) {
+    if (!initialize_slots_from_stage_view (self, view, &local_error)) {
+      if (local_error) {
+        g_warning ("native-buffer screencast: initial capture failed: %s", local_error->message);
+        g_clear_error (&local_error);
+      }
+
+      /* keep pending_requests set so a future paint can satisfy it */
+      return;
+    }
+
+    self->cur_slot = self->n_slots > 1 ? 1 : 0;
+
+    publish_slot (self, 0);
+
+    self->pending_requests = 0;
+
+    return;
+  }
+
   guint slot = self->cur_slot;
   self->cur_slot = (self->cur_slot + 1) % self->n_slots;
 
-  GError *local_error = NULL;
   if (!copy_stage_view_into_slot (self, view, slot, &local_error)) {
     if (local_error) {
       g_warning ("native-buffer screencast: capture failed: %s", local_error->message);
       g_clear_error (&local_error);
     }
+
     /* keep pending_requests set so a future paint can satisfy it */
     return;
   }
@@ -666,14 +711,18 @@ stage_kick_idle_cb (gpointer user_data)
     return G_SOURCE_REMOVE;
   }
 
+  if (self->slots_initialized || !self->pending_requests) {
+    self->stage_kick_idle_id = 0;
+    return G_SOURCE_REMOVE;
+  }
+
   ClutterActor *actor = meta_backend_get_stage (self->backend);
   if (!stage_is_ready_for_kick (actor))
     return G_SOURCE_CONTINUE;
 
   ensure_stage_watch (self);
 
-  if (self->pending_requests)
-    kick_stage_update (self, actor);
+  kick_stage_update (self, actor);
 
   self->stage_kick_idle_id = 0;
   return G_SOURCE_REMOVE;
@@ -817,13 +866,13 @@ meta_furios_screen_cast_stream_src_native_buffer_init (MetaFuriosScreenCastStrea
   self->seq = 0;
   self->last_published_slot = 0;
   self->cur_slot = 0;
+  self->slots_initialized = FALSE;
 
   self->paint_watch = NULL;
   self->watch_ready = FALSE;
   self->watch_self_ref = NULL;
 
   self->stage_kick_idle_id = 0;
-  self->last_stage_kick_us = 0;
   self->pending_requests = 0;
 
   self->egl_display = EGL_NO_DISPLAY;
@@ -887,11 +936,17 @@ meta_furios_screen_cast_stream_src_native_buffer_request_frame_async (MetaFurios
   /* coalesce multiple requests. only need 1 pending capture */
   self->pending_requests = 1;
 
-  ensure_stage_kick_scheduled (self);
+  if (self->slots_initialized)
+    return;
 
   ClutterActor *actor = meta_backend_get_stage (self->backend);
-  if (stage_is_ready_for_kick (actor))
+
+  if (stage_is_ready_for_kick (actor)) {
     kick_stage_update (self, actor);
+    return;
+  }
+
+  ensure_stage_kick_scheduled (self);
 }
 
 static GVariant *
