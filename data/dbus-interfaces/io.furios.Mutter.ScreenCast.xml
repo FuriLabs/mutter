@@ -16,6 +16,14 @@
     <method name="Stop"/>
     <signal name="Closed"/>
 
+    <!--
+      CreateStream properties:
+        backend     (s)
+        width       (u)
+        height      (u)
+        fps         (d/u)
+        use-fences  (b)
+    -->
     <method name="CreateStream">
       <arg name="properties" type="a{sv}" direction="in"/>
       <arg name="stream_path" type="o" direction="out"/>
@@ -50,6 +58,12 @@
       <arg name="seq" type="u" direction="out"/>
       <arg name="slot" type="u" direction="out"/>
       <arg name="damage" type="a(iiii)" direction="out"/>
+    </signal>
+
+    <signal name="FrameReadyWithFence">
+      <arg name="seq" type="u" direction="out"/>
+      <arg name="slot" type="u" direction="out"/>
+      <arg name="fence_fd" type="h" direction="out"/>
     </signal>
 
     <method name="Stop"/>

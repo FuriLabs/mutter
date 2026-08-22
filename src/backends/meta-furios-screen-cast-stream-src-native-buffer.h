@@ -38,6 +38,7 @@ meta_furios_screen_cast_stream_src_native_buffer_new (MetaBackend  *backend,
                                                       guint         width,
                                                       guint         height,
                                                       float         fps,
+                                                      gboolean      use_fences,
                                                       GError      **error);
 
 gboolean

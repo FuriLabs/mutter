@@ -71,6 +71,8 @@ struct _MetaFuriosScreenCastStream
   guint width;
   guint height;
   float fps;
+
+  gboolean use_fences;
 };
 
 static void
@@ -255,10 +257,62 @@ handle_get_eis_fd (MetaDBusMutterScreenCastStream *skeleton,
 }
 
 #ifdef HAVE_FURIOS_NATIVE_BUFFER
+static gboolean
+emit_frame_ready_with_fence (MetaFuriosScreenCastStream *self,
+                             guint32                     seq,
+                             guint32                     slot,
+                             int                         fence_fd,
+                             GError                    **error)
+{
+  if (!self || !self->connection || !self->object_path)
+    return FALSE;
+
+  if (fence_fd < 0) {
+    g_set_error (error,
+                 G_IO_ERROR,
+                 G_IO_ERROR_INVALID_ARGUMENT,
+                 "Invalid native fence FD");
+    return FALSE;
+  }
+
+  g_autoptr (GUnixFDList) fd_list = g_unix_fd_list_new ();
+
+  int fd_index = g_unix_fd_list_append (fd_list,
+                                        fence_fd,
+                                        error);
+  if (fd_index < 0)
+    return FALSE;
+
+  g_autoptr (GDBusMessage) message = g_dbus_message_new_signal (self->object_path,
+                                                                "io.furios.Mutter.ScreenCast.Stream",
+                                                                "FrameReadyWithFence");
+
+  if (self->peer_name)
+    g_dbus_message_set_destination (message, self->peer_name);
+
+  g_dbus_message_set_body (message,
+                           g_variant_new ("(uuh)",
+                                          seq,
+                                          slot,
+                                          fd_index));
+
+  g_dbus_message_set_unix_fd_list (message, fd_list);
+
+  if (!g_dbus_connection_send_message (self->connection,
+                                       message,
+                                       G_DBUS_SEND_MESSAGE_FLAGS_NONE,
+                                       NULL,
+                                       error))
+    return FALSE;
+
+  return TRUE;
+}
+
 static void
 on_native_buffer_frame_published (MetaFuriosScreenCastStreamSrcNativeBuffer *src,
                                   guint                                      seq,
                                   guint                                      slot,
+                                  gint                                       fence_fd,
                                   gpointer                                   user_data)
 {
   (void) src;
@@ -273,6 +327,27 @@ on_native_buffer_frame_published (MetaFuriosScreenCastStreamSrcNativeBuffer *src
   /* avoid duplicates */
   if (seq == self->last_emitted_seq)
     return;
+
+  if (self->use_fences) {
+    g_autoptr (GError) error = NULL;
+
+    if (fence_fd < 0) {
+      g_warning ("native-buffer frame %u has no fence FD", seq);
+      return;
+    }
+
+    if (!emit_frame_ready_with_fence (self,
+                                      (guint32) seq,
+                                      (guint32) slot,
+                                      fence_fd,
+                                      &error)) {
+      g_warning ("Failed to emit FrameReadyWithFence: %s", error ? error->message : "unknown error");
+      return;
+    }
+
+    self->last_emitted_seq = seq;
+    return;
+  }
 
   self->last_emitted_seq = seq;
 
@@ -487,6 +562,8 @@ meta_furios_screen_cast_stream_init (MetaFuriosScreenCastStream *self)
   self->width = 0;
   self->height = 0;
   self->fps = 0.0f;
+
+  self->use_fences = FALSE;
 }
 
 void
@@ -543,6 +620,7 @@ try_init_native_buffer_backend (MetaFuriosScreenCastStream *self,
                                 guint                       width,
                                 guint                       height,
                                 float                       fps,
+                                gboolean                    use_fences,
                                 GError                    **out_error)
 {
   g_autoptr (GError) local_error = NULL;
@@ -551,6 +629,7 @@ try_init_native_buffer_backend (MetaFuriosScreenCastStream *self,
                                                                                   width,
                                                                                   height,
                                                                                   fps,
+                                                                                  use_fences,
                                                                                   &local_error);
   if (!self->src_native_buffer) {
     if (out_error)
@@ -595,6 +674,7 @@ meta_furios_screen_cast_stream_new (MetaFuriosScreenCastSession *session,
   guint width = 1920;
   guint height = 1080;
   float fps = 0.0f;
+  gboolean use_fences = FALSE;
 
   int pref_w = 1920;
   int pref_h = 1080;
@@ -633,6 +713,11 @@ meta_furios_screen_cast_stream_new (MetaFuriosScreenCastSession *session,
 
       g_variant_unref (v);
     }
+
+    if ((v = g_variant_lookup_value (properties, "use-fences", G_VARIANT_TYPE_BOOLEAN))) {
+      use_fences = g_variant_get_boolean (v);
+      g_variant_unref (v);
+    }
   }
 
   const char *env = g_getenv ("MUTTER_WAYLAND_NESTED_DISPLAY_RESOLUTION");
@@ -644,6 +729,7 @@ meta_furios_screen_cast_stream_new (MetaFuriosScreenCastSession *session,
   self->width = width;
   self->height = height;
   self->fps = fps;
+  self->use_fences = use_fences;
 
   self->backend_type = META_FURIOS_SCREEN_CAST_STREAM_BACKEND_MEMFD;
 
@@ -659,7 +745,13 @@ meta_furios_screen_cast_stream_new (MetaFuriosScreenCastSession *session,
       force == META_FURIOS_SCREEN_CAST_STREAM_BACKEND_FORCE_UNSET) {
     g_autoptr (GError) nb_error = NULL;
 
-    if (try_init_native_buffer_backend (self, backend, width, height, fps, &nb_error)) {
+    if (try_init_native_buffer_backend (self,
+                                        backend,
+                                        width,
+                                        height,
+                                        fps,
+                                        use_fences,
+                                        &nb_error)) {
       /* ok */
     } else if (force == META_FURIOS_SCREEN_CAST_STREAM_BACKEND_FORCE_NATIVE_BUFFER) {
       if (nb_error)

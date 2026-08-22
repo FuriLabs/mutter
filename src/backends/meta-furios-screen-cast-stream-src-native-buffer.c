@@ -81,12 +81,18 @@ struct _MetaFuriosScreenCastStreamSrcNativeBuffer
 
   guint pending_requests;
 
+  gboolean use_fences;
+
   EGLDisplay egl_display;
   gboolean egl_gl_ready;
 
   PFNEGLCREATEIMAGEKHRPROC eglCreateImageKHR;
   PFNEGLDESTROYIMAGEKHRPROC eglDestroyImageKHR;
   PFNGLEGLIMAGETARGETTEXTURE2DOESPROC glEGLImageTargetTexture2DOES;
+
+  PFNEGLCREATESYNCKHRPROC eglCreateSyncKHR;
+  PFNEGLDESTROYSYNCKHRPROC eglDestroySyncKHR;
+  PFNEGLDUPNATIVEFENCEFDANDROIDPROC eglDupNativeFenceFDANDROID;
 
   EGLImageKHR *slot_images;
   GLuint *slot_textures;
@@ -323,6 +329,29 @@ get_any_stage_view (MetaFuriosScreenCastStreamSrcNativeBuffer *self)
 }
 
 static gboolean
+egl_has_extension (const char *extensions,
+                   const char *extension)
+{
+  if (!extensions || !extension || *extension == '\0')
+    return FALSE;
+
+  const char *p = extensions;
+  size_t len = strlen (extension);
+
+  while ((p = strstr (p, extension)) != NULL) {
+    gboolean start_ok = p == extensions || p[-1] == ' ';
+    gboolean end_ok = p[len] == '\0' || p[len] == ' ';
+
+    if (start_ok && end_ok)
+      return TRUE;
+
+    p += len;
+  }
+
+  return FALSE;
+}
+
+static gboolean
 ensure_egl_gl (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
                GError                                  **error)
 {
@@ -345,6 +374,35 @@ ensure_egl_gl (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
                  "Missing required EGL/GL entrypoints: eglCreateImageKHR=%p eglDestroyImageKHR=%p glEGLImageTargetTexture2DOES=%p",
                  self->eglCreateImageKHR, self->eglDestroyImageKHR, self->glEGLImageTargetTexture2DOES);
     return FALSE;
+  }
+
+  if (self->use_fences) {
+    const char *extensions = eglQueryString (self->egl_display, EGL_EXTENSIONS);
+
+    if (!egl_has_extension (extensions, "EGL_ANDROID_native_fence_sync")) {
+      g_set_error (error,
+                   G_IO_ERROR,
+                   G_IO_ERROR_NOT_SUPPORTED,
+                   "EGL_ANDROID_native_fence_sync is not supported");
+      return FALSE;
+    }
+
+    self->eglCreateSyncKHR = (PFNEGLCREATESYNCKHRPROC) eglGetProcAddress ("eglCreateSyncKHR");
+    self->eglDestroySyncKHR = (PFNEGLDESTROYSYNCKHRPROC) eglGetProcAddress ("eglDestroySyncKHR");
+    self->eglDupNativeFenceFDANDROID = (PFNEGLDUPNATIVEFENCEFDANDROIDPROC) eglGetProcAddress ("eglDupNativeFenceFDANDROID");
+
+    if (!self->eglCreateSyncKHR ||
+        !self->eglDestroySyncKHR ||
+        !self->eglDupNativeFenceFDANDROID) {
+      g_set_error (error,
+                   G_IO_ERROR,
+                   G_IO_ERROR_NOT_SUPPORTED,
+                   "Missing native fence EGL entrypoints: eglCreateSyncKHR=%p eglDestroySyncKHR=%p eglDupNativeFenceFDANDROID=%p",
+                   self->eglCreateSyncKHR,
+                   self->eglDestroySyncKHR,
+                   self->eglDupNativeFenceFDANDROID);
+      return FALSE;
+    }
   }
 
   self->egl_gl_ready = TRUE;
@@ -693,11 +751,70 @@ blit_stage_view_damage_into_slot (MetaFuriosScreenCastStreamSrcNativeBuffer *sel
 }
 
 static gboolean
+create_native_fence_fd (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
+                        int                                       *out_fence_fd,
+                        GError                                   **error)
+{
+  if (!out_fence_fd)
+    return FALSE;
+
+  *out_fence_fd = -1;
+
+  if (!self->use_fences)
+    return TRUE;
+
+  if (!ensure_egl_gl (self, error))
+    return FALSE;
+
+  const EGLint attribs[] = {
+    EGL_NONE
+  };
+
+  EGLSyncKHR sync = self->eglCreateSyncKHR (self->egl_display,
+                                            EGL_SYNC_NATIVE_FENCE_ANDROID,
+                                            attribs);
+  if (sync == EGL_NO_SYNC_KHR) {
+    g_set_error (error,
+                 G_IO_ERROR,
+                 G_IO_ERROR_FAILED,
+                 "eglCreateSyncKHR(EGL_SYNC_NATIVE_FENCE_ANDROID) failed (eglGetError=0x%04x)",
+                 eglGetError ());
+    return FALSE;
+  }
+
+  glFlush ();
+
+  int fence_fd = self->eglDupNativeFenceFDANDROID (self->egl_display,
+                                                   sync);
+
+  self->eglDestroySyncKHR (self->egl_display, sync);
+
+  if (fence_fd == EGL_NO_NATIVE_FENCE_FD_ANDROID) {
+    g_set_error (error,
+                 G_IO_ERROR,
+                 G_IO_ERROR_FAILED,
+                 "eglDupNativeFenceFDANDROID failed (eglGetError=0x%04x)",
+                 eglGetError ());
+    return FALSE;
+  }
+
+  *out_fence_fd = fence_fd;
+
+  return TRUE;
+}
+
+static gboolean
 copy_stage_view_into_slot (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
                            ClutterStageView                          *view,
                            guint                                      slot,
+                           int                                       *out_fence_fd,
                            GError                                   **error)
 {
+  if (!out_fence_fd)
+    return FALSE;
+
+  *out_fence_fd = -1;
+
   if (!self->slot_damage || slot >= self->n_slots)
     return FALSE;
 
@@ -713,7 +830,12 @@ copy_stage_view_into_slot (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
                                          error))
     return FALSE;
 
-  glFinish ();
+  if (self->use_fences) {
+    if (!create_native_fence_fd (self, out_fence_fd, error))
+      return FALSE;
+  } else {
+    glFinish ();
+  }
 
   clear_slot_damage (self, slot);
 
@@ -722,28 +844,45 @@ copy_stage_view_into_slot (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
 
 static void
 publish_slot (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
-              guint                                      slot)
+              guint                                      slot,
+              int                                        fence_fd)
 {
   self->seq++;
   self->last_published_slot = slot;
 
-  g_signal_emit (self, signals[SIGNAL_FRAME_PUBLISHED], 0, self->seq, slot);
+  g_signal_emit (self,
+                 signals[SIGNAL_FRAME_PUBLISHED],
+                 0,
+                 self->seq,
+                 slot,
+                 fence_fd);
+
+  if (fence_fd >= 0)
+    close (fence_fd);
 }
 
 static gboolean
 initialize_slots_from_stage_view (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
                                   ClutterStageView                          *view,
+                                  int                                       *out_fence_fd,
                                   GError                                   **error)
 {
-  if (!self || !view)
+  if (!self || !view || !out_fence_fd)
     return FALSE;
+
+  *out_fence_fd = -1;
 
   for (guint slot = 0; slot < self->n_slots; slot++) {
     if (!blit_stage_view_into_slot (self, view, slot, error))
       return FALSE;
   }
 
-  glFinish ();
+  if (self->use_fences) {
+    if (!create_native_fence_fd (self, out_fence_fd, error))
+      return FALSE;
+  } else {
+    glFinish ();
+  }
 
   clear_all_slot_damage (self);
 
@@ -774,9 +913,13 @@ on_after_paint (MetaStage        *stage,
     return;
 
   GError *local_error = NULL;
+  int fence_fd = -1;
 
   if (!self->slots_initialized) {
-    if (!initialize_slots_from_stage_view (self, view, &local_error)) {
+    if (!initialize_slots_from_stage_view (self,
+                                           view,
+                                           &fence_fd,
+                                           &local_error)) {
       if (local_error) {
         g_warning ("native-buffer screencast: initial capture failed: %s", local_error->message);
         g_clear_error (&local_error);
@@ -788,7 +931,7 @@ on_after_paint (MetaStage        *stage,
 
     self->cur_slot = self->n_slots > 1 ? 1 : 0;
 
-    publish_slot (self, 0);
+    publish_slot (self, 0, fence_fd);
 
     self->pending_requests = 0;
 
@@ -801,7 +944,11 @@ on_after_paint (MetaStage        *stage,
       mtk_region_is_empty (self->slot_damage[slot]))
     return;
 
-  if (!copy_stage_view_into_slot (self, view, slot, &local_error)) {
+  if (!copy_stage_view_into_slot (self,
+                                  view,
+                                  slot,
+                                  &fence_fd,
+                                  &local_error)) {
     if (local_error) {
       g_warning ("native-buffer screencast: capture failed: %s", local_error->message);
       g_clear_error (&local_error);
@@ -813,7 +960,7 @@ on_after_paint (MetaStage        *stage,
 
   self->cur_slot = (self->cur_slot + 1) % self->n_slots;
 
-  publish_slot (self, slot);
+  publish_slot (self, slot, fence_fd);
 
   /* satisfy exactly one request. coalesce multiple requests into 1 capture */
   self->pending_requests = 0;
@@ -1001,9 +1148,10 @@ meta_furios_screen_cast_stream_src_native_buffer_class_init (MetaFuriosScreenCas
                                                   NULL, NULL,
                                                   NULL,
                                                   G_TYPE_NONE,
-                                                  2,
+                                                  3,
                                                   G_TYPE_UINT,
-                                                  G_TYPE_UINT);
+                                                  G_TYPE_UINT,
+                                                  G_TYPE_INT);
 }
 
 static void
@@ -1045,11 +1193,17 @@ meta_furios_screen_cast_stream_src_native_buffer_init (MetaFuriosScreenCastStrea
   self->stage_kick_idle_id = 0;
   self->pending_requests = 0;
 
+  self->use_fences = FALSE;
+
   self->egl_display = EGL_NO_DISPLAY;
   self->egl_gl_ready = FALSE;
   self->eglCreateImageKHR = NULL;
   self->eglDestroyImageKHR = NULL;
   self->glEGLImageTargetTexture2DOES = NULL;
+
+  self->eglCreateSyncKHR = NULL;
+  self->eglDestroySyncKHR = NULL;
+  self->eglDupNativeFenceFDANDROID = NULL;
 
   self->slot_images = NULL;
   self->slot_textures = NULL;
@@ -1072,6 +1226,7 @@ meta_furios_screen_cast_stream_src_native_buffer_new (MetaBackend  *backend,
                                                       guint         width,
                                                       guint         height,
                                                       float         fps,
+                                                      gboolean      use_fences,
                                                       GError      **error)
 {
   MetaFuriosScreenCastStreamSrcNativeBuffer *self = g_object_new (META_TYPE_FURIOS_SCREEN_CAST_STREAM_SRC_NATIVE_BUFFER, NULL);
@@ -1080,6 +1235,7 @@ meta_furios_screen_cast_stream_src_native_buffer_new (MetaBackend  *backend,
   self->width = width;
   self->height = height;
   self->fps = fps;
+  self->use_fences = use_fences;
 
   if (!load_entrypoints (self, error)) {
     g_object_unref (self);
