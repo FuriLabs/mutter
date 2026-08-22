@@ -360,7 +360,9 @@ ensure_egl_gl (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
 
   self->egl_display = eglGetCurrentDisplay ();
   if (self->egl_display == EGL_NO_DISPLAY) {
-    g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+    g_set_error (error,
+                 G_IO_ERROR,
+                 G_IO_ERROR_FAILED,
                  "No current EGLDisplay (eglGetCurrentDisplay returned EGL_NO_DISPLAY)");
     return FALSE;
   }
@@ -369,43 +371,57 @@ ensure_egl_gl (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
   self->eglDestroyImageKHR = (PFNEGLDESTROYIMAGEKHRPROC) eglGetProcAddress ("eglDestroyImageKHR");
   self->glEGLImageTargetTexture2DOES = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC) eglGetProcAddress ("glEGLImageTargetTexture2DOES");
 
-  if (!self->eglCreateImageKHR || !self->eglDestroyImageKHR || !self->glEGLImageTargetTexture2DOES) {
-    g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED,
+  if (!self->eglCreateImageKHR ||
+      !self->eglDestroyImageKHR ||
+      !self->glEGLImageTargetTexture2DOES) {
+    g_set_error (error,
+                 G_IO_ERROR,
+                 G_IO_ERROR_NOT_SUPPORTED,
                  "Missing required EGL/GL entrypoints: eglCreateImageKHR=%p eglDestroyImageKHR=%p glEGLImageTargetTexture2DOES=%p",
-                 self->eglCreateImageKHR, self->eglDestroyImageKHR, self->glEGLImageTargetTexture2DOES);
+                 self->eglCreateImageKHR,
+                 self->eglDestroyImageKHR,
+                 self->glEGLImageTargetTexture2DOES);
     return FALSE;
   }
 
-  if (self->use_fences) {
-    const char *extensions = eglQueryString (self->egl_display, EGL_EXTENSIONS);
+  self->egl_gl_ready = TRUE;
+  return TRUE;
+}
 
-    if (!egl_has_extension (extensions, "EGL_ANDROID_native_fence_sync")) {
-      g_set_error (error,
-                   G_IO_ERROR,
-                   G_IO_ERROR_NOT_SUPPORTED,
-                   "EGL_ANDROID_native_fence_sync is not supported");
-      return FALSE;
-    }
+static gboolean
+ensure_egl_gl_fence (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
+                     GError                                  **error)
+{
+  if (!ensure_egl_gl (self, error))
+    return FALSE;
 
-    self->eglCreateSyncKHR = (PFNEGLCREATESYNCKHRPROC) eglGetProcAddress ("eglCreateSyncKHR");
-    self->eglDestroySyncKHR = (PFNEGLDESTROYSYNCKHRPROC) eglGetProcAddress ("eglDestroySyncKHR");
-    self->eglDupNativeFenceFDANDROID = (PFNEGLDUPNATIVEFENCEFDANDROIDPROC) eglGetProcAddress ("eglDupNativeFenceFDANDROID");
+  const char *extensions = eglQueryString (self->egl_display, EGL_EXTENSIONS);
 
-    if (!self->eglCreateSyncKHR ||
-        !self->eglDestroySyncKHR ||
-        !self->eglDupNativeFenceFDANDROID) {
-      g_set_error (error,
-                   G_IO_ERROR,
-                   G_IO_ERROR_NOT_SUPPORTED,
-                   "Missing native fence EGL entrypoints: eglCreateSyncKHR=%p eglDestroySyncKHR=%p eglDupNativeFenceFDANDROID=%p",
-                   self->eglCreateSyncKHR,
-                   self->eglDestroySyncKHR,
-                   self->eglDupNativeFenceFDANDROID);
-      return FALSE;
-    }
+  if (!egl_has_extension (extensions, "EGL_ANDROID_native_fence_sync")) {
+    g_set_error (error,
+                 G_IO_ERROR,
+                 G_IO_ERROR_NOT_SUPPORTED,
+                 "EGL_ANDROID_native_fence_sync is not supported");
+    return FALSE;
   }
 
-  self->egl_gl_ready = TRUE;
+  self->eglCreateSyncKHR = (PFNEGLCREATESYNCKHRPROC) eglGetProcAddress ("eglCreateSyncKHR");
+  self->eglDestroySyncKHR = (PFNEGLDESTROYSYNCKHRPROC) eglGetProcAddress ("eglDestroySyncKHR");
+  self->eglDupNativeFenceFDANDROID = (PFNEGLDUPNATIVEFENCEFDANDROIDPROC) eglGetProcAddress ("eglDupNativeFenceFDANDROID");
+
+  if (!self->eglCreateSyncKHR ||
+      !self->eglDestroySyncKHR ||
+      !self->eglDupNativeFenceFDANDROID) {
+    g_set_error (error,
+                 G_IO_ERROR,
+                 G_IO_ERROR_NOT_SUPPORTED,
+                 "Missing native fence EGL entrypoints: eglCreateSyncKHR=%p eglDestroySyncKHR=%p eglDupNativeFenceFDANDROID=%p",
+                 self->eglCreateSyncKHR,
+                 self->eglDestroySyncKHR,
+                 self->eglDupNativeFenceFDANDROID);
+    return FALSE;
+  }
+
   return TRUE;
 }
 
@@ -763,7 +779,7 @@ create_native_fence_fd (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
   if (!self->use_fences)
     return TRUE;
 
-  if (!ensure_egl_gl (self, error))
+  if (!ensure_egl_gl_fence (self, error))
     return FALSE;
 
   const EGLint attribs[] = {
@@ -1162,6 +1178,7 @@ meta_furios_screen_cast_stream_src_native_buffer_init (MetaFuriosScreenCastStrea
   self->width = 0;
   self->height = 0;
   self->fps = 0.0f;
+  self->use_fences = FALSE;
 
   self->n_slots = 3;
 
@@ -1226,7 +1243,6 @@ meta_furios_screen_cast_stream_src_native_buffer_new (MetaBackend  *backend,
                                                       guint         width,
                                                       guint         height,
                                                       float         fps,
-                                                      gboolean      use_fences,
                                                       GError      **error)
 {
   MetaFuriosScreenCastStreamSrcNativeBuffer *self = g_object_new (META_TYPE_FURIOS_SCREEN_CAST_STREAM_SRC_NATIVE_BUFFER, NULL);
@@ -1235,7 +1251,6 @@ meta_furios_screen_cast_stream_src_native_buffer_new (MetaBackend  *backend,
   self->width = width;
   self->height = height;
   self->fps = fps;
-  self->use_fences = use_fences;
 
   if (!load_entrypoints (self, error)) {
     g_object_unref (self);
@@ -1373,6 +1388,33 @@ meta_furios_screen_cast_stream_src_native_buffer_get_handle_info (MetaFuriosScre
   return TRUE;
 }
 
+gboolean
+meta_furios_screen_cast_stream_src_native_buffer_ensure_egl_gl (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
+                                                                GError                                   **error)
+{
+  g_return_val_if_fail (META_IS_FURIOS_SCREEN_CAST_STREAM_SRC_NATIVE_BUFFER (self), FALSE);
+
+  return ensure_egl_gl (self, error);
+}
+
+gboolean
+meta_furios_screen_cast_stream_src_native_buffer_ensure_egl_gl_fence (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
+                                                                      GError                                   **error)
+{
+  g_return_val_if_fail (META_IS_FURIOS_SCREEN_CAST_STREAM_SRC_NATIVE_BUFFER (self), FALSE);
+
+  return ensure_egl_gl_fence (self, error);
+}
+
+void
+meta_furios_screen_cast_stream_src_native_buffer_set_use_fences (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
+                                                                 gboolean                                   use_fences)
+{
+  g_return_if_fail (META_IS_FURIOS_SCREEN_CAST_STREAM_SRC_NATIVE_BUFFER (self));
+
+  self->use_fences = use_fences;
+}
+
 void
 meta_furios_screen_cast_stream_src_native_buffer_add_info (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
                                                            GVariantBuilder                           *builder)
@@ -1384,4 +1426,5 @@ meta_furios_screen_cast_stream_src_native_buffer_add_info (MetaFuriosScreenCastS
   g_variant_builder_add (builder, "{sv}", "stride_pixels", g_variant_new_uint32 ((guint) self->stride_pixels));
   g_variant_builder_add (builder, "{sv}", "hal_format", g_variant_new_int32 ((gint32) self->hal_format));
   g_variant_builder_add (builder, "{sv}", "usage", g_variant_new_uint32 ((guint32) self->usage));
+  g_variant_builder_add (builder, "{sv}", "use-fences", g_variant_new_boolean (self->use_fences));
 }

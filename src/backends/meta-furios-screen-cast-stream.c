@@ -620,7 +620,7 @@ try_init_native_buffer_backend (MetaFuriosScreenCastStream *self,
                                 guint                       width,
                                 guint                       height,
                                 float                       fps,
-                                gboolean                    use_fences,
+                                gboolean                    request_fences,
                                 GError                    **out_error)
 {
   g_autoptr (GError) local_error = NULL;
@@ -629,13 +629,40 @@ try_init_native_buffer_backend (MetaFuriosScreenCastStream *self,
                                                                                   width,
                                                                                   height,
                                                                                   fps,
-                                                                                  use_fences,
                                                                                   &local_error);
   if (!self->src_native_buffer) {
     if (out_error)
       *out_error = g_steal_pointer (&local_error);
+
     return FALSE;
   }
+
+  if (!meta_furios_screen_cast_stream_src_native_buffer_ensure_egl_gl (self->src_native_buffer,
+                                                                       &local_error)) {
+    g_clear_object (&self->src_native_buffer);
+
+    if (out_error)
+      *out_error = g_steal_pointer (&local_error);
+
+    return FALSE;
+  }
+
+  self->use_fences = FALSE;
+
+  if (request_fences) {
+    if (meta_furios_screen_cast_stream_src_native_buffer_ensure_egl_gl_fence (self->src_native_buffer,
+                                                                              &local_error)) {
+      self->use_fences = TRUE;
+    } else {
+      g_debug ("native-buffer fence support unavailable, continuing without fences: %s",
+               local_error ? local_error->message : "unknown error");
+
+      g_clear_error (&local_error);
+    }
+  }
+
+  meta_furios_screen_cast_stream_src_native_buffer_set_use_fences (self->src_native_buffer,
+                                                                   self->use_fences);
 
   g_signal_connect_object (self->src_native_buffer,
                            "frame-published",
@@ -644,6 +671,7 @@ try_init_native_buffer_backend (MetaFuriosScreenCastStream *self,
                            0);
 
   self->backend_type = META_FURIOS_SCREEN_CAST_STREAM_BACKEND_NATIVE_BUFFER;
+
   return TRUE;
 }
 #endif
@@ -729,7 +757,7 @@ meta_furios_screen_cast_stream_new (MetaFuriosScreenCastSession *session,
   self->width = width;
   self->height = height;
   self->fps = fps;
-  self->use_fences = use_fences;
+  self->use_fences = FALSE;
 
   self->backend_type = META_FURIOS_SCREEN_CAST_STREAM_BACKEND_MEMFD;
 
@@ -745,35 +773,40 @@ meta_furios_screen_cast_stream_new (MetaFuriosScreenCastSession *session,
       force == META_FURIOS_SCREEN_CAST_STREAM_BACKEND_FORCE_UNSET) {
     g_autoptr (GError) nb_error = NULL;
 
-    if (try_init_native_buffer_backend (self,
-                                        backend,
-                                        width,
-                                        height,
-                                        fps,
-                                        use_fences,
-                                        &nb_error)) {
-      /* ok */
-    } else if (force == META_FURIOS_SCREEN_CAST_STREAM_BACKEND_FORCE_NATIVE_BUFFER) {
-      if (nb_error)
-        g_debug ("native-buffer backend forced but unavailable, falling back to memfd: %s",
-                 nb_error->message);
-      else
-        g_debug ("native-buffer backend forced but unavailable, falling back to memfd");
+    if (!try_init_native_buffer_backend (self,
+                                         backend,
+                                         width,
+                                         height,
+                                         fps,
+                                         use_fences,
+                                         &nb_error)) {
+      if (force == META_FURIOS_SCREEN_CAST_STREAM_BACKEND_FORCE_NATIVE_BUFFER) {
+        if (nb_error)
+          g_debug ("native-buffer backend forced but unavailable, falling back to memfd: %s",
+                   nb_error->message);
+        else
+          g_debug ("native-buffer backend forced but unavailable, falling back to memfd");
+      } else {
+        if (nb_error)
+          g_debug ("native-buffer backend unavailable, falling back to memfd: %s",
+                   nb_error->message);
+        else
+          g_debug ("native-buffer backend unavailable, falling back to memfd");
+      }
+
       self->backend_type = META_FURIOS_SCREEN_CAST_STREAM_BACKEND_MEMFD;
-    } else {
-      if (nb_error)
-        g_debug ("native-buffer backend unavailable, falling back to memfd: %s", nb_error->message);
-      else
-        g_debug ("native-buffer backend unavailable, falling back to memfd");
-      self->backend_type = META_FURIOS_SCREEN_CAST_STREAM_BACKEND_MEMFD;
+      self->use_fences = FALSE;
     }
   } else if (force == META_FURIOS_SCREEN_CAST_STREAM_BACKEND_FORCE_MEMFD) {
     self->backend_type = META_FURIOS_SCREEN_CAST_STREAM_BACKEND_MEMFD;
+    self->use_fences = FALSE;
   }
 #else
   if (force == META_FURIOS_SCREEN_CAST_STREAM_BACKEND_FORCE_NATIVE_BUFFER)
     g_debug ("native-buffer backend forced but not built, falling back to memfd");
+
   self->backend_type = META_FURIOS_SCREEN_CAST_STREAM_BACKEND_MEMFD;
+  self->use_fences = FALSE;
 #endif
 
   if (self->backend_type == META_FURIOS_SCREEN_CAST_STREAM_BACKEND_MEMFD) {

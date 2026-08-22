@@ -38,7 +38,6 @@ meta_furios_screen_cast_stream_src_native_buffer_new (MetaBackend  *backend,
                                                       guint         width,
                                                       guint         height,
                                                       float         fps,
-                                                      gboolean      use_fences,
                                                       GError      **error);
 
 gboolean
@@ -46,6 +45,18 @@ meta_furios_screen_cast_stream_src_native_buffer_get_handle_info (MetaFuriosScre
                                                                   GUnixFDList                               *fd_list,
                                                                   GVariant                                 **out_info,
                                                                   GError                                   **error);
+
+gboolean
+meta_furios_screen_cast_stream_src_native_buffer_ensure_egl_gl (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
+                                                                GError                                   **error);
+
+gboolean
+meta_furios_screen_cast_stream_src_native_buffer_ensure_egl_gl_fence (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
+                                                                      GError                                   **error);
+
+void
+meta_furios_screen_cast_stream_src_native_buffer_set_use_fences (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
+                                                                 gboolean                                   use_fences);
 
 void
 meta_furios_screen_cast_stream_src_native_buffer_add_info (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
