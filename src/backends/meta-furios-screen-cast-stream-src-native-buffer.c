@@ -85,6 +85,7 @@ struct _MetaFuriosScreenCastStreamSrcNativeBuffer
 
   EGLDisplay egl_display;
   gboolean egl_gl_ready;
+  gboolean egl_fence_ready;
 
   PFNEGLCREATEIMAGEKHRPROC eglCreateImageKHR;
   PFNEGLDESTROYIMAGEKHRPROC eglDestroyImageKHR;
@@ -392,6 +393,9 @@ static gboolean
 ensure_egl_gl_fence (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
                      GError                                  **error)
 {
+  if (self->egl_fence_ready)
+    return TRUE;
+
   if (!ensure_egl_gl (self, error))
     return FALSE;
 
@@ -421,6 +425,8 @@ ensure_egl_gl_fence (MetaFuriosScreenCastStreamSrcNativeBuffer *self,
                  self->eglDupNativeFenceFDANDROID);
     return FALSE;
   }
+
+  self->egl_fence_ready = TRUE;
 
   return TRUE;
 }
@@ -1214,6 +1220,8 @@ meta_furios_screen_cast_stream_src_native_buffer_init (MetaFuriosScreenCastStrea
 
   self->egl_display = EGL_NO_DISPLAY;
   self->egl_gl_ready = FALSE;
+  self->egl_fence_ready = FALSE;
+
   self->eglCreateImageKHR = NULL;
   self->eglDestroyImageKHR = NULL;
   self->glEGLImageTargetTexture2DOES = NULL;
