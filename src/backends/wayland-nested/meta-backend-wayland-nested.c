@@ -309,6 +309,9 @@ meta_backend_wayland_nested_set_keymap_async (MetaBackend           *backend,
   if (seat_wl)
     meta_seat_wayland_nested_set_keymap (seat_wl, priv->xkb_keymap, priv->xkb_layout_index);
 
+  meta_backend_notify_keymap_changed (backend);
+  meta_backend_notify_keymap_layout_group_changed (backend, priv->xkb_layout_index);
+
   g_task_return_boolean (task, TRUE);
   g_object_unref (task);
 }
